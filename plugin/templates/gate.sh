@@ -86,6 +86,15 @@ if [ "$FAIL" -eq 0 ]; then
   echo "{\"ts\":\"$TS\",\"event\":\"gate_passed\",\"gate\":\"$GATE\",\"pass\":$PASS,\"fail\":0}" >> "$EVENTS_FILE"
   reproject
   echo ""
+  # v1.4 (#3): if this gate requires an adversarial review, the phase does NOT
+  # advance yet — a second agent must try to refute completion, then: hb review.
+  if node -e "process.exit((JSON.parse(require('fs').readFileSync('$DAG_FILE','utf8')).gates['$GATE']||{}).review?0:1)" 2>/dev/null; then
+    echo "🧪 DETERMINISTIC GATE PASSED — adversarial review required."
+    echo "   Spawn a skeptical reviewer to REFUTE completion, then run:"
+    echo "     node $HB_DIR/hb.js review $GATE pass    (could not refute)"
+    echo "     node $HB_DIR/hb.js review $GATE fail \"<findings>\"   (found holes)"
+    exit 0
+  fi
   echo "✅ GATE PASSED — proceed to next phase."
   exit 0
 else

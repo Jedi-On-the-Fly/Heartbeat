@@ -42,6 +42,11 @@ HB_MAX_CONCURRENCY="${HB_MAX_CONCURRENCY:-1}"
 # seconds of silence (fast hang-detection); a lease that never beats falls back
 # to LOCK_STALE_S. So set this well below LOCK_STALE_S.
 HEARTBEAT_STALE_S="${HEARTBEAT_STALE_S:-180}"
+# v1.4 (#2): optional notifier for human-needed wakes. If set, it is run as
+#   $HB_NOTIFY_CMD "<reason>" "<project>" "<detail>"
+# on build_stuck / gate_blocked / deadlock / unsanctioned_drift / all_done — once
+# per blockage. Timeout-wrapped and best-effort; it can never break the tick.
+HB_NOTIFY_CMD="${HB_NOTIFY_CMD:-}"
 # ── END CONFIG ────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -57,10 +62,26 @@ STUCK_FLAG="$HB_DIR/.stuck-alerted"
 NOPROG_FLAG="$HB_DIR/.noprogress-alerted"
 DONE_FLAG="$HB_DIR/.all-done-alerted"
 DEADLOCK_FLAG="$HB_DIR/.deadlock-alerted"
+GATE_NOTIFY_FLAG="$HB_DIR/.gate-notified"
+DRIFT_NOTIFY_FLAG="$HB_DIR/.drift-notified"
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 mtime()     { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }   # GNU | BSD/macOS
 log_event() { echo "{\"ts\":\"$TS\",\"event\":\"$1\"}" >> "$EVENTS"; }
+
+# v1.4 (#2): best-effort notifier. Args to HB_NOTIFY_CMD: reason, project, detail
+# (passed as $1/$2/$3 to avoid interpolation). Timeout-bounded; never fails the tick.
+notify() {
+  [ -n "$HB_NOTIFY_CMD" ] || return 0
+  local proj; proj="$(basename "$PROJECT_DIR")"
+  # reason/project/detail are exposed to HB_NOTIFY_CMD as $1/$2/$3 (positional args
+  # after the _ sentinel). The command may reference them or ignore them.
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 10s bash -c "$HB_NOTIFY_CMD" _ "$1" "$proj" "${2:-}" >/dev/null 2>&1 || true
+  else
+    bash -c "$HB_NOTIFY_CMD" _ "$1" "$proj" "${2:-}" >/dev/null 2>&1 || true
+  fi
+}
 
 compute_watch_hash() {
   ( eval "find $WATCH_PATHS" 2>/dev/null || true ) \
@@ -163,6 +184,7 @@ if [ "$stuck" -ge 5 ]; then
   if [ ! -f "$STUCK_FLAG" ]; then
     touch "$STUCK_FLAG"
     log_event "circuit_breaker_tripped"
+    notify "build_stuck" "count=$stuck"
     wake_out "{\"reason\":\"build_stuck\",\"build_stuck_count\":$stuck}"
   fi
   sleep_out "{\"reason\":\"stuck_waiting_human\",\"build_stuck_count\":$stuck}"
@@ -177,7 +199,12 @@ if [ -n "$WATCH_PATHS" ]; then
     log_event "architecture_frozen"
   elif [ "$CURRENT" != "$(cat "$ARCH_HASH")" ]; then
     log_event "unsanctioned_drift"
+    if [ -n "$HB_NOTIFY_CMD" ] && [ ! -f "$DRIFT_NOTIFY_FLAG" ]; then
+      touch "$DRIFT_NOTIFY_FLAG"; notify "unsanctioned_drift" ""
+    fi
     wake_out "{\"reason\":\"unsanctioned_drift\",\"hint\":\"review changes; if sanctioned run: bash tick.sh --freeze\",\"ts\":\"$TS\"}"
+  else
+    rm -f "$DRIFT_NOTIFY_FLAG"
   fi
 fi
 
@@ -188,8 +215,12 @@ gate_errors=$(node -e "
 " 2>/dev/null || echo "0")
 
 if [ "$gate_errors" -gt 0 ]; then
+  if [ -n "$HB_NOTIFY_CMD" ] && [ ! -f "$GATE_NOTIFY_FLAG" ]; then
+    touch "$GATE_NOTIFY_FLAG"; notify "gate_blocked" "errors=$gate_errors"
+  fi
   wake_out "{\"reason\":\"gate_blocked\",\"gate_errors\":$gate_errors}"
 fi
+rm -f "$GATE_NOTIFY_FLAG"
 
 # ── 6. Next task lookup ────────────────────────────────────────────────────────
 if [ ! -f "$NEXT_TASK_SCRIPT" ]; then
@@ -213,6 +244,7 @@ case "$TYPE" in
     if [ ! -f "$DONE_FLAG" ]; then
       touch "$DONE_FLAG"
       log_event "project_complete"
+      notify "all_done" ""
       wake_out "{\"reason\":\"all_done\",\"next_task\":$NEXT,\"ts\":\"$TS\"}"
     fi
     sleep_out "{\"reason\":\"project_complete\"}"
@@ -221,6 +253,7 @@ case "$TYPE" in
     if [ ! -f "$DEADLOCK_FLAG" ]; then
       touch "$DEADLOCK_FLAG"
       log_event "deadlock_detected"
+      notify "deadlock" ""
       wake_out "{\"reason\":\"deadlock\",\"next_task\":$NEXT,\"ts\":\"$TS\"}"
     fi
     sleep_out "{\"reason\":\"deadlock_waiting\",\"detail\":$NEXT}"
@@ -233,6 +266,11 @@ case "$TYPE" in
   gate_pending)
     rm -f "$DEADLOCK_FLAG"
     wake_out "{\"reason\":\"gate_pending\",\"next_task\":$NEXT,\"ts\":\"$TS\"}"
+    ;;
+  review_pending)
+    # v1.4 (#3): deterministic gate passed — an adversarial review is owed.
+    rm -f "$DEADLOCK_FLAG"
+    wake_out "{\"reason\":\"review_pending\",\"next_task\":$NEXT,\"ts\":\"$TS\"}"
     ;;
   *)
     rm -f "$DONE_FLAG" "$DEADLOCK_FLAG"
@@ -269,6 +307,7 @@ case "$TYPE" in
       if [ ! -f "$NOPROG_FLAG" ]; then
         touch "$NOPROG_FLAG"
         log_event "circuit_breaker_tripped"
+        notify "build_stuck" "no_progress $TASK_ID"
         wake_out "{\"reason\":\"build_stuck\",\"signal\":\"no_progress\",\"task\":\"$TASK_ID\",\"no_progress\":$noprog}"
       fi
       sleep_out "{\"reason\":\"stuck_waiting_human\",\"signal\":\"no_progress\",\"task\":\"$TASK_ID\"}"

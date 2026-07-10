@@ -43,8 +43,9 @@ When woken by a tick (`data.reason` present in context):
 | `data.reason` | Action |
 |---|---|
 | `next_task` | `hb start <id>` → do the work → `hb done <id>` (or `hb fail <id>`). |
-| `gate_pending` | `bash .hb/gate.sh <data.next_task.gate>` (reprojects: a pass advances the phase; a fail sets `gate.errors`). |
-| `gate_blocked` | Fix the failing criteria. Re-run the gate. |
+| `gate_pending` | `bash .hb/gate.sh <data.next_task.gate>`. A pass advances the phase unless the gate has a `review` block (→ `review_pending`). |
+| `review_pending` | Spawn a skeptical second agent to REFUTE completion, then `hb review <gate> pass\|fail "<findings>"`. Only a pass advances the phase. |
+| `gate_blocked` | Fix the failing criteria/findings. Re-run the gate. |
 | `at_capacity` | Nothing to do — max tasks in flight / only ready task is leased. |
 | `state_corrupted` | `node .hb/hb.js rebuild` (tick self-heals; surfaces only if the log is unusable). |
 | `dag_corrupted` | `git checkout HEAD -- .hb/dag.json` (structure is immutable). |

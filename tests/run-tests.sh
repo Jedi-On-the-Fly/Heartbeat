@@ -249,6 +249,91 @@ rm -rf "$H20/.lock"; HEARTBEAT_STALE_S=120 bash "$H20/tick.sh" >/dev/null 2>&1
 check "T20.4 lease sans beat & récente → conservée (fallback LOCK_STALE_S, pas de faux reclaim)" \
   '[ -d "$H20/leases/P0T4" ] && ! ( grep lease_expired "$H20/events.jsonl" | grep -q P0T4 )'
 
+echo "═══ T21 — hb-lint warnings avisées (v1.4, #1) ═══"
+LINT="$HB_SRC/plugin/templates/hb-lint.js"
+warns(){ node "$LINT" "$1" --json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write((JSON.parse(d).warnings||[]).join('\n')))"; }
+check "T21.1 dag template → warning 'squelette' (placeholder)" \
+  'node "$LINT" "$HB_SRC/plugin/templates/dag.json" --json | grep -qi squelette'
+check "T21.2 gate référence un fichier non produit → warning dangling" \
+  'warns "$FX/lint-dangling.json" | grep -q "ghost.spec.js"'
+check "T21.3 fichier produit par une tâche → PAS de warning" \
+  '! ( warns "$FX/lint-dangling.json" | grep -q "src/app.js" )'
+check "T21.4 warnings ne changent pas l'\''exit (DAG valide → 0)" \
+  'node "$LINT" "$FX/lint-dangling.json" >/dev/null 2>&1'
+check "T21.5 erreur structurelle → toujours exit 1" \
+  '! node "$LINT" "$FX/lint-dup-ids.json" >/dev/null 2>&1'
+
+echo "═══ T22 — notify hook (v1.4, #2) ═══"
+P22="$TMP/p22"; bash "$HB_SRC/plugin/bootstrap.sh" "$P22" >/dev/null 2>&1 </dev/null; H22="$P22/.hb"
+NF22="$TMP/notify22.log"; : > "$NF22"
+NCMD22="printf '%s|%s|%s\n' \"\$1\" \"\$2\" \"\$3\" >> $NF22"
+setb22(){ node -e "const fs=require('fs');const f='$H22/state.json';const s=JSON.parse(fs.readFileSync(f,'utf8'));s.build_stuck_count=5;fs.writeFileSync(f,JSON.stringify(s,null,2))"; }
+setb22; rm -rf "$H22/.lock"; HB_NOTIFY_CMD="$NCMD22" bash "$H22/tick.sh" >/dev/null 2>&1
+check "T22.1 wake human-needed → HB_NOTIFY_CMD reçoit reason|project|detail" \
+  'grep -q "build_stuck|p22|count=5" "$NF22"'
+rm -rf "$H22/.lock"; HB_NOTIFY_CMD="$NCMD22" bash "$H22/tick.sh" >/dev/null 2>&1
+check "T22.2 tick suivant → PAS de re-notification (fire-once)" \
+  '[ "$(wc -l < "$NF22")" -eq 1 ]'
+setb22; rm -f "$H22/.stuck-alerted"; rm -rf "$H22/.lock"
+out=$(bash "$H22/tick.sh" 2>&1); rc=$?
+check "T22.3 HB_NOTIFY_CMD non défini → tick inchangé (no-op)" \
+  '[ $rc -eq 0 ] && echo "$out" | grep -q build_stuck'
+rm -f "$H22/.stuck-alerted"; rm -rf "$H22/.lock"
+out=$(HB_NOTIFY_CMD="nope_xyz; exit 7" bash "$H22/tick.sh" 2>&1); rc=$?
+check "T22.4 notify qui échoue → n'\''interrompt jamais le tick" \
+  '[ $rc -eq 0 ] && echo "$out" | grep -q build_stuck'
+
+echo "═══ T23 — hb ready & parallélisme (v1.4, #4) ═══"
+P23="$TMP/p23"; bash "$HB_SRC/plugin/bootstrap.sh" "$P23" >/dev/null 2>&1 </dev/null; H23="$P23/.hb"
+node -e "const fs=require('fs');const f='$H23/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'a',requires:[]},{id:'B',title:'b',requires:[]},{id:'C',title:'c',requires:['A']}]}];d.gates={GATE_P0:{desc:'g',criteria:[{id:'g',desc:'ok',cmd:'true'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+node "$H23/hb.js" rebuild >/dev/null
+ids23(){ node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).map(t=>t.id).sort().join(',')))"; }
+len23(){ node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(String(JSON.parse(d).length)))"; }
+check "T23.1 ready → tâches indépendantes (A,B), pas C (requires A)" \
+  'test "$(node "$H23/hb.js" ready | ids23)" = "A,B"'
+check "T23.2 ready N respecte la limite" \
+  'test "$(node "$H23/hb.js" ready 1 | len23)" = "1"'
+mkdir -p "$H23/leases/A"
+check "T23.3 ready exclut les tâches leasées" \
+  'test "$(node "$H23/hb.js" ready | ids23)" = "B"'
+rm -rf "$H23/leases"; node "$H23/hb.js" start A >/dev/null; node "$H23/hb.js" done A >/dev/null
+check "T23.4 dépendance satisfaite → tâche débloquée (B,C prêtes)" \
+  'test "$(node "$H23/hb.js" ready | ids23)" = "B,C"'
+
+echo "═══ T24 — adversarial gate / second agent (v1.4, #3) ═══"
+hasP0(){ node "$1" state | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.exit(JSON.parse(d).completed_phases.includes('P0')?0:1))"; }
+P24="$TMP/p24"; bash "$HB_SRC/plugin/bootstrap.sh" "$P24" >/dev/null 2>&1 </dev/null; H24="$P24/.hb"
+node -e "const fs=require('fs');const f='$H24/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'a',requires:[]}]}];d.gates={GATE_P0:{desc:'g',review:{prompt:'Refute that P0 is done'},criteria:[{id:'g',desc:'ok',cmd:'true'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+node "$H24/hb.js" rebuild >/dev/null
+reason24(){ rm -rf "$H24/.lock"; bash "$H24/tick.sh" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).data.reason))"; }
+node "$H24/hb.js" start A >/dev/null; node "$H24/hb.js" done A >/dev/null
+check "T24.1 tâches finies → gate_pending" 'test "$(reason24)" = "gate_pending"'
+bash "$H24/gate.sh" GATE_P0 >/dev/null 2>&1
+check "T24.2 gate déterministe passée mais review dûe → phase PAS avancée" '! hasP0 "$H24/hb.js"'
+check "T24.3 tick → review_pending" 'test "$(reason24)" = "review_pending"'
+node "$H24/hb.js" review GATE_P0 fail hollow >/dev/null
+check "T24.4 review fail → gate_blocked (re-gate)" 'test "$(reason24)" = "gate_blocked"'
+bash "$H24/gate.sh" GATE_P0 >/dev/null 2>&1; node "$H24/hb.js" review GATE_P0 pass >/dev/null
+check "T24.5 review pass → phase avancée (P0 complétée)" 'hasP0 "$H24/hb.js"'
+P24b="$TMP/p24b"; bash "$HB_SRC/plugin/bootstrap.sh" "$P24b" >/dev/null 2>&1 </dev/null; H24b="$P24b/.hb"
+node "$H24b/hb.js" start P0T1 >/dev/null; node "$H24b/hb.js" done P0T1 >/dev/null
+node "$H24b/hb.js" start P0T2 >/dev/null; node "$H24b/hb.js" done P0T2 >/dev/null
+bash "$H24b/gate.sh" GATE_P0 >/dev/null 2>&1
+check "T24.6 back-compat: gate SANS review → avance sur passage déterministe seul" 'hasP0 "$H24b/hb.js"'
+
+echo "═══ T25 — schema DAG & timing par tâche (v1.4, #5) ═══"
+SCHEMA="$HB_SRC/plugin/dag.schema.json"; TDAG="$HB_SRC/plugin/templates/dag.json"
+check "T25.1 dag.schema.json valide + required gates/phases" \
+  'node -e "const s=require(\"$SCHEMA\");process.exit(s.type===\"object\"&&s.required.includes(\"gates\")&&s.required.includes(\"phases\")?0:1)"'
+check "T25.2 dag template conforme au schéma (structure: tasks<=8, criteria id+cmd)" \
+  'node -e "const d=require(\"$TDAG\");let ok=d.gates&&typeof d.gates===\"object\"&&Array.isArray(d.phases);for(const p of d.phases){if(!Array.isArray(p.tasks)||p.tasks.length>8)ok=false;}for(const g of Object.values(d.gates))for(const c of g.criteria){if(!c.id||!c.cmd)ok=false;}process.exit(ok?0:1)"'
+P25="$TMP/p25"; bash "$HB_SRC/plugin/bootstrap.sh" "$P25" >/dev/null 2>&1 </dev/null; H25="$P25/.hb"
+node "$H25/hb.js" start P0T1 >/dev/null; node "$H25/hb.js" done P0T1 >/dev/null
+check "T25.3 rapport --json inclut task_durations pour P0T1" \
+  'node "$HB_SRC/plugin/templates/hb-report.js" "$H25" --json | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>process.exit((JSON.parse(d).task_durations||[]).some(t=>t.task===\"P0T1\")?0:1))"'
+check "T25.4 rapport texte affiche la section durées de tâche" \
+  'node "$HB_SRC/plugin/templates/hb-report.js" "$H25" | grep -qi "plus longues"'
+
 echo ""
 echo "═══════════════════════════════════════"
 echo "  RÉSULTAT : $PASS passés, $FAIL échoués"

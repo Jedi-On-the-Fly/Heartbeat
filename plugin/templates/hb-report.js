@@ -77,11 +77,24 @@ for (let i = 1; i < milestones.length; i++) {
   }
 }
 
+// v1.4: per-task durations (task_started → task_done)
+const startedAt = {};
+const taskDurations = [];
+for (const e of events) {
+  if (e.event === 'task_started' && e.task) startedAt[e.task] = e.ts;
+  else if (e.event === 'task_done' && e.task && startedAt[e.task]) {
+    taskDurations.push({ task: e.task, seconds: Math.round((ms(e.ts) - ms(startedAt[e.task])) / 1000) });
+    delete startedAt[e.task];
+  }
+}
+taskDurations.sort((a, b) => b.seconds - a.seconds);
+
 const report = {
   project: dag._meta?.project ?? path.basename(path.dirname(path.resolve(dir))),
   progress: { done: doneTasks, total: totalTasks, pct: totalTasks ? Math.round(100 * doneTasks / totalTasks) : 0 },
   phases, gates, incidents,
   phase_durations: durations,
+  task_durations: taskDurations,
   task_done_events: events.filter(e => e.event === 'task_done').length,
   generated: new Date().toISOString(),
 };
@@ -106,6 +119,10 @@ if (Object.keys(gates).length) {
 if (durations.length) {
   console.log(''); console.log('Durées de phase (jalon → gate) :');
   for (const d of durations) console.log(`  ${d.gate}: ${hms(d.seconds)}`);
+}
+if (taskDurations.length) {
+  console.log(''); console.log('Tâches les plus longues (start → done) :');
+  for (const d of taskDurations.slice(0, 5)) console.log(`  ${d.task}: ${hms(d.seconds)}`);
 }
 console.log('');
 console.log(Object.keys(incidents).length

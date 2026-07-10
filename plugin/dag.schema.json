@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://heartbeat.local/dag.schema.json",
+  "title": "HeartBeat DAG",
+  "description": "Schema for a HeartBeat .hb/dag.json — phases, tasks, dependencies, and quality gates. Reference it from your dag.json with \"$schema\": \"../path/to/dag.schema.json\" for live editor validation.",
+  "type": "object",
+  "required": ["gates", "phases"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "_meta": { "type": "object" },
+    "gates": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["criteria"],
+        "properties": {
+          "desc": { "type": "string" },
+          "review": {
+            "type": "object",
+            "description": "Optional adversarial review — the phase advances only after a second agent fails to refute completion.",
+            "properties": { "prompt": { "type": "string" } },
+            "additionalProperties": true
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "cmd"],
+              "properties": {
+                "id": { "type": "string" },
+                "desc": { "type": "string" },
+                "cmd": { "type": "string", "description": "One-line bash, exit 0 = pass. $PROJECT_DIR and $HB_DIR are available." }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "tasks"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "desc": { "type": "string" },
+          "gate_entry": { "type": ["string", "null"] },
+          "gate_exit": { "type": ["string", "null"] },
+          "tasks": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": { "type": "string" },
+                "title": { "type": "string" },
+                "description": { "type": "string" },
+                "requires": { "type": "array", "items": { "type": "string" } }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

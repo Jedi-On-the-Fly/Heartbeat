@@ -58,6 +58,24 @@ bash <project-dir>/.hb/tick.sh
 Returns `{ wakeAgent, data }`. If `wakeAgent: true`, act on `data.reason` per the
 Tick Protocol below.
 
+### `/heartbeat run <project-dir>` — drive the loop
+
+**Serial (default):** repeatedly `bash .hb/tick.sh` → act on `data.reason` → repeat,
+stopping only at a wake that needs a human (`gate_blocked`, `build_stuck`, `deadlock`,
+`review_pending` you can't clear) or `all_done`. Equivalent to `/loop 15m /heartbeat tick <dir>`
+but self-paced.
+
+**Parallel (independent branches):** ask HeartBeat for the concurrently-runnable set
+and fan it out as **worktree-isolated** sub-agents so file writes never collide:
+```bash
+node <project-dir>/.hb/hb.js ready 4        # up to 4 eligible, unleased, independent tasks
+```
+For each returned task, spawn a sub-agent (Agent tool, `isolation:"worktree"`) that
+does the task and calls `hb start`/`hb done` under its own lease. The atomic lease
+guarantees no task is claimed twice. Repeat `hb ready` until empty, then gate.
+**Conflict rule:** `ready` only knows `requires` — if two ready tasks touch the same
+files, either run them worktree-isolated (recommended) or add a `requires` edge.
+
 ### `/heartbeat schedule <project-dir>`
 Drive ticks autonomously on Claude Code using a **`/schedule` routine** (cron).
 Present this ready-to-use routine to the user (fill in `<project-dir>`, `<slug>`,
@@ -90,12 +108,13 @@ clones. For **local-only** projects, use one of:
 ### `/heartbeat help`
 Reply with:
 ```
-*HeartBeat v1.3 — commands:*
+*HeartBeat v1.4 — commands:*
 • /heartbeat init <dir>     — bootstrap a new project
 • /heartbeat status <dir>   — progress report
 • /heartbeat lint <dir>     — validate the DAG
 • /heartbeat viz <dir>      — generate dag-view.html
-• /heartbeat tick <dir>     — manual tick
+• /heartbeat tick <dir>     — manual tick (one task)
+• /heartbeat run <dir>      — drive the loop (serial, or parallel via hb ready)
 • /heartbeat schedule <dir> — ready-to-use /schedule routine
 • /heartbeat help           — this help
 ```
@@ -112,6 +131,8 @@ node .hb/hb.js start <taskId>      # claim the task (lease) + mark active
 node .hb/hb.js done  <taskId>      # completed → frees the lease, resets stuck count
 node .hb/hb.js fail  <taskId>      # failed    → frees the lease, bumps stuck count
 node .hb/hb.js heartbeat <taskId>  # long task: refresh the lease so it isn't reclaimed
+node .hb/hb.js ready [N]           # the concurrently-runnable set (parallel drivers)
+node .hb/hb.js review <gate> pass|fail [note]   # record the adversarial verdict
 node .hb/hb.js rebuild             # reproject state.json from the log (sync / recover)
 node .hb/hb.js state               # print current projected state
 ```
@@ -126,8 +147,9 @@ When woken by a tick (`data.reason` present), act by reason:
 | `data.reason` | Action |
 |---|---|
 | `next_task` | `node .hb/hb.js start <id>` → do the work → `node .hb/hb.js done <id>` (or `fail <id>` if you couldn't complete it). No hand-edited JSON. |
-| `gate_pending` | `bash .hb/gate.sh <data.next_task.gate>`. gate.sh reprojects, so a pass advances the phase automatically; a fail sets `gate.errors`. |
-| `gate_blocked` | Fix the failing criteria, re-run `bash .hb/gate.sh <gate>`. |
+| `gate_pending` | `bash .hb/gate.sh <data.next_task.gate>`. A pass advances the phase — UNLESS the gate has a `review` block, in which case an adversarial review is owed (next). |
+| `review_pending` | The deterministic gate passed; now **spawn a second, skeptical agent** (Agent tool, `isolation` optional) told to *refute* that the phase is truly complete — hollow tests, criteria not really met, faked outputs. Then `node .hb/hb.js review <gate> pass` (couldn't refute) or `fail "<findings>"` (found holes → routes to `gate_blocked`; fix, re-gate, re-review). |
+| `gate_blocked` | Fix the failing criteria (or the review findings), re-run `bash .hb/gate.sh <gate>`. |
 | `at_capacity` | Nothing to do — max tasks already in flight (or the only ready task is leased). The tick handled it; no wake. |
 | `state_corrupted` | `node .hb/hb.js rebuild` (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable. |
 | `dag_corrupted` | Restore dag.json from git/backup (structure is immutable). |
@@ -142,7 +164,19 @@ A crashed session's lease is reclaimed after `LOCK_STALE_S`.
 
 **Parallelism:** set `HB_MAX_CONCURRENCY > 1` (env) to run independent DAG branches
 concurrently — overlapping ticks hand out distinct ready tasks up to the cap.
-Default `1` keeps the classic one-task-at-a-time behavior.
+Default `1` keeps the classic one-task-at-a-time behavior. For explicit fan-out use
+`node .hb/hb.js ready N` and spawn worktree-isolated sub-agents.
+
+**Adversarial gates & spec-first.** Gates are only as honest as the tests the
+implementer wrote — the same agent can grade its own homework. Two mitigations:
+- **Spec-first**: make each phase's *first* task author its gate's test spec from
+  the success checklist, *before* the implementation tasks.
+- **Adversarial review**: add a `review` block to a gate in `dag.json`:
+  ```json
+  "GATE_P3": { "desc": "...", "review": { "prompt": "Refute that P3 is done: hollow tests? criteria not really met? faked output?" }, "criteria": [ … ] }
+  ```
+  A review-gated phase advances only after BOTH the deterministic gate passes AND a
+  **second agent** (spawned on `review_pending`) fails to refute it (`hb review pass`).
 
 ---
 

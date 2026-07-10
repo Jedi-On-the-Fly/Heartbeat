@@ -1,0 +1,23 @@
+{
+  "gates": {
+    "GATE_P0": {
+      "desc": "app built",
+      "criteria": [
+        { "id": "G0_1", "desc": "app exists", "cmd": "test -f \"$PROJECT_DIR/src/app.js\"" },
+        { "id": "G0_2", "desc": "spec passes", "cmd": "node \"$PROJECT_DIR/tests/e2e/ghost.spec.js\"" }
+      ]
+    }
+  },
+  "phases": [
+    {
+      "id": "P0",
+      "title": "Build",
+      "desc": "build it",
+      "gate_entry": null,
+      "gate_exit": "GATE_P0",
+      "tasks": [
+        { "id": "P0T1", "title": "Write app", "description": "Create src/app.js with the main logic.", "requires": [] }
+      ]
+    }
+  ]
+}

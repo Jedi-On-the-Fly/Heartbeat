@@ -342,3 +342,24 @@ node .hb/hb.js import       # migre un projet pré-v1.3 (state.json → événem
 | `HB_MAX_CONCURRENCY` | 1 | Tâches en vol simultanées (leases) |
 | `HEARTBEAT_STALE_S` | 180 | Silence toléré d'une lease heartbeatée avant reclaim |
 | `LOCK_STALE_S` | 1800 | Péremption lock / lease sans heartbeat / write-lock |
+| `HB_NOTIFY_CMD` | (vide) | Commande lancée sur les réveils nécessitant un humain (v1.4) |
+
+---
+
+## Changelog v1.4 — qualité & débit (2026-07-10)
+
+| # | Évolution | Type |
+|---|---|---|
+| 1 | **Gates adversariales (2e agent)** : une gate peut porter un bloc `review` ; après le passage déterministe, le tick émet `review_pending` — un agent sceptique doit échouer à *réfuter* la complétion (`hb review <gate> pass\|fail`) avant que la phase n'avance. Ferme le trou « corriger sa propre copie ». Rétrocompatible (gates sans review inchangées). | 🔴 qualité |
+| 2 | **Parallélisme sans conflit** : `hb ready [N]` expose l'ensemble des tâches simultanément exécutables (éligibles, non-leasées, indépendantes) ; fan-out en sous-agents isolés (worktree). `/heartbeat run` (série ou parallèle). | 🟠 débit |
+| 3 | **hb-lint warnings avisées** : détecte le texte squelette résiduel et les artefacts de gate qu'aucune tâche ne produit. | 🟠 fiabilité |
+| 4 | **Notify hook** (`HB_NOTIFY_CMD`) : réveils nécessitant un humain notifiés une fois, borné en temps, sans jamais casser le tick. | 🟠 observabilité |
+| 5 | `dag.schema.json` (validation éditeur) + durées par tâche dans le rapport. | 🟡 confort |
+| 6 | Suite de régression : 90+ assertions (T21-T25 ajoutés). | 🟢 qualité |
+
+### Nouvelles commandes `hb`
+
+```bash
+node .hb/hb.js ready [N]                    # ensemble parallélisable
+node .hb/hb.js review <gate> pass|fail [note]   # verdict de la revue adversariale
+```

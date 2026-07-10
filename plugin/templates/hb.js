@@ -66,6 +66,7 @@ function initialState(dag) {
     active_tasks: [],
     completed_tasks: [],
     completed_phases: [],
+    pending_reviews: [],
     build_stuck_count: 0,
     gate: { errors: 0 },
     last_event: 'initialized',
@@ -78,12 +79,16 @@ function project(events, dag) {
   const s = initialState(dag);
   const completed = new Set();
   const active = new Set();
-  const completedPhases = new Set();
+  // v1.4: per-gate progress. det = deterministic gate passed; rev = adversarial
+  // review passed. A phase completes only when det AND (review not required OR rev).
+  const gateState = {};
+  const gs = (g) => (gateState[g] ||= { det: false, rev: false });
 
   for (const ev of events) {
     switch (ev.event) {
       case 'initialized':
-        completed.clear(); active.clear(); completedPhases.clear();
+        completed.clear(); active.clear();
+        for (const k of Object.keys(gateState)) delete gateState[k];
         s.build_stuck_count = 0; s.gate.errors = 0;
         break;
       case 'task_started':
@@ -100,13 +105,19 @@ function project(events, dag) {
       case 'lease_expired':          // dead agent reclaimed → task returns to pending
         if (ev.task) active.delete(ev.task);
         break;
-      case 'gate_passed': {
-        const ph = phaseByGateExit(dag, ev.gate);
-        if (ph) completedPhases.add(ph);
+      case 'gate_passed':
+        gs(ev.gate).det = true;
         s.gate.errors = 0; s.build_stuck_count = 0;
         break;
-      }
       case 'gate_failed':
+        gs(ev.gate).det = false;
+        s.gate.errors = 1; s.build_stuck_count += 1;
+        break;
+      case 'review_passed':          // v1.4: adversarial reviewer could not refute
+        gs(ev.gate).rev = true;
+        break;
+      case 'review_failed':          // v1.4: reviewer found holes → re-run the gate
+        gs(ev.gate).det = false; gs(ev.gate).rev = false;
         s.gate.errors = 1; s.build_stuck_count += 1;
         break;
       default: /* audit-only event → no state change */ break;
@@ -114,11 +125,28 @@ function project(events, dag) {
     if (ev.event) s.last_event = ev.event;
   }
 
+  const phases = dag.phases || [];
+  const gates  = dag.gates  || {};
+  const completedPhases = new Set();
+  const pendingReviews  = [];
+  for (const phase of phases) {
+    const G = phase.gate_exit;
+    if (!G) continue;
+    const st = gateState[G];
+    if (!st || !st.det) continue;
+    const reviewRequired = !!(gates[G] && gates[G].review);
+    if (reviewRequired && !st.rev) continue;      // deterministic pass, review owed
+    completedPhases.add(phase.id);
+  }
+  for (const G of Object.keys(gates)) {
+    if (gates[G].review && gateState[G] && gateState[G].det && !gateState[G].rev) pendingReviews.push(G);
+  }
+
   s.completed_tasks = [...completed];
   s.active_tasks = [...active];
   s.completed_phases = [...completedPhases];
+  s.pending_reviews = pendingReviews;             // v1.4
 
-  const phases = dag.phases || [];
   let cur = null;
   for (const p of phases) { if (!completedPhases.has(p.id)) { cur = p.id; break; } }
   if (cur === null && phases.length) cur = phases[phases.length - 1].id;
@@ -213,6 +241,15 @@ switch (cmd) {
     break;
   }
 
+  case 'review': {
+    // v1.4 (#3): record the adversarial reviewer's verdict for a gate.
+    const gate = arg1, verdict = rest[0], note = rest.slice(1).join(' ');
+    if (!gate || (verdict !== 'pass' && verdict !== 'fail')) die('usage: hb review <gate> pass|fail [note]');
+    mutate({ event: verdict === 'pass' ? 'review_passed' : 'review_failed', gate, ...(note ? { note } : {}) });
+    process.stdout.write(`review ${verdict} ${gate}\n`);
+    break;
+  }
+
   case 'rebuild': {
     const s = withWlock(() => reproject());
     process.stdout.write(`rebuilt: ${s.completed_tasks.length} done, phase ${s.current_phase}\n`);
@@ -222,6 +259,17 @@ switch (cmd) {
   case 'state':
     process.stdout.write(JSON.stringify(project(readEvents(), readDag()), null, 2) + '\n');
     break;
+
+  case 'ready': {
+    // v1.4 (#4): the concurrently-runnable set — eligible, unleased, requires-
+    // independent tasks (up to N). Fan these out as isolated parallel agents.
+    const limit = arg1 ? Math.max(0, parseInt(arg1, 10) || 0) : 0;
+    const { readyTasks } = require('./hb-next-task.js');
+    const dag = readDag();
+    const ready = readyTasks(project(readEvents(), dag), dag, HB_DIR, limit);
+    process.stdout.write(JSON.stringify(ready) + '\n');
+    break;
+  }
 
   case 'import': {
     let legacy;
@@ -242,7 +290,7 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|rebuild|state|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|rebuild|state|import> [args]');
 }
 
 module.exports = { project, phaseByGateExit, initialState };

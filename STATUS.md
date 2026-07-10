@@ -1,7 +1,23 @@
 # STATUS — HeartBeat
 
-**Version:** v1.3 (reliability hardening over v1.2)
+**Version:** v1.4 (quality & throughput over v1.3)
 **Regression suite:** `bash tests/run-tests.sh`
+
+## v1.4 — quality & throughput
+
+- **Adversarial gates (second agent).** A gate may carry a `review` block; after the
+  deterministic gate passes, the tick emits `review_pending` — a skeptical second
+  agent must fail to *refute* completion (`hb review <gate> pass|fail`) before the
+  phase advances. Closes the "grade-your-own-homework" hole. Review-less gates behave
+  as before.
+- **Parallel-when-no-conflict.** `hb ready [N]` surfaces the concurrently-runnable
+  (eligible, unleased, requires-independent) set; fan it out as worktree-isolated
+  sub-agents. `/heartbeat run` drives serial or parallel.
+- **hb-lint advisory warnings.** Flags leftover template/placeholder text and gate
+  criteria that reference files no task produces.
+- **Notify hook.** `HB_NOTIFY_CMD` fires once on human-needed wakes (build_stuck,
+  gate_blocked, deadlock, unsanctioned_drift, all_done). Timeout-bounded, fail-safe.
+- **dag.schema.json** for editor validation; **per-task durations** in the report.
 
 ## v1.3 — reliability hardening
 

@@ -70,7 +70,66 @@ function lint(dag) {
       warnings.push(`Gate définie mais jamais référencée: ${g}`);
     }
   }
+
+  checkPlaceholders(dag, warnings);
+  checkGateArtifacts(dag, warnings);
   return { errors, warnings };
+}
+
+// v1.4 (#1): warn if the DAG still carries bootstrap-skeleton text — catches
+// "the agent claimed a plan but left the template". Advisory (exit 0).
+const PLACEHOLDER_MARKERS = [
+  'Implement feature A', 'Implement feature B',
+  'Description of what this task produces.',
+  'Create all required directories and config files.',
+  'Check that all required tools and dependencies are available.',
+  'Verify A and B work together correctly.',
+  'output/result.json',
+];
+function checkPlaceholders(dag, warnings) {
+  const hits = [];
+  if (dag._meta && dag._meta.project === 'my-project') hits.push('_meta.project = "my-project"');
+  const flat = JSON.stringify(dag);
+  for (const m of PLACEHOLDER_MARKERS) if (flat.includes(m)) hits.push(`"${m}"`);
+  if (hits.length) {
+    warnings.push(`DAG contient encore du texte du squelette (${hits.slice(0, 3).join(', ')}${hits.length > 3 ? ', …' : ''}) — remplacer par le vrai plan`);
+  }
+}
+
+// v1.4 (#1): warn when a gate cmd references a file/dir that no task appears to
+// produce (heuristic). Catches "gate runs tests/e2e/x.spec.js but nothing writes it".
+function extractPaths(cmd) {
+  const out = new Set();
+  for (const tokRaw of (cmd.match(/[\w.\-/${}]+/g) || [])) {
+    if (!tokRaw.includes('/')) continue;            // must look like a path
+    if (/HB_DIR/.test(tokRaw)) continue;            // HeartBeat's own dir
+    let p = tokRaw.replace(/\$\{?PROJECT_DIR\}?\//, '').replace(/^\.\//, '');
+    if (!p || p.startsWith('$')) continue;          // bare/unresolved var
+    if (p.includes('.hb/')) continue;
+    const base = p.replace(/\/$/, '').split('/').pop();
+    if (['state.json', 'dag.json', 'events.jsonl'].includes(base)) continue;
+    out.add(p);
+  }
+  return out;
+}
+function checkGateArtifacts(dag, warnings) {
+  const phases = dag.phases ?? [];
+  const taskText = phases.flatMap(p => p.tasks ?? [])
+    .map(t => `${t.title ?? ''} ${t.description ?? ''}`).join(' ').toLowerCase();
+  const seen = new Set();
+  for (const g of Object.values(dag.gates ?? {})) {
+    for (const c of (g.criteria ?? [])) {
+      for (const p of extractPaths(c.cmd ?? '')) {
+        if (seen.has(p)) continue; seen.add(p);
+        const base  = p.replace(/\/$/, '').split('/').pop().toLowerCase();
+        const noext = base.replace(/\.\w+$/, '');
+        const pl    = p.toLowerCase();
+        if (taskText.includes(pl) || taskText.includes(base) ||
+            (noext.length >= 3 && taskText.includes(noext))) continue;
+        warnings.push(`gate référence ${p} — aucune tâche ne semble le produire (vérifier qu'une tâche l'écrit)`);
+      }
+    }
+  }
 }
 
 if (require.main === module) {
