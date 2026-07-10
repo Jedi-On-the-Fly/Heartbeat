@@ -1,0 +1,1 @@
+{"gates":{"G":{"desc":"","criteria":[]}},"phases":[{"id":"X","gate_entry":null,"gate_exit":"G","tasks":[{"id":"T0","requires":[]},{"id":"T1","requires":[]},{"id":"T2","requires":[]},{"id":"T3","requires":[]},{"id":"T4","requires":[]},{"id":"T5","requires":[]},{"id":"T6","requires":[]},{"id":"T7","requires":[]},{"id":"T8","requires":[]}]}]}

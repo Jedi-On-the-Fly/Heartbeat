@@ -1,0 +1,1 @@
+{"gates":{"G":{"desc":"","criteria":[]}},"phases":[{"id":"X","gate_entry":null,"gate_exit":"G","tasks":[{"id":"A","requires":["B"]},{"id":"B","requires":["A"]}]}]}

@@ -1,0 +1,15 @@
+{
+  "name": "heartbeat-marketplace",
+  "owner": {
+    "name": "HeartBeat"
+  },
+  "description": "Local marketplace for the HeartBeat orchestration plugin.",
+  "plugins": [
+    {
+      "name": "heartbeat",
+      "source": "./plugin",
+      "description": "Tick-driven agent orchestration with DAG phases, tasks, and quality gates.",
+      "version": "1.3.0"
+    }
+  ]
+}

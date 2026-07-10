@@ -1,0 +1,17 @@
+# HeartBeat runtime artifacts (created at bootstrap / by ticks — never source)
+# NOTE: templates state.json / dag.json under plugin/templates/ ARE source and
+# are intentionally NOT ignored.
+**/.hb/events.jsonl
+**/.hb/architecture.hash
+**/.hb/dag-view.html
+**/leases/
+.lock
+.wlock
+.stuck-alerted
+.noprogress-alerted
+.all-done-alerted
+.deadlock-alerted
+*.tmp
+
+# OS / editor cruft
+.DS_Store

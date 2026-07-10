@@ -1,0 +1,75 @@
+{
+  "_meta": {
+    "project": "my-project",
+    "version": "1.0",
+    "description": "HeartBeat DAG skeleton — edit phases, tasks, and gates for your project"
+  },
+
+  "gates": {
+    "GATE_P0": {
+      "desc": "Foundation ready",
+      "criteria": [
+        { "id": "G0_1", "desc": "Project directory exists", "cmd": "test -d \"$PROJECT_DIR\"" },
+        { "id": "G0_2", "desc": "state.json is valid JSON", "cmd": "node -e \"JSON.parse(require('fs').readFileSync('$HB_DIR/state.json','utf8'))\"" }
+      ]
+    },
+    "GATE_P1": {
+      "desc": "Phase 1 complete — all outputs verified",
+      "criteria": [
+        { "id": "G1_1", "desc": "Output file exists", "cmd": "test -f \"$PROJECT_DIR/output/result.json\"" },
+        { "id": "G1_2", "desc": "Output is valid JSON", "cmd": "node -e \"JSON.parse(require('fs').readFileSync('$PROJECT_DIR/output/result.json','utf8'))\"" }
+      ]
+    }
+  },
+
+  "phases": [
+    {
+      "id": "P0",
+      "title": "Foundation",
+      "desc": "Setup and validation",
+      "gate_entry": null,
+      "gate_exit": "GATE_P0",
+      "tasks": [
+        {
+          "id": "P0T1",
+          "title": "Initialize project structure",
+          "description": "Create all required directories and config files.",
+          "requires": []
+        },
+        {
+          "id": "P0T2",
+          "title": "Validate environment",
+          "description": "Check that all required tools and dependencies are available.",
+          "requires": ["P0T1"]
+        }
+      ]
+    },
+    {
+      "id": "P1",
+      "title": "Core implementation",
+      "desc": "Build the main feature set",
+      "gate_entry": "GATE_P0",
+      "gate_exit": "GATE_P1",
+      "tasks": [
+        {
+          "id": "P1T1",
+          "title": "Implement feature A",
+          "description": "Description of what this task produces.",
+          "requires": []
+        },
+        {
+          "id": "P1T2",
+          "title": "Implement feature B",
+          "description": "Description of what this task produces.",
+          "requires": ["P1T1"]
+        },
+        {
+          "id": "P1T3",
+          "title": "Integration test",
+          "description": "Verify A and B work together correctly.",
+          "requires": ["P1T1", "P1T2"]
+        }
+      ]
+    }
+  ]
+}
