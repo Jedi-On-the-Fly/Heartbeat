@@ -16,6 +16,7 @@ Skill: `/heartbeat` (installed under `~/.claude/skills/heartbeat/`)
 | Command | Action |
 |---|---|
 | `/heartbeat init <dir>` | `bash ~/.claude/heartbeat/bootstrap.sh <dir>` |
+| `/heartbeat plan <dir>` | Convert a written plan into a lint-clean `dag.json` (spec-first, behavioral gates, adversarial `review` on sensitive gates); gate on `hb-lint`+`hb-viz` |
 | `/heartbeat status <dir>` | `node <dir>/.hb/hb-report.js <dir>/.hb` |
 | `/heartbeat lint <dir>` | `node <dir>/.hb/hb-lint.js <dir>/.hb/dag.json` |
 | `/heartbeat viz <dir>` | `node <dir>/.hb/hb-viz.js <dir>/.hb` → `<dir>/.hb/dag-view.html` |

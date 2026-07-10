@@ -27,10 +27,38 @@ Bootstrap a new HeartBeat project:
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/bootstrap.sh" <project-dir>
 ```
-Then tell the user to:
-- Edit `<project-dir>/.hb/dag.json` (phases, tasks, gates).
-- Validate: `node <project-dir>/.hb/hb-lint.js <project-dir>/.hb/dag.json`.
-- Schedule autonomous runs: `/heartbeat schedule <project-dir>`.
+Then tell the user to co-write the DAG with `/heartbeat plan`, then schedule/run.
+
+### `/heartbeat plan <project-dir>`
+
+Convert a written plan (in the conversation, or a file the user names) into a
+**lint-clean, review-ready** `<project-dir>/.hb/dag.json`. Apply every rule below,
+then gate on `hb-lint` + `hb-viz` before proposing.
+
+**Continuation vs fresh.** Read `<project-dir>/.hb/state.json`: if it has completed
+phases, **append** new phases with fresh IDs and set the first new phase's
+`gate_entry` to the last completed phase's `gate_exit` (never touch/renumber done
+phases). Otherwise write a fresh DAG.
+
+**Rules:**
+- Unique task/phase IDs DAG-wide. `requires` sparse (only real deps). **≤ 8 tasks/phase.**
+- **Spec-first** — each phase's *first* task authors that phase's gate test spec from
+  the gate's checklist, before the implementation tasks. Every file a gate `cmd`
+  references must be produced by some task's description (⇒ no dangling-artifact warnings).
+- **Behavioral gates** — `criteria[].cmd`: one-line bash, exit 0 = pass, `$PROJECT_DIR`
+  available, deterministic <5s. Assert behavior (returns 200, row persisted, invariant
+  holds), not `test -f`.
+- **Adversarial review** on sensitive gates — add `"review": { "prompt": "Refute that
+  this phase is done: …" }` so a second agent must fail to refute before it advances.
+- **No hardcoded values/counts** — derive from source/registry. Validate the shape
+  against `<project-dir>/.hb/dag.schema.json`.
+
+**Acceptance (run and show before proposing):**
+```bash
+node <project-dir>/.hb/hb-lint.js <project-dir>/.hb/dag.json   # 0 errors; review warnings (0 NEW dangling)
+node <project-dir>/.hb/hb-viz.js  <project-dir>/.hb            # renders the cascade → dag-view.html
+```
+Present the new phases/gates + the lint/viz result and get sign-off before running.
 
 ### `/heartbeat status <project-dir>`
 ```bash
@@ -110,6 +138,7 @@ Reply with:
 ```
 *HeartBeat v1.4 — commands:*
 • /heartbeat init <dir>     — bootstrap a new project
+• /heartbeat plan <dir>     — convert a plan into a lint-clean dag.json
 • /heartbeat status <dir>   — progress report
 • /heartbeat lint <dir>     — validate the DAG
 • /heartbeat viz <dir>      — generate dag-view.html

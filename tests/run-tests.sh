@@ -181,6 +181,8 @@ check "T15.6 install.sh → sandbox HOME installe skill + tooling + smoke" \
   'SBX=$(mktemp -d); HOME="$SBX" bash "$HB_SRC/scripts/install.sh" >/dev/null 2>&1 && [ -f "$SBX/.claude/skills/heartbeat/SKILL.md" ] && [ -f "$SBX/.claude/heartbeat/bootstrap.sh" ]; rc=$?; rm -rf "$SBX"; [ $rc -eq 0 ]'
 check "T15.7 skill installé par script a des chemins concrets (var substituée)" \
   'SBX=$(mktemp -d); HOME="$SBX" bash "$HB_SRC/scripts/install.sh" >/dev/null 2>&1; ! grep -q "CLAUDE_PLUGIN_ROOT" "$SBX/.claude/skills/heartbeat/SKILL.md"; rc=$?; rm -rf "$SBX"; [ $rc -eq 0 ]'
+check "T15.8 skill documente /heartbeat plan (conversion plan → dag.json)" \
+  'grep -q "/heartbeat plan" "$HB_SRC/plugin/skills/heartbeat/SKILL.md" && grep -q "Spec-first" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
 
 echo "═══ T16 — hb CLI & projection événementielle (v1.3, #1/#2) ═══"
 P16="$TMP/p16"; bash "$HB_SRC/plugin/bootstrap.sh" "$P16" >/dev/null 2>&1 </dev/null; H16="$P16/.hb"

@@ -358,7 +358,8 @@ node .hb/hb.js import       # migre un projet pré-v1.3 (state.json → événem
 | 4 | **Notify hook** (`HB_NOTIFY_CMD`) : réveils nécessitant un humain notifiés une fois, borné en temps, sans jamais casser le tick. | 🟠 observabilité |
 | 5 | `dag.schema.json` (validation éditeur) + durées par tâche dans le rapport. | 🟡 confort |
 | 6 | **Git au bootstrap + commit-on-gate-pass** : chaque passage de gate committe l'arbre et pose un tag `GATE_PN` (point de restauration : `git reset --hard GATE_PN`). Identité de secours, `--no-git` / `HB_NO_GIT` / `HB_GIT_AUTOCOMMIT=0` pour désactiver. | 🟠 sûreté |
-| 7 | Suite de régression : 99 assertions (T21-T26 ajoutés). | 🟢 qualité |
+| 7 | **`/heartbeat plan`** : commande de conversion d'un plan rédigé en `dag.json` propre (spec-first, gates comportementales, `review` adversariale sur les gates sensibles, IDs uniques, cascade) — validée par `hb-lint` + `hb-viz`. | 🟠 ergonomie |
+| 8 | Suite de régression : 100 assertions (T21-T26 ajoutés). | 🟢 qualité |
 
 ### Nouvelles commandes `hb`
 
