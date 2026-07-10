@@ -11,6 +11,9 @@ HB_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 # repeatedly on a pending task without running an agent. The dedicated no-progress
 # test sets STUCK_TICKS low locally.
 export STUCK_TICKS=999
+# v1.4: keep git init / commit-on-gate-pass out of the throwaway test projects by
+# default; T26 opts back in explicitly (HB_NO_GIT="").
+export HB_NO_GIT=1
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 P="$TMP/proj"
@@ -333,6 +336,26 @@ check "T25.3 rapport --json inclut task_durations pour P0T1" \
   'node "$HB_SRC/plugin/templates/hb-report.js" "$H25" --json | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>process.exit((JSON.parse(d).task_durations||[]).some(t=>t.task===\"P0T1\")?0:1))"'
 check "T25.4 rapport texte affiche la section durées de tâche" \
   'node "$HB_SRC/plugin/templates/hb-report.js" "$H25" | grep -qi "plus longues"'
+
+echo "═══ T26 — git init au bootstrap & commit-on-gate-pass (v1.4) ═══"
+if command -v git >/dev/null 2>&1; then
+  PG26="$TMP/p26"; HB_NO_GIT="" bash "$HB_SRC/plugin/bootstrap.sh" "$PG26" >/dev/null 2>&1 </dev/null
+  check "T26.1 bootstrap → dépôt git initialisé" '[ -d "$PG26/.git" ]'
+  check "T26.2 .gitignore HeartBeat (runtime ignoré)" 'grep -q "HeartBeat runtime" "$PG26/.gitignore"'
+  check "T26.3 commit initial présent" 'git -C "$PG26" rev-parse HEAD >/dev/null 2>&1'
+  n26a=$(git -C "$PG26" rev-list --count HEAD)
+  HB_NO_GIT="" bash "$PG26/.hb/gate.sh" GATE_P0 >/dev/null 2>&1
+  check "T26.4 gate passée → tag du gate (restore point)" 'git -C "$PG26" rev-parse GATE_P0 >/dev/null 2>&1'
+  check "T26.5 gate passée → nouveau commit" '[ "$(git -C "$PG26" rev-list --count HEAD)" -gt "$n26a" ]'
+  PG26b="$TMP/p26b"; bash "$HB_SRC/plugin/bootstrap.sh" "$PG26b" --no-git >/dev/null 2>&1 </dev/null
+  check "T26.6 --no-git → pas de dépôt" '[ ! -d "$PG26b/.git" ]'
+  PG26c="$TMP/p26c"; HB_NO_GIT="" bash "$HB_SRC/plugin/bootstrap.sh" "$PG26c" >/dev/null 2>&1 </dev/null
+  n26c=$(git -C "$PG26c" rev-list --count HEAD)
+  HB_NO_GIT=1 bash "$PG26c/.hb/gate.sh" GATE_P0 >/dev/null 2>&1
+  check "T26.7 HB_NO_GIT=1 → gate.sh ne committe pas" '[ "$(git -C "$PG26c" rev-list --count HEAD)" = "$n26c" ]'
+else
+  echo "  (git absent — T26 sauté)"
+fi
 
 echo ""
 echo "═══════════════════════════════════════"

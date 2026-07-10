@@ -82,9 +82,23 @@ TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 # v1.3: after logging, reproject so the phase advances (pass) or gate.errors is
 # set (fail) with no hand-edited state. hb.js is the sole state mutator.
 reproject() { [ -f "$HB_DIR/hb.js" ] && node "$HB_DIR/hb.js" rebuild >/dev/null 2>&1 || true; }
+# v1.4: snapshot the phase on gate pass so it becomes a git restore point.
+# Force-tags the gate id (git reset --hard <GATE> rolls the phase back). Skips if
+# HB_NO_GIT set, HB_GIT_AUTOCOMMIT=0, git absent, or the project isn't a repo.
+git_snapshot() {
+  [ -z "${HB_NO_GIT:-}" ] || return 0
+  [ "${HB_GIT_AUTOCOMMIT:-1}" != "0" ] || return 0
+  command -v git >/dev/null 2>&1 || return 0
+  git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  git -C "$PROJECT_DIR" add -A >/dev/null 2>&1 || true
+  git -c user.name='HeartBeat' -c user.email='heartbeat@local' \
+      -C "$PROJECT_DIR" commit -q -m "heartbeat: $1 passed" >/dev/null 2>&1 || true
+  git -C "$PROJECT_DIR" tag -f "$1" >/dev/null 2>&1 || true
+}
 if [ "$FAIL" -eq 0 ]; then
   echo "{\"ts\":\"$TS\",\"event\":\"gate_passed\",\"gate\":\"$GATE\",\"pass\":$PASS,\"fail\":0}" >> "$EVENTS_FILE"
   reproject
+  git_snapshot "$GATE"
   echo ""
   # v1.4 (#3): if this gate requires an adversarial review, the phase does NOT
   # advance yet — a second agent must try to refute completion, then: hb review.

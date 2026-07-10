@@ -178,6 +178,15 @@ implementer wrote — the same agent can grade its own homework. Two mitigations
   A review-gated phase advances only after BOTH the deterministic gate passes AND a
   **second agent** (spawned on `review_pending`) fails to refute it (`hb review pass`).
 
+**Version control (automatic).** Bootstrap runs `git init` (unless `--no-git` /
+`HB_NO_GIT=1`) and every gate pass commits the working tree and force-tags the gate
+id — so each phase is a restore point:
+```bash
+git reset --hard GATE_P3      # roll the project back to when P3's gate last passed
+```
+Disable auto-commit with `HB_GIT_AUTOCOMMIT=0`. Commits use a fallback identity, so
+they work even if git user isn't configured.
+
 ---
 
 ## Reference

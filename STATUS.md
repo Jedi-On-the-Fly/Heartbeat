@@ -18,6 +18,9 @@
 - **Notify hook.** `HB_NOTIFY_CMD` fires once on human-needed wakes (build_stuck,
   gate_blocked, deadlock, unsanctioned_drift, all_done). Timeout-bounded, fail-safe.
 - **dag.schema.json** for editor validation; **per-task durations** in the report.
+- **Git-aware.** Bootstrap runs `git init`; every gate pass commits and force-tags
+  the gate id, so each phase is a restore point (`git reset --hard GATE_PN`). Opt out
+  with `--no-git` / `HB_NO_GIT` / `HB_GIT_AUTOCOMMIT=0`.
 
 ## v1.3 — reliability hardening
 

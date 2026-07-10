@@ -54,6 +54,10 @@ When woken by a tick (`data.reason` present in context):
 | `build_stuck` | `signal: no_progress` = woken repeatedly without progress. Produce a blocker report. |
 | `all_done` | Write the final project report. |
 
+**Version control:** bootstrap runs `git init`; every gate pass commits + force-tags
+the gate id → `git reset --hard GATE_PN` rolls a phase back. Disable via `HB_NO_GIT` /
+`HB_GIT_AUTOCOMMIT=0`.
+
 **End of session:** finish each task with `hb done`/`hb fail` (frees its lease).
 The handout lock is released automatically; a crashed session's lease is reclaimed
 after `LOCK_STALE_S`. Parallelism: `HB_MAX_CONCURRENCY > 1` (default 1 = serial).

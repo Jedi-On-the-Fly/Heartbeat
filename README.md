@@ -343,6 +343,8 @@ node .hb/hb.js import       # migre un projet pré-v1.3 (state.json → événem
 | `HEARTBEAT_STALE_S` | 180 | Silence toléré d'une lease heartbeatée avant reclaim |
 | `LOCK_STALE_S` | 1800 | Péremption lock / lease sans heartbeat / write-lock |
 | `HB_NOTIFY_CMD` | (vide) | Commande lancée sur les réveils nécessitant un humain (v1.4) |
+| `HB_NO_GIT` | (vide) | Si défini : pas de `git init` au bootstrap, pas de commit-on-gate-pass (v1.4) |
+| `HB_GIT_AUTOCOMMIT` | 1 | `0` désactive le commit automatique au passage de gate (v1.4) |
 
 ---
 
@@ -355,7 +357,8 @@ node .hb/hb.js import       # migre un projet pré-v1.3 (state.json → événem
 | 3 | **hb-lint warnings avisées** : détecte le texte squelette résiduel et les artefacts de gate qu'aucune tâche ne produit. | 🟠 fiabilité |
 | 4 | **Notify hook** (`HB_NOTIFY_CMD`) : réveils nécessitant un humain notifiés une fois, borné en temps, sans jamais casser le tick. | 🟠 observabilité |
 | 5 | `dag.schema.json` (validation éditeur) + durées par tâche dans le rapport. | 🟡 confort |
-| 6 | Suite de régression : 90+ assertions (T21-T25 ajoutés). | 🟢 qualité |
+| 6 | **Git au bootstrap + commit-on-gate-pass** : chaque passage de gate committe l'arbre et pose un tag `GATE_PN` (point de restauration : `git reset --hard GATE_PN`). Identité de secours, `--no-git` / `HB_NO_GIT` / `HB_GIT_AUTOCOMMIT=0` pour désactiver. | 🟠 sûreté |
+| 7 | Suite de régression : 99 assertions (T21-T26 ajoutés). | 🟢 qualité |
 
 ### Nouvelles commandes `hb`
 

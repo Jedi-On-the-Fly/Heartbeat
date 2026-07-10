@@ -31,7 +31,14 @@ fi
 
 HB_DIR="$PROJECT_DIR/.hb"
 
-FORCE="${2:-}"
+# v1.4: flags (any order after <project-dir>): --force (overwrite .hb), --no-git.
+FORCE=""; NO_GIT=0
+for a in "${@:2}"; do
+  case "$a" in
+    --force)  FORCE="--force";;
+    --no-git) NO_GIT=1;;
+  esac
+done
 
 if [ -d "$HB_DIR" ] && [ "$FORCE" != "--force" ]; then
   echo "⚠️  .hb/ already exists in $PROJECT_DIR"
@@ -76,8 +83,34 @@ node "$HB_DIR/hb.js" rebuild >/dev/null 2>&1 || true
 # Make scripts executable
 chmod +x "$HB_DIR/tick.sh" "$HB_DIR/gate.sh" "$HB_DIR/hb-next-task.js" "$HB_DIR/hb.js"
 
+# v1.4: init git so each gate pass is a restore point (commit-on-gate-pass).
+# Skips if: HB_NO_GIT set, --no-git, git absent, or already a repo.
+GIT_MSG=""
+if [ -z "${HB_NO_GIT:-}" ] && [ "$NO_GIT" != "1" ] && command -v git >/dev/null 2>&1 \
+   && ! git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if git -C "$PROJECT_DIR" init -q 2>/dev/null; then
+    GI="$PROJECT_DIR/.gitignore"
+    if ! grep -q "HeartBeat runtime" "$GI" 2>/dev/null; then
+      {
+        echo "# HeartBeat runtime (ephemeral — never source)"
+        echo ".hb/.lock"; echo ".hb/.wlock"; echo ".hb/leases/"
+        echo ".hb/.stuck-alerted"; echo ".hb/.noprogress-alerted"
+        echo ".hb/.all-done-alerted"; echo ".hb/.deadlock-alerted"
+        echo ".hb/.gate-notified"; echo ".hb/.drift-notified"
+        echo ".hb/*.tmp"; echo ".hb/dag-view.html"
+      } >> "$GI"
+    fi
+    git -C "$PROJECT_DIR" add -A >/dev/null 2>&1 || true
+    # Fallback identity so the snapshot works even if git user isn't configured.
+    git -c user.name='HeartBeat' -c user.email='heartbeat@local' \
+        -C "$PROJECT_DIR" commit -q -m "chore(heartbeat): initialize project" >/dev/null 2>&1 || true
+    GIT_MSG="git initialized — each gate pass will be committed & tagged (HB_NO_GIT=1 to disable)"
+  fi
+fi
+
 echo ""
 echo "✅ HeartBeat initialized in $HB_DIR"
+[ -n "$GIT_MSG" ] && echo "   $GIT_MSG"
 echo ""
 echo "Next steps:"
 echo "  1. Edit $HB_DIR/dag.json — define your phases, tasks, and gate criteria"
