@@ -359,6 +359,28 @@ else
   echo "  (git absent — T26 sauté)"
 fi
 
+echo "═══ T27 — hb doctor : rot detection (v1.5) ═══"
+P27="$TMP/p27"; bash "$HB_SRC/plugin/bootstrap.sh" "$P27" >/dev/null 2>&1 </dev/null; H27="$P27/.hb"
+node -e "const fs=require('fs');const f='$H27/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'spec',description:'author tests/e2e/x.spec.js',requires:[]}]}];d.gates={GATE_P0:{desc:'g',criteria:[{id:'g1',desc:'spec',cmd:'node \"\$PROJECT_DIR/tests/e2e/x.spec.js\"'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+node "$H27/hb.js" rebuild >/dev/null
+mkdir -p "$P27/tests/e2e"; echo "process.exit(0)" > "$P27/tests/e2e/x.spec.js"
+check "T27.1 fichier présent → doctor sain (exit 0)" 'node "$H27/hb.js" doctor >/dev/null 2>&1'
+node "$H27/hb.js" start A >/dev/null; node "$H27/hb.js" done A >/dev/null; bash "$H27/gate.sh" GATE_P0 >/dev/null 2>&1
+rm -f "$P27/tests/e2e/x.spec.js"
+check "T27.2 phase DONE + fichier supprimé → doctor signale la rot (exit 1)" '! node "$H27/hb.js" doctor >/dev/null 2>&1'
+check "T27.3 doctor nomme le fichier manquant + 'reproducible'" \
+  'o=$(node "$H27/hb.js" doctor 2>&1 || true); echo "$o" | grep -q "x.spec.js" && echo "$o" | grep -qi reproducible'
+
+echo "═══ T28 — gate.sh --check / --all read-only (v1.5) ═══"
+P28="$TMP/p28"; bash "$HB_SRC/plugin/bootstrap.sh" "$P28" >/dev/null 2>&1 </dev/null; H28="$P28/.hb"
+E28=$(wc -l < "$H28/events.jsonl")
+check "T28.1 --check GATE_P0 (passe) → exit 0" 'bash "$H28/gate.sh" --check GATE_P0 >/dev/null 2>&1'
+check "T28.2 --check est READ-ONLY (aucun event ajouté)" '[ "$(wc -l < "$H28/events.jsonl")" -eq "$E28" ]'
+node -e "const fs=require('fs');const f='$H28/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GATE_X={desc:'x',criteria:[{id:'x',desc:'no',cmd:'false'}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+check "T28.3 --check gate défaillante → exit 1" '! bash "$H28/gate.sh" --check GATE_X >/dev/null 2>&1'
+check "T28.4 --all réévalue toutes les gates read-only (aucun event)" \
+  'EB=$(wc -l < "$H28/events.jsonl"); bash "$H28/gate.sh" --all >/dev/null 2>&1; [ "$(wc -l < "$H28/events.jsonl")" -eq "$EB" ]'
+
 echo ""
 echo "═══════════════════════════════════════"
 echo "  RÉSULTAT : $PASS passés, $FAIL échoués"

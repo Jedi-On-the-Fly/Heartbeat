@@ -153,4 +153,4 @@ if (require.main === module) {
   }
   process.exit(errors.length ? 1 : 0);
 }
-module.exports = { lint };
+module.exports = { lint, extractPaths };

@@ -1,7 +1,16 @@
 # STATUS — HeartBeat
 
-**Version:** v1.4 (quality & throughput over v1.3)
+**Version:** v1.5 (gate integrity over v1.4)
 **Regression suite:** `bash tests/run-tests.sh`
+
+## v1.5 — gate integrity
+
+- **`hb doctor`** — static integrity check. Headline: *rot detection* — a completed
+  phase whose gate references a now-deleted file (that gate can no longer be
+  reproduced). Also flags DAG errors, state/log drift, stale leases. Read-only.
+- **Re-verifiable gates** — `gate.sh --check <GATE>` re-evaluates a gate read-only
+  (no state change); `gate.sh --all` re-evaluates every gate (regression check). A
+  passed gate keeps acting as a gate instead of a one-shot checkpoint.
 
 ## v1.4 — quality & throughput
 

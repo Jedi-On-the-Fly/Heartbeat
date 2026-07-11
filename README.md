@@ -367,3 +367,17 @@ node .hb/hb.js import       # migre un projet pré-v1.3 (state.json → événem
 node .hb/hb.js ready [N]                    # ensemble parallélisable
 node .hb/hb.js review <gate> pass|fail [note]   # verdict de la revue adversariale
 ```
+
+---
+
+## Changelog v1.5 — intégrité des gates (2026-07-11)
+
+| # | Évolution | Type |
+|---|---|---|
+| 1 | **`hb doctor`** : détection de *rot* — une phase TERMINÉE dont une gate référence un fichier disparu (gate non reproductible). Signale aussi erreurs DAG, dérive state/log, leases périmées. Lecture seule. | 🔴 intégrité |
+| 2 | **Gates re-vérifiables** : `gate.sh --check <GATE>` réévalue une gate en lecture seule (aucun effet de bord) ; `gate.sh --all` réévalue TOUTES les gates (contrôle de régression). Une gate passée continue d'agir comme une gate. | 🟠 intégrité |
+| 3 | Suite de régression : 107 assertions (T27-T28 ajoutés). | 🟢 qualité |
+
+**Contexte :** surgi d'un vrai build — un agent a retiré des specs qu'une gate TERMINÉE
+(`GATE_P8`) référençait encore. « Documenté mais non vérifié » : `hb doctor` attrape
+exactement ce cas, et `gate.sh --all` re-prouve que le projet passe encore toutes ses gates.

@@ -27,6 +27,7 @@ const fs   = require('fs');
 const path = require('path');
 
 const HB_DIR = process.env.HB_DIR || __dirname;
+const PROJECT_DIR = path.dirname(HB_DIR);
 const EVENTS = path.join(HB_DIR, 'events.jsonl');
 const STATE  = path.join(HB_DIR, 'state.json');
 const DAG    = path.join(HB_DIR, 'dag.json');
@@ -199,6 +200,55 @@ function mutate(ev) {
   return withWlock(() => { appendEvent(ev); return reproject(); });
 }
 
+// v1.5: static integrity check. The headline is rot detection — a COMPLETED phase
+// whose gate references a file that no longer exists (that gate can no longer be
+// reproduced). Also surfaces DAG errors, state/log drift, and stale leases. Read-only.
+function doctor() {
+  const dag = readDag();
+  const state = project(readEvents(), dag);
+  const gates = dag.gates || {}, phases = dag.phases || [];
+  const completed = new Set(state.completed_phases);
+  const { lint, extractPaths } = require('./hb-lint.js');
+  const problems = [], notes = [];
+
+  const gateToPhase = {};
+  for (const p of phases) if (p.gate_exit) gateToPhase[p.gate_exit] = p.id;
+  for (const [g, gv] of Object.entries(gates)) {
+    const phaseId = gateToPhase[g];
+    const isDone = phaseId && completed.has(phaseId);
+    for (const c of (gv.criteria || [])) {
+      for (const rel of extractPaths(c.cmd || '')) {
+        if (fs.existsSync(path.join(PROJECT_DIR, rel.replace(/\/$/, '')))) continue;
+        (isDone ? problems : notes).push(
+          `${g} [${c.id}] → missing ${rel}` +
+          (isDone ? ` (phase ${phaseId} DONE — gate no longer reproducible)`
+                  : ` (phase ${phaseId || '?'} not built yet)`));
+      }
+    }
+  }
+
+  for (const e of lint(dag).errors) problems.push(`dag: ${e}`);
+
+  let onDisk = null;
+  try { onDisk = JSON.parse(fs.readFileSync(STATE, 'utf8')); } catch (e) {}
+  if (onDisk) {
+    const k = s => JSON.stringify([...(s || [])].sort());
+    if (k(onDisk.completed_tasks) !== k(state.completed_tasks) ||
+        k(onDisk.completed_phases) !== k(state.completed_phases)) {
+      notes.push('state.json differs from the event-log projection — run: hb rebuild');
+    }
+  }
+
+  try {
+    for (const t of fs.readdirSync(LEASES)) {
+      const age = (Date.now() - fs.statSync(path.join(LEASES, t)).mtimeMs) / 1000;
+      if (age > LOCK_STALE_S) notes.push(`stale lease ${t} (~${Math.round(age)}s) — a tick will reclaim it`);
+    }
+  } catch (e) {}
+
+  return { problems, notes };
+}
+
 // ── CLI ───────────────────────────────────────────────────────────────────────
 const [cmd, arg1, ...rest] = process.argv.slice(2);
 const die = (msg) => { process.stderr.write(msg + '\n'); process.exit(1); };
@@ -250,6 +300,16 @@ switch (cmd) {
     break;
   }
 
+  case 'doctor': {
+    const { problems, notes } = doctor();
+    for (const n of notes)    process.stdout.write(`  ⚠ ${n}\n`);
+    for (const p of problems) process.stdout.write(`  ✗ ${p}\n`);
+    process.stdout.write(problems.length
+      ? `✗ hb doctor: ${problems.length} problem(s), ${notes.length} note(s)\n`
+      : `✓ hb doctor: healthy${notes.length ? ` (${notes.length} note(s))` : ''}\n`);
+    process.exit(problems.length ? 1 : 0);
+  }
+
   case 'rebuild': {
     const s = withWlock(() => reproject());
     process.stdout.write(`rebuilt: ${s.completed_tasks.length} done, phase ${s.current_phase}\n`);
@@ -290,7 +350,7 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|ready|review|rebuild|state|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|rebuild|state|import> [args]');
 }
 
 module.exports = { project, phaseByGateExit, initialState };

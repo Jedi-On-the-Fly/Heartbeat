@@ -66,6 +66,19 @@ node <project-dir>/.hb/hb-report.js <project-dir>/.hb
 ```
 Also read `<project-dir>/.hb/state.json` for current phase and task counts.
 
+### `/heartbeat doctor <project-dir>`
+Static integrity check — the key one is **rot detection**: a *completed* phase whose
+gate references a file that no longer exists (that gate can't be reproduced). Also
+flags DAG errors, state/log drift, and stale leases. Read-only.
+```bash
+node <project-dir>/.hb/hb.js doctor
+```
+To behaviourally **re-verify** that gates still pass (read-only, no state change):
+```bash
+bash <project-dir>/.hb/gate.sh --check <GATE>   # one gate
+bash <project-dir>/.hb/gate.sh --all            # every gate (regression check)
+```
+
 ### `/heartbeat lint <project-dir>`
 ```bash
 node <project-dir>/.hb/hb-lint.js <project-dir>/.hb/dag.json
@@ -136,11 +149,12 @@ clones. For **local-only** projects, use one of:
 ### `/heartbeat help`
 Reply with:
 ```
-*HeartBeat v1.4 — commands:*
+*HeartBeat v1.5 — commands:*
 • /heartbeat init <dir>     — bootstrap a new project
 • /heartbeat plan <dir>     — convert a plan into a lint-clean dag.json
 • /heartbeat status <dir>   — progress report
 • /heartbeat lint <dir>     — validate the DAG
+• /heartbeat doctor <dir>   — integrity check (rot: gates referencing deleted files)
 • /heartbeat viz <dir>      — generate dag-view.html
 • /heartbeat tick <dir>     — manual tick (one task)
 • /heartbeat run <dir>      — drive the loop (serial, or parallel via hb ready)
@@ -162,6 +176,7 @@ node .hb/hb.js fail  <taskId>      # failed    → frees the lease, bumps stuck 
 node .hb/hb.js heartbeat <taskId>  # long task: refresh the lease so it isn't reclaimed
 node .hb/hb.js ready [N]           # the concurrently-runnable set (parallel drivers)
 node .hb/hb.js review <gate> pass|fail [note]   # record the adversarial verdict
+node .hb/hb.js doctor              # integrity check (deleted gate files, drift, stale leases)
 node .hb/hb.js rebuild             # reproject state.json from the log (sync / recover)
 node .hb/hb.js state               # print current projected state
 ```
