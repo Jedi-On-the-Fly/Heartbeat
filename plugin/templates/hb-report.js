@@ -1,17 +1,15 @@
 #!/usr/bin/env node
 /**
- * hb-report.js — Rapport d'avancement HeartBeat (v1.2)
+ * hb-report.js — HeartBeat progress report
  *
- * Lit dag.json + state.json + events.jsonl et produit :
- *   - avancement global et par phase (statut : done / in_progress / ready / locked)
- *   - statistiques de gates (passées / échecs)
+ * Reads dag.json + state.json + events.jsonl and produces:
+ *   - overall and per-phase progress (status: done / in_progress / ready / locked)
+ *   - gate stats (passed / failed)
  *   - incidents (corruptions, drift, stale locks, circuit breaker, deadlocks)
- *   - durées de phase (jalons : initialized → gate_passed → gate_passed…)
+ *   - phase durations (milestones: initialized → gate_passed → gate_passed…)
+ *   - per-task durations (task_started → task_done)
  *
- * Convention v1.2 : l'agent appende {"ts","event":"task_done","task":"ID"} dans
- * events.jsonl à chaque tâche terminée — le rapport les exploite si présents.
- *
- * Usage : node hb-report.js <hb-dir> [--json]
+ * Usage: node hb-report.js <hb-dir> [--json]
  */
 'use strict';
 const fs = require('fs');
@@ -106,25 +104,25 @@ const hms = s => s >= 3600 ? `${Math.floor(s / 3600)}h${Math.floor((s % 3600) / 
 const icon = { done: '✅', in_progress: '🔧', ready: '▶️ ', locked: '🔒' };
 
 console.log(`═══ HeartBeat Report — ${report.project} ═══`);
-console.log(`Avancement : ${doneTasks}/${totalTasks} tâches (${report.progress.pct}%)`);
+console.log(`Progress: ${doneTasks}/${totalTasks} tasks (${report.progress.pct}%)`);
 console.log('');
-console.log('Phases :');
+console.log('Phases:');
 for (const p of phases) {
   console.log(`  ${icon[p.status]} ${p.id} ${p.title} — ${p.done}/${p.total}${p.gate_exit ? `  [gate: ${p.gate_exit}]` : ''}`);
 }
 if (Object.keys(gates).length) {
-  console.log(''); console.log('Gates :');
-  for (const [g, v] of Object.entries(gates)) console.log(`  ${g}: ${v.passed} passée(s), ${v.failed} échec(s)`);
+  console.log(''); console.log('Gates:');
+  for (const [g, v] of Object.entries(gates)) console.log(`  ${g}: ${v.passed} passed, ${v.failed} failed`);
 }
 if (durations.length) {
-  console.log(''); console.log('Durées de phase (jalon → gate) :');
+  console.log(''); console.log('Phase durations (milestone → gate):');
   for (const d of durations) console.log(`  ${d.gate}: ${hms(d.seconds)}`);
 }
 if (taskDurations.length) {
-  console.log(''); console.log('Tâches les plus longues (start → done) :');
+  console.log(''); console.log('Longest tasks (start → done):');
   for (const d of taskDurations.slice(0, 5)) console.log(`  ${d.task}: ${hms(d.seconds)}`);
 }
 console.log('');
 console.log(Object.keys(incidents).length
-  ? `Incidents : ${Object.entries(incidents).map(([k, v]) => `${k}×${v}`).join(', ')}`
-  : 'Incidents : aucun');
+  ? `Incidents: ${Object.entries(incidents).map(([k, v]) => `${k}×${v}`).join(', ')}`
+  : 'Incidents: none');

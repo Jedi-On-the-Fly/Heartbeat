@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 /**
- * hb-lint.js — Validation statique de dag.json (v1.2)
+ * hb-lint.js — Static validation of dag.json
  *
- * Erreurs (exit 1) :
- *   - IDs de tâches dupliqués
- *   - requires vers un ID inexistant
- *   - cycle de dépendances
- *   - gate_entry / gate_exit référençant une gate non définie
- *   - gate_entry qui n'est la gate_exit d'aucune phase (phase verrouillée à jamais)
- * Warnings (exit 0) :
- *   - phase > 8 tâches (leçon vizcore-demo : perte de contexte)
- *   - gate définie mais jamais référencée
+ * Errors (exit 1):
+ *   - duplicate task IDs
+ *   - requires pointing to a non-existent ID
+ *   - dependency cycle
+ *   - gate_entry / gate_exit referencing an undefined gate
+ *   - gate_entry that is no phase's gate_exit (phase locked forever)
+ * Warnings (exit 0):
+ *   - phase > 8 tasks (context-loss risk)
+ *   - gate defined but never referenced
+ *   - leftover template/skeleton text (v1.4)
+ *   - gate cmd references a file no task produces (v1.4)
  *
- * Usage : node hb-lint.js <dag.json> [--json]
- * Module : const { lint } = require('./hb-lint.js')  → { errors, warnings }
+ * Usage: node hb-lint.js <dag.json> [--json]
+ * Module: const { lint } = require('./hb-lint.js')  → { errors, warnings }
  */
 'use strict';
 const fs = require('fs');
@@ -28,35 +30,35 @@ function lint(dag) {
   for (const p of phases) {
     const tasks = p.tasks ?? [];
     if (tasks.length > 8) {
-      warnings.push(`[${p.id}] ${tasks.length} tâches (>8) — risque de perte de contexte, envisager des sous-phases`);
+      warnings.push(`[${p.id}] ${tasks.length} tasks (>8) — context-loss risk, consider sub-phases`);
     }
     for (const t of tasks) {
-      if (taskIds.has(t.id)) errors.push(`ID de tâche dupliqué: ${t.id}`);
+      if (taskIds.has(t.id)) errors.push(`duplicate task ID: ${t.id}`);
       taskIds.add(t.id);
       taskMap[t.id] = t;
     }
     for (const g of [p.gate_entry, p.gate_exit]) {
-      if (g && !gates[g]) errors.push(`[${p.id}] gate non définie: ${g}`);
+      if (g && !gates[g]) errors.push(`[${p.id}] undefined gate: ${g}`);
     }
     if (p.gate_entry && !phases.some(q => q.gate_exit === p.gate_entry)) {
-      errors.push(`[${p.id}] gate_entry ${p.gate_entry} n'est la gate_exit d'aucune phase — phase verrouillée à jamais`);
+      errors.push(`[${p.id}] gate_entry ${p.gate_entry} is no phase's gate_exit — phase locked forever`);
     }
   }
 
   for (const id of taskIds) {
     for (const r of (taskMap[id].requires ?? [])) {
-      if (!taskIds.has(r)) errors.push(`[${id}] requires une tâche inexistante: ${r}`);
+      if (!taskIds.has(r)) errors.push(`[${id}] requires a non-existent task: ${r}`);
     }
   }
 
-  // Cycles — DFS tricolore
+  // Cycles — tri-color DFS
   const color = {}; const stack = [];
   function dfs(id) {
     color[id] = 1; stack.push(id);
     for (const r of (taskMap[id]?.requires ?? [])) {
       if (!taskMap[r]) continue;
       if (color[r] === 1) {
-        errors.push(`Cycle de dépendances: ${[...stack.slice(stack.indexOf(r)), r].join(' → ')}`);
+        errors.push(`dependency cycle: ${[...stack.slice(stack.indexOf(r)), r].join(' → ')}`);
         continue;
       }
       if (!color[r]) dfs(r);
@@ -67,7 +69,7 @@ function lint(dag) {
 
   for (const g of Object.keys(gates)) {
     if (!phases.some(p => p.gate_entry === g || p.gate_exit === g)) {
-      warnings.push(`Gate définie mais jamais référencée: ${g}`);
+      warnings.push(`gate defined but never referenced: ${g}`);
     }
   }
 
@@ -92,7 +94,7 @@ function checkPlaceholders(dag, warnings) {
   const flat = JSON.stringify(dag);
   for (const m of PLACEHOLDER_MARKERS) if (flat.includes(m)) hits.push(`"${m}"`);
   if (hits.length) {
-    warnings.push(`DAG contient encore du texte du squelette (${hits.slice(0, 3).join(', ')}${hits.length > 3 ? ', …' : ''}) — remplacer par le vrai plan`);
+    warnings.push(`DAG still contains skeleton/template text (${hits.slice(0, 3).join(', ')}${hits.length > 3 ? ', …' : ''}) — replace with the real plan`);
   }
 }
 
@@ -126,7 +128,7 @@ function checkGateArtifacts(dag, warnings) {
         const pl    = p.toLowerCase();
         if (taskText.includes(pl) || taskText.includes(base) ||
             (noext.length >= 3 && taskText.includes(noext))) continue;
-        warnings.push(`gate référence ${p} — aucune tâche ne semble le produire (vérifier qu'une tâche l'écrit)`);
+        warnings.push(`gate references ${p} — no task appears to produce it (make sure a task writes it)`);
       }
     }
   }
@@ -139,8 +141,8 @@ if (require.main === module) {
   let dag;
   try { dag = JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch (e) {
-    if (asJson) console.log(JSON.stringify({ errors: [`dag.json illisible: ${e.message}`], warnings: [] }));
-    else console.error(`✗ dag.json illisible: ${e.message}`);
+    if (asJson) console.log(JSON.stringify({ errors: [`dag.json unreadable: ${e.message}`], warnings: [] }));
+    else console.error(`✗ dag.json unreadable: ${e.message}`);
     process.exit(1);
   }
   const { errors, warnings } = lint(dag);
@@ -148,8 +150,8 @@ if (require.main === module) {
   else {
     for (const e of errors)   console.log(`  ✗ ${e}`);
     for (const w of warnings) console.log(`  ⚠ ${w}`);
-    console.log(errors.length ? `✗ ${errors.length} erreur(s), ${warnings.length} warning(s)`
-                              : `✓ DAG valide (${warnings.length} warning(s))`);
+    console.log(errors.length ? `✗ ${errors.length} error(s), ${warnings.length} warning(s)`
+                              : `✓ DAG valid (${warnings.length} warning(s))`);
   }
   process.exit(errors.length ? 1 : 0);
 }

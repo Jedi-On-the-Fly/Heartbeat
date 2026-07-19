@@ -149,7 +149,7 @@ clones. For **local-only** projects, use one of:
 ### `/heartbeat help`
 Reply with:
 ```
-*HeartBeat v1.5 — commands:*
+*HeartBeat v1.6 — commands:*
 • /heartbeat init <dir>     — bootstrap a new project
 • /heartbeat plan <dir>     — convert a plan into a lint-clean dag.json
 • /heartbeat status <dir>   — progress report
@@ -199,7 +199,9 @@ When woken by a tick (`data.reason` present), act by reason:
 | `dag_corrupted` | Restore dag.json from git/backup (structure is immutable). |
 | `deadlock` | `active_orphan` → the stale-lease reclaim frees it automatically; if it persists, `hb fail <id>`. `dag_invalid` → surface errors for human review. |
 | `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
+| `gate_rot` | A completed phase's gate references a deleted/moved file — `node .hb/hb.js doctor` for details, then fix the file or re-point the gate. |
 | `build_stuck` | `signal: no_progress` means the agent was woken repeatedly without progressing. Produce a blocker report for human review. |
+| `review_stuck` | An adversarial review never resolved — spawn the refuter and record `hb review <gate> pass\|fail`, or surface for human review. |
 | `all_done` | Write the final project report. |
 
 **End of session:** finish each claimed task with `hb done`/`hb fail` — that frees

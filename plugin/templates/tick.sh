@@ -1,20 +1,15 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
-# HeartBeat tick.sh — Generic Stage A script (v1.1)
+# HeartBeat tick.sh — Generic Stage A script
 # Outputs: { "wakeAgent": bool, "data": {...} }
 #
-# Usage: bash tick.sh            → tick normal
-#        bash tick.sh --freeze   → (re)sanctionne l'état courant de WATCH_PATHS
-#                                   comme baseline de drift
+# Usage: bash tick.sh            → normal tick
+#        bash tick.sh --freeze   → (re)sanction the current WATCH_PATHS state as
+#                                   the drift baseline
 #
-# v1.1 :
-#   - Lock atomique (mkdir) conservé pendant TOUTE la session agent :
-#     quand wakeAgent:true, le lock reste — l'AGENT doit faire
-#     `rm -rf .hb/.lock` en fin de session. Périmé > LOCK_STALE_S = auto-cassé.
-#   - state.json corrompu → réveil "state_corrupted" (plus de mort silencieuse)
-#   - Circuit breaker : réveil UNE fois, puis silence jusqu'à reset humain
-#   - Drift : baseline auto-gelée au premier run, --freeze pour re-sanctionner
-#   - all_done : réveil unique de clôture
+# Stage A does a series of priority checks and outputs whether the agent (Stage B)
+# should wake, and why. It never runs LLM work itself. See the section banners
+# below for the ordered checks.
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── PROJECT CONFIG (edit this section) ────────────────────────────────────────
@@ -42,11 +37,15 @@ HB_MAX_CONCURRENCY="${HB_MAX_CONCURRENCY:-1}"
 # seconds of silence (fast hang-detection); a lease that never beats falls back
 # to LOCK_STALE_S. So set this well below LOCK_STALE_S.
 HEARTBEAT_STALE_S="${HEARTBEAT_STALE_S:-180}"
-# v1.4 (#2): optional notifier for human-needed wakes. If set, it is run as
+# v1.4: optional notifier for human-needed wakes. If set, it is run as
 #   $HB_NOTIFY_CMD "<reason>" "<project>" "<detail>"
-# on build_stuck / gate_blocked / deadlock / unsanctioned_drift / all_done — once
-# per blockage. Timeout-wrapped and best-effort; it can never break the tick.
+# on build_stuck / gate_blocked / deadlock / unsanctioned_drift / all_done /
+# review_stuck / gate_rot — once per blockage. Timeout-wrapped and best-effort;
+# it can never break the tick.
 HB_NOTIFY_CMD="${HB_NOTIFY_CMD:-}"
+# v1.6: run `hb.js doctor` each tick and wake `gate_rot` if a COMPLETED phase's
+# gate references a file that no longer exists (rot). Set 0 to disable.
+HB_ROT_CHECK="${HB_ROT_CHECK:-1}"
 # ── END CONFIG ────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -64,6 +63,8 @@ DONE_FLAG="$HB_DIR/.all-done-alerted"
 DEADLOCK_FLAG="$HB_DIR/.deadlock-alerted"
 GATE_NOTIFY_FLAG="$HB_DIR/.gate-notified"
 DRIFT_NOTIFY_FLAG="$HB_DIR/.drift-notified"
+REVIEW_STUCK_FLAG="$HB_DIR/.review-stuck-alerted"
+ROT_FLAG="$HB_DIR/.rot-alerted"
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 mtime()     { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }   # GNU | BSD/macOS
@@ -104,7 +105,7 @@ wake_out() {
   exit 0
 }
 
-# ── --freeze : sanctionner l'architecture courante comme baseline ─────────────
+# ── --freeze: sanction the current architecture as the drift baseline ─────────
 if [ "${1:-}" = "--freeze" ]; then
   if [ -z "$WATCH_PATHS" ]; then
     echo "WATCH_PATHS is not set — nothing to freeze." >&2
@@ -116,7 +117,7 @@ if [ "${1:-}" = "--freeze" ]; then
   exit 0
 fi
 
-# ── 1. Handout lock (atomique — sérialise seulement les ticks concurrents) ────
+# ── 1. Handout lock (atomic — only serializes concurrent ticks) ──────────────
 # v1.3 (#5): short-lived. It guards task selection so two overlapping ticks can't
 # hand out the same task. Released before the agent runs (agent holds a lease).
 if ! mkdir "$LOCK" 2>/dev/null; then
@@ -131,7 +132,7 @@ if ! mkdir "$LOCK" 2>/dev/null; then
 fi
 HAVE_LOCK=true
 
-# ── 2. Intégrité de state.json ────────────────────────────────────────────────
+# ── 2. state.json integrity ─────────────────────────────────────────────────
 # v1.3 (#2): state.json is a projection of events.jsonl. On corruption, try to
 # self-heal by reprojecting from the log; only wake state_corrupted if that fails
 # too (log itself unusable).
@@ -174,7 +175,23 @@ if [ -d "$LEASES" ]; then
   [ "$reclaimed" = true ] && node "$HB_DIR/hb.js" rebuild >/dev/null 2>&1 || true
 fi
 
-# ── 3. Circuit breaker (réveille UNE fois, puis attend un reset humain) ───────
+# ── 2.6 Rot detection (v1.6): a COMPLETED phase's gate references a vanished file ─
+# hb doctor is static and cheap; run it each tick and wake once on rot, then wait.
+if [ "$HB_ROT_CHECK" != "0" ] && [ -f "$HB_DIR/hb.js" ]; then
+  rot=$(node "$HB_DIR/hb.js" doctor 2>/dev/null | grep -c "no longer reproducible" || true)
+  if [ "${rot:-0}" -gt 0 ]; then
+    if [ ! -f "$ROT_FLAG" ]; then
+      touch "$ROT_FLAG"
+      log_event "gate_rot_detected"
+      notify "gate_rot" "$rot gate(s)"
+      wake_out "{\"reason\":\"gate_rot\",\"count\":$rot,\"hint\":\"a completed phase's gate references a deleted file — run: node .hb/hb.js doctor\"}"
+    fi
+    sleep_out "{\"reason\":\"gate_rot_waiting\",\"count\":$rot}"
+  fi
+  rm -f "$ROT_FLAG"
+fi
+
+# ── 3. Circuit breaker (wakes ONCE, then waits for a human reset) ────────────
 stuck=$(node -e "
   const s=JSON.parse(require('fs').readFileSync('$STATE','utf8'));
   console.log(s.build_stuck_count??0);
@@ -191,7 +208,7 @@ if [ "$stuck" -ge 5 ]; then
 fi
 rm -f "$STUCK_FLAG"
 
-# ── 4. Drift detection (baseline auto-gelée au premier run) ───────────────────
+# ── 4. Drift detection (baseline auto-frozen on first run) ───────────────────
 if [ -n "$WATCH_PATHS" ]; then
   CURRENT=$(compute_watch_hash)
   if [ ! -f "$ARCH_HASH" ]; then
@@ -269,7 +286,37 @@ case "$TYPE" in
     ;;
   review_pending)
     # v1.4 (#3): deterministic gate passed — an adversarial review is owed.
+    # v1.6: a review that never resolves (agent doesn't run it / session died) is a
+    # SILENT stall — the no-progress breaker now covers reviews too. Count review
+    # wakes for this gate since its last verdict; past the threshold → escalate.
     rm -f "$DEADLOCK_FLAG"
+    RGATE=$(echo "$NEXT" | node -e "
+      let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+        try{process.stdout.write(String(JSON.parse(d).gate||''));}catch(e){process.stdout.write('');}
+      });")
+    noreview=$(node -e "
+      const fs=require('fs'); const g=process.argv[1];
+      let raw=''; try{raw=fs.readFileSync('$EVENTS','utf8');}catch(e){}
+      const lines=raw.split('\n').filter(Boolean); let n=0;
+      for(let i=lines.length-1;i>=0;i--){
+        let ev; try{ev=JSON.parse(lines[i]);}catch(e){continue;}
+        if(ev.gate===g && (ev.event==='review_passed'||ev.event==='review_failed'||ev.event==='gate_passed')) break;
+        if(ev.event==='review_wake' && ev.gate===g) n++;
+      }
+      console.log(n);
+    " "$RGATE" 2>/dev/null || echo 0)
+
+    if [ -n "$RGATE" ] && [ "$noreview" -ge "$STUCK_TICKS" ]; then
+      if [ ! -f "$REVIEW_STUCK_FLAG" ]; then
+        touch "$REVIEW_STUCK_FLAG"
+        log_event "review_stalled"
+        notify "review_stuck" "$RGATE"
+        wake_out "{\"reason\":\"review_stuck\",\"gate\":\"$RGATE\",\"no_review\":$noreview,\"hint\":\"the adversarial review isn't resolving — run the refuter, then: hb review $RGATE pass|fail\"}"
+      fi
+      sleep_out "{\"reason\":\"review_waiting\",\"gate\":\"$RGATE\"}"
+    fi
+    rm -f "$REVIEW_STUCK_FLAG"
+    [ -n "$RGATE" ] && echo "{\"ts\":\"$TS\",\"event\":\"review_wake\",\"gate\":\"$RGATE\"}" >> "$EVENTS"
     wake_out "{\"reason\":\"review_pending\",\"next_task\":$NEXT,\"ts\":\"$TS\"}"
     ;;
   *)

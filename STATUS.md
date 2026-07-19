@@ -1,7 +1,16 @@
 # STATUS — HeartBeat
 
-**Version:** v1.5 (gate integrity over v1.4)
+**Version:** v1.6 (gate liveness over v1.5)
 **Regression suite:** `bash tests/run-tests.sh`
+
+## v1.6 — gate liveness
+
+- **`review_stuck`** — an adversarial review that never resolves (agent doesn't run
+  it / session died) is now caught by the objective no-progress breaker and escalated
+  instead of silently stalling.
+- **Automatic rot detection** — the tick runs `doctor` each tick and wakes `gate_rot`
+  on rot; a **pre-commit hook** blocks a commit that deletes a file a completed gate
+  depends on (bypass: `git commit --no-verify` / `HB_NO_HOOK=1`).
 
 ## v1.5 — gate integrity
 

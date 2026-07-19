@@ -62,8 +62,8 @@ cp "$TEMPLATES_DIR/dag.json"        "$HB_DIR/dag.json"
 for f in hb-lint.js hb-report.js hb-viz.js hb.js; do
   [ -f "$TEMPLATES_DIR/$f" ] && cp "$TEMPLATES_DIR/$f" "$HB_DIR/$f"
 done
-# v1.2: valider le DAG des le bootstrap (les erreurs de structure se voient ici, pas au tick N)
-node "$HB_DIR/hb-lint.js" "$HB_DIR/dag.json" || echo "!! hb-lint a detecte des erreurs dans dag.json — corrigez avant de planifier le tick"
+# Validate the DAG at bootstrap — structural errors show up here, not at tick N.
+node "$HB_DIR/hb-lint.js" "$HB_DIR/dag.json" || echo "!! hb-lint found errors in dag.json — fix them before scheduling the tick"
 
 # Init state with timestamp
 node -e "
@@ -97,14 +97,36 @@ if [ -z "${HB_NO_GIT:-}" ] && [ "$NO_GIT" != "1" ] && command -v git >/dev/null 
         echo ".hb/.stuck-alerted"; echo ".hb/.noprogress-alerted"
         echo ".hb/.all-done-alerted"; echo ".hb/.deadlock-alerted"
         echo ".hb/.gate-notified"; echo ".hb/.drift-notified"
+        echo ".hb/.review-stuck-alerted"; echo ".hb/.rot-alerted"
         echo ".hb/*.tmp"; echo ".hb/dag-view.html"
       } >> "$GI"
     fi
+    # v1.6: pre-commit rot guard — block a commit that deletes/moves a file a
+    # COMPLETED phase's gate depends on. Bypass with `git commit --no-verify` or
+    # HB_NO_HOOK=1. HeartBeat's own commits already pass --no-verify.
+    HOOK="$PROJECT_DIR/.git/hooks/pre-commit"
+    if [ ! -e "$HOOK" ]; then
+      cat > "$HOOK" <<'HOOKEOF'
+#!/usr/bin/env bash
+[ -n "${HB_NO_HOOK:-}" ] && exit 0
+DIR="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+[ -f "$DIR/.hb/hb.js" ] || exit 0
+OUT="$(node "$DIR/.hb/hb.js" doctor 2>&1 || true)"
+if echo "$OUT" | grep -q "no longer reproducible"; then
+  echo "✗ HeartBeat rot guard: this commit breaks a completed gate:"
+  echo "$OUT" | grep "no longer reproducible" | sed 's/^/    /'
+  echo "  Fix the gate/file, or bypass: git commit --no-verify"
+  exit 1
+fi
+exit 0
+HOOKEOF
+      chmod +x "$HOOK"
+    fi
     git -C "$PROJECT_DIR" add -A >/dev/null 2>&1 || true
-    # Fallback identity so the snapshot works even if git user isn't configured.
+    # Fallback identity + --no-verify so init works even if git user isn't configured.
     git -c user.name='HeartBeat' -c user.email='heartbeat@local' \
-        -C "$PROJECT_DIR" commit -q -m "chore(heartbeat): initialize project" >/dev/null 2>&1 || true
-    GIT_MSG="git initialized — each gate pass will be committed & tagged (HB_NO_GIT=1 to disable)"
+        -C "$PROJECT_DIR" commit -q --no-verify -m "chore(heartbeat): initialize project" >/dev/null 2>&1 || true
+    GIT_MSG="git initialized (+ rot pre-commit hook) — gate passes committed & tagged (HB_NO_GIT=1 to disable)"
   fi
 fi
 

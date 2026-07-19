@@ -58,8 +58,10 @@ git_snapshot() {   # snapshot the phase on gate pass → git restore point (v1.4
   command -v git >/dev/null 2>&1 || return 0
   git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
   git -C "$PROJECT_DIR" add -A >/dev/null 2>&1 || true
+  # --no-verify: internal snapshots bypass the rot pre-commit hook (avoids a
+  # pre-existing rot blocking this gate's own snapshot → loop deadlock).
   git -c user.name='HeartBeat' -c user.email='heartbeat@local' \
-      -C "$PROJECT_DIR" commit -q -m "heartbeat: $1 passed" >/dev/null 2>&1 || true
+      -C "$PROJECT_DIR" commit -q --no-verify -m "heartbeat: $1 passed" >/dev/null 2>&1 || true
   git -C "$PROJECT_DIR" tag -f "$1" >/dev/null 2>&1 || true
 }
 

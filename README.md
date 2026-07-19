@@ -1,383 +1,287 @@
-# HeartBeat — Guide de démarrage (v1.2)
+# HeartBeat — tick-driven agent orchestration (v1.6)
 
-> Orchestration d'agent par tick. Le Stage A (bash) tourne toutes les 15-30 min. Le Stage B (agent IA) ne se réveille que s'il y a du travail réel.
+> A cheap, deterministic **Stage A** (bash) runs on a schedule and wakes the
+> expensive **Stage B** (an LLM agent) *only when there is real work to do*.
+
+HeartBeat lets an agent drive a long, multi-phase project autonomously without
+supervision, without losing the thread, and without burning tokens idling. The
+project is described as a **DAG**: phases → tasks → dependencies → quality gates.
+
+```
+tick.sh (every 15–30 min)              ← Stage A: pure bash, priority checks, ~0 tokens
+  │
+  ├─ wakeAgent: false → nothing to do, sleep
+  └─ wakeAgent: true  → the LLM is invoked ← Stage B: only when needed
+```
 
 ---
 
-## Installation sur Claude Code
+## Install on Claude Code
 
-HeartBeat s'installe comme **plugin Claude Code** (recommandé) ou via un
-**script de secours**. Détails complets : [`INSTALL.md`](INSTALL.md).
+HeartBeat installs as a **Claude Code plugin** (recommended) or via a **fallback
+script**. Full details: [`INSTALL.md`](INSTALL.md).
 
 ```
-# Plugin (rien n'est publié — marketplace locale)
-/plugin marketplace add <chemin-vers-ce-dossier>
+# Plugin (nothing is published — local marketplace)
+/plugin marketplace add <path-to-this-folder>
 /plugin install heartbeat
 
-# — ou — script de secours
+# — or — fallback script
 bash scripts/install.sh
 ```
 
-Puis `/heartbeat help`. Planification : `/heartbeat schedule <dir>` génère une
-routine `/schedule` (voir la section Scheduling d'`INSTALL.md` pour les limites
-cloud/git et les alternatives locales `/loop` et cron système).
+Then `/heartbeat help`.
 
 ---
 
-## Démarrage rapide
+## Quick start
 
-```bash
-# 1. Initialiser un nouveau projet
-bash /workspace/group/projects/heartbeat/bootstrap.sh /workspace/group/mon-projet
-#    (ajouter --force pour écraser un .hb/ existant sans prompt)
-
-# 2. Éditer le DAG
-nano /workspace/group/mon-projet/.hb/dag.json
-
-# 3. Tester le tick manuellement
-bash /workspace/group/mon-projet/.hb/tick.sh
-
-# 4. Planifier (nanoclaw)
-# → utiliser schedule_task avec tick.sh comme script
+```
+/heartbeat init <project-dir>      # scaffold .hb/ (+ git init, restore points)
+/heartbeat plan <project-dir>      # convert a written plan into a lint-clean dag.json
+/heartbeat lint <project-dir>      # validate the DAG
+/heartbeat viz <project-dir>       # dag-view.html
+/heartbeat tick <project-dir>      # one manual tick
+/loop 15m /heartbeat tick <dir>    # drive it autonomously
 ```
 
 ---
 
-## Structure après bootstrap
+## Layout after bootstrap
 
 ```
-mon-projet/
+my-project/
 └── .hb/
-    ├── tick.sh            ← Stage A : 6 vérifications, sort { wakeAgent, data }
-    ├── gate.sh            ← Validation de gate : bash gate.sh GATE_P0
-    ├── hb-next-task.js    ← Résout la prochaine tâche (gate-aware, diagnostic deadlock)
-    ├── hb-lint.js         ← Validation statique du DAG (bootstrap + à la demande)
-    ├── hb-report.js       ← Rapport d'avancement (texte / --json)
-    ├── hb-viz.js          ← Génère dag-view.html (visualisation autonome)
-    ├── dag.json           ← TON PROJET : phases, tâches, dépendances, critères de gate
-    ├── state.json         ← État runtime (phase courante, tâches complétées, etc.)
-    ├── events.jsonl       ← Journal d'audit append-only
-    ├── architecture.hash  ← Baseline de drift (auto-créée si WATCH_PATHS défini)
-    └── .lock              ← Verrou de session (répertoire — voir "Lock" ci-dessous)
+    ├── tick.sh            ← Stage A: priority checks, outputs { wakeAgent, data }
+    ├── gate.sh            ← gate runner: bash gate.sh GATE_P0  (+ --check / --all)
+    ├── hb.js              ← state CLI: start/done/fail/heartbeat/ready/review/doctor/rebuild/state/import
+    ├── hb-next-task.js    ← gate-aware resolver (deadlock/rot diagnostics)
+    ├── hb-lint.js         ← static DAG validation
+    ├── hb-report.js       ← progress report (text / --json)
+    ├── hb-viz.js          ← self-contained dag-view.html
+    ├── dag.json           ← YOUR PROJECT: phases, tasks, dependencies, gate criteria
+    ├── state.json         ← runtime state (a projection of events.jsonl)
+    ├── events.jsonl       ← append-only event log (the source of truth)
+    └── leases/            ← per-task session claims
 ```
 
 ---
 
-## Structure de dag.json
+## dag.json structure
 
 ```json
 {
   "gates": {
     "GATE_P0": {
-      "desc": "Description lisible",
+      "desc": "Human-readable description",
+      "review": { "prompt": "Refute that this phase is done: …" },
       "criteria": [
-        {
-          "id": "G0_1",
-          "desc": "Ce que ce critère vérifie",
-          "cmd": "commande bash qui retourne exit 0 si OK"
-        }
+        { "id": "G0_1", "desc": "What this criterion checks",
+          "cmd": "one-line bash that exits 0 if OK" }
       ]
     }
   },
   "phases": [
     {
-      "id": "P0",
-      "title": "Nom de la phase",
-      "desc": "Ce que cette phase produit",
-      "gate_entry": null,
-      "gate_exit": "GATE_P0",
+      "id": "P0", "title": "Phase name", "desc": "What this phase produces",
+      "gate_entry": null, "gate_exit": "GATE_P0",
       "tasks": [
-        { "id": "P0T1", "title": "Nom de la tâche", "description": "Ce que l'agent doit faire", "requires": [] },
-        { "id": "P0T2", "title": "Deuxième tâche", "description": "Ce que cette tâche produit", "requires": ["P0T1"] }
+        { "id": "P0T1", "title": "Task", "description": "What the agent must do", "requires": [] },
+        { "id": "P0T2", "title": "Second task", "description": "...", "requires": ["P0T1"] }
       ]
     }
   ]
 }
 ```
 
-**Règles :**
-- Les IDs de tâches doivent être uniques dans tout le DAG
-- `requires` = liste d'IDs de tâches devant être `done` avant que cette tâche soit éligible
-- **`gate_entry` est appliquée par le resolver** (v1.1) : aucune tâche d'une phase n'est servie tant que la phase portant la `gate_exit` correspondante n'est pas dans `completed_phases`. Les gates ne sont plus contournables.
-- Les `cmd` de gate s'exécutent avec `eval` **dans un sous-shell** — `$PROJECT_DIR` et `$HB_DIR` sont disponibles ; une variable inconnue = critère ✗ (plus de crash silencieux). Gardez-les déterministes, sur une ligne, rapides (< 5s)
-- Les critères de gate valident le **comportement** (fichier existe, JSON parse) pas la structure
+**Rules:**
+- Task IDs are unique across the whole DAG. `requires` = task IDs that must be
+  `done` before this task is eligible. Keep it **sparse** (only real dependencies).
+- **`gate_entry` is enforced by the resolver:** no task of a phase is served until
+  the phase carrying the matching `gate_exit` is in `completed_phases`. Gates are
+  not bypassable.
+- Gate `cmd`s run under `timeout` with `$PROJECT_DIR` and `$HB_DIR` available. Keep
+  them deterministic, one line, fast (<5s). **dag.json is trusted input** (criteria
+  are eval'd).
+- **Behavioral gates, not structural:** `test -f output.js` breaks on rename;
+  `node -e "require('./output')"` survives. Assert behavior, not file layout.
+- **`review` block (optional):** adds an adversarial second-agent gate — the phase
+  advances only after the deterministic gate passes AND a skeptical agent fails to
+  refute completion. See below.
+- **Schema:** validate against [`plugin/dag.schema.json`](plugin/dag.schema.json).
+
+Author a DAG from a written plan with `/heartbeat plan` — it enforces spec-first
+tasks, behavioral gates, adversarial review on sensitive gates, and lints clean.
 
 ---
 
-## Structure de state.json
+## Stage A — tick.sh priority checks
+
+```
+1. Handout lock     atomic mkdir; serializes concurrent ticks (released before Stage B)
+2. Integrity        corrupt state.json → self-heal via rebuild; corrupt dag.json → wake dag_corrupted
+2.5 Lease reclaim   a stale/hung lease (heartbeat gone) is reclaimed → task returns to pending
+2.6 Rot             a COMPLETED phase's gate references a deleted file → wake gate_rot (v1.6)
+3. Circuit breaker  build_stuck_count ≥ 5, or objective no-progress → wake build_stuck (single alert)
+4. Drift            SHA256 of WATCH_PATHS; unsanctioned change → wake unsanctioned_drift
+5. Gate errors      a previously failed gate → wake gate_blocked
+6. Next task        eligible task → wake next_task; tasks done but gate unpassed → gate_pending;
+                    deterministic gate passed, review owed → review_pending; project done → all_done;
+                    nothing actionable on an unfinished project → deadlock (with diagnostic)
+```
+
+Output is always `{ "wakeAgent": true|false, "data": { "reason": "...", ... } }`.
+
+---
+
+## Stage B — the tick protocol
+
+When woken (`data.reason` present), the agent acts by reason. **Never hand-edit
+`state.json`** — it is a projection of `events.jsonl`. Mutate state only through the
+`hb` CLI:
+
+```bash
+node .hb/hb.js start <id>          # claim the task (lease) + mark active
+node .hb/hb.js done  <id>          # completed → frees the lease, resets stuck count
+node .hb/hb.js fail  <id>          # failed    → frees the lease, bumps stuck count
+node .hb/hb.js heartbeat <id>      # long task: refresh the lease so it isn't reclaimed
+node .hb/hb.js ready [N]           # the concurrently-runnable set (parallel drivers)
+node .hb/hb.js review <gate> pass|fail [note]   # record the adversarial verdict
+node .hb/hb.js doctor              # integrity check (rot / drift / stale leases)
+node .hb/hb.js rebuild             # reproject state.json from the log (sync / recover)
+node .hb/hb.js state               # print the projected state
+```
+
+| `data.reason` | Action |
+|---|---|
+| `next_task` | `hb start <id>` → do the work → `hb done <id>` (or `hb fail <id>`). |
+| `gate_pending` | `bash .hb/gate.sh <gate>`. A pass advances the phase — unless the gate has a `review` block (→ `review_pending`). |
+| `review_pending` | Spawn a skeptical second agent to **refute** completion, then `hb review <gate> pass\|fail`. Only a pass advances. |
+| `gate_blocked` | Fix the failing criteria/findings, re-run the gate. |
+| `at_capacity` | Nothing to do — max tasks in flight (or the only ready task is leased). |
+| `state_corrupted` | `hb rebuild` (the tick self-heals; surfaces only if the log is unusable). |
+| `dag_corrupted` | Restore dag.json from git/backup (structure is immutable). |
+| `deadlock` | `active_orphan` → reclaimed automatically. `dag_invalid` → surface for human review. |
+| `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
+| `gate_rot` | A completed phase's gate references a deleted file — run `hb doctor`, fix or re-point the gate. |
+| `build_stuck` | Woken repeatedly without progress. Produce a blocker report. |
+| `review_stuck` | An adversarial review never resolved — run the refuter, then `hb review`. |
+| `all_done` | Write the final project report. |
+
+**End of session:** finish each claimed task with `hb done`/`hb fail`. The handout
+lock releases automatically; a crashed session's lease is reclaimed after
+`HEARTBEAT_STALE_S` (or `LOCK_STALE_S` if it never heartbeat).
+
+---
+
+## Adversarial gates (the second agent)
+
+A gate can carry a `review` block. Then, after the deterministic gate passes, the
+tick emits `review_pending` and the phase does **not** advance until a second,
+skeptical agent — told to *refute* completion, not confirm it — fails to find holes:
 
 ```json
-{
-  "current_phase": "P0",
-  "active_tasks": [],
-  "completed_tasks": [],
-  "completed_phases": [],
-  "build_stuck_count": 0,
-  "gate": { "errors": 0 },
-  "last_event": "initialized",
-  "last_updated": "2026-07-06T..."
+"GATE_P3": {
+  "desc": "...",
+  "review": { "prompt": "Refute that P3 is done: hollow tests? criteria not really met? faked output?" },
+  "criteria": [ … ]
 }
 ```
 
-**L'agent met à jour ce fichier** après chaque tâche — **toujours en écriture atomique** (un state.json tronqué à mi-écriture réveillera le système en `state_corrupted`) :
+Refutation beats confirmation: a confirmer looks for reasons to say yes (and an LLM
+is very good at generating those); a refuter looks for the one reason to say no.
+This is the primary defense against an agent grading its own homework. Combine it
+with **spec-first** tasks (each phase's first task authors its gate's test spec from
+the checklist, before the implementation tasks).
+
+---
+
+## Parallel execution
+
+`hb ready N` returns the eligible, unleased, requires-independent tasks. A parallel
+driver fans them out as **worktree-isolated** sub-agents so simultaneous writes
+can't collide; each does `hb start`/`hb done` under its own lease (atomic — no task
+is claimed twice). Parallelism only applies within a phase (gates serialize
+phases), and works best on file-disjoint slices — foundation phases are usually
+better serial. `HB_MAX_CONCURRENCY` caps the tick's serial handout (default 1).
+
+---
+
+## Gate integrity & liveness (v1.5–v1.6)
+
+Gates have both **safety** (a phase can't advance until its criteria pass) and
+**liveness** (no gate-related state silently persists as wrong):
+
+- **`hb doctor`** — static integrity check. Headline: *rot detection* — a completed
+  phase whose gate references a now-deleted file (that gate can no longer be
+  reproduced). Also flags DAG errors, state/log drift, stale leases. Read-only.
+- **Re-verifiable gates** — `bash .hb/gate.sh --check <GATE>` re-runs one gate's
+  criteria read-only (no state change); `bash .hb/gate.sh --all` re-verifies every
+  gate (a regression check). A passed gate keeps acting as a gate.
+- **Automatic rot detection** — the tick runs `doctor` each tick and wakes
+  `gate_rot` on rot; a **pre-commit hook** blocks a commit that deletes a file a
+  completed gate depends on (bypass: `git commit --no-verify` / `HB_NO_HOOK=1`).
+- **Review liveness** — an adversarial review that never resolves is caught by the
+  no-progress breaker and escalated as `review_stuck`.
+
+---
+
+## Version control
+
+Bootstrap runs `git init` (unless `--no-git` / `HB_NO_GIT=1`). Every gate pass
+commits the working tree and force-tags the gate id, so each phase is a restore
+point:
 
 ```bash
-node -e "
-  const fs=require('fs');
-  const s=JSON.parse(fs.readFileSync('.hb/state.json','utf8'));
-  s.completed_tasks.push('P0T1');            // vos modifications
-  s.last_updated=new Date().toISOString();
-  fs.writeFileSync('.hb/state.json.tmp', JSON.stringify(s,null,2));
-  fs.renameSync('.hb/state.json.tmp', '.hb/state.json');   // rename = atomique
-"
+git reset --hard GATE_P3      # roll the project back to when P3's gate last passed
 ```
+
+Commits use a fallback identity, so they work even if git user isn't configured.
+Disable auto-commit with `HB_GIT_AUTOCOMMIT=0`.
 
 ---
 
-## tick.sh — 6 vérifications prioritaires (Stage A)
+## Config (environment variables)
 
-```
-1. Lock              mkdir atomique — session en cours → dort (already_running).
-                     Lock périmé (> LOCK_STALE_S, défaut 30 min) → auto-cassé.
-2. Intégrité         state.json corrompu → RÉVEIL state_corrupted (l'agent
-                     reconstruit depuis events.jsonl) ; dag.json corrompu →
-                     RÉVEIL dag_corrupted (restaurer depuis backup/git)
-3. Circuit breaker   build_stuck_count ≥ 5 → réveil UNE seule fois pour revue
-                     humaine, puis silence (stuck_waiting_human) jusqu'au reset
-4. Drift detection   SHA256 de WATCH_PATHS — baseline auto-gelée au 1er run ;
-                     changement non sanctionné → réveil unsanctioned_drift
-5. Gate errors       gate précédente en échec → réveil immédiat (gate_blocked)
-6. Next task         tâche pending éligible → réveil ; tâches finies mais gate
-                     pas passée → réveil gate_pending ; projet fini → UN réveil
-                     all_done puis silence (project_complete) ; rien d'actionnable
-                     sur un projet NON fini → UN réveil deadlock avec diagnostic
-                     (active_orphan | dag_invalid | unsatisfiable), puis silence
-```
-
-La sortie est toujours : `{ "wakeAgent": true/false, "data": { "reason": "...", ... } }`
-
-### Lock — cycle de vie (v1.1)
-
-Le lock protège la **session agent**, pas seulement le tick. Quand `wakeAgent:true`,
-le tick **laisse le lock en place** : c'est à l'agent de le libérer en fin de session
-avec `rm -rf .hb/.lock`. Si l'agent meurt, le seuil de staleness (`LOCK_STALE_S`,
-défaut 1800s, surchargeable en variable d'environnement) casse le lock au tick suivant.
-
-### Drift — sanctionner un refactoring
-
-```bash
-bash .hb/tick.sh --freeze   # re-gèle la baseline après un changement volontaire
-```
+| Variable | Default | Purpose |
+|---|---|---|
+| `LOCK_STALE_S` | 1800 | Handout lock / non-heartbeat lease / write-lock staleness |
+| `HEARTBEAT_STALE_S` | 180 | Silence tolerated on a heartbeated lease before reclaim |
+| `STUCK_TICKS` | 3 | No-progress wakes (task or review) before escalation |
+| `HB_MAX_CONCURRENCY` | 1 | Tasks in flight at once (leases) |
+| `GATE_TIMEOUT_S` | 5 | Per-criterion gate timeout |
+| `HB_NOTIFY_CMD` | (empty) | Command run on human-needed wakes: `"<reason>" "<project>" "<detail>"` |
+| `HB_ROT_CHECK` | 1 | Per-tick rot detection (0 to disable) |
+| `HB_NO_GIT` | (empty) | Disable git init + commit-on-gate-pass + hook |
+| `HB_GIT_AUTOCOMMIT` | 1 | 0 disables the commit on gate pass |
 
 ---
 
-## Validation de gate (Stage A ou manuel)
+## Scheduling
 
-```bash
-bash .hb/gate.sh GATE_P0
+`tick.sh` runs on a timer. On Claude Code:
 
-# === Gate: GATE_P0 ===
-#   ✓ [G0_1] Le répertoire projet existe
-#   ✓ [G0_2] state.json est un JSON valide
-# === Result: 2 passed, 0 failed ===
-# ✅ GATE PASSED — proceed to next phase.
-```
-
-Les gates écrivent dans `events.jsonl` à chaque passage ou échec.
-
----
-
-## Planification nanoclaw
-
-```
-schedule_task :
-  prompt: |
-    Tu exécutes un tick HeartBeat pour le projet mon-projet.
-    Le résultat du script est dans {{data}}.
-    Agis selon {{data.reason}} :
-      - next_task        → exécute {{data.next_task.title}} — {{data.next_task.description}}
-      - gate_pending     → lance bash .hb/gate.sh {{data.next_task.gate}} et clôture la phase
-      - gate_blocked     → corrige les critères en échec puis relance la gate
-      - state_corrupted  → reconstruis .hb/state.json depuis events.jsonl et dag.json
-      - dag_corrupted    → restaure .hb/dag.json depuis backup/git (structure immuable)
-      - deadlock         → agis selon data.next_task.cause : active_orphan = retire
-        les IDs de active_tasks ; dag_invalid = signale les erreurs pour revue humaine
-      - unsanctioned_drift → examine les changements ; si voulus : bash .hb/tick.sh --freeze
-      - build_stuck      → produis un rapport de blocage pour revue humaine
-      - all_done         → rédige le rapport final du projet
-    Mets à jour .hb/state.json en écriture ATOMIQUE (tmp + rename).
-    OBLIGATOIRE en fin de session : rm -rf .hb/.lock
-
-  script: |
-    bash /workspace/group/mon-projet/.hb/tick.sh
-
-  schedule_type: cron
-  schedule_value: "*/20 * * * *"   # toutes les 20 min
-  context_mode: isolated
-```
-
----
-
-## Responsabilités de l'agent (Stage B)
-
-Quand réveillé par tick.sh, l'agent doit :
-
-1. Lire `data.reason` et `data.next_task` depuis la sortie du tick
-2. Exécuter la tâche (écrire du code, créer des fichiers, lancer des tests, etc.)
-3. Mettre à jour `state.json` **atomiquement** (voir plus haut) :
-   - Ajouter l'ID de la tâche à `completed_tasks`
-   - Remettre `build_stuck_count` à 0 en cas de succès (incrémenter en cas d'échec, y compris échec répété de gate)
-4. Sur `gate_pending` : `bash .hb/gate.sh <GATE>` ;
-   passée → ajouter la phase à `completed_phases`, avancer `current_phase` ;
-   échouée → `gate.errors = 1` dans state (le tick réveillera au prochain cycle)
-5. Sur `state_corrupted` : reconstruire state.json depuis `events.jsonl` + `dag.json` ;
-   sur `deadlock` cause `active_orphan` : retirer les IDs de `active_tasks` (reprise)
-6. **Convention v1.2** : appender `{"ts":"...","event":"task_done","task":"ID"}` dans
-   `events.jsonl` à chaque tâche terminée — hb-report s'en sert
-7. Sur `unsanctioned_drift` : examiner ; si le changement est voulu → `bash .hb/tick.sh --freeze`
-8. **Toujours, en fin de session : `rm -rf .hb/.lock`**
+1. **`/schedule` routine** (`/heartbeat schedule <dir>`) — cron, but runs in the
+   cloud and clones a GitHub repo, so it fits when the project is a git repo.
+2. **In-session:** `/loop 20m /heartbeat tick <dir>` — while a session is open.
+3. **System cron:** `*/20 * * * * cd <dir> && claude -p "run bash .hb/tick.sh and act on data.reason per the tick protocol"`.
 
 ---
 
 ## Tests
 
 ```bash
-bash tests/run-tests.sh   # suite de régression complète (24 assertions)
+bash tests/run-tests.sh      # full regression suite (all green)
 ```
 
 ---
 
-## Retours d'expérience — vizcore-demo (26 phases, 115 tâches)
+## Changelog (high level)
 
-| Règle | Détail |
+| Version | Theme |
 |---|---|
-| Gates comportementales, pas structurelles | `test -f output.js` casse au renommage ; `node -e "require('./output')"` résiste |
-| Phases ≤ 8 tâches | Au-delà, risque de perte de contexte entre sessions |
-| Planifier le DAG avant de coder | Révèle les problèmes d'intégration avant de les rencontrer |
-| `requires` sparse | Éviter les cascades de blocage — ne déclarer que les vraies dépendances |
-| stuck_count = signal d'alerte précoce | S'il monte, arrêter et réviser manuellement |
-| WATCH_PATHS pour les modules critiques | Détecte les refactorings accidentels qui cassent les gates |
-
----
-
-## Changelog v1.1 (2026-07-06)
-
-| # | Correctif | Sévérité |
-|---|---|---|
-| 1 | gate.sh : `$PROJECT_DIR` non défini + `set -u` → crash silencieux sur le template | 🔴 bug |
-| 2 | Resolver : `gate_entry` ignorée → tâches servies avant validation de gate | 🔴 bug |
-| 3 | state.json corrompu → `wakeAgent:false` silencieux ; devient réveil `state_corrupted` | 🔴 bug |
-| 4 | Lock : libéré à la fin du tick au lieu de la session agent ; devient lock de session (mkdir atomique, staleness 30 min, `stat` portable GNU/BSD) | 🟠 design |
-| 5 | `architecture.hash` jamais créé → drift inopérant ; auto-freeze + `--freeze` | 🟠 design |
-| 6 | Circuit breaker : réveil à chaque tick une fois déclenché ; devient alerte unique | 🟠 design |
-| 7 | `all_done` : boucle de réveil en fin de projet ; devient alerte unique + `gate_pending` explicite | 🟠 design |
-| 8 | Pipeline drift : `pipefail` + find en échec tuait le tick (bug latent découvert en cours) | 🟠 latent |
-| 9 | bootstrap : `read -p` crashait en contexte non-interactif ; EOF-safe + `--force` | 🟡 mineur |
-| 10 | gate.sh : parsing en 1 appel node, gate ID en argv (fix injection), critères en sous-shell | 🟡 mineur |
-
-
----
-
-## Outils v1.2
-
-```bash
-node .hb/hb-lint.js .hb/dag.json          # valider le DAG (exit 1 si erreurs)
-node .hb/hb-report.js .hb                 # rapport d'avancement (ajouter --json)
-node .hb/hb-viz.js .hb                    # génère .hb/dag-view.html (autonome)
-```
-
-Le lint tourne automatiquement au bootstrap. Lancez-le après CHAQUE édition de
-dag.json — il attrape à l'édition ce qui, avant v1.2, devenait un deadlock
-silencieux au tick N.
-
----
-
-## Changelog v1.2 (2026-07-06)
-
-| # | Évolution | Type |
-|---|---|---|
-| 1 | hb-lint.js : validation statique du DAG (IDs dupliqués, requires cassés, cycles, gates non définies ou inatteignables), intégré au bootstrap | 🔴 fiabilité |
-| 2 | Resolver : plus jamais `null` sur un projet non fini — `{type:"deadlock", cause, detail}` avec diagnostic (active_orphan / dag_invalid / unsatisfiable) | 🔴 fiabilité |
-| 3 | tick.sh : dag.json corrompu → réveil `dag_corrupted` ; deadlock en alerte unique (flag `.deadlock-alerted`) | 🔴 fiabilité |
-| 4 | hb-report.js : avancement, stats gates, incidents, durées de phase depuis events.jsonl — texte + `--json` | 🟠 observabilité |
-| 5 | Convention `task_done` dans events.jsonl (responsabilité agent) | 🟠 observabilité |
-| 6 | hb-viz.js : visualisation HTML 100% autonome du DAG et de son état | 🟡 visualisation |
-| 7 | Suite de régression : 43 assertions (T11-T14 ajoutés) | 🟢 qualité |
-
-Développé en dogfooding : ce plan v1.2 a été exécuté par HeartBeat v1.1
-(dag.json de 5 phases / 9 tâches / 5 gates, 25 critères exécutables).
-
----
-
-## Changelog v1.3 — durcissement fiabilité (2026-07-10)
-
-| # | Évolution | Type |
-|---|---|---|
-| 1 | **State événementiel (`hb.js`)** : `events.jsonl` fait autorité, `state.json` est une projection déterministe. L'agent mute l'état UNIQUEMENT via `hb` (`start`/`done`/`fail`/`rebuild`/`state`/`import`) — plus d'édition JSON à la main. | 🔴 fiabilité |
-| 2 | **Auto-réparation** : `state.json` corrompu → le tick reprojette depuis le log (`hb rebuild`) ; ne réveille `state_corrupted` que si le log est inutilisable. | 🔴 fiabilité |
-| 3 | **Détection no-progress objective** : un agent réveillé N fois sans progresser → `build_stuck` (`signal: no_progress`), indépendamment de son auto-report. | 🔴 fiabilité |
-| 4 | **Timeout des critères de gate** (`GATE_TIMEOUT_S`, 5s) : un critère qui pend bloque la gate au lieu de figer le tick. | 🟠 robustesse |
-| 5 | **Leases par tâche + concurrence bornée** (`HB_MAX_CONCURRENCY`, défaut 1 = série) : les branches indépendantes du DAG tournent en parallèle ; leases périmées réclamées automatiquement. Le lock de session devient un lock de handout court. | 🟠 design |
-| 6 | **Heartbeat mi-session** (`hb heartbeat <id>`, `HEARTBEAT_STALE_S`, défaut 180s) : une lease pendue est réclamée en minutes (cadence du tick) au lieu de `LOCK_STALE_S` ; les leases sans heartbeat gardent le fallback lent. | 🟠 fiabilité |
-| 7 | Suite de régression : 69 assertions (T16-T20 ajoutés ; T4/T5 réécrits). | 🟢 qualité |
-
-### Le CLI `hb` (Stage B)
-
-```bash
-node .hb/hb.js start <id>   # claim (lease) + task_started
-node .hb/hb.js done  <id>   # task_done  → libère la lease, remet stuck à 0
-node .hb/hb.js fail  <id>   # task_failed → libère la lease, incrémente stuck
-node .hb/hb.js heartbeat <id> # tâche longue : rafraîchit la lease (anti-reclaim)
-node .hb/hb.js rebuild      # reprojette state.json depuis le log (sync / recovery)
-node .hb/hb.js state        # affiche l'état projeté
-node .hb/hb.js import       # migre un projet pré-v1.3 (state.json → événements)
-```
-
-### Config (env, overridable)
-
-| Variable | Défaut | Rôle |
-|---|---|---|
-| `GATE_TIMEOUT_S` | 5 | Timeout par critère de gate |
-| `STUCK_TICKS` | 3 | Réveils no-progress avant `build_stuck` |
-| `HB_MAX_CONCURRENCY` | 1 | Tâches en vol simultanées (leases) |
-| `HEARTBEAT_STALE_S` | 180 | Silence toléré d'une lease heartbeatée avant reclaim |
-| `LOCK_STALE_S` | 1800 | Péremption lock / lease sans heartbeat / write-lock |
-| `HB_NOTIFY_CMD` | (vide) | Commande lancée sur les réveils nécessitant un humain (v1.4) |
-| `HB_NO_GIT` | (vide) | Si défini : pas de `git init` au bootstrap, pas de commit-on-gate-pass (v1.4) |
-| `HB_GIT_AUTOCOMMIT` | 1 | `0` désactive le commit automatique au passage de gate (v1.4) |
-
----
-
-## Changelog v1.4 — qualité & débit (2026-07-10)
-
-| # | Évolution | Type |
-|---|---|---|
-| 1 | **Gates adversariales (2e agent)** : une gate peut porter un bloc `review` ; après le passage déterministe, le tick émet `review_pending` — un agent sceptique doit échouer à *réfuter* la complétion (`hb review <gate> pass\|fail`) avant que la phase n'avance. Ferme le trou « corriger sa propre copie ». Rétrocompatible (gates sans review inchangées). | 🔴 qualité |
-| 2 | **Parallélisme sans conflit** : `hb ready [N]` expose l'ensemble des tâches simultanément exécutables (éligibles, non-leasées, indépendantes) ; fan-out en sous-agents isolés (worktree). `/heartbeat run` (série ou parallèle). | 🟠 débit |
-| 3 | **hb-lint warnings avisées** : détecte le texte squelette résiduel et les artefacts de gate qu'aucune tâche ne produit. | 🟠 fiabilité |
-| 4 | **Notify hook** (`HB_NOTIFY_CMD`) : réveils nécessitant un humain notifiés une fois, borné en temps, sans jamais casser le tick. | 🟠 observabilité |
-| 5 | `dag.schema.json` (validation éditeur) + durées par tâche dans le rapport. | 🟡 confort |
-| 6 | **Git au bootstrap + commit-on-gate-pass** : chaque passage de gate committe l'arbre et pose un tag `GATE_PN` (point de restauration : `git reset --hard GATE_PN`). Identité de secours, `--no-git` / `HB_NO_GIT` / `HB_GIT_AUTOCOMMIT=0` pour désactiver. | 🟠 sûreté |
-| 7 | **`/heartbeat plan`** : commande de conversion d'un plan rédigé en `dag.json` propre (spec-first, gates comportementales, `review` adversariale sur les gates sensibles, IDs uniques, cascade) — validée par `hb-lint` + `hb-viz`. | 🟠 ergonomie |
-| 8 | Suite de régression : 100 assertions (T21-T26 ajoutés). | 🟢 qualité |
-
-### Nouvelles commandes `hb`
-
-```bash
-node .hb/hb.js ready [N]                    # ensemble parallélisable
-node .hb/hb.js review <gate> pass|fail [note]   # verdict de la revue adversariale
-```
-
----
-
-## Changelog v1.5 — intégrité des gates (2026-07-11)
-
-| # | Évolution | Type |
-|---|---|---|
-| 1 | **`hb doctor`** : détection de *rot* — une phase TERMINÉE dont une gate référence un fichier disparu (gate non reproductible). Signale aussi erreurs DAG, dérive state/log, leases périmées. Lecture seule. | 🔴 intégrité |
-| 2 | **Gates re-vérifiables** : `gate.sh --check <GATE>` réévalue une gate en lecture seule (aucun effet de bord) ; `gate.sh --all` réévalue TOUTES les gates (contrôle de régression). Une gate passée continue d'agir comme une gate. | 🟠 intégrité |
-| 3 | Suite de régression : 107 assertions (T27-T28 ajoutés). | 🟢 qualité |
-
-**Contexte :** surgi d'un vrai build — un agent a retiré des specs qu'une gate TERMINÉE
-(`GATE_P8`) référençait encore. « Documenté mais non vérifié » : `hb doctor` attrape
-exactement ce cas, et `gate.sh --all` re-prouve que le projet passe encore toutes ses gates.
+| v1.1–v1.2 | Reliability + static DAG validation, reports, visualization |
+| v1.3 | Event-sourced state + `hb` CLI, objective no-progress detection, gate timeout, per-task leases + bounded concurrency, mid-session heartbeat |
+| v1.4 | Adversarial gates (second agent), parallel-ready (`hb ready`), lint warnings, notify hook, git init + commit-on-gate-pass, `/heartbeat plan` |
+| v1.5 | Gate integrity: `hb doctor` (rot detection), re-verifiable gates (`gate.sh --check/--all`) |
+| v1.6 | Gate liveness: `review_stuck` (stalled-review guard), automatic rot detection (per-tick + pre-commit hook) |

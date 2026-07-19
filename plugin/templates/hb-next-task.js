@@ -116,7 +116,7 @@ function resolve(state, dag, hbDir) {
   }
   if (orphans.length) return {
     type: 'deadlock', cause: 'active_orphan',
-    detail: { tasks: orphans, hint: 'retirer ces IDs de active_tasks (reprise) ou les marquer done si le travail existe' },
+    detail: { tasks: orphans, hint: 'remove these IDs from active_tasks (to retry) or mark them done if the work exists' },
   };
 
   try {
@@ -125,7 +125,7 @@ function resolve(state, dag, hbDir) {
     if (res.errors.length) return { type: 'deadlock', cause: 'dag_invalid', detail: { errors: res.errors.slice(0, 5) } };
   } catch (e) { /* lint absent → fall through */ }
 
-  return { type: 'deadlock', cause: 'unsatisfiable', detail: { hint: 'aucune tâche éligible — lancer: node .hb/hb-lint.js .hb/dag.json' } };
+  return { type: 'deadlock', cause: 'unsatisfiable', detail: { hint: 'no eligible task — run: node .hb/hb-lint.js .hb/dag.json' } };
 }
 
 if (require.main === module) {

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * hb-viz.js — Visualisation du DAG HeartBeat (v1.2)
+ * hb-viz.js — HeartBeat DAG visualization
  *
- * Génère une page HTML 100% AUTONOME (zéro ressource externe, ouvrable en
- * local) montrant : phases, tâches colorées par statut (done / active /
- * pending / locked), gates (passée / en attente) et dépendances (requires).
+ * Generates a fully SELF-CONTAINED HTML page (zero external resources, opens
+ * locally) showing: phases, tasks colored by status (done / active / pending /
+ * locked), gates (passed / waiting) and dependencies (requires).
  *
- * Usage : node hb-viz.js <hb-dir> [sortie.html]
- *         (défaut : <hb-dir>/dag-view.html)
+ * Usage: node hb-viz.js <hb-dir> [output.html]
+ *        (default: <hb-dir>/dag-view.html)
  */
 'use strict';
 const fs = require('fs');
@@ -46,7 +46,7 @@ for (const p of (dag.phases ?? [])) {
     body += `<div class="task t-${st}"><b>${esc(t.id)}</b> ${esc(t.title)}${reqs}</div>`;
   }
   body += `</div>`;
-  if (p.gate_exit) body += `<footer><span class="gate ${gatePassed.has(p.gate_exit) ? 'g-ok' : 'g-wait'}">⛩ ${esc(p.gate_exit)} — ${gatePassed.has(p.gate_exit) ? 'passée' : 'en attente'}</span></footer>`;
+  if (p.gate_exit) body += `<footer><span class="gate ${gatePassed.has(p.gate_exit) ? 'g-ok' : 'g-wait'}">⛩ ${esc(p.gate_exit)} — ${gatePassed.has(p.gate_exit) ? 'passed' : 'waiting'}</span></footer>`;
   body += `</section>\n`;
 }
 
@@ -71,11 +71,11 @@ header .pid{color:#8ab4ff;font-weight:700}.ptitle{font-weight:600}
 .g-ok{color:#4ade80}.g-wait{color:#fbbf24}
 footer{margin-top:8px}.meta{color:#9aa0aa;font-size:12px}
 </style></head><body>
-<h1>HeartBeat — ${esc(dag._meta?.project ?? '')} <span class="meta">${doneT}/${totalT} tâches · ${pct}%</span></h1>
+<h1>HeartBeat — ${esc(dag._meta?.project ?? '')} <span class="meta">${doneT}/${totalT} tasks · ${pct}%</span></h1>
 <div class="bar"><i></i></div>
 ${body}
-<p class="meta">Généré le ${new Date().toISOString()} — hb-viz v1.2 · page autonome, aucune ressource externe</p>
+<p class="meta">Generated ${new Date().toISOString()} — hb-viz · self-contained page, no external resources</p>
 </body></html>`;
 
 fs.writeFileSync(out, html);
-console.log(`Vue générée: ${out}`);
+console.log(`View generated: ${out}`);
