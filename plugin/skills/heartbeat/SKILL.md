@@ -149,7 +149,7 @@ clones. For **local-only** projects, use one of:
 ### `/heartbeat help`
 Reply with:
 ```
-*HeartBeat v1.6 — commands:*
+*HeartBeat v1.7 — commands:*
 • /heartbeat init <dir>     — bootstrap a new project
 • /heartbeat plan <dir>     — convert a plan into a lint-clean dag.json
 • /heartbeat status <dir>   — progress report
@@ -177,9 +177,17 @@ node .hb/hb.js heartbeat <taskId>  # long task: refresh the lease so it isn't re
 node .hb/hb.js ready [N]           # the concurrently-runnable set (parallel drivers)
 node .hb/hb.js review <gate> pass|fail [note]   # record the adversarial verdict
 node .hb/hb.js doctor              # integrity check (deleted gate files, drift, stale leases)
+node .hb/hb.js diagnose [reason]   # computed root-cause + recovery steps for a blocked state
+node .hb/hb.js protocol [reason]   # the reason→action table (single source of truth)
 node .hb/hb.js rebuild             # reproject state.json from the log (sync / recover)
 node .hb/hb.js state               # print current projected state
 ```
+
+**Self-describing ticks (v1.7).** Every wake already carries the exact next action
+in `data.action` — you rarely need this table; act on what the tick tells you. When
+blocked, `node .hb/hb.js diagnose` computes the root cause (which criteria fail, which
+commit deleted a gate's file, the deadlock cause) and the recovery steps. The full
+protocol also lives in `.hb/PROTOCOL.md`, versioned with the project.
 
 **Long-running tasks:** call `node .hb/hb.js heartbeat <id>` at least every
 `HEARTBEAT_STALE_S` (default 180s) — e.g. between sub-steps. A heartbeated lease
@@ -193,13 +201,13 @@ When woken by a tick (`data.reason` present), act by reason:
 | `next_task` | `node .hb/hb.js start <id>` → do the work → `node .hb/hb.js done <id>` (or `fail <id>` if you couldn't complete it). No hand-edited JSON. |
 | `gate_pending` | `bash .hb/gate.sh <data.next_task.gate>`. A pass advances the phase — UNLESS the gate has a `review` block, in which case an adversarial review is owed (next). |
 | `review_pending` | The deterministic gate passed; now **spawn a second, skeptical agent** (Agent tool, `isolation` optional) told to *refute* that the phase is truly complete — hollow tests, criteria not really met, faked outputs. Then `node .hb/hb.js review <gate> pass` (couldn't refute) or `fail "<findings>"` (found holes → routes to `gate_blocked`; fix, re-gate, re-review). |
-| `gate_blocked` | Fix the failing criteria (or the review findings), re-run `bash .hb/gate.sh <gate>`. |
+| `gate_blocked` | `node .hb/hb.js diagnose` → shows which criteria fail + attempts; fix the ROOT cause (never weaken the gate), re-run `bash .hb/gate.sh <gate>`. |
 | `at_capacity` | Nothing to do — max tasks already in flight (or the only ready task is leased). The tick handled it; no wake. |
 | `state_corrupted` | `node .hb/hb.js rebuild` (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable. |
 | `dag_corrupted` | Restore dag.json from git/backup (structure is immutable). |
 | `deadlock` | `active_orphan` → the stale-lease reclaim frees it automatically; if it persists, `hb fail <id>`. `dag_invalid` → surface errors for human review. |
 | `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
-| `gate_rot` | A completed phase's gate references a deleted/moved file — `node .hb/hb.js doctor` for details, then fix the file or re-point the gate. |
+| `gate_rot` | `node .hb/hb.js diagnose` names the missing file AND the commit that deleted it — restore it or re-point the gate. |
 | `build_stuck` | `signal: no_progress` means the agent was woken repeatedly without progressing. Produce a blocker report for human review. |
 | `review_stuck` | An adversarial review never resolved — spawn the refuter and record `hb review <gate> pass\|fail`, or surface for human review. |
 | `all_done` | Write the final project report. |

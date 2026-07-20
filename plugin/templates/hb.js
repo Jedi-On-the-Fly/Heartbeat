@@ -25,6 +25,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const HB_DIR = process.env.HB_DIR || __dirname;
 const PROJECT_DIR = path.dirname(HB_DIR);
@@ -37,6 +38,31 @@ const LOCK_STALE_S = parseInt(process.env.LOCK_STALE_S || '1800', 10);
 
 const nowIso = () => new Date().toISOString();
 const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+// v1.7: single source of truth for the tick protocol (reason → action). Rendered
+// into: the tick's self-describing `data.action`, `.hb/PROTOCOL.md`, and `hb protocol`.
+// Keeping it here means it is always version-matched to the tick that emits reasons.
+const PROTOCOL = {
+  next_task:          'hb start <id> → do the work → hb done <id> (or hb fail <id> if you could not complete it). Never hand-edit state.json.',
+  gate_pending:       'bash .hb/gate.sh <gate> — a pass advances the phase, UNLESS the gate has a review block (then a review is owed next).',
+  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?), then: node .hb/hb.js review <gate> pass|fail "<findings>".',
+  gate_blocked:       'Run: node .hb/hb.js diagnose — fix the ROOT cause (do NOT weaken the gate), then re-run bash .hb/gate.sh <gate>.',
+  at_capacity:        'Nothing to do — max tasks already in flight. No action.',
+  state_corrupted:    'node .hb/hb.js rebuild (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable.',
+  dag_corrupted:      'Restore dag.json from git/backup — its structure is immutable.',
+  deadlock:           'Run: node .hb/hb.js diagnose — active_orphan: free the IDs; dag_invalid: fix the DAG and re-lint.',
+  unsanctioned_drift: 'Review the diff. If the change is intended: bash .hb/tick.sh --freeze.',
+  gate_rot:           'Run: node .hb/hb.js diagnose — a completed phase\'s gate references a deleted file; restore it or re-point the gate.',
+  build_stuck:        'Run: node .hb/hb.js diagnose — woken repeatedly without progress; root-cause it or surface a blocker report for a human.',
+  review_stuck:       'The adversarial review never resolved — spawn the refuter and record hb review <gate> pass|fail, or surface for a human.',
+  all_done:           'Write the final project report.',
+};
+function renderProtocolMd() {
+  let md = '# HeartBeat — tick protocol\n\nWhen a tick returns `wakeAgent:true`, act on `data.reason`. The tick also embeds\nthe action for the current reason in `data.action`. Full reference:\n\n| reason | action |\n|---|---|\n';
+  for (const [r, a] of Object.entries(PROTOCOL)) md += `| \`${r}\` | ${a.replace(/\|/g, '\\|')} |\n`;
+  md += '\nNever hand-edit `state.json` — it is a projection of `events.jsonl`; mutate state\nonly through the `hb` CLI.\n';
+  return md;
+}
 
 function readDag() {
   try { return JSON.parse(fs.readFileSync(DAG, 'utf8')); }
@@ -249,7 +275,82 @@ function doctor() {
   return { problems, notes };
 }
 
+// v1.7: read-only, never throws. Compute-what-you-can root-cause for a blocked state.
+function sh(cmd) {
+  try { return execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 8000 }); }
+  catch (e) { return (e && e.stdout) || ''; }
+}
+function diagnose(reason) {
+  const dag = readDag(), events = readEvents(), state = project(events, dag);
+  const out = [];
+  const P = s => out.push(s);
+
+  if (!reason) {   // infer the most pressing blocker
+    if ((state.gate && state.gate.errors) > 0) reason = 'gate_blocked';
+    else if (doctor().problems.some(p => /no longer reproducible/.test(p))) reason = 'gate_rot';
+    else if ((state.pending_reviews || []).length) reason = 'review_stuck';
+    else if ((state.build_stuck_count || 0) >= 5) reason = 'build_stuck';
+    else { try { const { resolve } = require('./hb-next-task.js'); const r = resolve(state, dag, HB_DIR); if (r && r.type === 'deadlock') reason = 'deadlock'; } catch (e) {} }
+  }
+  P(`Diagnosis: ${reason || 'no blocker detected'}`);
+  if (!reason) { P('  Not currently blocked. Run: node .hb/hb.js state'); return out.join('\n'); }
+
+  if (reason === 'gate_blocked') {
+    let g = null;
+    for (let i = events.length - 1; i >= 0 && !g; i--) if (['gate_failed', 'gate_passed'].includes(events[i].event)) g = events[i].gate;
+    if (!g) { const p = (dag.phases || []).find(p => !state.completed_phases.includes(p.id)); g = p && p.gate_exit; }
+    P(`  Gate: ${g}`);
+    P('  Observe (read-only re-run):');
+    const fails = sh(`bash "${HB_DIR}/gate.sh" --check "${g}"`).split('\n').filter(l => l.includes('✗'));
+    (fails.length ? fails : ['   (run: bash .hb/gate.sh --check ' + g + ')']).forEach(l => P('   ' + l.trim()));
+    P(`  Attempts: this gate has failed ${events.filter(e => e.event === 'gate_failed' && e.gate === g).length}× (build_stuck at 5).`);
+    P('  Recover:');
+    P('   1. Root-cause each ✗ from its real output — fix the CODE, not the test.');
+    P(`   2. bash .hb/gate.sh --check ${g}   (read-only) until all ✓.`);
+    P(`   3. Then bash .hb/gate.sh ${g} for real.`);
+    P('  Do NOT weaken a criterion to make it pass. If you have tried the same fix twice, surface for a human.');
+  } else if (reason === 'gate_rot') {
+    P('  Observe: a completed phase\'s gate references a file that no longer exists.');
+    for (const pr of doctor().problems.filter(p => /no longer reproducible/.test(p))) {
+      P('   ' + pr);
+      const m = pr.match(/missing (\S+)/);
+      if (m) { const del = sh(`git -C "${PROJECT_DIR}" log --diff-filter=D --oneline -1 -- "${m[1]}"`).trim(); if (del) P(`     traced: deleted in ${del}`); }
+    }
+    P('  Recover:');
+    P('   1. Was that coverage genuinely moved? Confirm a current spec asserts the same behavior.');
+    P('   2. If yes → re-point the gate criterion in .hb/dag.json.');
+    P('   3. If no  → restore the file: git checkout <commit>^ -- <file>.');
+    P('   4. Re-verify read-only: bash .hb/gate.sh --all.  Do NOT weaken the criterion.');
+  } else if (reason === 'deadlock') {
+    let r = {}; try { const { resolve } = require('./hb-next-task.js'); r = resolve(state, dag, HB_DIR) || {}; } catch (e) {}
+    P(`  Cause: ${r.cause || 'unknown'}`);
+    if (r.cause === 'active_orphan') P('  Recover: free the orphan IDs (hb fail <id>): ' + JSON.stringify((r.detail || {}).tasks || []));
+    else if (r.cause === 'dag_invalid') P('  Recover: fix the DAG, then: node .hb/hb-lint.js .hb/dag.json\n  ' + JSON.stringify((r.detail || {}).errors || []));
+    else P('  Recover: no eligible task — run node .hb/hb-lint.js .hb/dag.json and check requires/gates.');
+  } else if (reason === 'build_stuck') {
+    let task = null;
+    for (let i = events.length - 1; i >= 0 && !task; i--) if (events[i].event === 'wake' && events[i].task) task = events[i].task;
+    P(`  Task: ${task || '(unknown)'} — woken ${events.filter(e => e.event === 'wake' && e.task === task).length}×, failed ${events.filter(e => e.event === 'task_failed' && e.task === task).length}×, stuck_count=${state.build_stuck_count}.`);
+    P('  Recover:');
+    P('   1. Read what happened each attempt (events.jsonl). Are you repeating the same fix?');
+    P('   2. If genuinely blocked, produce a blocker report and surface for a human.');
+    P(`   3. If it is an orphan (started, never finished): node .hb/hb.js fail ${task || '<id>'}.`);
+  } else if (reason === 'review_stuck') {
+    const g = (state.pending_reviews || [])[0];
+    P(`  Gate awaiting review: ${g}`);
+    P('  Recover:');
+    P('   1. Spawn a skeptical sub-agent to REFUTE that the phase is done.');
+    P(`   2. Record the verdict: node .hb/hb.js review ${g} pass|fail "<findings>".`);
+  } else {
+    P('  (no structured diagnosis for this reason — see: node .hb/hb.js protocol ' + reason + ')');
+  }
+  return out.join('\n');
+}
+
 // ── CLI ───────────────────────────────────────────────────────────────────────
+// v1.7: guard the dispatch so hb.js is safely requirable (the tick requires it to
+// read PROTOCOL). Without this, require() would run the switch → default → exit.
+if (require.main === module) {
 const [cmd, arg1, ...rest] = process.argv.slice(2);
 const die = (msg) => { process.stderr.write(msg + '\n'); process.exit(1); };
 
@@ -310,6 +411,27 @@ switch (cmd) {
     process.exit(problems.length ? 1 : 0);
   }
 
+  case 'diagnose':
+    process.stdout.write(diagnose(arg1 && !arg1.startsWith('-') ? arg1 : null) + '\n');
+    break;
+
+  case 'protocol': {
+    // v1.7: hb protocol            → the full reason→action table
+    //       hb protocol <reason>   → one reason's action
+    //       hb protocol --md       → PROTOCOL.md (rendered)
+    //       hb protocol <reason> --oneline → bare action string (used by the tick)
+    if (rest.includes('--md') || arg1 === '--md') { process.stdout.write(renderProtocolMd()); break; }
+    const reason = (arg1 && !arg1.startsWith('--')) ? arg1 : null;
+    if (reason) {
+      const a = PROTOCOL[reason];
+      if (!a) { process.stderr.write(`unknown reason: ${reason}\n`); process.exit(1); }
+      process.stdout.write((rest.includes('--oneline') ? a : `${reason}: ${a}`) + '\n');
+    } else {
+      for (const [r, a] of Object.entries(PROTOCOL)) process.stdout.write(`${r}: ${a}\n`);
+    }
+    break;
+  }
+
   case 'rebuild': {
     const s = withWlock(() => reproject());
     process.stdout.write(`rebuilt: ${s.completed_tasks.length} done, phase ${s.current_phase}\n`);
@@ -350,7 +472,8 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|rebuild|state|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|import> [args]');
+}
 }
 
-module.exports = { project, phaseByGateExit, initialState };
+module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd };

@@ -1,7 +1,22 @@
 # STATUS — HeartBeat
 
-**Version:** v1.6 (gate liveness over v1.5)
+**Version:** v1.7 (never left guessing, over v1.6)
 **Regression suite:** `bash tests/run-tests.sh`
+
+## v1.7 — never left guessing
+
+- **Self-describing ticks.** Every wake embeds the exact next action in
+  `data.action`, so any driver (cron, headless, another harness) knows what to do
+  from the JSON alone.
+- **One-source protocol.** A single `reason → action` map in `hb.js` drives
+  `data.action`, `hb protocol`, and `.hb/PROTOCOL.md` (written at bootstrap, versioned
+  with the project) — no more drift across skill / README / snippet.
+- **`hb diagnose`.** For a blocked state, computes the root cause where the substrate
+  can — which criteria fail, the commit that deleted a gate's file (git backward-trace),
+  the deadlock cause — plus ordered recovery steps. Read-only.
+- **SessionStart hook.** Detects a `.hb/` project and injects a tiny pointer, so a
+  Claude Code session is always current regardless of installed skill version.
+- Fixed a latent bug: `hb.js` is now safely `require`-able (CLI guarded).
 
 ## v1.6 — gate liveness
 

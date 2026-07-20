@@ -101,7 +101,15 @@ sleep_out() {
 }
 wake_out() {
   release_lock
-  echo "{\"wakeAgent\":true,\"data\":$1}"
+  # v1.7: make the tick self-describing — inject data.action from the protocol map
+  # so any driver (cron, headless, another harness) knows what to do from the JSON
+  # alone. Falls back to the bare payload if node/hb.js is unavailable.
+  node -e "
+    const hb=require('$HB_DIR/hb.js');
+    let d; try{d=JSON.parse(process.argv[1])}catch(e){d={}}
+    if(d.reason && hb.PROTOCOL && hb.PROTOCOL[d.reason]) d.action=hb.PROTOCOL[d.reason];
+    process.stdout.write(JSON.stringify({wakeAgent:true,data:d}));
+  " "$1" 2>/dev/null || echo "{\"wakeAgent\":true,\"data\":$1}"
   exit 0
 }
 

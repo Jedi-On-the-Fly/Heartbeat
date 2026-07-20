@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 660" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="ai" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6366f1"/>
+    </marker>
+    <marker id="at" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="900" height="660" fill="#ffffff"/>
+  <text x="450" y="36" text-anchor="middle" font-size="23" font-weight="700" fill="#0f172a">HeartBeat — architecture</text>
+  <text x="450" y="58" text-anchor="middle" font-size="13" fill="#64748b">a deterministic scheduler wrapped around a non-deterministic worker</text>
+
+  <!-- bands -->
+  <rect x="30" y="82"  width="840" height="140" rx="14" fill="#eef2ff"/>
+  <rect x="30" y="240" width="840" height="128" rx="14" fill="#fff7ed"/>
+  <rect x="30" y="388" width="840" height="212" rx="14" fill="#f0fdfa"/>
+  <text x="46" y="104" font-size="12" font-weight="700" fill="#4f46e5">NON-DETERMINISTIC — Stage B (LLM)</text>
+  <text x="46" y="262" font-size="12" font-weight="700" fill="#b45309">INFORMED STATE — data (the source of truth)</text>
+  <text x="46" y="410" font-size="12" font-weight="700" fill="#0d9488">DETERMINISTIC — Stage A (bash · ~0 tokens)</text>
+
+  <!-- Stage B boxes -->
+  <rect x="90" y="120" width="250" height="82" rx="10" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
+  <text x="215" y="152" text-anchor="middle" font-size="15" font-weight="700" fill="#4338ca">Agent (LLM)</text>
+  <text x="215" y="174" text-anchor="middle" font-size="12" fill="#4338ca">does one task · records facts</text>
+
+  <rect x="560" y="120" width="290" height="82" rx="10" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
+  <text x="705" y="152" text-anchor="middle" font-size="15" font-weight="700" fill="#4338ca">Adversarial reviewer</text>
+  <text x="705" y="174" text-anchor="middle" font-size="12" fill="#4338ca">tries to REFUTE completion</text>
+
+  <!-- Data boxes -->
+  <rect x="90" y="276" width="250" height="76" rx="10" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+  <text x="215" y="304" text-anchor="middle" font-size="14" font-weight="700" fill="#b45309">events.jsonl</text>
+  <text x="215" y="325" text-anchor="middle" font-size="11" fill="#b45309">append-only log · source of truth</text>
+
+  <rect x="380" y="276" width="190" height="76" rx="10" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+  <text x="475" y="304" text-anchor="middle" font-size="14" font-weight="700" fill="#b45309">state.json</text>
+  <text x="475" y="325" text-anchor="middle" font-size="11" fill="#b45309">informed state (projection)</text>
+
+  <rect x="610" y="276" width="240" height="76" rx="10" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+  <text x="730" y="304" text-anchor="middle" font-size="14" font-weight="700" fill="#b45309">dag.json</text>
+  <text x="730" y="325" text-anchor="middle" font-size="11" fill="#b45309">phases · tasks · gates</text>
+
+  <!-- Stage A boxes -->
+  <rect x="90" y="430" width="300" height="150" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="2"/>
+  <text x="240" y="456" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">tick.sh — priority checks</text>
+  <text x="240" y="480" text-anchor="middle" font-size="11" fill="#0f766e">integrity · rot · circuit-breaker</text>
+  <text x="240" y="498" text-anchor="middle" font-size="11" fill="#0f766e">drift · gate-errors · next-task</text>
+  <text x="240" y="534" text-anchor="middle" font-size="12" font-weight="700" fill="#0f766e">→ { wakeAgent, reason }</text>
+  <text x="240" y="556" text-anchor="middle" font-size="11" fill="#0f766e">wake only when there is real work</text>
+
+  <rect x="430" y="430" width="180" height="150" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="2"/>
+  <text x="520" y="456" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">gate.sh</text>
+  <text x="520" y="480" text-anchor="middle" font-size="11" fill="#0f766e">behavioral gates</text>
+  <text x="520" y="498" text-anchor="middle" font-size="11" fill="#0f766e">timeout · deterministic</text>
+  <text x="520" y="530" text-anchor="middle" font-size="11" fill="#0f766e">--check / --all</text>
+  <text x="520" y="548" text-anchor="middle" font-size="11" fill="#0f766e">re-verify (read-only)</text>
+
+  <rect x="650" y="430" width="200" height="150" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="2"/>
+  <text x="750" y="456" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">git</text>
+  <text x="750" y="480" text-anchor="middle" font-size="11" fill="#0f766e">commit + tag on</text>
+  <text x="750" y="496" text-anchor="middle" font-size="11" fill="#0f766e">each gate pass</text>
+  <text x="750" y="528" text-anchor="middle" font-size="11" font-weight="700" fill="#0f766e">= restore points</text>
+  <text x="750" y="546" text-anchor="middle" font-size="11" fill="#0f766e">git reset --hard GATE_Px</text>
+
+  <!-- ARROWS -->
+  <!-- wake: tick -> Agent, up the left margin -->
+  <path d="M90,470 L52,470 L52,161 L90,161" fill="none" stroke="#6366f1" stroke-width="2" marker-end="url(#ai)"/>
+  <text x="40" y="315" transform="rotate(-90 40 315)" text-anchor="middle" font-size="11" font-weight="600" fill="#4f46e5">wakeAgent · reason</text>
+
+  <!-- Agent -> events (append) -->
+  <line x1="200" y1="202" x2="200" y2="274" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <text x="300" y="242" text-anchor="middle" font-size="11" fill="#334155">append events</text>
+
+  <!-- events -> state (projection) -->
+  <line x1="342" y1="314" x2="378" y2="314" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <text x="360" y="268" text-anchor="middle" font-size="10" fill="#334155">project</text>
+
+  <!-- data -> tick (reads), dashed -->
+  <path d="M470,354 L340,428" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ag)"/>
+  <text x="430" y="398" text-anchor="middle" font-size="11" fill="#64748b">reads state · log · dag</text>
+
+  <!-- review_pending: gate.sh -> Reviewer, up the state/dag gap -->
+  <path d="M588,428 L588,204" fill="none" stroke="#6366f1" stroke-width="2" marker-end="url(#ai)"/>
+  <text x="598" y="414" text-anchor="start" font-size="10" font-weight="600" fill="#4f46e5">review_pending</text>
+
+  <!-- Reviewer verdict -> events (dashed curve) -->
+  <path d="M615,202 C470,238 400,258 322,283" fill="none" stroke="#6366f1" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ai)"/>
+  <text x="470" y="232" text-anchor="middle" font-size="10" fill="#4f46e5">hb review → event</text>
+
+  <!-- gate pass -> git -->
+  <line x1="610" y1="505" x2="648" y2="505" stroke="#0d9488" stroke-width="2" marker-end="url(#at)"/>
+  <text x="629" y="497" text-anchor="middle" font-size="10" font-weight="600" fill="#0f766e">pass</text>
+
+  <!-- gate.sh reads dag/events (dashed, short) -->
+  <path d="M520,428 L520,354" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#ag)"/>
+
+  <text x="450" y="632" text-anchor="middle" font-size="12" fill="#94a3b8">The tick reads settled reality, computes an informed state, and wakes the model only for real work.</text>
+  <text x="450" y="650" text-anchor="middle" font-size="12" fill="#94a3b8">Gates verify results deterministically; a second agent refutes them; git makes every phase a restore point.</text>
+</svg>

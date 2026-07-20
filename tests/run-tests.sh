@@ -427,6 +427,67 @@ else
   echo "  (git absent — T31 skipped)"
 fi
 
+echo "═══ T32 — protocol source of truth (v1.7, #1) ═══"
+P32="$TMP/p32"; bash "$HB_SRC/plugin/bootstrap.sh" "$P32" >/dev/null 2>&1 </dev/null; H32="$P32/.hb"
+check "T32.1 hb protocol lists all reasons" 'test "$(node "$H32/hb.js" protocol | wc -l)" -ge 12'
+check "T32.2 hb protocol <reason> returns that reason" 'node "$H32/hb.js" protocol review_pending | grep -q REFUTE'
+check "T32.3 --oneline is a single bare line (no reason prefix)" \
+  'test "$(node "$H32/hb.js" protocol gate_blocked --oneline | wc -l)" -eq 1 && ! node "$H32/hb.js" protocol gate_blocked --oneline | grep -q "^gate_blocked:"'
+check "T32.4 --md renders a table" \
+  'node "$H32/hb.js" protocol --md | grep -q "tick protocol" && node "$H32/hb.js" protocol --md | grep -q next_task'
+check "T32.5 unknown reason → exit 1" '! node "$H32/hb.js" protocol nope >/dev/null 2>&1'
+
+echo "═══ T33 — self-describing ticks + PROTOCOL.md (v1.7, #1) ═══"
+P33="$TMP/p33"; bash "$HB_SRC/plugin/bootstrap.sh" "$P33" >/dev/null 2>&1 </dev/null; H33="$P33/.hb"
+check "T33.1 next_task tick embeds data.action" \
+  'rm -rf "$H33/.lock"; bash "$H33/tick.sh" | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>{const j=JSON.parse(d);process.exit(j.data.action&&/hb start/.test(j.data.action)?0:1)})"'
+check "T33.2 bootstrap writes .hb/PROTOCOL.md with reasons" \
+  '[ -f "$H33/PROTOCOL.md" ] && grep -q next_task "$H33/PROTOCOL.md" && grep -q review_pending "$H33/PROTOCOL.md"'
+check "T33.3 hb.js is safely requirable (no CLI side effects)" \
+  'node -e "const hb=require(\"$H33/hb.js\");process.exit(hb.PROTOCOL&&hb.PROTOCOL.next_task?0:1)"'
+# review_pending tick self-describes with a REFUTE action
+P33b="$TMP/p33b"; bash "$HB_SRC/plugin/bootstrap.sh" "$P33b" >/dev/null 2>&1 </dev/null; H33b="$P33b/.hb"
+node -e "const fs=require('fs');const f='$H33b/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'a',requires:[]}]}];d.gates={GATE_P0:{desc:'g',review:{prompt:'r'},criteria:[{id:'g',desc:'ok',cmd:'true'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+node "$H33b/hb.js" rebuild >/dev/null; node "$H33b/hb.js" start A >/dev/null; node "$H33b/hb.js" done A >/dev/null; bash "$H33b/gate.sh" GATE_P0 >/dev/null 2>&1
+check "T33.4 review_pending tick embeds a REFUTE action" \
+  'rm -rf "$H33b/.lock"; bash "$H33b/tick.sh" | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>{const j=JSON.parse(d);process.exit(j.data.action&&/refute/i.test(j.data.action)?0:1)})"'
+check "T33.5 every wake reason is covered by PROTOCOL (drift guard)" \
+  'node -e "const {PROTOCOL}=require(\"$HB_SRC/plugin/templates/hb.js\");const need=[\"next_task\",\"gate_pending\",\"review_pending\",\"gate_blocked\",\"deadlock\",\"unsanctioned_drift\",\"gate_rot\",\"build_stuck\",\"review_stuck\",\"all_done\",\"state_corrupted\",\"dag_corrupted\"];process.exit(need.every(r=>PROTOCOL[r])?0:1)"'
+
+echo "═══ T34 — hb diagnose : computed root-cause (v1.7, #2) ═══"
+P34="$TMP/p34"; bash "$HB_SRC/plugin/bootstrap.sh" "$P34" >/dev/null 2>&1 </dev/null; H34="$P34/.hb"
+node -e "const fs=require('fs');const f='$H34/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GATE_P0.criteria=[{id:'G0_1',desc:'must exist',cmd:'test -f \"\$PROJECT_DIR/nope.txt\"'}];fs.writeFileSync(f,JSON.stringify(d,null,2))"
+node "$H34/hb.js" rebuild >/dev/null; bash "$H34/gate.sh" GATE_P0 >/dev/null 2>&1
+check "T34.1 diagnose gate_blocked names the failing criterion" 'node "$H34/hb.js" diagnose gate_blocked | grep -q G0_1'
+check "T34.2 diagnose is READ-ONLY (no new events)" \
+  'E=$(wc -l < "$H34/events.jsonl"); node "$H34/hb.js" diagnose gate_blocked >/dev/null 2>&1; [ "$(wc -l < "$H34/events.jsonl")" -eq "$E" ]'
+P34b="$TMP/p34b"; bash "$HB_SRC/plugin/bootstrap.sh" "$P34b" >/dev/null 2>&1 </dev/null; H34b="$P34b/.hb"
+node -e "const fs=require('fs');const f='$H34b/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases[0].tasks[1].requires=['GHOST'];fs.writeFileSync(f,JSON.stringify(d,null,2))"
+node "$H34b/hb.js" rebuild >/dev/null; node "$H34b/hb.js" start P0T1 >/dev/null; node "$H34b/hb.js" done P0T1 >/dev/null
+check "T34.3 diagnose deadlock → cause dag_invalid" 'node "$H34b/hb.js" diagnose deadlock | grep -q dag_invalid'
+check "T34.4 diagnose (no arg) infers the blocker" 'node "$H34b/hb.js" diagnose | grep -q deadlock'
+if command -v git >/dev/null 2>&1; then
+  P34c="$TMP/p34c"; HB_NO_GIT="" bash "$HB_SRC/plugin/bootstrap.sh" "$P34c" >/dev/null 2>&1 </dev/null; H34c="$P34c/.hb"
+  node -e "const fs=require('fs');const f='$H34c/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'a',requires:[]}]}];d.gates={GATE_P0:{desc:'g',criteria:[{id:'g1',desc:'spec',cmd:'node \"\$PROJECT_DIR/spec.js\"'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+  node "$H34c/hb.js" rebuild >/dev/null; echo "process.exit(0)" > "$P34c/spec.js"
+  git -C "$P34c" add spec.js; git -c user.email=t@t -c user.name=t -C "$P34c" commit -q --no-verify -m "add spec" >/dev/null 2>&1
+  node "$H34c/hb.js" start A >/dev/null; node "$H34c/hb.js" done A >/dev/null; bash "$H34c/gate.sh" GATE_P0 >/dev/null 2>&1
+  git -C "$P34c" rm -q spec.js; git -c user.email=t@t -c user.name=t -C "$P34c" commit -q --no-verify -m "remove spec" >/dev/null 2>&1
+  check "T34.5 diagnose gate_rot traces the deleting commit (git backward-trace)" \
+    'node "$H34c/hb.js" diagnose gate_rot | grep -qi "deleted in"'
+else
+  echo "  (git absent — T34.5 skipped)"
+fi
+
+echo "═══ T35 — SessionStart hook (v1.7, #1) ═══"
+check "T35.1 hooks.json valid + registers SessionStart" \
+  'node -e "const h=require(\"$HB_SRC/plugin/hooks/hooks.json\");process.exit(h.hooks&&h.hooks.SessionStart?0:1)"'
+P35="$TMP/p35"; bash "$HB_SRC/plugin/bootstrap.sh" "$P35" >/dev/null 2>&1 </dev/null
+check "T35.2 hook fires (prints pointer) on a .hb/ project" \
+  'CLAUDE_PROJECT_DIR="$P35" bash "$HB_SRC/plugin/hooks/heartbeat-detect.sh" | grep -qi "HeartBeat"'
+check "T35.3 hook is silent on a non-HeartBeat dir" \
+  '[ -z "$(CLAUDE_PROJECT_DIR="$TMP" bash "$HB_SRC/plugin/hooks/heartbeat-detect.sh")" ]'
+
 echo ""
 echo "═══════════════════════════════════════"
 echo "  RESULT: $PASS passed, $FAIL failed"

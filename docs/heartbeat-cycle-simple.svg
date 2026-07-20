@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/>
+    </marker>
+  </defs>
+
+  <rect width="720" height="400" fill="#f8fafc"/>
+  <text x="360" y="38" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">HeartBeat — the tick cycle</text>
+  <text x="360" y="60" text-anchor="middle" font-size="13" fill="#64748b">a deterministic tick in the gap between non-deterministic tasks</text>
+
+  <!-- TICK (Stage A) -->
+  <rect x="55" y="150" width="170" height="92" rx="12" fill="#ccfbf1" stroke="#0d9488" stroke-width="2"/>
+  <text x="140" y="184" text-anchor="middle" font-size="16" font-weight="700" fill="#0f766e">TICK · Stage A</text>
+  <text x="140" y="206" text-anchor="middle" font-size="12" fill="#0f766e">deterministic</text>
+  <text x="140" y="224" text-anchor="middle" font-size="12" fill="#0f766e">bash · ~0 tokens</text>
+
+  <!-- decision -->
+  <polygon points="360,150 432,196 360,242 288,196" fill="#ffffff" stroke="#334155" stroke-width="2"/>
+  <text x="360" y="192" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">real</text>
+  <text x="360" y="209" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">work?</text>
+
+  <!-- AGENT (Stage B) -->
+  <rect x="500" y="150" width="185" height="92" rx="12" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2"/>
+  <text x="592" y="184" text-anchor="middle" font-size="16" font-weight="700" fill="#4338ca">AGENT · Stage B</text>
+  <text x="592" y="206" text-anchor="middle" font-size="12" fill="#4338ca">non-deterministic</text>
+  <text x="592" y="224" text-anchor="middle" font-size="12" fill="#4338ca">LLM · one task</text>
+
+  <!-- tick -> decision -->
+  <line x1="225" y1="196" x2="286" y2="196" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- decision -> agent -->
+  <line x1="434" y1="196" x2="498" y2="196" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="466" y="184" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">yes</text>
+
+  <!-- no -> sleep : arc from decision top back to tick top -->
+  <path d="M352,154 C300,92 190,96 146,148" fill="none" stroke="#0d9488" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-teal)"/>
+  <text x="250" y="92" text-anchor="middle" font-size="12" fill="#0f766e" font-weight="600">no → sleep</text>
+
+  <!-- agent -> event -> back to tick : bottom arc -->
+  <path d="M592,244 C560,326 220,326 146,246" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="368" y="320" text-anchor="middle" font-size="12" fill="#334155">append event → informed state advances</text>
+
+  <text x="360" y="378" text-anchor="middle" font-size="12" fill="#94a3b8">Stage A reads settled reality and wakes Stage B only when there is real work.</text>
+</svg>

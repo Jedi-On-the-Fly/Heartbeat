@@ -148,9 +148,18 @@ node .hb/hb.js heartbeat <id>      # long task: refresh the lease so it isn't re
 node .hb/hb.js ready [N]           # the concurrently-runnable set (parallel drivers)
 node .hb/hb.js review <gate> pass|fail [note]   # record the adversarial verdict
 node .hb/hb.js doctor              # integrity check (rot / drift / stale leases)
+node .hb/hb.js diagnose [reason]   # computed root-cause + recovery for a blocked state
+node .hb/hb.js protocol [reason]   # the reason→action table (single source of truth)
 node .hb/hb.js rebuild             # reproject state.json from the log (sync / recover)
 node .hb/hb.js state               # print the projected state
 ```
+
+**Self-describing ticks (v1.7):** every wake carries the exact next action in
+`data.action`, so any driver knows what to do from the JSON alone. The protocol is
+one source of truth (`hb protocol`), rendered to `.hb/PROTOCOL.md` at bootstrap and
+embedded in ticks. When blocked, `hb diagnose` computes the root cause (failing
+criteria, the commit that deleted a gate's file, the deadlock cause) and recovery
+steps — you are never left guessing.
 
 | `data.reason` | Action |
 |---|---|
@@ -285,3 +294,4 @@ bash tests/run-tests.sh      # full regression suite (all green)
 | v1.4 | Adversarial gates (second agent), parallel-ready (`hb ready`), lint warnings, notify hook, git init + commit-on-gate-pass, `/heartbeat plan` |
 | v1.5 | Gate integrity: `hb doctor` (rot detection), re-verifiable gates (`gate.sh --check/--all`) |
 | v1.6 | Gate liveness: `review_stuck` (stalled-review guard), automatic rot detection (per-tick + pre-commit hook) |
+| v1.7 | Never left guessing: self-describing ticks (`data.action`), one-source protocol (`hb protocol` + `.hb/PROTOCOL.md`), computed root-cause recovery (`hb diagnose`), SessionStart hook |
