@@ -11,6 +11,7 @@
   <rect width="720" height="400" fill="#f8fafc"/>
   <text x="360" y="38" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">HeartBeat — the tick cycle</text>
   <text x="360" y="60" text-anchor="middle" font-size="13" fill="#64748b">a deterministic tick in the gap between non-deterministic tasks</text>
+  <text x="690" y="26" text-anchor="end" font-size="11" fill="#94a3b8">v1.7</text>
 
   <!-- TICK (Stage A) -->
   <rect x="55" y="150" width="170" height="92" rx="12" fill="#ccfbf1" stroke="#0d9488" stroke-width="2"/>
@@ -33,7 +34,8 @@
   <line x1="225" y1="196" x2="286" y2="196" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
   <!-- decision -> agent -->
   <line x1="434" y1="196" x2="498" y2="196" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
-  <text x="466" y="184" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">yes</text>
+  <text x="466" y="182" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">yes</text>
+  <text x="466" y="216" text-anchor="middle" font-size="10" fill="#6366f1">wake + action</text>
 
   <!-- no -> sleep : arc from decision top back to tick top -->
   <path d="M352,154 C300,92 190,96 146,148" fill="none" stroke="#0d9488" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow-teal)"/>
@@ -43,5 +45,5 @@
   <path d="M592,244 C560,326 220,326 146,246" fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"/>
   <text x="368" y="320" text-anchor="middle" font-size="12" fill="#334155">append event → informed state advances</text>
 
-  <text x="360" y="378" text-anchor="middle" font-size="12" fill="#94a3b8">Stage A reads settled reality and wakes Stage B only when there is real work.</text>
+  <text x="360" y="378" text-anchor="middle" font-size="12" fill="#94a3b8">Stage A reads settled reality and wakes Stage B only for real work — the wake carries the exact next action.</text>
 </svg>

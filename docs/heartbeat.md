@@ -79,9 +79,11 @@ Roughly:
 2. **Describe the work as a DAG** (`dag.json`) — phases, tasks, and gates. There's a
    helper that turns a written plan into one and lints it.
 3. **Drive the tick on a timer** — a loop, system cron, or a scheduled job. Each tick
-   either sleeps or wakes the agent with a reason: do the next task, run a gate, run
-   the adversarial review, or stop because something needs a human.
+   either sleeps or wakes the agent with a reason *and the exact next action*: do the
+   next task, run a gate, run the adversarial review, or stop because something needs
+   a human. When it's blocked, it computes the root cause (which check failed, which
+   commit deleted a gate's file) rather than leaving the agent to guess.
 4. **Each gate pass commits and tags**, so every phase is a restore point.
 
 That's the shape of it. You describe the work and the checks; the tick decides,
-cheaply and deterministically, when to spend the model.
+cheaply and deterministically, when to spend the model — and tells it what to do.
