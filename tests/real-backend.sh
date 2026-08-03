@@ -8,8 +8,14 @@
 # ══════════════════════════════════════════════════════════════════════════════
 set -uo pipefail
 HB_SRC="$(cd "$(dirname "$0")/.." && pwd)"
-MODEL="${1:-qwen2.5:7b-instruct}"
+BACKEND="${1:-ollama}"       # ollama | agno | crewai | claude-code
+MODEL="${2:-qwen2.5:7b-instruct}"
 HOST="${OLLAMA_HOST:-http://localhost:11434}"
+# agno/crewai default to the local ollama provider so no API key is needed. Point
+# HB_EXEC_CMD at a venv python if the backend's package lives in a virtualenv, e.g.
+#   HB_EXEC_CMD="/tmp/hbvenv/bin/python $HB_SRC/plugin/templates/executors/agno_exec.py" \
+#     bash tests/real-backend.sh agno
+case "$BACKEND" in agno|crewai) export HB_EXEC_PROVIDER="${HB_EXEC_PROVIDER:-ollama}";; esac
 
 curl -s "$HOST/api/tags" -m 3 >/dev/null 2>&1 || { echo "ollama not reachable at $HOST — skipping live test"; exit 0; }
 
@@ -35,10 +41,10 @@ cat > "$H/dag.json" <<'DAGEOF'
 DAGEOF
 node "$H/hb.js" rebuild >/dev/null
 
-echo "▶ Driving a real HeartBeat project with ollama model: $MODEL"
+echo "▶ Driving a real HeartBeat project — backend: $BACKEND, model: $MODEL${HB_EXEC_PROVIDER:+, provider: $HB_EXEC_PROVIDER}"
 echo "  Task: write greeting.js  ·  Gate: node requires it and asserts greet('Ada')==='Hello, Ada'"
 echo "────────────────────────────────────────────────────────────"
-out=$(HB_EXEC_BACKEND=ollama HB_EXEC_MODEL="$MODEL" HB_EXEC_MAX_ITERS=8 node "$H/hb-exec.js" run 2>&1)
+out=$(HB_EXEC_BACKEND="$BACKEND" HB_EXEC_MODEL="$MODEL" HB_EXEC_MAX_ITERS=8 node "$H/hb-exec.js" run 2>&1)
 echo "$out"
 echo "────────────────────────────────────────────────────────────"
 

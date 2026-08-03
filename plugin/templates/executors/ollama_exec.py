@@ -22,15 +22,21 @@ there is nothing to pip-install; degrades to protocol-valid JSON if the server i
 Config: HB_EXEC_MODEL / OLLAMA_MODEL (default qwen2.5:7b-instruct),
         OLLAMA_HOST (default http://localhost:11434).
 """
-import sys, os, json, re, urllib.request, urllib.error
+import sys, os, json, urllib.request, urllib.error
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _fileblocks import write_blocks
+
+# Guarantee ONLY the protocol JSON lands on stdout: keep the real stdout fd, then point
+# fd 1 at stderr so any library chatter (banners, progress) can't corrupt the JSON line.
+_STDOUT_FD = os.dup(1)
+os.dup2(2, 1)
 
 HOST  = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 MODEL = os.environ.get("HB_EXEC_MODEL") or os.environ.get("OLLAMA_MODEL") or "qwen2.5:7b-instruct"
-BLOCK = re.compile(r"===FILE:\s*(.+?)\s*===\s*\n(.*?)\n===END===", re.DOTALL)
 
 
 def emit(obj):
-    sys.stdout.write(json.dumps(obj) + "\n")
+    os.write(_STDOUT_FD, (json.dumps(obj) + "\n").encode())
 
 
 def generate(prompt, timeout=180):
@@ -82,33 +88,7 @@ def main():
         emit({"ok": False, "summary": f"ollama unreachable ({e})"})
         return
 
-    cwd = os.path.realpath(os.getcwd())
-
-    def normalize(rel):
-        rel = rel.strip()
-        rel = re.sub(r"^\$\{?PROJECT_DIR\}?/?", "", rel)   # model echoed the gate's $PROJECT_DIR
-        if os.path.isabs(rel):                             # model gave an absolute path
-            ab = os.path.realpath(rel)
-            rel = os.path.relpath(ab, cwd) if ab.startswith(cwd + os.sep) else os.path.basename(rel)
-        return rel.lstrip("/")
-
-    # Group by path and CONCATENATE — a small model often splits one file across
-    # several blocks (e.g. the body in one, `module.exports` in another); overwriting
-    # would drop all but the last. Concatenating in order reassembles the file.
-    files = {}
-    for raw, content in BLOCK.findall(out):
-        rel = normalize(raw)
-        dest = os.path.realpath(os.path.join(cwd, rel))
-        if not rel or rel.startswith(".hb/") or not dest.startswith(cwd + os.sep):
-            continue  # never write into the HeartBeat substrate or outside the tree
-        files.setdefault(dest, []).append(content)
-
-    written = []
-    for dest, parts in files.items():
-        os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
-        with open(dest, "w") as f:
-            f.write("\n".join(parts))
-        written.append(os.path.relpath(dest, cwd))
+    written = write_blocks(out)   # parse ===FILE=== blocks → write into cwd (shared helper)
 
     if written:
         emit({"ok": True, "summary": f"wrote {', '.join(written)}"})

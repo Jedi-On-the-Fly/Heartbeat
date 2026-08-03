@@ -138,6 +138,11 @@ Each backend is a small adapter under `.hb/executors/` speaking the same protoco
 driver → backend:  argv[last] = execute|refute, stdin = payload JSON
 backend → driver:  execute → {"ok":bool,"summary":str}   refute → {"refuted":bool,"findings":str}
 ```
+`agno`/`crewai` wrap a real tool-using agent (they write files with native tools);
+set `HB_EXEC_PROVIDER=ollama` to drive them with **local models, no API key**, or
+`=anthropic` (needs `ANTHROPIC_API_KEY`). All three model backends are proven
+end-to-end against local Ollama (`tests/real-backend.sh <backend>`).
+
 The backend never touches `state.json` or `gate.sh`. The driver runs the gate,
 pumps the task's lease heartbeat while the backend works, and — by policy —
 **escalates (never auto-fixes) when a gate blocks**. In **strict** mode

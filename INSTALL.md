@@ -3,7 +3,10 @@
 Two ways to install. The **plugin** is the native one-command path; the
 **script** is a fallback that needs no plugin system. Pick one.
 
-Prerequisites: **Node.js v18+**, **Claude Code**.
+Prerequisites: **Node.js v18+** and **bash** (the runtime). **Claude Code is
+optional** — it provides the `/heartbeat` skill UX, but a DAG can be executed fully
+headless via `node .hb/hb-exec.js` on any machine without it (see
+[Running without Claude Code](#running-without-claude-code)).
 
 ---
 
@@ -51,6 +54,37 @@ Uninstall: `bash scripts/install.sh --uninstall`.
 
 ---
 
+## Running without Claude Code
+
+HeartBeat's runtime is **bash + node** (the tick, resolver, gates, and state). Claude
+Code is just *one* Stage B. With the **executor** (`hb-exec.js`, v1.8), any project can
+run on a machine that has never seen Claude Code — a server, a CI box, a teammate's
+laptop. You need `node ≥18`, `bash`, `git` (optional, for restore points), and your
+chosen backend's runtime.
+
+1. **Copy the project folder** (the one containing `.hb/`) to the target machine. If
+   `.hb/` predates v1.8, add the executor: copy `hb-exec.js` and `executors/` into it.
+2. **Pick a backend** (`.hb/executor.json` `{ "backend": … }`, or `HB_EXEC_BACKEND`):
+   - `ollama` — local models, **no API key**. Needs an Ollama server + `python3`.
+     `HB_EXEC_BACKEND=ollama HB_EXEC_MODEL=qwen2.5:7b-instruct`
+   - `agno` / `crewai` — `pip install agno` (or `crewai`); set `HB_EXEC_PROVIDER=ollama`
+     for local models, or `=anthropic` with `ANTHROPIC_API_KEY` for Claude.
+   - `script` — any command you point `HB_EXEC_CMD` at (no Python at all).
+3. **Run the loop** — no Claude Code involved:
+   ```bash
+   node .hb/hb-exec.js run                 # serial, until all_done or a human is needed
+   node .hb/hb-exec.js run --parallel 4     # worktree-isolated fan-out
+   ```
+4. **Drive it on a timer** with plain system cron (no cloud, no Claude Code):
+   ```
+   */20 * * * * cd <project-dir> && node .hb/hb-exec.js run >> .hb/exec.log 2>&1
+   ```
+
+The DAG is backend-agnostic — the same `dag.json` runs under any backend; only the
+executor config picks the engine. See `tests/real-backend.sh` for a live example.
+
+---
+
 ## Using it
 
 ```
@@ -87,5 +121,6 @@ HeartBeat's Stage A (`tick.sh`) is meant to run on a timer. On Claude Code:
 ## Verify the install works
 
 ```bash
-bash tests/run-tests.sh   # full regression suite (50 assertions) → SUITE VERTE
+bash tests/run-tests.sh        # full regression suite (160 assertions) → ALL GREEN
+bash tests/real-backend.sh     # optional: live end-to-end run with a local model (ollama)
 ```

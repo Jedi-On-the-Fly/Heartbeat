@@ -42,8 +42,8 @@ done
 
 if [ -d "$HB_DIR" ] && [ "$FORCE" != "--force" ]; then
   echo "⚠️  .hb/ already exists in $PROJECT_DIR"
-  # v1.1: EOF-safe — en contexte non-interactif (cron/agent), pas de tty =
-  # refus par defaut au lieu d'un crash sous set -e. --force pour ecraser.
+  # v1.1: EOF-safe — in a non-interactive context (cron/agent) there is no tty, so
+  # default to refusing instead of crashing under set -e. Use --force to overwrite.
   read -p "Overwrite? (y/N) " -n 1 -r REPLY || REPLY="n"
   echo
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
