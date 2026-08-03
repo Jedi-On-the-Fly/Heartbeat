@@ -55,6 +55,32 @@
         { "id": "E3T3", "title": "Rebuild the zip", "requires": ["E3T2"],
           "description": "Rebuild heartbeat-v1.8.0.zip excluding .git/.claude and extract-test it on a clean path." }
       ]
+    },
+    {
+      "id": "E4",
+      "title": "Parallel execution",
+      "gate_entry": "GATE_E3",
+      "gate_exit": "GATE_E4",
+      "tasks": [
+        { "id": "E4T1", "title": "Author the gate spec (T40)", "requires": [],
+          "description": "Add T40 to tests/run-tests.sh: parallel fan-out drives a multi-task phase to completion via the stub backend, and git worktree isolation lands each task's file into the main tree with a clean merge and worktree cleanup." },
+        { "id": "E4T2", "title": "Implement parallel mode", "requires": ["E4T1"],
+          "description": "Implement parallel mode in plugin/templates/hb-exec.js: on next_task with concurrency>1, free the tick lease, fan out hb ready N concurrently, run each task in its own git worktree (in-place fallback without git), serialize the merge-back, and discard a worktree on failure. Add --parallel N and HB_MAX_CONCURRENCY." }
+      ]
+    },
+    {
+      "id": "E5",
+      "title": "Ollama backend + live tests",
+      "gate_entry": "GATE_E4",
+      "gate_exit": "GATE_E5",
+      "tasks": [
+        { "id": "E5T1", "title": "Author the gate spec (T41)", "requires": [],
+          "description": "Add T41 to tests/run-tests.sh: ollama_exec.py is valid python and degrades to protocol-valid JSON when the ollama server is unreachable. Add tests/real-backend.sh for a live end-to-end run." },
+        { "id": "E5T2", "title": "Implement ollama_exec.py", "requires": ["E5T1"],
+          "description": "Implement plugin/templates/executors/ollama_exec.py using stdlib urllib: a FILE-block mini-agent for execute (the model emits file blocks the backend writes) and a skeptic for refute. Document the ollama backend in SKILL.md." },
+        { "id": "E5T3", "title": "Run the live end-to-end test", "requires": ["E5T2"],
+          "description": "Run tests/real-backend.sh live against qwen2.5:7b-instruct: drive a tiny project whose behavioral gate compiles and runs the model-written code, and record the result." }
+      ]
     }
   ],
   "gates": {
@@ -85,6 +111,21 @@
       "criteria": [
         { "id": "e3c1", "desc": "version bumped to 1.8.0", "cmd": "grep -q '1.8.0' \"$PROJECT_DIR/plugin/.claude-plugin/plugin.json\"" },
         { "id": "e3c2", "desc": "suite covers packaging (T39)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T39" }
+      ]
+    },
+    "GATE_E4": {
+      "desc": "Parallel fan-out with worktree isolation, verified against the stub.",
+      "review": { "prompt": "Refute that E4 is done: are the concurrent tasks REALLY isolated (a worktree per task) or can two tasks corrupt each other's writes? Is the merge-back serialized so the git index can't race? On a failed task, is its worktree actually discarded (not silently merged)? Does the attempt cap still hold under fan-out? Is T40 hollow (asserting the stub instead of real concurrency/isolation)?" },
+      "criteria": [
+        { "id": "e4c1", "desc": "driver implements worktree-isolated fan-out", "cmd": "grep -q worktree \"$PROJECT_DIR/plugin/templates/hb-exec.js\"" },
+        { "id": "e4c2", "desc": "suite covers parallel execution (T40)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T40" }
+      ]
+    },
+    "GATE_E5": {
+      "desc": "Ollama backend implements the wire protocol, degrades gracefully, and passed a live behavioral gate.",
+      "criteria": [
+        { "id": "e5c1", "desc": "ollama_exec.py implements execute and refute", "cmd": "grep -q 'def main' \"$PROJECT_DIR/plugin/templates/executors/ollama_exec.py\" && grep -q refuted \"$PROJECT_DIR/plugin/templates/executors/ollama_exec.py\"" },
+        { "id": "e5c2", "desc": "suite covers the ollama adapter (T41)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T41" }
       ]
     }
   }

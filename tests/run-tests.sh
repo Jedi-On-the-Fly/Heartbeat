@@ -504,7 +504,7 @@ case "$mode" in
   execute)
     [ "${STUB_FAIL:-0}" = 1 ] && { echo '{"ok":false,"summary":"forced fail"}'; exit 0; }
     id=$(printf '%s' "$payload" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).task.id' 2>/dev/null)
-    printf '%s\n' "$id" >> done.log
+    if [ "${STUB_DISTINCT:-0}" = 1 ]; then printf 'done\n' > "$id.out"; else printf '%s\n' "$id" >> done.log; fi
     printf '{"ok":true,"summary":"did %s"}\n' "$id" ;;
   refute) printf '{"refuted":%s,"findings":"stub"}\n' "${STUB_REFUTE:-false}" ;;
 esac
@@ -589,6 +589,41 @@ check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
 check "T39.4 plugin version bumped to 1.8.0" \
   'grep -q "1.8.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+
+echo "═══ T40 — parallel fan-out (v1.8) ═══"
+# In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
+P40="$TMP/p40"; bash "$HB_SRC/plugin/bootstrap.sh" "$P40" >/dev/null 2>&1 </dev/null; H40="$P40/.hb"
+set_dag "$H40" "d.phases=[{id:'PA',title:'fan',gate_entry:null,gate_exit:'GPA',tasks:[{id:'PA1',title:'write PA1 to done.log',requires:[]},{id:'PA2',title:'write PA2 to done.log',requires:[]},{id:'PA3',title:'write PA3 to done.log',requires:[]}]}];d.gates={GPA:{desc:'all three',criteria:[{id:'c',desc:'all recorded',cmd:'grep -q PA1 \"\$PROJECT_DIR/done.log\" && grep -q PA2 \"\$PROJECT_DIR/done.log\" && grep -q PA3 \"\$PROJECT_DIR/done.log\"'}]}}"
+out40=$(HB_MAX_CONCURRENCY=3 HB_EXEC_CMD="bash $STUB" HB_EXEC_MAX_ITERS=15 node "$H40/hb-exec.js" run 2>&1)
+check "T40.1 parallel run fans out and drives the phase to all_done" \
+  'echo "$out40" | grep -q "fan-out 3" && echo "$out40" | grep -q "HB-EXEC DONE"'
+check "T40.2 all three concurrent tasks did their work" \
+  'grep -q PA1 "$P40/done.log" && grep -q PA2 "$P40/done.log" && grep -q PA3 "$P40/done.log"'
+# Worktree isolation: git enabled, two tasks writing DISTINCT files → clean merge into main.
+if command -v git >/dev/null 2>&1; then
+  P40w="$TMP/p40w"; HB_NO_GIT="" bash "$HB_SRC/plugin/bootstrap.sh" "$P40w" >/dev/null 2>&1 </dev/null; H40w="$P40w/.hb"
+  set_dag "$H40w" "d.phases=[{id:'WP',title:'iso',gate_entry:null,gate_exit:'GWP',tasks:[{id:'WA',title:'produce WA.out',requires:[]},{id:'WB',title:'produce WB.out',requires:[]}]}];d.gates={GWP:{desc:'both merged',criteria:[{id:'c',desc:'both files',cmd:'test -f \"\$PROJECT_DIR/WA.out\" && test -f \"\$PROJECT_DIR/WB.out\"'}]}}"
+  out40w=$(HB_NO_GIT="" STUB_DISTINCT=1 HB_MAX_CONCURRENCY=2 HB_EXEC_CMD="bash $STUB" HB_EXEC_MAX_ITERS=15 node "$H40w/hb-exec.js" run 2>&1)
+  check "T40.3 worktree-isolated fan-out merges both tasks' files into the main tree" \
+    'echo "$out40w" | grep -q "worktree-isolated" && [ -f "$P40w/WA.out" ] && [ -f "$P40w/WB.out" ]'
+  check "T40.4 worktrees and temp branches are cleaned up afterward" \
+    '[ -z "$(ls -A "$H40w/wt" 2>/dev/null)" ] && [ -z "$(git -C "$P40w" branch --list "hb-exec/*")" ]'
+else
+  echo "  (git absent — T40.3/T40.4 skipped)"
+fi
+
+echo "═══ T41 — Ollama backend adapter (v1.8) ═══"
+OLL="$HB_SRC/plugin/templates/executors/ollama_exec.py"
+if command -v python3 >/dev/null 2>&1; then
+  check "T41.1 ollama_exec.py is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$OLL"'\").read())"'
+  # Point at a dead port so the degrade path is deterministic (no model needed).
+  check "T41.2 execute degrades to protocol-valid JSON when the server is unreachable" \
+    'OLLAMA_HOST=http://127.0.0.1:9 bash -c "printf {} | python3 \"'"$OLL"'\" execute" | grep -q "\"ok\": false"'
+  check "T41.3 refute degrades to protocol-valid JSON when the server is unreachable" \
+    'OLLAMA_HOST=http://127.0.0.1:9 bash -c "printf {} | python3 \"'"$OLL"'\" refute" | grep -q "\"refuted\": false"'
+else
+  echo "  (python3 absent — T41 skipped)"
+fi
 
 echo ""
 echo "═══════════════════════════════════════"

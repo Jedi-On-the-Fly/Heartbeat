@@ -47,6 +47,7 @@ function defaultCmd(backend) {
     case 'claude-code': return `bash "${path.join(ex, 'claude-exec.sh')}"`;
     case 'agno':        return `python3 "${path.join(ex, 'agno_exec.py')}"`;
     case 'crewai':      return `python3 "${path.join(ex, 'crewai_exec.py')}"`;
+    case 'ollama':      return `python3 "${path.join(ex, 'ollama_exec.py')}"`;
     default:            return backend;   // 'script'/custom: the backend IS the command
   }
 }
@@ -58,11 +59,24 @@ function config() {
     String(Math.floor(parseInt(process.env.HEARTBEAT_STALE_S || '180', 10) * 1000 / 2)), 10);
   return {
     backend,
-    cmd:        process.env.HB_EXEC_CMD || file.cmd || defaultCmd(backend),
-    strict:     envBool('HB_EXEC_STRICT', file.strict != null ? !!file.strict : false),
-    attemptCap: parseInt(process.env.HB_EXEC_ATTEMPT_CAP || file.attempt_cap || '3', 10),
+    cmd:         process.env.HB_EXEC_CMD || file.cmd || defaultCmd(backend),
+    strict:      envBool('HB_EXEC_STRICT', file.strict != null ? !!file.strict : false),
+    attemptCap:  parseInt(process.env.HB_EXEC_ATTEMPT_CAP || file.attempt_cap || '3', 10),
+    concurrency: Math.max(1, parseInt(process.env.HB_MAX_CONCURRENCY || file.concurrency || '1', 10) || 1),
     heartbeatMs,
   };
+}
+
+// Worktree isolation needs git and a real repo (and must not be suppressed by HB_NO_GIT).
+let _gitOk = null;
+function gitIsolation() {
+  if (_gitOk !== null) return _gitOk;
+  _gitOk = false;
+  if (!process.env.HB_NO_GIT) {
+    try { execFileSync('git', ['-C', PROJECT_DIR, 'rev-parse', '--is-inside-work-tree'], { stdio: 'ignore' }); _gitOk = true; }
+    catch (e) {}
+  }
+  return _gitOk;
 }
 
 // ── driver ↔ HeartBeat helpers ──────────────────────────────────────────────
@@ -129,9 +143,9 @@ function strictBlock(gateId) {
 }
 
 // ── dispatch one backend call, pumping the lease heartbeat while it runs ──────
-function dispatch(cmd, mode, payload, taskId, heartbeatMs) {
+function dispatch(cmd, mode, payload, taskId, heartbeatMs, cwd) {
   return new Promise((resolve) => {
-    const child = spawn('bash', ['-c', `${cmd} ${mode}`], { cwd: PROJECT_DIR, stdio: ['pipe', 'pipe', 'inherit'] });
+    const child = spawn('bash', ['-c', `${cmd} ${mode}`], { cwd: cwd || PROJECT_DIR, stdio: ['pipe', 'pipe', 'inherit'] });
     let out = '';
     child.stdout.on('data', d => (out += d));
     let timer = null;
@@ -149,7 +163,72 @@ function dispatch(cmd, mode, payload, taskId, heartbeatMs) {
   });
 }
 
-// ── the serial run loop ──────────────────────────────────────────────────────
+// ── parallel fan-out: run the runnable set concurrently, isolated per task ────
+// Each task runs in its own git worktree (writes can't collide); the merge-back is
+// SERIALIZED so the git index never races. A failed task's worktree is discarded.
+// Without git, falls back to concurrent in-place execution (caller-warned).
+async function worktreeDispatch(t, c, attempts, iso, serialize) {
+  try { hb('start', t.id); } catch (e) {}
+  let cwd = PROJECT_DIR, wt = null, branch = null;
+  if (iso) {
+    branch = `hb-exec/${t.id}`;
+    wt = path.join(HB_DIR, 'wt', t.id);
+    try {
+      fs.mkdirSync(path.join(HB_DIR, 'wt'), { recursive: true });
+      execFileSync('git', ['-C', PROJECT_DIR, 'worktree', 'add', '--quiet', '-B', branch, wt, 'HEAD'], { stdio: 'ignore' });
+      cwd = wt;
+    } catch (e) { wt = null; cwd = PROJECT_DIR; }   // isolation failed → in-place
+  }
+
+  const r = await dispatch(c.cmd, 'execute',
+    { mode: 'execute', task: t, project_dir: cwd, context: assembleContext(t) }, t.id, c.heartbeatMs, cwd);
+  const ok = r.json && r.json.ok === true;
+  let capped = false;
+  const bump = () => { attempts[t.id] = (attempts[t.id] || 0) + 1; if (attempts[t.id] >= c.attemptCap) capped = true; };
+
+  if (ok && wt) {
+    try {
+      await serialize(async () => {
+        execFileSync('git', ['-C', wt, 'add', '-A'], { stdio: 'ignore' });
+        // commit only if the task actually changed something
+        let changed = true;
+        try { execFileSync('git', ['-C', wt, 'diff', '--cached', '--quiet']); changed = false; } catch (e) {}
+        if (changed) execFileSync('git', ['-c', 'user.name=HeartBeat', '-c', 'user.email=heartbeat@local',
+          '-C', wt, 'commit', '--no-verify', '-q', '-m', `hb-exec(${t.id}): ${t.title}`], { stdio: 'ignore' });
+        execFileSync('git', ['-C', PROJECT_DIR, 'merge', '--no-verify', '--no-edit', '-q', branch], { stdio: 'ignore' });
+      });
+      hb('done', t.id);
+    } catch (mergeErr) {
+      try { execFileSync('git', ['-C', PROJECT_DIR, 'merge', '--abort'], { stdio: 'ignore' }); } catch (e) {}
+      hb('fail', t.id, 'merge conflict on integration'); bump();
+    }
+  } else if (ok) {
+    hb('done', t.id);
+  } else {
+    hb('fail', t.id, (r.json && r.json.summary) || 'backend reported failure'); bump();
+  }
+
+  if (wt) {
+    try { execFileSync('git', ['-C', PROJECT_DIR, 'worktree', 'remove', '--force', wt], { stdio: 'ignore' }); } catch (e) {}
+    try { execFileSync('git', ['-C', PROJECT_DIR, 'branch', '-D', branch], { stdio: 'ignore' }); } catch (e) {}
+  }
+  return capped ? 'capped' : 'ok';
+}
+
+async function fanOut(c, attempts) {
+  let ready;
+  try { ready = JSON.parse((hb('ready', String(c.concurrency)) || '[]').trim() || '[]'); } catch (e) { ready = []; }
+  if (!ready.length) return 'continue';
+  const iso = gitIsolation();
+  process.stdout.write(`⇉ fan-out ${ready.length} task(s) [${iso ? 'worktree-isolated' : 'in-place'}]: ${ready.map(t => t.id).join(', ')}\n`);
+  let chain = Promise.resolve();                                   // serialize merge-backs
+  const serialize = (fn) => { const p = chain.then(fn); chain = p.catch(() => {}); return p; };
+  const results = await Promise.all(ready.map(t => worktreeDispatch(t, c, attempts, iso, serialize)));
+  if (results.some(r => r === 'capped')) { escalate('attempts_exhausted', 'a task exceeded the attempt cap under fan-out'); return 'stop'; }
+  return 'continue';
+}
+
+// ── the run loop (serial by default; parallel when concurrency > 1) ───────────
 async function run() {
   const c = config();
   const maxIters = parseInt(process.env.HB_EXEC_MAX_ITERS || '0', 10) || Infinity;
@@ -169,6 +248,13 @@ async function run() {
 
     switch (reason) {
       case 'next_task': {
+        if (c.concurrency > 1) {
+          // The tick leased ONE task; free it so `hb ready N` returns the full runnable set.
+          try { fs.rmSync(path.join(HB_DIR, 'leases', data.next_task.id), { recursive: true, force: true }); } catch (e) {}
+          const sig = await fanOut(c, attempts);
+          if (sig === 'stop') return 1;
+          break;
+        }
         const t = data.next_task;
         process.stdout.write(`▸ ${t.id} — ${t.title}\n`);
         try { hb('start', t.id); } catch (e) {}
@@ -243,6 +329,8 @@ function report() {
 
 if (require.main === module) {
   const cmd = process.argv[2];
+  const pIdx = process.argv.indexOf('--parallel');   // run --parallel N → HB_MAX_CONCURRENCY
+  if (pIdx !== -1) { const n = parseInt(process.argv[pIdx + 1], 10); if (n > 0) process.env.HB_MAX_CONCURRENCY = String(n); }
   if (cmd === 'run')         run().then(code => process.exit(code || 0));
   else if (cmd === 'config') process.stdout.write(JSON.stringify(config(), null, 2) + '\n');
   else { process.stderr.write('usage: hb-exec.js <run|config>\n'); process.exit(1); }

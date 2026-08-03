@@ -19,7 +19,15 @@
   criteria), **escalate-only** on a blocked gate (never auto-fixes), a per-task
   **attempt cap** (`HB_EXEC_ATTEMPT_CAP`, default 3), and **strict mode**
   (`HB_EXEC_STRICT=1`) that refuses non-behavioral gates / lint-warning DAGs.
-- Serial (one task at a time); worktree-isolated parallel is a later pass.
+- **Parallel fan-out** (`HB_MAX_CONCURRENCY > 1` / `run --parallel N`): the runnable
+  set (`hb ready N`) runs concurrently, **each task in its own git worktree** so writes
+  can't collide; the **merge-back is serialized** and a failed task's worktree is
+  discarded. Falls back to concurrent in-place without git.
+- **Backends**: `claude-code` (default), `agno`, `crewai`, `ollama` (local models,
+  stdlib-only), or a raw `script`. Each degrades to protocol-valid JSON when its
+  runtime is absent. `tests/real-backend.sh` drives a live end-to-end run against a
+  local model (verified with `qwen2.5:7b-instruct`: the model writes code, a
+  behavioral gate compiles and runs it).
 
 ## v1.7 — never left guessing
 
