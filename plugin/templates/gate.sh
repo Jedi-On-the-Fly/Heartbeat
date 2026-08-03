@@ -57,11 +57,21 @@ git_snapshot() {   # snapshot the phase on gate pass → git restore point (v1.4
   [ "${HB_GIT_AUTOCOMMIT:-1}" != "0" ] || return 0
   command -v git >/dev/null 2>&1 || return 0
   git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  # Descriptive message: the phase this gate closes (id + title), not just "GATE_X passed".
+  MSG=$(node -e "
+    try {
+      const dag = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
+      const g = process.argv[2];
+      const p = (dag.phases||[]).find(x => x.gate_exit === g);
+      console.log(p ? 'heartbeat('+p.id+'): '+p.title+' ['+g+']' : 'heartbeat: '+g+' passed');
+    } catch (e) { console.log('heartbeat: '+process.argv[2]+' passed'); }
+  " "$DAG_FILE" "$1" 2>/dev/null)
+  [ -n "$MSG" ] || MSG="heartbeat: $1 passed"
   git -C "$PROJECT_DIR" add -A >/dev/null 2>&1 || true
   # --no-verify: internal snapshots bypass the rot pre-commit hook (avoids a
   # pre-existing rot blocking this gate's own snapshot → loop deadlock).
   git -c user.name='HeartBeat' -c user.email='heartbeat@local' \
-      -C "$PROJECT_DIR" commit -q --no-verify -m "heartbeat: $1 passed" >/dev/null 2>&1 || true
+      -C "$PROJECT_DIR" commit -q --no-verify -m "$MSG" >/dev/null 2>&1 || true
   git -C "$PROJECT_DIR" tag -f "$1" >/dev/null 2>&1 || true
 }
 

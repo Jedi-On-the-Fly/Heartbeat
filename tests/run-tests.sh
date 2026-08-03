@@ -351,6 +351,8 @@ if command -v git >/dev/null 2>&1; then
   HB_NO_GIT="" bash "$PG26/.hb/gate.sh" GATE_P0 >/dev/null 2>&1
   check "T26.4 gate passed → gate tag (restore point)" 'git -C "$PG26" rev-parse GATE_P0 >/dev/null 2>&1'
   check "T26.5 gate passed → new commit" '[ "$(git -C "$PG26" rev-list --count HEAD)" -gt "$n26a" ]'
+  check "T26.8 commit subject is descriptive (phase id + title + gate)" \
+    '[ "$(git -C "$PG26" log -1 --format=%s)" = "heartbeat(P0): Foundation [GATE_P0]" ]'
   PG26b="$TMP/p26b"; bash "$HB_SRC/plugin/bootstrap.sh" "$PG26b" --no-git >/dev/null 2>&1 </dev/null
   check "T26.6 --no-git → no repository" '[ ! -d "$PG26b/.git" ]'
   PG26c="$TMP/p26c"; HB_NO_GIT="" bash "$HB_SRC/plugin/bootstrap.sh" "$PG26c" >/dev/null 2>&1 </dev/null
