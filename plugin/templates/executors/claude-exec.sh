@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# HeartBeat executor backend: claude-code (headless `claude -p`).
+# Wire protocol: argv1 = execute|refute ; stdin = payload JSON ; stdout = ONE JSON line.
+#   execute → {"ok":bool,"summary":str}   refute → {"refuted":bool,"findings":str}
+# Degrades to a protocol-valid error if the `claude` CLI isn't on PATH.
+set -uo pipefail
+
+mode="${1:-execute}"
+payload="$(cat)"
+# Pull a field (JS path expr like `.context`) out of the JSON payload, safely.
+field() { printf '%s' "$payload" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String((JSON.parse(d)$1)??''))}catch(e){process.stdout.write('')}})"; }
+jstr()  { node -pe 'JSON.stringify(require("fs").readFileSync(0,"utf8"))'; }
+
+ctx="$(field .context)"
+
+if ! command -v claude >/dev/null 2>&1; then
+  if [ "$mode" = refute ]; then echo '{"refuted":false,"findings":"claude CLI not available — could not run the refuter"}'
+  else echo '{"ok":false,"summary":"claude CLI not available"}'; fi
+  exit 0
+fi
+
+if [ "$mode" = refute ]; then
+  rp="$(field .prompt)"
+  ans="$(claude -p "You are a SKEPTICAL adversarial reviewer for a HeartBeat phase gate.
+${rp}
+
+Context:
+${ctx}
+
+Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with the single token REFUTED (you found a hole) or CLEAR (you could not)." 2>/dev/null)"
+  if printf '%s' "$ans" | grep -q 'REFUTED'; then
+    printf '{"refuted":true,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 500 | jstr)"
+  else
+    echo '{"refuted":false,"findings":"reviewer could not refute"}'
+  fi
+else
+  if claude -p "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.
+
+${ctx}" >/tmp/hb-exec-claude.$$.log 2>&1; then
+    echo '{"ok":true,"summary":"claude completed the task"}'
+  else
+    echo '{"ok":false,"summary":"claude exited non-zero (see /tmp/hb-exec-claude.'"$$"'.log)"}'
+  fi
+fi

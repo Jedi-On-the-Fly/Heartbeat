@@ -59,9 +59,14 @@ cp "$TEMPLATES_DIR/tick.sh"         "$HB_DIR/tick.sh"
 cp "$TEMPLATES_DIR/gate.sh"         "$HB_DIR/gate.sh"
 cp "$TEMPLATES_DIR/hb-next-task.js" "$HB_DIR/hb-next-task.js"
 cp "$TEMPLATES_DIR/dag.json"        "$HB_DIR/dag.json"
-for f in hb-lint.js hb-report.js hb-viz.js hb.js; do
+for f in hb-lint.js hb-report.js hb-viz.js hb.js hb-exec.js; do
   [ -f "$TEMPLATES_DIR/$f" ] && cp "$TEMPLATES_DIR/$f" "$HB_DIR/$f"
 done
+# v1.8: pluggable Stage-B executor backends (claude-code / agno / crewai).
+if [ -d "$TEMPLATES_DIR/executors" ]; then
+  mkdir -p "$HB_DIR/executors"
+  cp "$TEMPLATES_DIR/executors/"* "$HB_DIR/executors/" 2>/dev/null || true
+fi
 # Validate the DAG at bootstrap — structural errors show up here, not at tick N.
 node "$HB_DIR/hb-lint.js" "$HB_DIR/dag.json" || echo "!! hb-lint found errors in dag.json — fix them before scheduling the tick"
 
@@ -86,6 +91,8 @@ node "$HB_DIR/hb.js" protocol --md > "$HB_DIR/PROTOCOL.md" 2>/dev/null || true
 
 # Make scripts executable
 chmod +x "$HB_DIR/tick.sh" "$HB_DIR/gate.sh" "$HB_DIR/hb-next-task.js" "$HB_DIR/hb.js"
+[ -f "$HB_DIR/hb-exec.js" ] && chmod +x "$HB_DIR/hb-exec.js"
+[ -d "$HB_DIR/executors" ] && chmod +x "$HB_DIR/executors/"*.sh 2>/dev/null || true
 
 # v1.4: init git so each gate pass is a restore point (commit-on-gate-pass).
 # Skips if: HB_NO_GIT set, --no-git, git absent, or already a repo.

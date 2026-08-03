@@ -1,0 +1,91 @@
+{
+  "_meta": {
+    "project": "heartbeat-exec",
+    "note": "Pluggable Stage-B executor: HeartBeat stays the deterministic brain; agno/crewai/claude-code/script back the worker via a JSON wire protocol. Decisions locked: all-three backends, escalate-only on gate_blocked, serial-first, strict gates in autonomous mode. Verified by tests/run-tests.sh (the real gate)."
+  },
+  "phases": [
+    {
+      "id": "E0",
+      "title": "Executor contract + driver",
+      "gate_entry": null,
+      "gate_exit": "GATE_E0",
+      "tasks": [
+        { "id": "E0T1", "title": "Author the gate spec (T36)", "requires": [],
+          "description": "Add T36 assertions to tests/run-tests.sh covering the hb-exec driver against a python-free stub backend: drive to all_done, per-task attempt-cap escalation, strict refusal of a non-behavioral gate, and adversarial refute pass/fail." },
+        { "id": "E0T2", "title": "Implement the driver", "requires": ["E0T1"],
+          "description": "Implement plugin/templates/hb-exec.js: the serial run loop (tick -> route -> dispatch -> gate), the execute/refute wire protocol, the lease heartbeat pump, context assembly from settled reality, escalate-only policy, per-task attempt cap, and strict mode. CLI-guarded so it is requirable; exports run." },
+        { "id": "E0T3", "title": "Ship it via bootstrap", "requires": ["E0T2"],
+          "description": "Update plugin/bootstrap.sh to copy hb-exec.js and the executors/ directory into each project's .hb/, and chmod them." }
+      ]
+    },
+    {
+      "id": "E1",
+      "title": "Agno backend",
+      "gate_entry": "GATE_E0",
+      "gate_exit": "GATE_E1",
+      "tasks": [
+        { "id": "E1T1", "title": "Author the gate spec (T37)", "requires": [],
+          "description": "Add T37 to tests/run-tests.sh: plugin/templates/executors/agno_exec.py is valid and degrades to protocol-valid JSON (execute -> ok:false, refute -> refuted:false) when the agno library is absent." },
+        { "id": "E1T2", "title": "Implement agno_exec.py", "requires": ["E1T1"],
+          "description": "Implement plugin/templates/executors/agno_exec.py implementing execute and refute over the wire protocol, wrapping an Agno agent, with graceful degrade when agno is not installed." }
+      ]
+    },
+    {
+      "id": "E2",
+      "title": "CrewAI backend",
+      "gate_entry": "GATE_E1",
+      "gate_exit": "GATE_E2",
+      "tasks": [
+        { "id": "E2T1", "title": "Author the gate spec (T38)", "requires": [],
+          "description": "Add T38 to tests/run-tests.sh: plugin/templates/executors/crewai_exec.py is valid and degrades to protocol-valid JSON when the crewai library is absent." },
+        { "id": "E2T2", "title": "Implement crewai_exec.py", "requires": ["E2T1"],
+          "description": "Implement plugin/templates/executors/crewai_exec.py over the same wire protocol; document that a HeartBeat task is not a CrewAI Task." }
+      ]
+    },
+    {
+      "id": "E3",
+      "title": "Docs + packaging",
+      "gate_entry": "GATE_E2",
+      "gate_exit": "GATE_E3",
+      "tasks": [
+        { "id": "E3T1", "title": "Author the gate spec (T39)", "requires": [],
+          "description": "Add T39 to tests/run-tests.sh: bootstrap copies hb-exec.js and executors into .hb/, and the SKILL help text mentions the exec command." },
+        { "id": "E3T2", "title": "Docs + version bump", "requires": ["E3T1"],
+          "description": "Add /heartbeat exec to SKILL.md and bump the version to 1.8.0 across plugin/.claude-plugin/plugin.json, .claude-plugin/marketplace.json, STATUS.md, and README.md." },
+        { "id": "E3T3", "title": "Rebuild the zip", "requires": ["E3T2"],
+          "description": "Rebuild heartbeat-v1.8.0.zip excluding .git/.claude and extract-test it on a clean path." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_E0": {
+      "desc": "The driver mediates Stage B correctly against a stub backend.",
+      "review": { "prompt": "Refute that E0 is done: does the driver actually mediate ALL state transitions (never letting the backend touch state.json/gate.sh)? Is the lease heartbeat really pumped during a long task? Does the attempt cap and escalate-only policy hold, or is there a path that auto-fixes a blocked gate? Are the tests hollow (asserting the stub, not the driver)?" },
+      "criteria": [
+        { "id": "e0c1", "desc": "hb-exec.js is requirable and exports run", "cmd": "node -e \"const m=require('$PROJECT_DIR/plugin/templates/hb-exec.js');process.exit(typeof m.run==='function'?0:1)\"" },
+        { "id": "e0c2", "desc": "the full regression suite is green", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" >/dev/null 2>&1" }
+      ]
+    },
+    "GATE_E1": {
+      "desc": "The Agno backend implements the wire protocol and degrades gracefully.",
+      "criteria": [
+        { "id": "e1c1", "desc": "agno_exec.py implements execute and refute", "cmd": "grep -q 'def main' \"$PROJECT_DIR/plugin/templates/executors/agno_exec.py\" && grep -q refuted \"$PROJECT_DIR/plugin/templates/executors/agno_exec.py\"" },
+        { "id": "e1c2", "desc": "suite covers the agno adapter (T37)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T37" }
+      ]
+    },
+    "GATE_E2": {
+      "desc": "The CrewAI backend implements the wire protocol and degrades gracefully.",
+      "criteria": [
+        { "id": "e2c1", "desc": "crewai_exec.py implements execute and refute", "cmd": "grep -q 'def main' \"$PROJECT_DIR/plugin/templates/executors/crewai_exec.py\" && grep -q refuted \"$PROJECT_DIR/plugin/templates/executors/crewai_exec.py\"" },
+        { "id": "e2c2", "desc": "suite covers the crewai adapter (T38)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T38" }
+      ]
+    },
+    "GATE_E3": {
+      "desc": "Shipped: bootstrap carries the executor, docs and version updated, suite green.",
+      "criteria": [
+        { "id": "e3c1", "desc": "version bumped to 1.8.0", "cmd": "grep -q '1.8.0' \"$PROJECT_DIR/plugin/.claude-plugin/plugin.json\"" },
+        { "id": "e3c2", "desc": "suite covers packaging (T39)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T39" }
+      ]
+    }
+  }
+}

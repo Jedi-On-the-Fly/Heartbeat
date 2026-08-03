@@ -117,6 +117,37 @@ guarantees no task is claimed twice. Repeat `hb ready` until empty, then gate.
 **Conflict rule:** `ready` only knows `requires` — if two ready tasks touch the same
 files, either run them worktree-isolated (recommended) or add a `requires` edge.
 
+### `/heartbeat exec <project-dir>` — drive the loop with a pluggable backend
+
+Same serial loop as `/heartbeat run`, but Stage B is a **pluggable backend** instead
+of this session — so an unattended process can do the work. HeartBeat stays the
+deterministic brain (the tick decides what/when, the gates verify); the driver
+dispatches each task to a backend agent over a tiny JSON wire protocol and mediates
+every state transition itself.
+
+```bash
+node <project-dir>/.hb/hb-exec.js run       # loop until all_done or a human is needed
+node <project-dir>/.hb/hb-exec.js config    # show the resolved backend config
+```
+
+**Backends** (`.hb/executor.json` `{ "backend": … }`, or `HB_EXEC_BACKEND`):
+`claude-code` (headless `claude -p`, default), `agno`, `crewai`, or a raw `script`
+(`HB_EXEC_CMD="<cmd>"`). Each backend is a small adapter under `.hb/executors/`
+speaking the same protocol:
+```
+driver → backend:  argv[last] = execute|refute, stdin = payload JSON
+backend → driver:  execute → {"ok":bool,"summary":str}   refute → {"refuted":bool,"findings":str}
+```
+The backend never touches `state.json` or `gate.sh`. The driver runs the gate,
+pumps the task's lease heartbeat while the backend works, and — by policy —
+**escalates (never auto-fixes) when a gate blocks**. In **strict** mode
+(`HB_EXEC_STRICT=1`) it refuses to run a phase whose gate is non-behavioral (e.g.
+`test -f`) or whose DAG still has `hb-lint` warnings — because autonomy makes weak
+gates dangerous. Serial (one task at a time); `HB_EXEC_ATTEMPT_CAP` (default 3)
+bounds retries per task. Write a real backend by implementing those two modes; the
+shipped adapters (`.hb/executors/agno_exec.py`, `crewai_exec.py`, `claude-exec.sh`)
+are the templates.
+
 ### `/heartbeat schedule <project-dir>`
 Drive ticks autonomously on Claude Code using a **`/schedule` routine** (cron).
 Present this ready-to-use routine to the user (fill in `<project-dir>`, `<slug>`,
@@ -149,7 +180,7 @@ clones. For **local-only** projects, use one of:
 ### `/heartbeat help`
 Reply with:
 ```
-*HeartBeat v1.7 — commands:*
+*HeartBeat v1.8 — commands:*
 • /heartbeat init <dir>     — bootstrap a new project
 • /heartbeat plan <dir>     — convert a plan into a lint-clean dag.json
 • /heartbeat status <dir>   — progress report
@@ -158,6 +189,7 @@ Reply with:
 • /heartbeat viz <dir>      — generate dag-view.html
 • /heartbeat tick <dir>     — manual tick (one task)
 • /heartbeat run <dir>      — drive the loop (serial, or parallel via hb ready)
+• /heartbeat exec <dir>     — drive the loop with a pluggable backend (agno/crewai/claude-code)
 • /heartbeat schedule <dir> — ready-to-use /schedule routine
 • /heartbeat help           — this help
 ```

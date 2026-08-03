@@ -295,3 +295,4 @@ bash tests/run-tests.sh      # full regression suite (all green)
 | v1.5 | Gate integrity: `hb doctor` (rot detection), re-verifiable gates (`gate.sh --check/--all`) |
 | v1.6 | Gate liveness: `review_stuck` (stalled-review guard), automatic rot detection (per-tick + pre-commit hook) |
 | v1.7 | Never left guessing: self-describing ticks (`data.action`), one-source protocol (`hb protocol` + `.hb/PROTOCOL.md`), computed root-cause recovery (`hb diagnose`), SessionStart hook |
+| v1.8 | Pluggable Stage B: `hb-exec.js` + `/heartbeat exec` — dispatch each task to a backend agent (`claude-code`/`agno`/`crewai`/`script`) over a JSON wire protocol; driver-mediated state, lease heartbeat pump, escalate-only, per-task attempt cap, strict-gate mode |

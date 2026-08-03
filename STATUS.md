@@ -1,7 +1,25 @@
 # STATUS — HeartBeat
 
-**Version:** v1.7 (never left guessing, over v1.6)
+**Version:** v1.8 (pluggable Stage B, over v1.7)
 **Regression suite:** `bash tests/run-tests.sh`
+
+## v1.8 — pluggable Stage B
+
+- **`hb-exec.js` executor driver + `/heartbeat exec`.** Stage B is now pluggable. The
+  driver runs the same serial loop as `/heartbeat run` but dispatches each task to a
+  **backend agent** (`claude-code`, `agno`, `crewai`, or a raw `script`) over a tiny
+  JSON wire protocol — so an unattended process can do the work. HeartBeat stays the
+  deterministic brain: the tick decides what/when, the gates verify, and the driver
+  mediates **every** state transition (the backend never touches `state.json`/`gate.sh`).
+- **Wire protocol.** `driver → backend`: `argv[last]=execute|refute`, stdin = payload
+  JSON. `backend → driver`: `execute → {ok,summary}`, `refute → {refuted,findings}`.
+  A backend is ~two methods; shipped adapters live in `.hb/executors/`.
+- **Driver owns the hard parts** (framework-blind): the lease **heartbeat pump** during
+  a task, **context assembly** from settled reality (dag + state + git log + gate
+  criteria), **escalate-only** on a blocked gate (never auto-fixes), a per-task
+  **attempt cap** (`HB_EXEC_ATTEMPT_CAP`, default 3), and **strict mode**
+  (`HB_EXEC_STRICT=1`) that refuses non-behavioral gates / lint-warning DAGs.
+- Serial (one task at a time); worktree-isolated parallel is a later pass.
 
 ## v1.7 — never left guessing
 

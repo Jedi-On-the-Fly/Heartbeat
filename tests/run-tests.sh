@@ -490,6 +490,106 @@ check "T35.2 hook fires (prints pointer) on a .hb/ project" \
 check "T35.3 hook is silent on a non-HeartBeat dir" \
   '[ -z "$(CLAUDE_PROJECT_DIR="$TMP" bash "$HB_SRC/plugin/hooks/heartbeat-detect.sh")" ]'
 
+echo "═══ T36 — hb-exec driver: pluggable Stage B (v1.8) ═══"
+EXEC_SRC="$HB_SRC/plugin/templates/hb-exec.js"
+check "T36.1 hb-exec.js is requirable and exports run()" \
+  'node -e "const m=require(\"'"$EXEC_SRC"'\");process.exit(typeof m.run===\"function\"?0:1)"'
+# A python-free stub backend: execute writes the task id to done.log (cwd=PROJECT_DIR);
+# refute returns a configurable verdict. STUB_FAIL forces an execute failure.
+STUB="$TMP/stub.sh"
+cat > "$STUB" <<'STUBEOF'
+#!/usr/bin/env bash
+mode="$1"; payload="$(cat)"
+case "$mode" in
+  execute)
+    [ "${STUB_FAIL:-0}" = 1 ] && { echo '{"ok":false,"summary":"forced fail"}'; exit 0; }
+    id=$(printf '%s' "$payload" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).task.id' 2>/dev/null)
+    printf '%s\n' "$id" >> done.log
+    printf '{"ok":true,"summary":"did %s"}\n' "$id" ;;
+  refute) printf '{"refuted":%s,"findings":"stub"}\n' "${STUB_REFUTE:-false}" ;;
+esac
+STUBEOF
+# set_dag <hbdir> <js> — overwrite dag.json (strip skeleton) and reproject.
+set_dag(){ node -e "const fs=require('fs');const f='$1/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));delete d._meta;$2;fs.writeFileSync(f,JSON.stringify(d,null,2))"; node "$1/hb.js" rebuild >/dev/null 2>&1; }
+
+# — happy path: two phases, behavioral gates, driven to all_done —
+P36="$TMP/p36"; bash "$HB_SRC/plugin/bootstrap.sh" "$P36" >/dev/null 2>&1 </dev/null; H36="$P36/.hb"
+set_dag "$H36" "d.phases=[{id:'X0',title:'p0',gate_entry:null,gate_exit:'GX0',tasks:[{id:'X0T1',title:'write X0T1 to done.log',requires:[]}]},{id:'X1',title:'p1',gate_entry:'GX0',gate_exit:'GX1',tasks:[{id:'X1T1',title:'write X1T1 to done.log',requires:[]}]}];d.gates={GX0:{desc:'p0',criteria:[{id:'c',desc:'X0T1 recorded',cmd:'grep -q X0T1 \"\$PROJECT_DIR/done.log\"'}]},GX1:{desc:'p1',criteria:[{id:'c',desc:'X1T1 recorded',cmd:'grep -q X1T1 \"\$PROJECT_DIR/done.log\"'}]}}"
+out36=$(HB_EXEC_CMD="bash $STUB" HB_EXEC_MAX_ITERS=25 node "$H36/hb-exec.js" run 2>&1)
+check "T36.2 driver runs the stub backend to completion (all_done)" 'echo "$out36" | grep -q "HB-EXEC DONE"'
+check "T36.3 both phases advanced through their gates" \
+  'node -e "const s=require(\"'"$H36"'/state.json\");process.exit(s.completed_phases.includes(\"X0\")&&s.completed_phases.includes(\"X1\")?0:1)"'
+check "T36.4 backend actually did the work (both task ids in done.log)" \
+  'grep -q X0T1 "$P36/done.log" && grep -q X1T1 "$P36/done.log"'
+
+# — per-task attempt cap → escalate (never loops forever) —
+P36c="$TMP/p36c"; bash "$HB_SRC/plugin/bootstrap.sh" "$P36c" >/dev/null 2>&1 </dev/null; H36c="$P36c/.hb"
+set_dag "$H36c" "d.phases=[{id:'Y0',title:'p',gate_entry:null,gate_exit:'GY0',tasks:[{id:'Y0T1',title:'write Y0T1 to done.log',requires:[]}]}];d.gates={GY0:{desc:'p',criteria:[{id:'c',desc:'done',cmd:'grep -q Y0T1 \"\$PROJECT_DIR/done.log\"'}]}}"
+out36c=$(STUB_FAIL=1 HB_EXEC_CMD="bash $STUB" HB_EXEC_ATTEMPT_CAP=3 HB_EXEC_MAX_ITERS=20 node "$H36c/hb-exec.js" run 2>&1)
+check "T36.5 repeated backend failure hits the attempt cap and escalates" 'echo "$out36c" | grep -q "STOP: attempts_exhausted"'
+
+# — strict mode refuses a non-behavioral gate —
+P36s="$TMP/p36s"; bash "$HB_SRC/plugin/bootstrap.sh" "$P36s" >/dev/null 2>&1 </dev/null; H36s="$P36s/.hb"
+set_dag "$H36s" "d.phases=[{id:'Z0',title:'p',gate_entry:null,gate_exit:'GZ0',tasks:[{id:'Z0T1',title:'do',requires:[]}]}];d.gates={GZ0:{desc:'p',criteria:[{id:'c',desc:'exists',cmd:'test -f \"\$PROJECT_DIR/whatever\"'}]}}"
+node "$H36s/hb.js" start Z0T1 >/dev/null; node "$H36s/hb.js" done Z0T1 >/dev/null   # tasks done → gate_pending
+out36s=$(HB_EXEC_STRICT=1 HB_EXEC_CMD="bash $STUB" HB_EXEC_MAX_ITERS=5 node "$H36s/hb-exec.js" run 2>&1)
+check "T36.6 strict mode escalates on a non-behavioral (test -f) gate" 'echo "$out36s" | grep -q "STOP: strict_gate"'
+
+# — adversarial review: refuter can't refute → phase advances —
+P36r="$TMP/p36r"; bash "$HB_SRC/plugin/bootstrap.sh" "$P36r" >/dev/null 2>&1 </dev/null; H36r="$P36r/.hb"
+set_dag "$H36r" "d.phases=[{id:'R0',title:'p',gate_entry:null,gate_exit:'GR0',tasks:[{id:'R0T1',title:'write R0T1 to done.log',requires:[]}]}];d.gates={GR0:{desc:'p',review:{prompt:'Refute R0.'},criteria:[{id:'c',desc:'done',cmd:'grep -q R0T1 \"\$PROJECT_DIR/done.log\"'}]}}"
+out36r=$(STUB_REFUTE=false HB_EXEC_CMD="bash $STUB" HB_EXEC_MAX_ITERS=25 node "$H36r/hb-exec.js" run 2>&1)
+check "T36.7 review_pending → refuter fails to refute → phase completes" \
+  'echo "$out36r" | grep -q "HB-EXEC DONE" && node -e "const s=require(\"'"$H36r"'/state.json\");process.exit(s.completed_phases.includes(\"R0\")?0:1)"'
+
+# — adversarial review: refuter DOES refute → routes to gate_blocked → escalate —
+P36f="$TMP/p36f"; bash "$HB_SRC/plugin/bootstrap.sh" "$P36f" >/dev/null 2>&1 </dev/null; H36f="$P36f/.hb"
+set_dag "$H36f" "d.phases=[{id:'F0',title:'p',gate_entry:null,gate_exit:'GF0',tasks:[{id:'F0T1',title:'write F0T1 to done.log',requires:[]}]}];d.gates={GF0:{desc:'p',review:{prompt:'Refute F0.'},criteria:[{id:'c',desc:'done',cmd:'grep -q F0T1 \"\$PROJECT_DIR/done.log\"'}]}}"
+out36f=$(STUB_REFUTE=true HB_EXEC_CMD="bash $STUB" HB_EXEC_MAX_ITERS=25 node "$H36f/hb-exec.js" run 2>&1)
+check "T36.8 refuter finds a hole → review fail → escalates gate_blocked" 'echo "$out36f" | grep -q "STOP: gate_blocked"'
+
+echo "═══ T37 — Agno backend adapter (v1.8) ═══"
+AGNO="$HB_SRC/plugin/templates/executors/agno_exec.py"
+if command -v python3 >/dev/null 2>&1; then
+  check "T37.1 agno_exec.py is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$AGNO"'\").read())"'
+  if python3 -c "import agno" 2>/dev/null; then
+    echo "  (agno installed — degrade-path assertions skipped)"
+  else
+    check "T37.2 execute degrades to protocol-valid JSON (ok:false) without agno" \
+      'printf "{}" | python3 "'"$AGNO"'" execute | grep -q "\"ok\": false"'
+    check "T37.3 refute degrades to protocol-valid JSON (refuted:false) without agno" \
+      'printf "{}" | python3 "'"$AGNO"'" refute | grep -q "\"refuted\": false"'
+  fi
+else
+  echo "  (python3 absent — T37 skipped)"
+fi
+
+echo "═══ T38 — CrewAI backend adapter (v1.8) ═══"
+CREW="$HB_SRC/plugin/templates/executors/crewai_exec.py"
+if command -v python3 >/dev/null 2>&1; then
+  check "T38.1 crewai_exec.py is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$CREW"'\").read())"'
+  if python3 -c "import crewai" 2>/dev/null; then
+    echo "  (crewai installed — degrade-path assertions skipped)"
+  else
+    check "T38.2 execute degrades to protocol-valid JSON (ok:false) without crewai" \
+      'printf "{}" | python3 "'"$CREW"'" execute | grep -q "\"ok\": false"'
+    check "T38.3 refute degrades to protocol-valid JSON (refuted:false) without crewai" \
+      'printf "{}" | python3 "'"$CREW"'" refute | grep -q "\"refuted\": false"'
+  fi
+else
+  echo "  (python3 absent — T38 skipped)"
+fi
+
+echo "═══ T39 — packaging: bootstrap ships the executor (v1.8) ═══"
+P39="$TMP/p39"; bash "$HB_SRC/plugin/bootstrap.sh" "$P39" >/dev/null 2>&1 </dev/null
+check "T39.1 bootstrap copies hb-exec.js into .hb/" '[ -f "$P39/.hb/hb-exec.js" ]'
+check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
+  '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ]'
+check "T39.3 SKILL help documents the exec command" \
+  'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
+check "T39.4 plugin version bumped to 1.8.0" \
+  'grep -q "1.8.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+
 echo ""
 echo "═══════════════════════════════════════"
 echo "  RESULT: $PASS passed, $FAIL failed"
