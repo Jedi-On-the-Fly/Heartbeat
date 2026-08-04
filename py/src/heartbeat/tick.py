@@ -1,0 +1,175 @@
+"""Stage A — the tick. Ported from tick.sh with the same priority order.
+
+Returns {"wakeAgent": bool, "data": {...}}. On a wake, data.action is injected from the
+PROTOCOL map so any driver knows the exact next action from the JSON alone.
+"""
+import json
+import os
+import shutil
+import time
+from pathlib import Path
+
+from . import state as st
+from . import resolver as rv
+from . import doctor as doc
+from .protocol import PROTOCOL
+
+LOCK_STALE_S = int(os.environ.get("LOCK_STALE_S", "1800"))
+HEARTBEAT_STALE_S = int(os.environ.get("HEARTBEAT_STALE_S", "180"))
+STUCK_TICKS = int(os.environ.get("STUCK_TICKS", "3"))
+HB_MAX_CONCURRENCY = int(os.environ.get("HB_MAX_CONCURRENCY", "1"))
+HB_ROT_CHECK = os.environ.get("HB_ROT_CHECK", "1")
+
+
+def _wake(data):
+    r = data.get("reason")
+    if r and r in PROTOCOL:
+        data["action"] = PROTOCOL[r]
+    return {"wakeAgent": True, "data": data}
+
+
+def _sleep(data):
+    return {"wakeAgent": False, "data": data}
+
+
+def _flag(hbdir, name):
+    return Path(hbdir) / name
+
+
+def _rm(p):
+    try:
+        Path(p).unlink()
+    except OSError:
+        pass
+
+
+def tick(hbdir):
+    hbdir = Path(hbdir)
+    lock = hbdir / ".lock"
+    try:
+        lock.mkdir()
+    except FileExistsError:
+        age = time.time() - lock.stat().st_mtime
+        if age < LOCK_STALE_S:
+            return _sleep({"reason": "already_running", "lock_age_s": int(age)})
+        shutil.rmtree(lock, ignore_errors=True)
+        lock.mkdir()
+    try:
+        return _body(hbdir)
+    finally:
+        shutil.rmtree(lock, ignore_errors=True)
+
+
+def _body(hbdir):
+    # 2. state integrity (self-heal by reprojecting; only wake if the log is unusable)
+    try:
+        json.loads((hbdir / "state.json").read_text())
+    except Exception:
+        try:
+            st.reproject(hbdir)
+        except Exception:
+            return _wake({"reason": "state_corrupted"})
+    # 3. dag integrity
+    try:
+        json.loads((hbdir / "dag.json").read_text())
+    except Exception:
+        return _wake({"reason": "dag_corrupted"})
+
+    # 4. reclaim stale leases
+    leases = hbdir / "leases"
+    if leases.is_dir():
+        reclaimed = False
+        for d in list(leases.iterdir()):
+            if not d.is_dir():
+                continue
+            beat = d / "beat"
+            ref, threshold = ((beat.stat().st_mtime, HEARTBEAT_STALE_S) if beat.exists()
+                              else (d.stat().st_mtime, LOCK_STALE_S))
+            if time.time() - ref >= threshold:
+                st.append_event(hbdir, {"event": "lease_expired", "task": d.name})
+                shutil.rmtree(d, ignore_errors=True)
+                reclaimed = True
+        if reclaimed:
+            st.reproject(hbdir)
+
+    # 5. rot detection
+    if HB_ROT_CHECK != "0" and doc.has_rot(hbdir):
+        if not _flag(hbdir, ".rot-alerted").exists():
+            _flag(hbdir, ".rot-alerted").touch()
+            return _wake({"reason": "gate_rot", "hint": "a completed phase's gate references a deleted file — run: hb doctor"})
+        return _sleep({"reason": "gate_rot_waiting"})
+    _rm(_flag(hbdir, ".rot-alerted"))
+
+    state = st.project(st.read_events(hbdir), st.read_dag(hbdir))
+
+    # 6. circuit breaker
+    if state["build_stuck_count"] >= 5:
+        if not _flag(hbdir, ".stuck-alerted").exists():
+            _flag(hbdir, ".stuck-alerted").touch()
+            return _wake({"reason": "build_stuck", "build_stuck_count": state["build_stuck_count"]})
+        return _sleep({"reason": "stuck_waiting_human", "build_stuck_count": state["build_stuck_count"]})
+    _rm(_flag(hbdir, ".stuck-alerted"))
+
+    # 8. gate errors from a previous run
+    if state["gate"]["errors"] > 0:
+        return _wake({"reason": "gate_blocked", "gate_errors": state["gate"]["errors"]})
+
+    # 9. next task
+    dag = st.read_dag(hbdir)
+    nxt = rv.resolve(state, dag, hbdir)
+    if nxt is None:
+        return _sleep({"reason": "no_pending_tasks"})
+    typ = nxt.get("type", "task")
+
+    if typ == "all_done":
+        if not _flag(hbdir, ".all-done-alerted").exists():
+            _flag(hbdir, ".all-done-alerted").touch()
+            return _wake({"reason": "all_done", "next_task": nxt})
+        return _sleep({"reason": "project_complete"})
+    if typ == "deadlock":
+        if not _flag(hbdir, ".deadlock-alerted").exists():
+            _flag(hbdir, ".deadlock-alerted").touch()
+            return _wake({"reason": "deadlock", "next_task": nxt})
+        return _sleep({"reason": "deadlock_waiting", "detail": nxt})
+    if typ == "busy":
+        _rm(_flag(hbdir, ".deadlock-alerted"))
+        return _sleep({"reason": "at_capacity", "detail": nxt})
+    if typ == "gate_pending":
+        _rm(_flag(hbdir, ".deadlock-alerted"))
+        return _wake({"reason": "gate_pending", "next_task": nxt})
+    if typ == "review_pending":
+        _rm(_flag(hbdir, ".deadlock-alerted"))
+        st.append_event(hbdir, {"event": "review_wake", "gate": nxt.get("gate")})
+        return _wake({"reason": "review_pending", "next_task": nxt})
+
+    # a real task
+    _rm(_flag(hbdir, ".all-done-alerted"))
+    _rm(_flag(hbdir, ".deadlock-alerted"))
+    task_id = nxt.get("id")
+
+    in_flight = len([d for d in (list(leases.iterdir()) if leases.is_dir() else []) if d.is_dir()])
+    if task_id and in_flight >= HB_MAX_CONCURRENCY:
+        return _sleep({"reason": "at_capacity", "in_flight": in_flight, "max": HB_MAX_CONCURRENCY})
+
+    noprog = _wakes_since_progress(hbdir, task_id)
+    if task_id and noprog >= STUCK_TICKS:
+        if not _flag(hbdir, ".noprogress-alerted").exists():
+            _flag(hbdir, ".noprogress-alerted").touch()
+            return _wake({"reason": "build_stuck", "signal": "no_progress", "task": task_id, "no_progress": noprog})
+        return _sleep({"reason": "stuck_waiting_human", "signal": "no_progress", "task": task_id})
+    _rm(_flag(hbdir, ".noprogress-alerted"))
+
+    if task_id:
+        st.acquire_lease(hbdir, task_id)
+        st.append_event(hbdir, {"event": "wake", "task": task_id})
+    return _wake({"reason": "next_task", "next_task": nxt})
+
+
+def _wakes_since_progress(hbdir, task_id):
+    n = 0
+    for ev in reversed(st.read_events(hbdir)):
+        if ev.get("task") == task_id and ev.get("event") in ("task_started", "task_done", "task_failed"):
+            break
+        if ev.get("event") == "wake" and ev.get("task") == task_id:
+            n += 1
+    return n

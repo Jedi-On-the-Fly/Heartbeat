@@ -1,0 +1,85 @@
+{
+  "_meta": {
+    "project": "heartbeat-py",
+    "note": "Pure-Python port of the HeartBeat substrate (zero node/bash for OUR tooling). Lives in py/ as a pip-installable package `heartbeat` with console script `hb`. Core is stdlib-only; agno/crewai are optional extras. Gate cmds remain user-authored shell (the DAG contract). Verified by pytest (py/tests) — the real gate."
+  },
+  "phases": [
+    {
+      "id": "PP0", "title": "Package skeleton + state core", "gate_entry": null, "gate_exit": "GATE_PP0",
+      "tasks": [
+        { "id": "PP0T1", "title": "Author the state tests", "requires": [],
+          "description": "Write py/tests/test_state.py asserting the event-sourced projection: initialized/task_started/task_done/task_failed/lease_expired/gate_passed/gate_failed/review_passed/review_failed derive completed_tasks, active_tasks, completed_phases, pending_reviews, build_stuck_count, current_phase — matching the node projector semantics." },
+        { "id": "PP0T2", "title": "Package layout + pyproject", "requires": ["PP0T1"],
+          "description": "Create py/pyproject.toml (stdlib-only core, console script hb=heartbeat.cli:main, optional extras agno/crewai) and py/src/heartbeat/__init__.py." },
+        { "id": "PP0T3", "title": "state.py + protocol.py", "requires": ["PP0T2"],
+          "description": "Implement py/src/heartbeat/state.py (read/append events.jsonl, project(events,dag)->state, atomic write, write-lock, leases helpers) and py/src/heartbeat/protocol.py (the reason->action PROTOCOL map + render_md)." }
+      ]
+    },
+    {
+      "id": "PP1", "title": "Resolver + lint", "gate_entry": "GATE_PP0", "gate_exit": "GATE_PP1",
+      "tasks": [
+        { "id": "PP1T1", "title": "Author resolver + lint tests", "requires": [],
+          "description": "Write py/tests/test_resolver.py and py/tests/test_lint.py: gate-aware resolve() (next_task/gate_pending/review_pending/all_done/deadlock/busy), ready_tasks(), and lint (duplicate ids, broken requires, cycles, undefined gates, oversized phases)." },
+        { "id": "PP1T2", "title": "resolver.py + lint.py", "requires": ["PP1T1"],
+          "description": "Implement py/src/heartbeat/resolver.py (resolve, ready_tasks) and py/src/heartbeat/lint.py (lint, extract_paths) porting the node semantics faithfully." }
+      ]
+    },
+    {
+      "id": "PP2", "title": "Gate runner + tick", "gate_entry": "GATE_PP1", "gate_exit": "GATE_PP2",
+      "tasks": [
+        { "id": "PP2T1", "title": "Author gate + tick tests", "requires": [],
+          "description": "Write py/tests/test_gate.py and py/tests/test_tick.py: gate runs criteria via the system shell with a timeout, appends gate_passed/failed, advances the phase; tick does the Stage-A priority checks (lock, integrity, lease reclaim, circuit breaker, gate errors, next task) and returns {wakeAgent,data}." },
+        { "id": "PP2T2", "title": "gate.py + tick.py", "requires": ["PP2T1"],
+          "description": "Implement py/src/heartbeat/gate.py (eval criteria, --check/--all, optional git snapshot) and py/src/heartbeat/tick.py (Stage A) porting tick.sh/gate.sh semantics; gate cmds run via subprocess shell." }
+      ]
+    },
+    {
+      "id": "PP3", "title": "CLI + init + doctor/diagnose", "gate_entry": "GATE_PP2", "gate_exit": "GATE_PP3",
+      "tasks": [
+        { "id": "PP3T1", "title": "Author CLI tests", "requires": [],
+          "description": "Write py/tests/test_cli.py driving the hb console end-to-end: init a project, lint, tick, start/done, gate, report, doctor, diagnose, protocol." },
+        { "id": "PP3T2", "title": "cli.py + scaffold.py + report.py + doctor/diagnose", "requires": ["PP3T1"],
+          "description": "Implement py/src/heartbeat/cli.py (argparse subcommands), scaffold.py (hb init writes .hb/ dag/state/events/executor.json), report.py, and doctor()+diagnose() computed root-cause." }
+      ]
+    },
+    {
+      "id": "PP4", "title": "Executor + backends", "gate_entry": "GATE_PP3", "gate_exit": "GATE_PP4",
+      "tasks": [
+        { "id": "PP4T1", "title": "Author executor tests", "requires": [],
+          "description": "Write py/tests/test_exec.py: the driver drives a stub-backed project to all_done, escalate-only on gate_blocked, per-task attempt cap, strict-gate refusal, and worktree-isolated parallel fan-out." },
+        { "id": "PP4T2", "title": "executor.py + backends", "requires": ["PP4T1"],
+          "description": "Implement py/src/heartbeat/executor.py (serial + parallel worktree, heartbeat pump, escalate-only, attempt cap, strict) and py/src/heartbeat/backends/ (ollama, agno, crewai, script, claude) with an in-process execute/refute contract and shared _fileblocks." }
+      ]
+    },
+    {
+      "id": "PP5", "title": "Packaging + live proof + docs", "gate_entry": "GATE_PP4", "gate_exit": "GATE_PP5",
+      "tasks": [
+        { "id": "PP5T1", "title": "Author install + live tests", "requires": [],
+          "description": "Write py/tests/test_smoke.py (pip install into a venv, hb --help, hb init+tick works) and py/real-backend.py (live end-to-end with the ollama backend)." },
+        { "id": "PP5T2", "title": "Finalize packaging + docs", "requires": ["PP5T1"],
+          "description": "Finalize py/pyproject.toml extras and console_scripts, write py/README.md documenting the pure-Python port and zero node/bash, and run the live ollama end-to-end." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_PP0": { "desc": "State core projects correctly, stdlib-only.",
+      "criteria": [
+        { "id": "pp0c1", "desc": "state tests pass", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_state.py" },
+        { "id": "pp0c2", "desc": "package imports with stdlib only", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"import heartbeat, heartbeat.state, heartbeat.protocol\"" }
+      ] },
+    "GATE_PP1": { "desc": "Resolver and lint match node semantics.",
+      "criteria": [ { "id": "pp1c1", "desc": "resolver+lint tests pass", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_resolver.py tests/test_lint.py" } ] },
+    "GATE_PP2": { "desc": "Gate runner and tick drive a project.",
+      "review": { "prompt": "Refute that PP2 is done: does the Python tick REALLY reproduce tick.sh's priority order and lease/stale semantics, or did it skip a check? Does the gate append the right events and advance the phase only on a genuine pass? Are the tests hollow (asserting mocks instead of real subprocess gate runs)?" },
+      "criteria": [ { "id": "pp2c1", "desc": "gate+tick tests pass", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_gate.py tests/test_tick.py" } ] },
+    "GATE_PP3": { "desc": "hb console works end-to-end.",
+      "criteria": [ { "id": "pp3c1", "desc": "cli tests pass", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_cli.py" } ] },
+    "GATE_PP4": { "desc": "Executor drives backends, serial and parallel.",
+      "criteria": [ { "id": "pp4c1", "desc": "executor tests pass", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_exec.py" } ] },
+    "GATE_PP5": { "desc": "Installable, whole suite green.",
+      "criteria": [
+        { "id": "pp5c1", "desc": "full python suite green", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q" },
+        { "id": "pp5c2", "desc": "pyproject present", "cmd": "test -f \"$PROJECT_DIR/py/pyproject.toml\"" }
+      ] }
+  }
+}

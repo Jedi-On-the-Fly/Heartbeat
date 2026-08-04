@@ -1,0 +1,121 @@
+import os
+import shutil
+import subprocess
+
+import pytest
+
+from conftest import make_hb
+from heartbeat import state, executor
+
+STUB = """#!/usr/bin/env bash
+mode="$1"; payload="$(cat)"
+case "$mode" in
+  execute)
+    [ "${STUB_FAIL:-0}" = 1 ] && { echo '{"ok":false,"summary":"forced"}'; exit 0; }
+    id=$(printf '%s' "$payload" | python3 -c 'import sys,json;print(json.load(sys.stdin)["task"]["id"])')
+    if [ "${STUB_DISTINCT:-0}" = 1 ]; then printf 'done\\n' > "$id.out"; else printf '%s\\n' "$id" >> done.log; fi
+    printf '{"ok":true,"summary":"did %s"}\\n' "$id" ;;
+  refute) printf '{"refuted":%s,"findings":"stub"}\\n' "${STUB_REFUTE:-false}" ;;
+esac
+"""
+
+
+@pytest.fixture
+def stub(tmp_path):
+    p = tmp_path / "stub.sh"
+    p.write_text(STUB)
+    p.chmod(0o755)
+    return p
+
+
+def _dag(tasks_by_phase, review=None):
+    phases, gates = [], {}
+    prev_gate = None
+    for i, (pid, tids) in enumerate(tasks_by_phase):
+        g = f"G{pid}"
+        phases.append({"id": pid, "gate_entry": prev_gate, "gate_exit": g,
+                       "tasks": [{"id": t, "title": f"write {t} to done.log", "requires": []} for t in tids]})
+        crit = " && ".join(f'grep -q {t} "$PROJECT_DIR/done.log"' for t in tids)
+        gates[g] = {"desc": pid, "criteria": [{"id": "c", "cmd": crit}]}
+        if review:
+            gates[g]["review"] = {"prompt": "refute"}
+        prev_gate = g
+    return {"phases": phases, "gates": gates}
+
+
+def _run(tmp_path, dag, monkeypatch, stub, **env):
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    monkeypatch.setenv("HB_EXEC_CMD", f"bash {stub}")
+    monkeypatch.setenv("HB_EXEC_MAX_ITERS", "30")
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    return hb
+
+
+def test_drive_to_all_done(tmp_path, monkeypatch, stub, capsys):
+    hb = _run(tmp_path, _dag([("P0", ["P0T1"]), ("P1", ["P1T1"])]), monkeypatch, stub)
+    rc = executor.run(hb)
+    out = capsys.readouterr().out
+    assert rc == 0 and "HB-EXEC DONE" in out
+    s = state.read_state(hb)
+    assert "P0" in s["completed_phases"] and "P1" in s["completed_phases"]
+    assert (tmp_path / "done.log").read_text().count("\n") == 2
+
+
+def test_attempt_cap_escalates(tmp_path, monkeypatch, stub, capsys):
+    hb = _run(tmp_path, _dag([("P0", ["P0T1"])]), monkeypatch, stub, STUB_FAIL="1", HB_EXEC_ATTEMPT_CAP="3")
+    rc = executor.run(hb)
+    assert rc == 1 and "attempts_exhausted" in capsys.readouterr().out
+
+
+def test_strict_refuses_non_behavioral_gate(tmp_path, monkeypatch, stub, capsys):
+    dag = _dag([("P0", ["P0T1"])])
+    dag["gates"]["GP0"]["criteria"] = [{"id": "c", "cmd": 'test -f "$PROJECT_DIR/x"'}]
+    hb = make_hb(tmp_path, dag)
+    state.mutate(hb, {"event": "task_started", "task": "P0T1"})
+    state.mutate(hb, {"event": "task_done", "task": "P0T1"})
+    monkeypatch.setenv("HB_EXEC_CMD", f"bash {stub}")
+    monkeypatch.setenv("HB_EXEC_MAX_ITERS", "5")
+    monkeypatch.setenv("HB_EXEC_STRICT", "1")
+    assert executor.run(hb) == 1
+    assert "strict_gate" in capsys.readouterr().out
+
+
+def test_review_refuted_routes_to_gate_blocked(tmp_path, monkeypatch, stub, capsys):
+    hb = _run(tmp_path, _dag([("P0", ["P0T1"])], review=True), monkeypatch, stub, STUB_REFUTE="true")
+    assert executor.run(hb) == 1
+    assert "STOP: gate_blocked" in capsys.readouterr().out
+
+
+def test_parallel_in_place(tmp_path, monkeypatch, stub, capsys):
+    hb = _run(tmp_path, _dag([("P0", ["A", "B", "C"])]), monkeypatch, stub, HB_MAX_CONCURRENCY="3")
+    rc = executor.run(hb)
+    out = capsys.readouterr().out
+    assert rc == 0 and "fan-out 3" in out and "HB-EXEC DONE" in out
+    log = (tmp_path / "done.log").read_text()
+    assert all(x in log for x in ("A", "B", "C"))
+
+
+@pytest.mark.skipif(not shutil.which("git"), reason="git required")
+def test_parallel_worktree_isolation(tmp_path, monkeypatch, stub, capsys):
+    dag = {"phases": [{"id": "WP", "gate_entry": None, "gate_exit": "GWP",
+                       "tasks": [{"id": "WA", "title": "WA.out", "requires": []},
+                                 {"id": "WB", "title": "WB.out", "requires": []}]}],
+           "gates": {"GWP": {"criteria": [{"id": "c", "cmd": 'test -f "$PROJECT_DIR/WA.out" && test -f "$PROJECT_DIR/WB.out"'}]}}}
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    subprocess.run(["git", "-C", str(tmp_path), "init", "-q"])
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"])
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", str(tmp_path),
+                    "commit", "-q", "-m", "init"])
+    monkeypatch.setenv("HB_EXEC_CMD", f"bash {stub}")
+    monkeypatch.setenv("HB_EXEC_MAX_ITERS", "15")
+    monkeypatch.setenv("HB_MAX_CONCURRENCY", "2")
+    monkeypatch.setenv("STUB_DISTINCT", "1")
+    monkeypatch.delenv("HB_NO_GIT", raising=False)
+    rc = executor.run(hb)
+    out = capsys.readouterr().out
+    assert rc == 0 and "worktree-isolated" in out
+    assert (tmp_path / "WA.out").exists() and (tmp_path / "WB.out").exists()
+    assert not list((hb / "wt").glob("*")) if (hb / "wt").exists() else True
