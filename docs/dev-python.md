@@ -2,6 +2,8 @@
 
 Backend reference for the pure-Python implementation. Narrative: [heartbeat-py.md](heartbeat-py.md). Plugin (node+bash): [dev-plugin.md](dev-plugin.md). Tests: [dev-tests.md](dev-tests.md).
 
+Visual overview: [dev-python-poster.png](dev-python-poster.png).
+
 Same DAG / event / gate model as the plugin, reimplemented as a pip-installable package with a single `hb` console. Stdlib-only core; `agno`/`crewai` are optional extras. Scope of "zero node/bash": HeartBeat's own tooling is Python — gate `cmd`s remain user-authored shell (the DAG contract), run via the system shell.
 
 ## Package
