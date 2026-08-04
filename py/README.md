@@ -7,6 +7,8 @@ model backends (`agno`, `crewai`, `ollama`) are optional extras that now fit nat
 This is a parallel implementation of the same DAG/gate/event model as the node+bash
 plugin — the `dag.json` format and the tick protocol are identical.
 
+![Architecture](../docs/heartbeat-py-arch.png)
+
 > **Scope note.** Gate `cmd`s are user-authored shell one-liners (the DAG contract) and
 > still run via the system shell. "Zero node/bash" means *HeartBeat's own tooling* is
 > pure Python — you can write gates in Python, and drive real models with no node.

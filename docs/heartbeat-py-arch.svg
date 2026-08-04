@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 680" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="ai" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6366f1"/>
+    </marker>
+    <marker id="at" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="900" height="680" fill="#ffffff"/>
+  <text x="450" y="36" text-anchor="middle" font-size="23" font-weight="700" fill="#0f172a">HeartBeat — pure-Python port</text>
+  <text x="450" y="58" text-anchor="middle" font-size="13" fill="#64748b">the same tick / gate / state model — zero node/bash, pip-installable, one `hb` console</text>
+  <text x="868" y="30" text-anchor="end" font-size="11" font-weight="700" fill="#3b82f6">py</text>
+
+  <!-- package pill -->
+  <rect x="30" y="72" width="230" height="22" rx="11" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="44" y="87" font-size="11" fill="#2563eb">package <tspan font-weight="700">heartbeat</tspan> · console <tspan font-weight="700">hb &lt;cmd&gt;</tspan></text>
+
+  <!-- bands -->
+  <rect x="30" y="102" width="840" height="140" rx="14" fill="#eef2ff"/>
+  <rect x="30" y="260" width="840" height="128" rx="14" fill="#fff7ed"/>
+  <rect x="30" y="408" width="840" height="212" rx="14" fill="#f0fdfa"/>
+  <text x="46" y="124" font-size="12" font-weight="700" fill="#4f46e5">NON-DETERMINISTIC — Stage B (pluggable backends)</text>
+  <text x="46" y="282" font-size="12" font-weight="700" fill="#b45309">INFORMED STATE — data (the source of truth)</text>
+  <text x="46" y="430" font-size="12" font-weight="700" fill="#0d9488">DETERMINISTIC — Stage A (pure Python · stdlib-only core)</text>
+
+  <!-- Stage B boxes -->
+  <rect x="90" y="140" width="250" height="82" rx="10" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
+  <text x="215" y="168" text-anchor="middle" font-size="14" font-weight="700" fill="#4338ca">executor.py — the driver</text>
+  <text x="215" y="188" text-anchor="middle" font-size="11" fill="#4338ca">serial · worktree-parallel</text>
+  <text x="215" y="206" text-anchor="middle" font-size="10" fill="#6366f1">escalate-only · attempt cap · strict</text>
+
+  <rect x="560" y="140" width="290" height="82" rx="10" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
+  <text x="705" y="166" text-anchor="middle" font-size="14" font-weight="700" fill="#4338ca">backends/</text>
+  <text x="705" y="186" text-anchor="middle" font-size="11" fill="#4338ca">ollama · agno · crewai · claude (in-process)</text>
+  <text x="705" y="204" text-anchor="middle" font-size="10" fill="#6366f1">or a subprocess via HB_EXEC_CMD</text>
+
+  <!-- Data boxes -->
+  <rect x="90" y="296" width="250" height="76" rx="10" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+  <text x="215" y="324" text-anchor="middle" font-size="14" font-weight="700" fill="#b45309">events.jsonl</text>
+  <text x="215" y="345" text-anchor="middle" font-size="11" fill="#b45309">append-only log · source of truth</text>
+
+  <rect x="380" y="296" width="190" height="76" rx="10" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+  <text x="475" y="324" text-anchor="middle" font-size="14" font-weight="700" fill="#b45309">state.json</text>
+  <text x="475" y="345" text-anchor="middle" font-size="11" fill="#b45309">projection (state.py)</text>
+
+  <rect x="610" y="296" width="240" height="76" rx="10" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+  <text x="730" y="324" text-anchor="middle" font-size="14" font-weight="700" fill="#b45309">dag.json</text>
+  <text x="730" y="345" text-anchor="middle" font-size="11" fill="#b45309">phases · tasks · gates</text>
+
+  <!-- Stage A boxes -->
+  <rect x="90" y="450" width="300" height="150" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="2"/>
+  <text x="240" y="476" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">tick.py — priority checks</text>
+  <text x="240" y="500" text-anchor="middle" font-size="11" fill="#0f766e">integrity · rot · circuit-breaker</text>
+  <text x="240" y="518" text-anchor="middle" font-size="11" fill="#0f766e">drift · gate-errors · next-task</text>
+  <text x="240" y="554" text-anchor="middle" font-size="12" font-weight="700" fill="#0f766e">→ { wakeAgent, reason, action }</text>
+  <text x="240" y="576" text-anchor="middle" font-size="11" fill="#0f766e">resolver.py · lint.py · self-describing</text>
+
+  <rect x="430" y="450" width="180" height="150" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="2"/>
+  <text x="520" y="476" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">gate.py</text>
+  <text x="520" y="500" text-anchor="middle" font-size="11" fill="#0f766e">behavioral gates</text>
+  <text x="520" y="518" text-anchor="middle" font-size="11" fill="#0f766e">runs the user's</text>
+  <text x="520" y="534" text-anchor="middle" font-size="11" fill="#0f766e">shell gate cmds</text>
+  <text x="520" y="566" text-anchor="middle" font-size="11" fill="#0f766e">--check / --all</text>
+
+  <rect x="650" y="450" width="200" height="150" rx="10" fill="#ffffff" stroke="#0d9488" stroke-width="2"/>
+  <text x="750" y="476" text-anchor="middle" font-size="14" font-weight="700" fill="#0f766e">hb console · doctor.py</text>
+  <text x="750" y="500" text-anchor="middle" font-size="11" fill="#0f766e">init · tick · gate · report</text>
+  <text x="750" y="518" text-anchor="middle" font-size="11" font-weight="700" fill="#0f766e">git commit+tag = restore points</text>
+  <text x="750" y="544" text-anchor="middle" font-size="11" fill="#0f766e">hb diagnose</text>
+  <text x="750" y="560" text-anchor="middle" font-size="11" fill="#0f766e">computes the root cause</text>
+
+  <!-- ARROWS -->
+  <!-- wake: tick -> executor, up the left margin -->
+  <path d="M90,490 L52,490 L52,181 L90,181" fill="none" stroke="#6366f1" stroke-width="2" marker-end="url(#ai)"/>
+  <text x="40" y="335" transform="rotate(-90 40 335)" text-anchor="middle" font-size="11" font-weight="600" fill="#4f46e5">wakeAgent · reason · action</text>
+
+  <!-- executor -> backends (dispatch) -->
+  <line x1="340" y1="168" x2="558" y2="168" stroke="#6366f1" stroke-width="2" marker-end="url(#ai)"/>
+  <text x="449" y="160" text-anchor="middle" font-size="10" font-weight="600" fill="#4f46e5">dispatch: execute / refute</text>
+  <!-- backends -> executor (result), dashed -->
+  <path d="M558,196 L342,196" fill="none" stroke="#6366f1" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ai)"/>
+  <text x="449" y="212" text-anchor="middle" font-size="10" fill="#6366f1">{ ok } / { refuted }</text>
+
+  <!-- executor -> events (driver mediates state) -->
+  <line x1="200" y1="222" x2="200" y2="294" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <text x="300" y="262" text-anchor="middle" font-size="11" fill="#334155">driver mediates state</text>
+
+  <!-- events -> state (project) -->
+  <line x1="342" y1="334" x2="378" y2="334" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <text x="360" y="288" text-anchor="middle" font-size="10" fill="#334155">project</text>
+
+  <!-- data -> tick (reads), dashed -->
+  <path d="M470,374 L340,448" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ag)"/>
+  <text x="430" y="418" text-anchor="middle" font-size="11" fill="#64748b">reads state · log · dag</text>
+
+  <!-- gate pass -> hb/git -->
+  <line x1="610" y1="525" x2="648" y2="525" stroke="#0d9488" stroke-width="2" marker-end="url(#at)"/>
+  <text x="629" y="517" text-anchor="middle" font-size="10" font-weight="600" fill="#0f766e">pass</text>
+
+  <!-- gate.py reads dag/events (dashed, short) -->
+  <path d="M520,448 L520,374" fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#ag)"/>
+
+  <text x="450" y="652" text-anchor="middle" font-size="12" fill="#94a3b8">Pure Python (stdlib-only core) · pip install · one `hb` console · in-process or subprocess backends.</text>
+  <text x="450" y="670" text-anchor="middle" font-size="12" fill="#94a3b8">Gate cmds remain user-authored shell — the DAG contract. Everything else runs with zero node and zero bash.</text>
+</svg>
