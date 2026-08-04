@@ -1,0 +1,75 @@
+{
+  "_meta": {
+    "project": "dag-auditor",
+    "note": "Adversarial DAG reviewer = a deterministic gate-quality auditor (both runtimes) + an agent-refutation layer (skill prompt). Applies refute-don't-confirm to the PLAN before it runs. Rules: hollow_gate (no behavioral criterion), ungated, unguarded_phase, existence/vacuous criteria, nondeterministic, gate_offphase. Node and Python auditors share one ruleset (parity seed → planning/parity-notes.md). Verified by both suites + dogfooded on our own DAGs."
+  },
+  "phases": [
+    {
+      "id": "DA0", "title": "Ruleset + fixtures + parity notes", "gate_entry": null, "gate_exit": "GATE_DA0",
+      "tasks": [
+        { "id": "DA0T1", "title": "Author fixtures + parity notes", "requires": [],
+          "description": "Create shared DAG fixtures under planning/audit-fixtures/ (hollow.json with a `true` gate, existence.json with test -f, nondeterministic.json with curl, good.json fully behavioral) and planning/parity-notes.md capturing the shared classification regexes and the expected findings, so the node and python auditors can be checked for parity." }
+      ]
+    },
+    {
+      "id": "DA1", "title": "Node auditor (plugin)", "gate_entry": "GATE_DA0", "gate_exit": "GATE_DA1",
+      "tasks": [
+        { "id": "DA1T1", "title": "Author T42 audit tests", "requires": [],
+          "description": "Add T42 to tests/run-tests.sh: hb-audit.js flags hollow/existence/nondeterministic gates on the fixtures and passes a good DAG clean." },
+        { "id": "DA1T2", "title": "Implement hb-audit.js + skill", "requires": ["DA1T1"],
+          "description": "Implement plugin/templates/hb-audit.js (audit(dag)->{findings,errors,warns}, classify, CLI exit 1 on any error) reusing hb-lint extractPaths, wire it into bootstrap, and document /heartbeat audit in plugin/skills/heartbeat/SKILL.md including the adversarial agent layer." }
+      ]
+    },
+    {
+      "id": "DA2", "title": "Python auditor (port)", "gate_entry": "GATE_DA1", "gate_exit": "GATE_DA2",
+      "tasks": [
+        { "id": "DA2T1", "title": "Author test_audit.py", "requires": [],
+          "description": "Add py/tests/test_audit.py mirroring T42 against the same planning/audit-fixtures/." },
+        { "id": "DA2T2", "title": "Implement heartbeat/audit.py + hb audit", "requires": ["DA2T1"],
+          "description": "Implement py/src/heartbeat/audit.py with the identical ruleset and an `hb audit` CLI subcommand in py/src/heartbeat/cli.py." }
+      ]
+    },
+    {
+      "id": "DA3", "title": "Parity + apply-to-self + docs", "gate_entry": "GATE_DA2", "gate_exit": "GATE_DA3",
+      "tasks": [
+        { "id": "DA3T1", "title": "Parity + dogfood", "requires": [],
+          "description": "Assert the node and python auditors agree on every fixture in planning/audit-fixtures/ (recorded in planning/parity-notes.md), then run the auditor on our own DAGs (the template, the python scaffold default, planning/hb-exec.dag.json, planning/heartbeat-py.dag.json) and record the honest findings." },
+        { "id": "DA3T2", "title": "Docs + version", "requires": ["DA3T1"],
+          "description": "Document the auditor in README.md and STATUS.md and bump versions in plugin/.claude-plugin/plugin.json and .claude-plugin/marketplace.json." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_DA0": {
+      "desc": "Fixtures and parity notes exist and are meaningful.",
+      "criteria": [
+        { "id": "da0c1", "desc": "hollow fixture is genuinely hollow", "cmd": "grep -q '\"true\"' \"$PROJECT_DIR/planning/audit-fixtures/hollow.json\"" },
+        { "id": "da0c2", "desc": "parity notes name the rules", "cmd": "grep -q hollow_gate \"$PROJECT_DIR/planning/parity-notes.md\" && grep -q nondeterministic \"$PROJECT_DIR/planning/parity-notes.md\"" }
+      ]
+    },
+    "GATE_DA1": {
+      "desc": "The node auditor catches weak gates and clears good ones.",
+      "review": { "prompt": "Refute that DA1 is done: does the auditor ACTUALLY detect a hollow gate, or does it just parse? Is a phase with one behavioral + one test -f criterion correctly NOT flagged hollow? Is the auditor itself hollow (its own T42 assertions trivial)? Does a fully-behavioral DAG pass clean (no false positives)?" },
+      "criteria": [
+        { "id": "da1c1", "desc": "flags a hollow gate", "cmd": "node \"$PROJECT_DIR/plugin/templates/hb-audit.js\" \"$PROJECT_DIR/planning/audit-fixtures/hollow.json\" | grep -q hollow_gate" },
+        { "id": "da1c2", "desc": "passes a good DAG clean (exit 0)", "cmd": "node \"$PROJECT_DIR/plugin/templates/hb-audit.js\" \"$PROJECT_DIR/planning/audit-fixtures/good.json\"" },
+        { "id": "da1c3", "desc": "suite covers the auditor (T42)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T42" }
+      ]
+    },
+    "GATE_DA2": {
+      "desc": "The python auditor matches the node one.",
+      "criteria": [
+        { "id": "da2c1", "desc": "python auditor flags the hollow fixture", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m heartbeat.cli audit \"$PROJECT_DIR/planning/audit-fixtures/hollow.json\" | grep -q hollow_gate" },
+        { "id": "da2c2", "desc": "audit tests pass", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_audit.py" }
+      ]
+    },
+    "GATE_DA3": {
+      "desc": "Node and python agree; both suites green.",
+      "criteria": [
+        { "id": "da3c1", "desc": "node and python auditors agree on the good fixture (both exit 0)", "cmd": "node \"$PROJECT_DIR/plugin/templates/hb-audit.js\" \"$PROJECT_DIR/planning/audit-fixtures/good.json\" && cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m heartbeat.cli audit \"$PROJECT_DIR/planning/audit-fixtures/good.json\"" },
+        { "id": "da3c2", "desc": "node suite green", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" >/dev/null 2>&1" },
+        { "id": "da3c3", "desc": "python suite green", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q >/dev/null 2>&1" }
+      ]
+    }
+  }
+}

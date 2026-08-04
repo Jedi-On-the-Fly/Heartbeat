@@ -85,6 +85,24 @@ node <project-dir>/.hb/hb-lint.js <project-dir>/.hb/dag.json
 ```
 Reports duplicate IDs, cycles, broken `requires`, undefined gates, phases > 8 tasks.
 
+### `/heartbeat audit <project-dir>` — adversarial DAG review
+
+Where `lint` checks **structure**, `audit` checks **gate quality** — the thing that
+actually bounds HeartBeat's value. It applies refute-don't-confirm to the *plan* before
+you spend a token running it: a hollow gate (`test -f`, `true`) makes the whole
+verification apparatus theatre.
+```bash
+node <project-dir>/.hb/hb-audit.js <project-dir>/.hb/dag.json    # exit 1 if any hollow gate
+```
+Flags: **hollow_gate** (a phase whose gate has no behavioral criterion), **ungated**,
+**unguarded_phase**, existence-only / vacuous criteria, **nondeterministic** gates
+(network/time → flaky), and **gate_offphase** (the gate tests nothing the phase produces).
+
+**Adversarial layer (agent).** For the plan overall, also spawn a skeptical reviewer
+(Agent tool) told to *refute that this DAG will truly verify the work* — hollow gates,
+phases with no real coverage, missing `requires`, criteria that pass trivially — and fix
+what it finds before running. Deterministic audit first, then the second read.
+
 ### `/heartbeat viz <project-dir>`
 ```bash
 node <project-dir>/.hb/hb-viz.js <project-dir>/.hb
@@ -185,11 +203,12 @@ clones. For **local-only** projects, use one of:
 ### `/heartbeat help`
 Reply with:
 ```
-*HeartBeat v1.8 — commands:*
+*HeartBeat v1.9 — commands:*
 • /heartbeat init <dir>     — bootstrap a new project
 • /heartbeat plan <dir>     — convert a plan into a lint-clean dag.json
 • /heartbeat status <dir>   — progress report
-• /heartbeat lint <dir>     — validate the DAG
+• /heartbeat lint <dir>     — validate the DAG (structure)
+• /heartbeat audit <dir>    — adversarial gate-quality review (hollow gates)
 • /heartbeat doctor <dir>   — integrity check (rot: gates referencing deleted files)
 • /heartbeat viz <dir>      — generate dag-view.html
 • /heartbeat tick <dir>     — manual tick (one task)

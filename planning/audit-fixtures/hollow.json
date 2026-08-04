@@ -1,0 +1,3 @@
+{ "phases": [ { "id": "P0", "title": "does nothing", "gate_entry": null, "gate_exit": "G0",
+      "tasks": [ { "id": "T", "title": "build the thing", "requires": [] } ] } ],
+  "gates": { "G0": { "desc": "g", "criteria": [ { "id": "c", "desc": "passes always", "cmd": "true" } ] } } }

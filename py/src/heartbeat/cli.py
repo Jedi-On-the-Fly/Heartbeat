@@ -37,6 +37,7 @@ def main(argv=None):
     p = sub.add_parser("tick"); _add_dir(p)
     p = sub.add_parser("gate"); p.add_argument("gate", nargs="?"); p.add_argument("--check", action="store_true"); p.add_argument("--all", action="store_true"); _add_dir(p)
     p = sub.add_parser("lint"); p.add_argument("dagfile", nargs="?"); _add_dir(p)
+    p = sub.add_parser("audit"); p.add_argument("dagfile", nargs="?"); p.add_argument("--json", action="store_true"); _add_dir(p)
     p = sub.add_parser("report"); p.add_argument("--json", action="store_true"); _add_dir(p)
     p = sub.add_parser("doctor"); _add_dir(p)
     p = sub.add_parser("diagnose"); p.add_argument("reason", nargs="?"); _add_dir(p)
@@ -97,6 +98,19 @@ def main(argv=None):
             print(f"  ⚠ {w}")
         print(f"✗ {len(r['errors'])} error(s), {len(r['warnings'])} warning(s)" if r["errors"]
               else f"✓ DAG valid ({len(r['warnings'])} warning(s))")
+        return 1 if r["errors"] else 0
+    elif args.cmd == "audit":
+        from . import audit as auditmod
+        dag = json.loads(Path(args.dagfile).read_text()) if args.dagfile else st.read_dag(hb)
+        r = auditmod.audit(dag)
+        if args.json:
+            print(json.dumps(r))
+            return 1 if r["errors"] else 0
+        icon = {"error": "✗", "warn": "⚠", "info": "·"}
+        for f in r["findings"]:
+            print(f"  {icon[f['severity']]} [{f['rule']}] {f['message']}")
+        print(f"✗ {r['errors']} error(s), {r['warns']} warning(s) — fix hollow gates before running"
+              if r["errors"] else f"✓ gates look behavioural ({r['warns']} warning(s))")
         return 1 if r["errors"] else 0
     elif args.cmd == "report":
         print(json.dumps(reportmod.build(hb), indent=2) if args.json else reportmod.render(hb))

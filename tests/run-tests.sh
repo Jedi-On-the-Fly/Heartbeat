@@ -587,8 +587,8 @@ check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
   '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ]'
 check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
-check "T39.4 plugin version bumped to 1.8.0" \
-  'grep -q "1.8.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+check "T39.4 plugin version bumped to 1.9.0" \
+  'grep -q "1.9.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 
 echo "═══ T40 — parallel fan-out (v1.8) ═══"
 # In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
@@ -624,6 +624,22 @@ if command -v python3 >/dev/null 2>&1; then
 else
   echo "  (python3 absent — T41 skipped)"
 fi
+
+echo "═══ T42 — DAG auditor: gate-quality (adversarial plan review) ═══"
+AUD="$HB_SRC/plugin/templates/hb-audit.js"
+FIX="$HB_SRC/planning/audit-fixtures"
+check "T42.1 hb-audit.js is requirable and exports audit()" \
+  'node -e "const m=require(\"'"$AUD"'\");process.exit(typeof m.audit===\"function\"?0:1)"'
+check "T42.2 flags a hollow (always-true) gate → error, exit 1" \
+  'out=$(node "$AUD" "$FIX/hollow.json"); rc=$?; [ "$rc" -eq 1 ] && printf "%s" "$out" | grep -q hollow_gate'
+check "T42.3 flags an existence-only gate as hollow (test -f)" \
+  'out=$(node "$AUD" "$FIX/existence.json"); printf "%s" "$out" | grep -q existence && printf "%s" "$out" | grep -q hollow_gate'
+check "T42.4 behavioral-but-flaky gate → nondeterministic warning, no error (exit 0)" \
+  'node "$AUD" "$FIX/nondeterministic.json" | grep -q nondeterministic && node "$AUD" "$FIX/nondeterministic.json" >/dev/null 2>&1'
+check "T42.5 a good (behavioral) DAG passes clean, no errors" \
+  'node "$AUD" "$FIX/good.json" >/dev/null 2>&1 && [ "$(node "$AUD" "$FIX/good.json" --json | node -pe "JSON.parse(require(\"fs\").readFileSync(0)).errors")" = "0" ]'
+check "T42.6 a phase with a behavioral criterion is NOT hollow even with a sibling test -f" \
+  'node -e "const {audit}=require(\"'"$AUD"'\");const d={phases:[{id:\"P\",gate_exit:\"G\",tasks:[{id:\"t\",title:\"x\"}]}],gates:{G:{criteria:[{id:\"a\",cmd:\"grep -q ok f\"},{id:\"b\",cmd:\"test -f f\"}]}}};process.exit(audit(d).errors===0?0:1)"'
 
 echo ""
 echo "═══════════════════════════════════════"

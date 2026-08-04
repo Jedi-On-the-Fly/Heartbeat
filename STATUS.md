@@ -1,7 +1,20 @@
 # STATUS — HeartBeat
 
-**Version:** v1.8 (pluggable Stage B, over v1.7)
+**Version:** v1.9 (adversarial DAG review, over v1.8)
 **Regression suite:** `bash tests/run-tests.sh`
+
+## v1.9 — adversarial DAG review (gate quality)
+
+- **`hb-audit.js` + `/heartbeat audit`.** Where `lint` checks structure, `audit` checks
+  **gate quality** — the thing that actually bounds HeartBeat's value. It applies
+  refute-don't-confirm to the *plan* before you run it, flagging **hollow_gate** (a phase
+  whose gate has no behavioral criterion), **ungated**, **unguarded_phase**,
+  existence-only / vacuous criteria, **nondeterministic** gates, and **gate_offphase**.
+  Exit 1 on any hollow gate. The agent-refutation layer (a skeptical second read of the
+  whole DAG) sits on top, documented in the skill.
+- **Ported to both runtimes** — `hb-audit.js` (node) and `heartbeat.audit` (`hb audit`,
+  Python) share one ruleset and are checked for **parity** on shared fixtures
+  (`planning/audit-fixtures/`, see `planning/parity-notes.md`).
 
 ## v1.8 — pluggable Stage B
 

@@ -20,6 +20,7 @@ Python modules instead of a mix of bash and node:
 |---|---|
 | Stage A — the tick | `tick.py` (priority checks → `{ wakeAgent, reason, action }`) |
 | Eligibility / next work | `resolver.py`, `lint.py` |
+| Gate-quality review | `audit.py` (`hb audit` — flags hollow gates before you run) |
 | Behavioral gates | `gate.py` (runs the gate's shell commands, `--check` re-verifies) |
 | Event-sourced state | `state.py` (append to `events.jsonl` → project `state.json`) |
 | Integrity + root cause | `doctor.py` (rot detection, `hb diagnose`) |

@@ -1,0 +1,3 @@
+{ "phases": [ { "id": "P0", "title": "writes output.txt", "gate_entry": null, "gate_exit": "G0",
+      "tasks": [ { "id": "T", "title": "write ok into output.txt", "requires": [] } ] } ],
+  "gates": { "G0": { "desc": "output.txt contains ok", "criteria": [ { "id": "c", "desc": "content is ok", "cmd": "[ \"$(cat \"$PROJECT_DIR/output.txt\")\" = ok ]" } ] } } }
