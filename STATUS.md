@@ -1,7 +1,22 @@
 # STATUS — HeartBeat
 
-**Version:** v1.9 (adversarial DAG review, over v1.8)
-**Regression suite:** `bash tests/run-tests.sh`
+**Version:** v1.10 (agent DAG review + parity, over v1.9)
+**Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.10 — agent DAG review + node↔python parity
+
+- **`hb audit --agent` (Python).** The deterministic auditor catches structural
+  weakness; the agent layer catches semantics — a gate that asserts the *wrong*
+  behaviour, a phase whose gate doesn't exercise the task's real requirement. It
+  dispatches a refutation of the DAG to a configured backend and exits non-zero if the
+  reviewer refutes the plan. The node/Claude side has a concrete refuter prompt in the
+  skill.
+- **Exemplary default template.** The scaffold's gates are now behavioral (the DAG
+  lints clean; output reports success) instead of `test -f` — `hb audit` on the template
+  is clean, and it still bootstraps green.
+- **Parity test (`tests/parity.sh`, ratcheted as T43).** The node plugin and the Python
+  port are checked to AGREE on lint (errors), audit (findings), and the state projection
+  for shared fixtures. node ≡ python.
 
 ## v1.9 — adversarial DAG review (gate quality)
 

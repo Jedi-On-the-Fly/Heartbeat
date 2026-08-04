@@ -36,8 +36,8 @@ def main(argv=None):
     p = sub.add_parser("init"); p.add_argument("project_dir"); p.add_argument("--force", action="store_true")
     p = sub.add_parser("tick"); _add_dir(p)
     p = sub.add_parser("gate"); p.add_argument("gate", nargs="?"); p.add_argument("--check", action="store_true"); p.add_argument("--all", action="store_true"); _add_dir(p)
-    p = sub.add_parser("lint"); p.add_argument("dagfile", nargs="?"); _add_dir(p)
-    p = sub.add_parser("audit"); p.add_argument("dagfile", nargs="?"); p.add_argument("--json", action="store_true"); _add_dir(p)
+    p = sub.add_parser("lint"); p.add_argument("dagfile", nargs="?"); p.add_argument("--json", action="store_true"); _add_dir(p)
+    p = sub.add_parser("audit"); p.add_argument("dagfile", nargs="?"); p.add_argument("--json", action="store_true"); p.add_argument("--agent", action="store_true"); _add_dir(p)
     p = sub.add_parser("report"); p.add_argument("--json", action="store_true"); _add_dir(p)
     p = sub.add_parser("doctor"); _add_dir(p)
     p = sub.add_parser("diagnose"); p.add_argument("reason", nargs="?"); _add_dir(p)
@@ -92,6 +92,9 @@ def main(argv=None):
     elif args.cmd == "lint":
         dag = json.loads(Path(args.dagfile).read_text()) if args.dagfile else st.read_dag(hb)
         r = lintmod.lint(dag)
+        if args.json:
+            print(json.dumps(r))
+            return 1 if r["errors"] else 0
         for e in r["errors"]:
             print(f"  ✗ {e}")
         for w in r["warnings"]:
@@ -103,7 +106,7 @@ def main(argv=None):
         from . import audit as auditmod
         dag = json.loads(Path(args.dagfile).read_text()) if args.dagfile else st.read_dag(hb)
         r = auditmod.audit(dag)
-        if args.json:
+        if args.json and not args.agent:
             print(json.dumps(r))
             return 1 if r["errors"] else 0
         icon = {"error": "✗", "warn": "⚠", "info": "·"}
@@ -111,7 +114,16 @@ def main(argv=None):
             print(f"  {icon[f['severity']]} [{f['rule']}] {f['message']}")
         print(f"✗ {r['errors']} error(s), {r['warns']} warning(s) — fix hollow gates before running"
               if r["errors"] else f"✓ gates look behavioural ({r['warns']} warning(s))")
-        return 1 if r["errors"] else 0
+        refuted = False
+        if args.agent:
+            from . import review
+            rr = review.run(hb, dag)
+            print("\n── agent review (refute the plan) ──")
+            print(rr["concerns"] or "(no concerns returned)")
+            refuted = rr["refuted"]
+            print("verdict: " + ("UNSOUND — the reviewer refuted this DAG" if refuted
+                                 else "SOUND — the reviewer could not refute it"))
+        return 1 if (r["errors"] or refuted) else 0
     elif args.cmd == "report":
         print(json.dumps(reportmod.build(hb), indent=2) if args.json else reportmod.render(hb))
     elif args.cmd == "doctor":

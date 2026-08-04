@@ -30,6 +30,7 @@ Ollama server; it uses only the stdlib (no extra install).
 hb init <project-dir>              # scaffold .hb/ (dag.json, state, events, executor.json)
 hb lint  --dir <project-dir>       # validate the DAG (structure)
 hb audit --dir <project-dir>       # adversarial gate-quality review (hollow gates)
+hb audit --agent --dir <dir>       # + a backend refutes the plan's semantics
 hb tick  --dir <project-dir>       # one Stage-A tick -> {wakeAgent, data}
 hb gate  <GATE> --dir <dir>        # run a behavioral gate (--check = read-only)
 hb report --dir <project-dir>      # progress

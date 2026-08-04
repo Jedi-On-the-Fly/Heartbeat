@@ -587,8 +587,8 @@ check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
   '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ]'
 check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
-check "T39.4 plugin version bumped to 1.9.0" \
-  'grep -q "1.9.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+check "T39.4 plugin version bumped to 1.10.0" \
+  'grep -q "1.10.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 
 echo "═══ T40 — parallel fan-out (v1.8) ═══"
 # In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
@@ -640,6 +640,15 @@ check "T42.5 a good (behavioral) DAG passes clean, no errors" \
   'node "$AUD" "$FIX/good.json" >/dev/null 2>&1 && [ "$(node "$AUD" "$FIX/good.json" --json | node -pe "JSON.parse(require(\"fs\").readFileSync(0)).errors")" = "0" ]'
 check "T42.6 a phase with a behavioral criterion is NOT hollow even with a sibling test -f" \
   'node -e "const {audit}=require(\"'"$AUD"'\");const d={phases:[{id:\"P\",gate_exit:\"G\",tasks:[{id:\"t\",title:\"x\"}]}],gates:{G:{criteria:[{id:\"a\",cmd:\"grep -q ok f\"},{id:\"b\",cmd:\"test -f f\"}]}}};process.exit(audit(d).errors===0?0:1)"'
+
+echo "═══ T43 — node ↔ python parity (lint / audit / state projection) ═══"
+if command -v python3 >/dev/null 2>&1; then
+  check "T43.1 node ≡ python on all parity fixtures" 'bash "$HB_SRC/tests/parity.sh" >/dev/null 2>&1'
+  check "T43.2 parity covers audit, lint, and the state projection" \
+    'out=$(bash "$HB_SRC/tests/parity.sh"); echo "$out" | grep -q "audit parity" && echo "$out" | grep -q "lint parity" && echo "$out" | grep -q "state projection parity"'
+else
+  echo "  (python3 absent — T43 skipped)"
+fi
 
 echo ""
 echo "═══════════════════════════════════════"

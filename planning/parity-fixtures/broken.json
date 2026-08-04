@@ -1,0 +1,3 @@
+{ "phases": [ { "id": "P0", "gate_exit": "G0", "tasks": [ { "id": "A", "requires": ["A"] }, { "id": "A" } ] },
+              { "id": "P1", "gate_entry": "GHOST", "gate_exit": "G1", "tasks": [ { "id": "B", "requires": ["NOPE"] } ] } ],
+  "gates": { "G0": {}, "G1": {} } }

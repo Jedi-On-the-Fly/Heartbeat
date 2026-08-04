@@ -1,0 +1,83 @@
+{
+  "_meta": {
+    "project": "audit-agent",
+    "note": "Four things: (AG1) the AGENT side of hb audit — a backend refutes the DAG semantically, in the Python port; (AG2) make the node default template exemplary (behavioral gates that still pass on a fresh bootstrap); (AG3) a real node↔python parity test over lint/audit/project; (AG4) docs + version. Gate cmds are behavioral (run tools / suites / greps), never test -f — so this plan passes hb audit clean."
+  },
+  "phases": [
+    {
+      "id": "AG0", "title": "Specs + fixtures", "gate_entry": null, "gate_exit": "GATE_AG0",
+      "tasks": [
+        { "id": "AG0T1", "title": "Author agent-review + parity tests", "requires": [],
+          "description": "Add py/tests/test_review.py (hb audit --agent with a stub backend surfaces a concern and exits 1) and create planning/parity-fixtures/ (dag+events pairs) plus a placeholder tests/parity.sh so the parity gate has something to run." }
+      ]
+    },
+    {
+      "id": "AG1", "title": "Agent side of hb audit (python)", "gate_entry": "GATE_AG0", "gate_exit": "GATE_AG1",
+      "tasks": [
+        { "id": "AG1T1", "title": "Implement review.py + --agent", "requires": [],
+          "description": "Implement py/src/heartbeat/review.py (build a refutation prompt from the DAG + deterministic findings, dispatch via a backend's refute, parse the verdict) and wire hb audit --agent in py/src/heartbeat/cli.py: run the deterministic audit, then the agent review, exit 1 if errors or refuted." },
+        { "id": "AG1T2", "title": "Enrich the skill's adversarial layer", "requires": ["AG1T1"],
+          "description": "Give plugin/skills/heartbeat/SKILL.md a concrete refuter prompt template for the node/Claude side and note that the Python port automates it via hb audit --agent." }
+      ]
+    },
+    {
+      "id": "AG2", "title": "Exemplary node template", "gate_entry": "GATE_AG1", "gate_exit": "GATE_AG2",
+      "tasks": [
+        { "id": "AG2T1", "title": "Rewrite the template gates behavioral", "requires": [],
+          "description": "Read plugin/templates/dag.json and the T2 gate assertions, then rewrite the template's gate criteria to be behavioral (not existence-only) while still passing on a fresh bootstrap, keeping the criteria count so T2 stays green. Confirm hb-audit on the template reports no existence/hollow findings." }
+      ]
+    },
+    {
+      "id": "AG3", "title": "Parity test (node ↔ python)", "gate_entry": "GATE_AG2", "gate_exit": "GATE_AG3",
+      "tasks": [
+        { "id": "AG3T1", "title": "Implement tests/parity.sh + py lint --json", "requires": [],
+          "description": "Add a --json mode to hb lint in py/src/heartbeat/cli.py, then implement tests/parity.sh comparing node vs python on the shared fixtures: audit findings, lint errors, and the projected state — exit non-zero on any divergence. Add T43 to tests/run-tests.sh running it." }
+      ]
+    },
+    {
+      "id": "AG4", "title": "Docs + version", "gate_entry": "GATE_AG3", "gate_exit": "GATE_AG4",
+      "tasks": [
+        { "id": "AG4T1", "title": "Docs + version bump", "requires": [],
+          "description": "Document the agent review and parity test in README.md, STATUS.md, and planning/parity-notes.md; bump plugin/.claude-plugin/plugin.json and .claude-plugin/marketplace.json to 1.10.0 and py/pyproject.toml to 0.3.0." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_AG0": {
+      "desc": "Specs and fixtures are in place and meaningful.",
+      "criteria": [
+        { "id": "ag0c1", "desc": "review test drives --agent", "cmd": "grep -q 'audit' \"$PROJECT_DIR/py/tests/test_review.py\" && grep -q agent \"$PROJECT_DIR/py/tests/test_review.py\"" },
+        { "id": "ag0c2", "desc": "parity script is runnable", "cmd": "bash \"$PROJECT_DIR/tests/parity.sh\" >/dev/null 2>&1 || grep -q parity \"$PROJECT_DIR/tests/parity.sh\"" }
+      ]
+    },
+    "GATE_AG1": {
+      "desc": "hb audit --agent runs a backend refutation of the DAG.",
+      "review": { "prompt": "Refute that AG1 is done: does --agent actually send the DAG to a backend and parse a real verdict, or is it a stub that always says SOUND? Does a refuting backend make it exit non-zero? Is test_review.py hollow (asserting the stub, not the wiring)? Does it degrade sanely when no backend is configured?" },
+      "criteria": [
+        { "id": "ag1c1", "desc": "--agent surfaces a refuter concern and exits 1", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_review.py" },
+        { "id": "ag1c2", "desc": "review.py builds a prompt from the DAG", "cmd": "grep -q 'def build_prompt' \"$PROJECT_DIR/py/src/heartbeat/review.py\"" }
+      ]
+    },
+    "GATE_AG2": {
+      "desc": "The default template models behavioral gates and still bootstraps green.",
+      "criteria": [
+        { "id": "ag2c1", "desc": "template has no existence-only/hollow findings", "cmd": "cd \"$PROJECT_DIR\" && node plugin/templates/hb-audit.js plugin/templates/dag.json --json | node -pe 'const d=JSON.parse(require(\"fs\").readFileSync(0));d.findings.filter(f=>f.rule===\"existence\"||f.rule===\"hollow_gate\").length' | grep -qx 0" },
+        { "id": "ag2c2", "desc": "node suite still green (template gates pass on fresh bootstrap)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" >/dev/null 2>&1" }
+      ]
+    },
+    "GATE_AG3": {
+      "desc": "Node and Python agree across lint/audit/project.",
+      "criteria": [
+        { "id": "ag3c1", "desc": "parity test passes (node ≡ python)", "cmd": "bash \"$PROJECT_DIR/tests/parity.sh\" >/dev/null 2>&1" },
+        { "id": "ag3c2", "desc": "suite runs the parity check (T43)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T43" }
+      ]
+    },
+    "GATE_AG4": {
+      "desc": "Documented and versioned; both suites green.",
+      "criteria": [
+        { "id": "ag4c1", "desc": "version bumped to 1.10.0", "cmd": "grep -q '1.10.0' \"$PROJECT_DIR/plugin/.claude-plugin/plugin.json\"" },
+        { "id": "ag4c2", "desc": "python suite green", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q >/dev/null 2>&1" }
+      ]
+    }
+  }
+}

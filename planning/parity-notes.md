@@ -15,7 +15,14 @@ is easy to build. Update as we add cross-implementation surface.
 | **Auditor** | `hb-audit.js audit()` | `heartbeat.audit.audit()` | same dag → same findings (rule + severity per gate) |
 
 Fixtures for the auditor live in `planning/audit-fixtures/` and are consumed by BOTH
-suites (node T42, py test_audit.py), which is the seed of the parity test.
+suites (node T42, py test_audit.py).
+
+**The parity test now exists: `tests/parity.sh`** (ratcheted as node-suite T43). It runs
+the same inputs through both implementations and asserts they agree on: **audit** findings
+(4 fixtures), **lint** errors (`planning/parity-fixtures/broken.json` + fixtures), and the
+**state projection** (4 event scenarios: fresh / p0-gated / review-owed / two-fails). One
+gotcha it encodes: Python's `json.dumps` escapes non-ASCII (the `—` in a lint message) — so
+comparisons normalize with `ensure_ascii=False`. Extend it when a new shared surface lands.
 
 ## Auditor ruleset (identical regexes in both)
 

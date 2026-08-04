@@ -9,15 +9,15 @@
     "GATE_P0": {
       "desc": "Foundation ready",
       "criteria": [
-        { "id": "G0_1", "desc": "Project directory exists", "cmd": "test -d \"$PROJECT_DIR\"" },
-        { "id": "G0_2", "desc": "state.json is valid JSON", "cmd": "node -e \"JSON.parse(require('fs').readFileSync('$HB_DIR/state.json','utf8'))\"" }
+        { "id": "G0_1", "desc": "the DAG is valid — lints clean (behavioral, not 'a file exists')", "cmd": "node \"$HB_DIR/hb-lint.js\" \"$HB_DIR/dag.json\"" },
+        { "id": "G0_2", "desc": "state is a valid projection of the event log", "cmd": "node -e \"JSON.parse(require('fs').readFileSync('$HB_DIR/state.json','utf8'))\"" }
       ]
     },
     "GATE_P1": {
       "desc": "Phase 1 complete — all outputs verified",
       "criteria": [
-        { "id": "G1_1", "desc": "Output file exists", "cmd": "test -f \"$PROJECT_DIR/output/result.json\"" },
-        { "id": "G1_2", "desc": "Output is valid JSON", "cmd": "node -e \"JSON.parse(require('fs').readFileSync('$PROJECT_DIR/output/result.json','utf8'))\"" }
+        { "id": "G1_1", "desc": "output reports success (behavioral example — replace with your real assertion)", "cmd": "grep -q '\"status\"[[:space:]]*:[[:space:]]*\"ok\"' \"$PROJECT_DIR/output/result.json\"" },
+        { "id": "G1_2", "desc": "output is valid JSON", "cmd": "node -e \"JSON.parse(require('fs').readFileSync('$PROJECT_DIR/output/result.json','utf8'))\"" }
       ]
     }
   },

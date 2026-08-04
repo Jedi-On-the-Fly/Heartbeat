@@ -98,10 +98,19 @@ Flags: **hollow_gate** (a phase whose gate has no behavioral criterion), **ungat
 **unguarded_phase**, existence-only / vacuous criteria, **nondeterministic** gates
 (network/time → flaky), and **gate_offphase** (the gate tests nothing the phase produces).
 
-**Adversarial layer (agent).** For the plan overall, also spawn a skeptical reviewer
-(Agent tool) told to *refute that this DAG will truly verify the work* — hollow gates,
-phases with no real coverage, missing `requires`, criteria that pass trivially — and fix
-what it finds before running. Deterministic audit first, then the second read.
+**Adversarial layer (agent).** The static rules catch *structural* weakness; a second
+*read* catches semantic gaps — a gate that asserts the **wrong** behaviour, a phase whose
+gate doesn't exercise the task's real requirement. After the deterministic audit, spawn a
+skeptical reviewer (Agent tool) with a prompt like:
+
+> You are refuting a HeartBeat DAG. For each phase, decide whether its gate would truly
+> prove the task's real requirement — or whether the phase could pass with the work still
+> broken. Flag: gates that test the wrong behaviour, phases with no real coverage, missing
+> `requires`, criteria that pass trivially. End with SOUND or UNSOUND.
+
+Fix what it raises before running. The **Python port automates this**: `hb audit --agent`
+runs the deterministic audit and then dispatches the refutation to a configured backend
+(`hb audit --agent --dir <project>`), exiting non-zero if the reviewer refutes the plan.
 
 ### `/heartbeat viz <project-dir>`
 ```bash
@@ -203,7 +212,7 @@ clones. For **local-only** projects, use one of:
 ### `/heartbeat help`
 Reply with:
 ```
-*HeartBeat v1.9 — commands:*
+*HeartBeat v1.10 — commands:*
 • /heartbeat init <dir>     — bootstrap a new project
 • /heartbeat plan <dir>     — convert a plan into a lint-clean dag.json
 • /heartbeat status <dir>   — progress report
