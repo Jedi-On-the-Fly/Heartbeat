@@ -1,4 +1,4 @@
-# AGENT.md — HeartBeat
+# AGENTS.md — HeartBeat
 
 Non-negotiable rules for any coding agent (or human) working on this repo. Detail lives in the dev docs; this is the minimum you must hold. General engineering practice (think before coding, minimal/surgical diffs) is assumed.
 
