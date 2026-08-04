@@ -27,14 +27,21 @@ it.
 
 ## Two stages
 
-- **Stage A — the tick.** Cheap, deterministic code (bash). It runs on a schedule,
-  reads the settled reality (event log, state, gates), and outputs one thing: should
-  the agent wake, and why. It never generates anything and costs almost nothing.
+- **Stage A — the tick.** Cheap, deterministic code (bash, or pure Python). It runs on
+  a schedule, reads the settled reality (event log, state, gates), and outputs one
+  thing: should the agent wake, and why. It never generates anything and costs almost nothing.
 - **Stage B — the agent.** The non-deterministic worker. It runs only when Stage A
   says there's real work, does one unit of it, records the outcome, and stops.
 
 Splitting them keeps scheduling free and observable, and reserves the model for the
 one thing only it can do.
+
+Stage B is deliberately swappable. The tick doesn't care *what* does the work — only
+that something does one unit and records the outcome. So the worker can be an
+interactive session, or an unattended backend agent — a local model, or a framework
+like Agno or CrewAI — driven over a tiny protocol. Whatever it is, the deterministic
+side still decides when to wake it and still verifies the result at the gate. A
+less-trusted worker is safe precisely because nothing believes it until the gate passes.
 
 ## Informed state
 
@@ -84,6 +91,9 @@ Roughly:
    a human. When it's blocked, it computes the root cause (which check failed, which
    commit deleted a gate's file) rather than leaving the agent to guess.
 4. **Each gate pass commits and tags**, so every phase is a restore point.
+5. **Or hand it to a backend.** Instead of an interactive session, point the executor
+   at a backend (a local model, Agno, CrewAI) and it drives the same loop headless —
+   no Claude Code required. The DAG doesn't change; only who does the work does.
 
 That's the shape of it. You describe the work and the checks; the tick decides,
 cheaply and deterministically, when to spend the model — and tells it what to do.
