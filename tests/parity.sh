@@ -63,5 +63,53 @@ state_case "two-fails"    '{"event":"initialized"}
 {"event":"task_failed","task":"P0T1"}
 {"event":"task_failed","task":"P0T1"}'
 
+echo "── protocol parity ──"
+# The reason KEYS must match; the action text is runtime-specific by design (node
+# references `node .hb/hb.js`/`bash .hb/gate.sh`, python references the `hb` console).
+cmp "protocol:reasons" \
+  "$(node "$ROOT/plugin/templates/hb.js" protocol | sed 's/:.*//' | sort | tr '\n' ',')" \
+  "$(eval "$PY protocol" | sed 's/:.*//' | sort | tr '\n' ',')"
+
+echo "── resolve / ready / report parity ──"
+proj_compare(){ # name events
+  local d; d=$(mktemp -d); mkdir "$d/.hb"
+  printf '%s' "$DAG" > "$d/.hb/dag.json"
+  printf '%s\n' "$2" > "$d/.hb/events.jsonl"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-lint.js" \
+     "$ROOT/plugin/templates/hb-next-task.js" "$ROOT/plugin/templates/hb-report.js" "$d/.hb/"
+  node "$d/.hb/hb.js" rebuild >/dev/null 2>&1
+  # next (resolve)
+  cmp "next:$1" \
+    "$(node "$d/.hb/hb-next-task.js" "$d/.hb/state.json" | node -pe 'const d=JSON.parse(require("fs").readFileSync(0))||{};JSON.stringify([d.type||"task",d.id||"",d.gate||"",d.phase||""])')" \
+    "$(eval "$PY next --dir \"$d\"" | python3 -c 'import sys,json;d=json.load(sys.stdin) or {};print(json.dumps([d.get("type","task"),d.get("id",""),d.get("gate",""),d.get("phase","")],separators=(",",":"),ensure_ascii=False))')"
+  # ready set
+  cmp "ready:$1" \
+    "$(node "$d/.hb/hb.js" ready 9 | node -pe 'JSON.stringify(JSON.parse(require("fs").readFileSync(0)).map(t=>t.id).sort())')" \
+    "$(eval "$PY ready 9 --dir \"$d\"" | python3 -c 'import sys,json;print(json.dumps(sorted(t["id"] for t in json.load(sys.stdin)),separators=(",",":"),ensure_ascii=False))')"
+  # report progress numbers (node report is richer; compare shared semantics)
+  cmp "report:$1" \
+    "$(node "$d/.hb/hb-report.js" "$d/.hb" --json | node -pe 'const p=JSON.parse(require("fs").readFileSync(0)).progress;JSON.stringify([p.done,p.total,p.pct])')" \
+    "$(eval "$PY report --dir \"$d\" --json" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(json.dumps([d["tasks_done"],d["tasks_total"],d["percent"]],separators=(",",":"),ensure_ascii=False))')"
+  rm -rf "$d"
+}
+proj_compare "mid" '{"event":"initialized"}
+{"event":"task_done","task":"P0T1"}'
+
+echo "── diagnose parity (inferred blocker) ──"
+diag_compare(){ # name events
+  local d; d=$(mktemp -d); mkdir "$d/.hb"
+  printf '%s' "$DAG" > "$d/.hb/dag.json"
+  printf '%s\n' "$2" > "$d/.hb/events.jsonl"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-lint.js" \
+     "$ROOT/plugin/templates/hb-next-task.js" "$ROOT/plugin/templates/gate.sh" "$d/.hb/"
+  node "$d/.hb/hb.js" rebuild >/dev/null 2>&1
+  cmp "diagnose:$1" \
+    "$(node "$d/.hb/hb.js" diagnose 2>/dev/null | head -1)" \
+    "$(eval "$PY diagnose --dir \"$d\"" 2>/dev/null | head -1)"
+  rm -rf "$d"
+}
+diag_compare "gate-blocked" '{"event":"initialized"}
+{"event":"gate_failed","gate":"G0"}'
+
 echo ""
 [ "$FAIL" -eq 0 ] && { echo "✅ PARITY OK — node ≡ python"; exit 0; } || { echo "❌ PARITY DIVERGENCE"; exit 1; }

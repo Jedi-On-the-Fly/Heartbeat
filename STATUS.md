@@ -1,7 +1,20 @@
 # STATUS — HeartBeat
 
-**Version:** v1.10 (agent DAG review + parity, over v1.9)
+**Version:** v1.11 (audited plan step + full parity, over v1.10)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.11 — audited plan step + full-coverage parity
+
+- **`/heartbeat plan` now audits and refutes before proposing.** Its acceptance step runs
+  `hb-lint` (structure) **and `hb-audit` (gate quality)**, then refutes the DAG (skeptic
+  agent, or `hb audit --agent` in the port) — so no plan is proposed until it's lint-clean,
+  audit-clean, AND a skeptic comes back SOUND.
+- **Full-coverage parity.** `tests/parity.sh` now checks node ≡ python across every shared
+  surface: lint, audit, **protocol (reason keys)**, **resolve (`hb next`)**, **ready**,
+  **report** (progress), **diagnose** (inferred blocker), and the state projection. It
+  encodes the one intentional divergence — protocol *action text* is runtime-specific (node
+  cites `.hb/hb.js`/`gate.sh`, python cites the `hb` console) — by comparing reason keys.
+- Added `hb next` (resolve) to the Python CLI; `--json` to `hb lint`.
 
 ## v1.10 — agent DAG review + node↔python parity
 

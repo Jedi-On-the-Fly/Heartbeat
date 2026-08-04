@@ -32,8 +32,8 @@ Then tell the user to co-write the DAG with `/heartbeat plan`, then schedule/run
 ### `/heartbeat plan <project-dir>`
 
 Convert a written plan (in the conversation, or a file the user names) into a
-**lint-clean, review-ready** `<project-dir>/.hb/dag.json`. Apply every rule below,
-then gate on `hb-lint` + `hb-viz` before proposing.
+**lint-clean, audit-clean, review-ready** `<project-dir>/.hb/dag.json`. Apply every rule
+below, then gate on `hb-lint` + `hb-audit` + a refutation before proposing.
 
 **Continuation vs fresh.** Read `<project-dir>/.hb/state.json`: if it has completed
 phases, **append** new phases with fresh IDs and set the first new phase's
@@ -55,10 +55,16 @@ phases). Otherwise write a fresh DAG.
 
 **Acceptance (run and show before proposing):**
 ```bash
-node <project-dir>/.hb/hb-lint.js <project-dir>/.hb/dag.json   # 0 errors; review warnings (0 NEW dangling)
-node <project-dir>/.hb/hb-viz.js  <project-dir>/.hb            # renders the cascade → dag-view.html
+node <project-dir>/.hb/hb-lint.js  <project-dir>/.hb/dag.json   # structure: 0 errors (0 NEW dangling)
+node <project-dir>/.hb/hb-audit.js <project-dir>/.hb/dag.json   # gate quality: 0 hollow gates
+node <project-dir>/.hb/hb-viz.js   <project-dir>/.hb            # renders the cascade → dag-view.html
 ```
-Present the new phases/gates + the lint/viz result and get sign-off before running.
+Then **refute the plan** before proposing: spawn a skeptical reviewer (Agent tool) — or,
+in the Python port, `hb audit --agent` — told to prove the DAG *won't* truly verify the
+work (gates that assert the wrong behaviour, phases with no real coverage, missing
+`requires`). Fold its concerns back into the DAG. Only propose once **lint + audit are
+clean AND the refuter comes back SOUND**. Present the phases/gates + the lint/audit/viz
+results + the refutation verdict, then get sign-off before running.
 
 ### `/heartbeat status <project-dir>`
 ```bash
@@ -212,7 +218,7 @@ clones. For **local-only** projects, use one of:
 ### `/heartbeat help`
 Reply with:
 ```
-*HeartBeat v1.10 — commands:*
+*HeartBeat v1.11 — commands:*
 • /heartbeat init <dir>     — bootstrap a new project
 • /heartbeat plan <dir>     — convert a plan into a lint-clean dag.json
 • /heartbeat status <dir>   — progress report

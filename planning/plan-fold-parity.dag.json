@@ -1,0 +1,57 @@
+{
+  "_meta": {
+    "project": "plan-fold-parity",
+    "note": "Two hardenings + docs. (1) Fold hb-audit (deterministic) + a refutation into /heartbeat plan's acceptance step, so no DAG is proposed until it audits clean and a skeptic fails to refute it. (2) Extend tests/parity.sh from lint/audit/state to FULL coverage of the shared surfaces: protocol, resolve (next), ready, report, diagnose — node ≡ python. Gate cmds are behavioral; this plan passes hb audit clean."
+  },
+  "phases": [
+    {
+      "id": "PF0", "title": "Full-coverage parity", "gate_entry": null, "gate_exit": "GATE_PF0",
+      "tasks": [
+        { "id": "PF0T1", "title": "Add py `hb next` (resolve)", "requires": [],
+          "description": "Add an `hb next` subcommand to py/src/heartbeat/cli.py that prints resolver.resolve(state,dag) as JSON, so the resolver is comparable to node hb-next-task.js." },
+        { "id": "PF0T2", "title": "Extend tests/parity.sh", "requires": ["PF0T1"],
+          "description": "Extend tests/parity.sh to also compare node vs python on: protocol (the reason->action map), next (resolve), ready (the runnable set), report (progress numbers), and diagnose (the inferred blocker). Keep T43 running it in tests/run-tests.sh." }
+      ]
+    },
+    {
+      "id": "PF1", "title": "Fold audit into /heartbeat plan", "gate_entry": "GATE_PF0", "gate_exit": "GATE_PF1",
+      "tasks": [
+        { "id": "PF1T1", "title": "Update the plan acceptance step", "requires": [],
+          "description": "Update the /heartbeat plan acceptance block in plugin/skills/heartbeat/SKILL.md so it runs hb-audit.js (must be 0 hollow gates) AND spawns a skeptic to refute the DAG (must be SOUND) before proposing — folding concerns back into the DAG. Add a node-suite assertion that the skill documents hb-audit in the plan acceptance." }
+      ]
+    },
+    {
+      "id": "PF2", "title": "Docs + version", "gate_entry": "GATE_PF1", "gate_exit": "GATE_PF2",
+      "tasks": [
+        { "id": "PF2T1", "title": "Docs + version bump", "requires": [],
+          "description": "Update README.md, STATUS.md, and planning/parity-notes.md to reflect full-coverage parity and the audited plan step; bump plugin/.claude-plugin/plugin.json and .claude-plugin/marketplace.json to 1.11.0 and py/pyproject.toml to 0.4.0." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_PF0": {
+      "desc": "Parity covers every shared surface and node ≡ python.",
+      "review": { "prompt": "Refute that PF0 is done: does parity ACTUALLY compare protocol, resolve, ready, report AND diagnose — or did it stub some? Are the comparisons meaningful (normalized on semantics) rather than trivially-equal empty strings? Does `hb next` really return the resolver's decision? Would a real divergence between node and python make the test fail?" },
+      "criteria": [
+        { "id": "pf0c1", "desc": "parity passes end to end", "cmd": "bash \"$PROJECT_DIR/tests/parity.sh\" >/dev/null 2>&1" },
+        { "id": "pf0c2", "desc": "parity now covers protocol, next, ready, report, diagnose", "cmd": "out=$(bash \"$PROJECT_DIR/tests/parity.sh\"); for s in protocol next ready report diagnose; do echo \"$out\" | grep -q \"$s\" || exit 1; done" },
+        { "id": "pf0c3", "desc": "py `hb next` returns the resolver decision", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"import heartbeat.cli as c; import inspect; assert 'next' in inspect.getsource(c.main)\"" }
+      ]
+    },
+    "GATE_PF1": {
+      "desc": "The plan acceptance step audits and refutes before proposing.",
+      "criteria": [
+        { "id": "pf1c1", "desc": "plan acceptance runs hb-audit", "cmd": "cd \"$PROJECT_DIR\" && awk '/heartbeat plan/{f=1} f&&/hb-audit/{print; found=1} END{exit !found}' plugin/skills/heartbeat/SKILL.md" },
+        { "id": "pf1c2", "desc": "suite asserts the folded acceptance (T44)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T44" }
+      ]
+    },
+    "GATE_PF2": {
+      "desc": "Documented and versioned; both suites + parity green.",
+      "criteria": [
+        { "id": "pf2c1", "desc": "version bumped to 1.11.0", "cmd": "grep -q '1.11.0' \"$PROJECT_DIR/plugin/.claude-plugin/plugin.json\"" },
+        { "id": "pf2c2", "desc": "node suite green", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" >/dev/null 2>&1" },
+        { "id": "pf2c3", "desc": "python suite green", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q >/dev/null 2>&1" }
+      ]
+    }
+  }
+}

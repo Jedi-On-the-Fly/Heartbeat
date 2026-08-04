@@ -587,8 +587,8 @@ check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
   '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ]'
 check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
-check "T39.4 plugin version bumped to 1.10.0" \
-  'grep -q "1.10.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+check "T39.4 plugin version bumped to 1.11.0" \
+  'grep -q "1.11.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 
 echo "═══ T40 — parallel fan-out (v1.8) ═══"
 # In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
@@ -649,6 +649,13 @@ if command -v python3 >/dev/null 2>&1; then
 else
   echo "  (python3 absent — T43 skipped)"
 fi
+
+echo "═══ T44 — /heartbeat plan acceptance folds in the auditor (v1.11) ═══"
+SK="$HB_SRC/plugin/skills/heartbeat/SKILL.md"
+check "T44.1 plan acceptance runs hb-audit (gate quality)" \
+  'awk "/heartbeat plan/{f=1} f&&/hb-audit/{found=1} END{exit !found}" "$SK"'
+check "T44.2 plan acceptance requires refuting the plan (SOUND) before proposing" \
+  'grep -q "refute the plan" "$SK" && grep -q "SOUND" "$SK"'
 
 echo ""
 echo "═══════════════════════════════════════"

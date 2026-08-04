@@ -48,6 +48,7 @@ def main(argv=None):
         p = sub.add_parser(name); p.add_argument("task"); p.add_argument("reason", nargs="*"); _add_dir(p)
     p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail"]); p.add_argument("note", nargs="*"); _add_dir(p)
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
+    p = sub.add_parser("next"); _add_dir(p)
     p = sub.add_parser("exec"); p.add_argument("action", nargs="?", default="run"); p.add_argument("--parallel", type=int, default=0); _add_dir(p)
 
     args = ap.parse_args(argv)
@@ -163,6 +164,9 @@ def main(argv=None):
     elif args.cmd == "ready":
         s = st.project(st.read_events(hb), st.read_dag(hb))
         print(json.dumps(rv.ready_tasks(s, st.read_dag(hb), hb, args.n)))
+    elif args.cmd == "next":
+        s = st.project(st.read_events(hb), st.read_dag(hb))
+        print(json.dumps(rv.resolve(s, st.read_dag(hb), hb)))
     elif args.cmd == "exec":
         from . import executor
         if args.parallel:
