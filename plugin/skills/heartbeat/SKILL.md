@@ -218,7 +218,7 @@ clones. For **local-only** projects, use one of:
 ### `/heartbeat help`
 Reply with:
 ```
-*HeartBeat v1.11 — commands:*
+*HeartBeat — commands:*
 • /heartbeat init <dir>     — bootstrap a new project
 • /heartbeat plan <dir>     — convert a plan into a lint-clean dag.json
 • /heartbeat status <dir>   — progress report

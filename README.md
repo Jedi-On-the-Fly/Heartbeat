@@ -16,7 +16,7 @@ tick.sh (every 15–30 min)              ← Stage A: pure bash, priority checks
   └─ wakeAgent: true  → the LLM is invoked ← Stage B: only when needed
 ```
 
----
+
 
 ## Install on Claude Code
 
@@ -34,7 +34,7 @@ bash scripts/install.sh
 
 Then `/heartbeat help`.
 
----
+
 
 ## Quick start
 
@@ -47,7 +47,7 @@ Then `/heartbeat help`.
 /loop 15m /heartbeat tick <dir>    # drive it autonomously
 ```
 
----
+
 
 ## Layout after bootstrap
 
@@ -67,7 +67,7 @@ my-project/
     └── leases/            ← per-task session claims
 ```
 
----
+
 
 ## dag.json structure
 
@@ -115,7 +115,7 @@ my-project/
 Author a DAG from a written plan with `/heartbeat plan` — it enforces spec-first
 tasks, behavioral gates, adversarial review on sensitive gates, and lints clean.
 
----
+
 
 ## Stage A — tick.sh priority checks
 
@@ -123,7 +123,7 @@ tasks, behavioral gates, adversarial review on sensitive gates, and lints clean.
 1. Handout lock     atomic mkdir; serializes concurrent ticks (released before Stage B)
 2. Integrity        corrupt state.json → self-heal via rebuild; corrupt dag.json → wake dag_corrupted
 2.5 Lease reclaim   a stale/hung lease (heartbeat gone) is reclaimed → task returns to pending
-2.6 Rot             a COMPLETED phase's gate references a deleted file → wake gate_rot (v1.6)
+2.6 Rot             a COMPLETED phase's gate references a deleted file → wake gate_rot
 3. Circuit breaker  build_stuck_count ≥ 5, or objective no-progress → wake build_stuck (single alert)
 4. Drift            SHA256 of WATCH_PATHS; unsanctioned change → wake unsanctioned_drift
 5. Gate errors      a previously failed gate → wake gate_blocked
@@ -134,7 +134,7 @@ tasks, behavioral gates, adversarial review on sensitive gates, and lints clean.
 
 Output is always `{ "wakeAgent": true|false, "data": { "reason": "...", ... } }`.
 
----
+
 
 ## Stage B — the tick protocol
 
@@ -156,7 +156,7 @@ node .hb/hb.js rebuild             # reproject state.json from the log (sync / r
 node .hb/hb.js state               # print the projected state
 ```
 
-**Self-describing ticks (v1.7):** every wake carries the exact next action in
+**Self-describing ticks:** every wake carries the exact next action in
 `data.action`, so any driver knows what to do from the JSON alone. The protocol is
 one source of truth (`hb protocol`), rendered to `.hb/PROTOCOL.md` at bootstrap and
 embedded in ticks. When blocked, `hb diagnose` computes the root cause (failing
@@ -183,7 +183,7 @@ steps — you are never left guessing.
 lock releases automatically; a crashed session's lease is reclaimed after
 `HEARTBEAT_STALE_S` (or `LOCK_STALE_S` if it never heartbeat).
 
----
+
 
 ## Adversarial gates (the second agent)
 
@@ -205,7 +205,7 @@ This is the primary defense against an agent grading its own homework. Combine i
 with **spec-first** tasks (each phase's first task authors its gate's test spec from
 the checklist, before the implementation tasks).
 
----
+
 
 ## Parallel execution
 
@@ -216,9 +216,9 @@ is claimed twice). Parallelism only applies within a phase (gates serialize
 phases), and works best on file-disjoint slices — foundation phases are usually
 better serial. `HB_MAX_CONCURRENCY` caps the tick's serial handout (default 1).
 
----
 
-## Gate integrity & liveness (v1.5–v1.6)
+
+## Gate integrity & liveness
 
 Gates have both **safety** (a phase can't advance until its criteria pass) and
 **liveness** (no gate-related state silently persists as wrong):
@@ -235,7 +235,7 @@ Gates have both **safety** (a phase can't advance until its criteria pass) and
 - **Review liveness** — an adversarial review that never resolves is caught by the
   no-progress breaker and escalated as `review_stuck`.
 
----
+
 
 ## Version control
 
@@ -250,7 +250,7 @@ git reset --hard GATE_P3      # roll the project back to when P3's gate last pas
 Commits use a fallback identity, so they work even if git user isn't configured.
 Disable auto-commit with `HB_GIT_AUTOCOMMIT=0`.
 
----
+
 
 ## Config (environment variables)
 
@@ -266,7 +266,7 @@ Disable auto-commit with `HB_GIT_AUTOCOMMIT=0`.
 | `HB_NO_GIT` | (empty) | Disable git init + commit-on-gate-pass + hook |
 | `HB_GIT_AUTOCOMMIT` | 1 | 0 disables the commit on gate pass |
 
----
+
 
 ## Scheduling
 
@@ -277,7 +277,7 @@ Disable auto-commit with `HB_GIT_AUTOCOMMIT=0`.
 2. **In-session:** `/loop 20m /heartbeat tick <dir>` — while a session is open.
 3. **System cron:** `*/20 * * * * cd <dir> && claude -p "run bash .hb/tick.sh and act on data.reason per the tick protocol"`.
 
----
+
 
 ## Tests
 
@@ -285,19 +285,8 @@ Disable auto-commit with `HB_GIT_AUTOCOMMIT=0`.
 bash tests/run-tests.sh      # full regression suite (all green)
 ```
 
----
 
-## Changelog (high level)
 
-| Version | Theme |
-|---|---|
-| v1.1–v1.2 | Reliability + static DAG validation, reports, visualization |
-| v1.3 | Event-sourced state + `hb` CLI, objective no-progress detection, gate timeout, per-task leases + bounded concurrency, mid-session heartbeat |
-| v1.4 | Adversarial gates (second agent), parallel-ready (`hb ready`), lint warnings, notify hook, git init + commit-on-gate-pass, `/heartbeat plan` |
-| v1.5 | Gate integrity: `hb doctor` (rot detection), re-verifiable gates (`gate.sh --check/--all`) |
-| v1.6 | Gate liveness: `review_stuck` (stalled-review guard), automatic rot detection (per-tick + pre-commit hook) |
-| v1.7 | Never left guessing: self-describing ticks (`data.action`), one-source protocol (`hb protocol` + `.hb/PROTOCOL.md`), computed root-cause recovery (`hb diagnose`), SessionStart hook |
-| v1.8 | Pluggable Stage B: `hb-exec.js` + `/heartbeat exec` — dispatch each task to a backend agent (`claude-code`/`agno`/`crewai`/`ollama`/`script`) over a JSON wire protocol; driver-mediated state, lease heartbeat pump, escalate-only, per-task attempt cap, strict-gate mode; **worktree-isolated parallel fan-out**; live local-model runs (`tests/real-backend.sh`) |
-| v1.9 | Adversarial DAG review: `hb-audit.js` + `/heartbeat audit` — refute-don't-confirm applied to the *plan* (hollow/ungated/existence/vacuous/nondeterministic/off-phase gates). Ported to both runtimes. Also: a full **pure-Python port** (`py/`), pip-installable, zero node/bash |
-| v1.10 | Agent DAG review (`hb audit --agent` — a backend refutes the plan's semantics); behavioral default template; **node↔python parity test** (`tests/parity.sh`) over lint/audit/state |
-| v1.11 | `/heartbeat plan` folds in `hb-audit` + a refutation before sign-off (no hollow plans proposed); **full-coverage parity** (lint/audit/protocol/resolve/ready/report/diagnose/state) |
+## Version and changes
+
+See [STATUS.md](STATUS.md) for the changelog. The version is single-sourced: the plugin's in `plugin/.claude-plugin/plugin.json` and the Python package's in `py/pyproject.toml`; `.claude-plugin/marketplace.json` mirrors the plugin version (marketplace format). No version number is restated in prose.

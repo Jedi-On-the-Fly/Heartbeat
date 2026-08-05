@@ -15,3 +15,11 @@
 
 # OS / editor cruft
 .DS_Store
+
+# Python build / cache artifacts (never source)
+**/__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
