@@ -799,6 +799,16 @@ else
   echo "  (python3 absent — T54 skipped)"
 fi
 
+grp "T55 — parity self-test + recovery proofs (docs/howto)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T55.1 parity.sh flags an injected node<->python divergence (self-test)" \
+    'bash "'"$GEX"'/parity-selftest.sh" 2>&1 | grep -q "PARITY-SELFTEST-CAUGHT"'
+  check "T55.2 recovery: doctor flags drift + rot, rebuild heals (real CLI)" \
+    'bash "'"$GEX"'/recovery-demo.sh" 2>&1 | grep -q "RECOVERY-GUARDS-OK"'
+else
+  echo "  (python3 absent — T55 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

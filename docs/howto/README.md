@@ -15,6 +15,10 @@ just prose.
   verdict; well under the timeout, never a flaky timing bound.
 - [Write gates for non-code work](write-gates-for-non-code-work.md) — gate documents,
   datasets, and migrations on content and shape, not `test -f`.
+- [Keep the two runtimes in parity](keep-the-runtimes-in-parity.md) — the node≡python
+  contract, and proving the parity alarm actually fires.
+- [Recover a dead or corrupted run](recover-a-dead-or-corrupted-run.md) — the event log is
+  truth; rebuild heals, doctor flags drift and rot.
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).

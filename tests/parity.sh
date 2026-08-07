@@ -9,7 +9,11 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 command -v python3 >/dev/null 2>&1 || { echo "python3 absent — parity skipped"; exit 0; }
 FAIL=0
-PY="PYTHONPATH=$ROOT/py/src python3 -m heartbeat.cli"
+# HB_PY_SRC overrides the Python runtime under test (default: this repo's py/src). The
+# seam lets a self-test substitute a mutated copy to prove parity actually flags a
+# node<->python divergence; default behavior is unchanged. See
+# docs/howto/keep-the-runtimes-in-parity.md.
+PY="PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -m heartbeat.cli"
 
 # --- audit parity (errors, warns, sorted rule set) ---
 a_node(){ node "$ROOT/plugin/templates/hb-audit.js" "$1" --json | node -pe 'const d=JSON.parse(require("fs").readFileSync(0));JSON.stringify([d.errors,d.warns,d.findings.map(x=>x.rule).sort()])'; }

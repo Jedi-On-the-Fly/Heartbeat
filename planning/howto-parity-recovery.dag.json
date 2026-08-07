@@ -1,0 +1,59 @@
+{
+  "_meta": {
+    "project": "howto-parity-recovery",
+    "note": "Two operator how-tos whose proofs are 'does the alarm actually go off?' negative tests of safety mechanisms we currently only watch pass. PR0: a parity self-test — inject a real node<->python divergence into a throwaway copy of the Python runtime (via a new HB_PY_SRC seam that leaves default behavior unchanged) and assert tests/parity.sh FLAGS it and names the diverging surface; today parity.sh is only ever seen to pass when equal, never proven to fail when it should. PR1: a recovery proof — drive the public hb CLI to corrupt state.json (doctor reports drift, rebuild heals), delete a completed gate's artifact (doctor reports rot), and confirm rebuild is idempotent. PR2: the two guides + index + a T55 group that enforces both demos so they cannot rot. Same dogfooded discipline: every claim a runnable proof, each phase refuted by a distinct actor."
+  },
+  "phases": [
+    {
+      "id": "PR0", "title": "Parity self-test (the alarm fires)", "gate_entry": null, "gate_exit": "GATE_PR0",
+      "tasks": [
+        { "id": "PR0T1", "title": "Add a test seam to parity.sh", "requires": [],
+          "description": "Add an HB_PY_SRC override to tests/parity.sh (default $ROOT/py/src; behavior unchanged) so a mutated copy of the Python runtime can be substituted — the seam that lets a divergence be injected without editing the real runtime. Verify tests/parity.sh still passes by default." },
+        { "id": "PR0T2", "title": "Write parity-selftest.sh", "requires": ["PR0T1"],
+          "description": "Write docs/howto/gate-examples/parity-selftest.sh: confirm baseline tests/parity.sh is green, then copy the Python runtime, inject a deliberate node<->python divergence (a phantom lint error), run tests/parity.sh against the mutated copy via HB_PY_SRC, and assert the harness FLAGS it (non-zero exit, a divergence marked on the lint surface). Print PARITY-SELFTEST-CAUGHT only when the alarm fires on the real harness." }
+      ]
+    },
+    {
+      "id": "PR1", "title": "Recovery proof (drift + rot + rebuild)", "gate_entry": "GATE_PR0", "gate_exit": "GATE_PR1",
+      "tasks": [
+        { "id": "PR1T1", "title": "Write recovery-demo.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/recovery-demo.sh: via the public hb CLI stand up a project and complete a phase whose gate references an artifact, then exercise recovery — corrupt state.json and assert hb doctor reports the projection drift and hb rebuild heals it; delete the completed gate's artifact and assert hb doctor reports the rot ('no longer reproducible'); assert rebuild is idempotent (two rebuilds project identical state). Print RECOVERY-GUARDS-OK when all hold." }
+      ]
+    },
+    {
+      "id": "PR2", "title": "The two how-tos + wiring", "gate_entry": "GATE_PR1", "gate_exit": "GATE_PR2",
+      "tasks": [
+        { "id": "PR2T1", "title": "Write the two guides", "requires": [],
+          "description": "Write docs/howto/keep-the-runtimes-in-parity.md (the parity contract, what a shared surface is, intentional divergences, and proving the alarm fires; proof: parity-selftest.sh) and docs/howto/recover-a-dead-or-corrupted-run.md (event-log-is-truth, rebuild, doctor rot/drift; proof: recovery-demo.sh). Follow the project doc rules; link AGENTS rules 1 and 2 and planning/parity-notes.md rather than restating them." },
+        { "id": "PR2T2", "title": "Index + enforce", "requires": ["PR2T1"],
+          "description": "Add both guides to docs/howto/README.md; add a T55 group to tests/run-tests.sh that runs parity-selftest.sh and recovery-demo.sh and asserts their markers, so the proofs cannot rot." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_PR0": {
+      "desc": "parity.sh still passes by default, and a self-test proves it flags a real injected node<->python divergence.",
+      "review": { "prompt": "Refute that PR0 is done: does the HB_PY_SRC seam leave default parity behavior unchanged (not silently weaken it)? Does parity-selftest.sh inject a REAL runtime divergence (not just make python crash, which would trip parity for the wrong reason)? Is the non-zero exit actually due to the divergence, on the lint surface, and would the selftest ESCAPE-report if parity failed to catch it? Could it pass vacuously?" },
+      "criteria": [
+        { "id": "pr0c1", "desc": "parity is green by default (seam unchanged behavior)", "cmd": "bash \"$PROJECT_DIR/tests/parity.sh\" 2>&1 | grep -q 'PARITY OK'" },
+        { "id": "pr0c2", "desc": "the self-test proves parity flags an injected divergence", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/parity-selftest.sh\" 2>&1 | grep -q 'PARITY-SELFTEST-CAUGHT'" }
+      ]
+    },
+    "GATE_PR1": {
+      "desc": "The recovery demo drives the real runtime: doctor detects drift and rot, and rebuild heals and is idempotent.",
+      "review": { "prompt": "Refute that PR1 is done: does recovery-demo.sh drive the REAL hb CLI (not a mock)? Is each alarm load-bearing — would the drift check fail if state.json were NOT corrupted, and the rot check fail if the artifact were NOT deleted (so it is not asserting a constant)? Does rebuild actually heal (state matches the canonical projection), or does the demo pass vacuously?" },
+      "criteria": [
+        { "id": "pr1c1", "desc": "the recovery demo passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/recovery-demo.sh\" 2>&1 | grep -q 'RECOVERY-GUARDS-OK'" }
+      ]
+    },
+    "GATE_PR2": {
+      "desc": "Each guide points at a proof that runs; the index lists both; the suite enforces the demos.",
+      "review": { "prompt": "Refute that PR2 is done: does either guide claim a proof that does not run? Does either restate the enforced rules (AGENTS, parity-notes) rather than link them? Is either guide missing from the index? Does T55 actually run both demos and assert their markers?" },
+      "criteria": [
+        { "id": "pr2c1", "desc": "each guide references its runnable proof", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'parity-selftest' keep-the-runtimes-in-parity.md && grep -q 'recovery-demo' recover-a-dead-or-corrupted-run.md" },
+        { "id": "pr2c2", "desc": "the index lists both guides", "cmd": "for f in keep-the-runtimes-in-parity recover-a-dead-or-corrupted-run; do grep -q \"$f\" \"$PROJECT_DIR/docs/howto/README.md\" || exit 1; done" },
+        { "id": "pr2c3", "desc": "the node suite enforces the demos (T55 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T55 '" }
+      ]
+    }
+  }
+}
