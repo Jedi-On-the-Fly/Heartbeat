@@ -22,20 +22,24 @@ P="$TMP/proj"
 HB="$P/.hb"
 
 PASS=0; FAIL=0
+declare -A _GFAIL; _CURG=""; _ALLG=""
+# grp "<Tnn — title>" — start a group; enables an outcome marker (GROUPS-PASSED) so a
+# coverage gate can assert a group PASSED, not just that its header exists.
+grp(){ _CURG="${1%% *}"; case " $_ALLG " in *" $_CURG "*) ;; *) _ALLG="$_ALLG $_CURG";; esac; echo "═══ $1 ═══"; }
 ok(){ echo "  ✓ $1"; PASS=$((PASS+1)); }
-ko(){ echo "  ✗ $1"; FAIL=$((FAIL+1)); }
+ko(){ echo "  ✗ $1"; FAIL=$((FAIL+1)); [ -n "$_CURG" ] && _GFAIL["$_CURG"]=1; }
 check(){ if eval "$2" >/dev/null 2>&1; then ok "$1"; else ko "$1"; fi; }
 set_state(){ node -e "const fs=require('fs');const f=process.argv[1];const s=JSON.parse(fs.readFileSync(f,'utf8'));${1};fs.writeFileSync(f,JSON.stringify(s,null,2));" "$HB/state.json"; }
 tick(){ rm -rf "$HB/.lock"; bash "$HB/tick.sh"; }
 
-echo "═══ T1 — bootstrap (non-interactive) ═══"
+grp "T1 — bootstrap (non-interactive)"
 bash "$HB_SRC/plugin/bootstrap.sh" "$P" >/dev/null 2>&1 </dev/null
 check "T1.1 .hb/ created with the 6 files" \
   '[ -f "$HB/tick.sh" ] && [ -f "$HB/gate.sh" ] && [ -f "$HB/hb-next-task.js" ] && [ -f "$HB/dag.json" ] && [ -f "$HB/state.json" ] && [ -f "$HB/events.jsonl" ]'
 bash "$HB_SRC/plugin/bootstrap.sh" "$P" >/dev/null 2>&1 </dev/null
 check "T1.2 re-bootstrap without tty → clean refusal (no crash)" '[ $? -eq 0 ]'
 
-echo "═══ T2 — gate.sh out-of-the-box (bug #1) ═══"
+grp "T2 — gate.sh out-of-the-box (bug #1)"
 # v1.3: gate.sh now reprojects state (a passing gate advances the phase), so run
 # it on a dedicated throwaway project — the shared $HB must stay pristine for T3+.
 PG="$TMP/gate"; bash "$HB_SRC/plugin/bootstrap.sh" "$PG" >/dev/null 2>&1 </dev/null; HBG="$PG/.hb"
@@ -45,7 +49,7 @@ check "T2.2 the 2 criteria are evaluated (PROJECT_DIR set)" 'echo "$out" | grep 
 out=$(bash "$HBG/gate.sh" GATE_NONEXISTENT 2>&1); rc=$?
 check "T2.3 unknown gate → exit 2 + message" '[ "$rc" -eq 2 ] && echo "$out" | grep -q "Unknown gate"'
 
-echo "═══ T3 — resolver gate-aware (bug #2) ═══"
+grp "T3 — resolver gate-aware (bug #2)"
 set_state 's.completed_tasks=["P0T1","P0T2"]'
 next=$(node "$HB/hb-next-task.js" "$HB/state.json")
 check "T3.1 P0 done, gate NOT passed → gate_pending (not P1T1)" \
@@ -55,7 +59,7 @@ set_state 's.completed_phases=["P0"]'
 next=$(node "$HB/hb-next-task.js" "$HB/state.json")
 check "T3.3 phase P0 closed → P1T1 served" 'echo "$next" | grep -q P1T1'
 
-echo "═══ T4 — state.json corrupted → auto-repair (v1.3, #2) ═══"
+grp "T4 — state.json corrupted → auto-repair (v1.3, #2)"
 cp "$HB/state.json" "$TMP/state.bak"
 echo "{broken" > "$HB/state.json"
 out=$(tick)
@@ -69,7 +73,7 @@ check "T4.2 corruption without hb.js (pre-v1.3 project) → WAKE state_corrupted
 mv "$HB/hb.js.bak" "$HB/hb.js"
 cp "$TMP/state.bak" "$HB/state.json"
 
-echo "═══ T5 — leases & handout lock (v1.3, #5) ═══"
+grp "T5 — leases & handout lock (v1.3, #5)"
 set_state 's.completed_tasks=[];s.completed_phases=[];s.active_tasks=[]'; rm -rf "$HB/leases"
 out=$(tick)
 check "T5.1 tick with work → wakeAgent:true (next_task)" \
@@ -85,7 +89,7 @@ check "T5.4 expired lease → reclaim (lease_expired) + task re-served" \
   'grep -q lease_expired "$HB/events.jsonl" && echo "$out" | grep -q "\"wakeAgent\":true"'
 rm -rf "$HB/leases"
 
-echo "═══ T6 — circuit breaker (single alert) ═══"
+grp "T6 — circuit breaker (single alert)"
 set_state 's.build_stuck_count=5'
 out1=$(tick)
 check "T6.1 first tick → build_stuck wake" 'echo "$out1" | grep -q build_stuck && echo "$out1" | grep -q "\"wakeAgent\":true"'
@@ -96,13 +100,13 @@ set_state 's.build_stuck_count=0'
 tick >/dev/null
 check "T6.3 human reset → alert flag cleared" '[ ! -f "$HB/.stuck-alerted" ]'
 
-echo "═══ T7 — gate_blocked ═══"
+grp "T7 — gate_blocked"
 set_state 's.gate.errors=1'
 out=$(tick)
 check "T7.1 gate failing → gate_blocked wake" 'echo "$out" | grep -q gate_blocked'
 set_state 's.gate.errors=0'
 
-echo "═══ T8 — drift + freeze ═══"
+grp "T8 — drift + freeze"
 mkdir -p "$P/core"; echo "module.exports=1;" > "$P/core/a.js"
 sed -i 's|^WATCH_PATHS=.*|WATCH_PATHS="$PROJECT_DIR/core/*.js"|' "$HB/tick.sh"
 tick >/dev/null
@@ -114,7 +118,7 @@ bash "$HB/tick.sh" --freeze >/dev/null
 out=$(tick)
 check "T8.3 after --freeze → no more drift" 'echo "$out" | grep -qv unsanctioned_drift'
 
-echo "═══ T9 — all_done (single alert) ═══"
+grp "T9 — all_done (single alert)"
 set_state 's.completed_tasks=["P0T1","P0T2","P1T1","P1T2","P1T3"];s.completed_phases=["P0","P1"]'
 out1=$(tick)
 check "T9.1 project done → ONE all_done wake (final report)" 'echo "$out1" | grep -q all_done && echo "$out1" | grep -q "\"wakeAgent\":true"'
@@ -122,7 +126,7 @@ out2=$(tick)
 check "T9.2 subsequent ticks → project_complete, silence" \
   'echo "$out2" | grep -q project_complete && echo "$out2" | grep -q "\"wakeAgent\":false"'
 
-echo "═══ T10 — documentation consistency ═══"
+grp "T10 — documentation consistency"
 check "T10.1 README documents the tick checks and --freeze" \
   'grep -qi "priority checks" "$HB_SRC/README.md" && grep -q -- "--freeze" "$HB_SRC/README.md"'
 check "T10.2 STATUS is current (v1.6) and covers doctor/rot" \
@@ -130,7 +134,7 @@ check "T10.2 STATUS is current (v1.6) and covers doctor/rot" \
 check "T10.3 README documents the hb CLI tick protocol" \
   'grep -q "hb.js start" "$HB_SRC/README.md" && grep -qi "tick protocol" "$HB_SRC/README.md"'
 
-echo "═══ T11 — hb-lint (v1.2) ═══"
+grp "T11 — hb-lint (v1.2)"
 FX="$HB_SRC/tests/fixtures"
 check "T11.1 duplicate IDs detected" '! node "$HB_SRC/plugin/templates/hb-lint.js" "$FX/lint-dup-ids.json"'
 check "T11.2 cycle detected" '! node "$HB_SRC/plugin/templates/hb-lint.js" "$FX/lint-cycle.json"'
@@ -140,7 +144,7 @@ check "T11.5 phase >8 tasks = warning only" 'node "$HB_SRC/plugin/templates/hb-l
 check "T11.6 dag template valid" 'node "$HB_SRC/plugin/templates/hb-lint.js" "$HB_SRC/plugin/templates/dag.json"'
 check "T11.7 bootstrap lints the dag" 'grep -q hb-lint "$HB_SRC/plugin/bootstrap.sh" && [ -f "$HB/hb-lint.js" ]'
 
-echo "═══ T12 — deadlock & corrupted dag (v1.2) ═══"
+grp "T12 — deadlock & corrupted dag (v1.2)"
 next=$(node "$HB_SRC/plugin/templates/hb-next-task.js" "$FX/deadlock-missing-ref/state.json")
 check "T12.1 broken requires → deadlock diagnosed (dag_invalid)" 'echo "$next" | grep -q deadlock && echo "$next" | grep -q dag_invalid'
 next=$(node "$HB_SRC/plugin/templates/hb-next-task.js" "$FX/deadlock-orphan/state.json")
@@ -157,18 +161,18 @@ echo "{broken" > "$HB2/dag.json"
 rm -rf "$HB2/.lock"; out=$(bash "$HB2/tick.sh")
 check "T12.5 dag.json corrupted → dag_corrupted wake" 'echo "$out" | grep -q dag_corrupted'
 
-echo "═══ T13 — hb-report (v1.2) ═══"
+grp "T13 — hb-report (v1.2)"
 check "T13.1 text report generated with phases" 'node "$HB_SRC/plugin/templates/hb-report.js" "$HB" | grep -q "P0"'
 check "T13.2 --json report parseable" 'node "$HB_SRC/plugin/templates/hb-report.js" "$HB" --json > "$TMP/r.json" && node -e "JSON.parse(require(\"fs\").readFileSync(\"$TMP/r.json\",\"utf8\"))"'
 check "T13.3 incidents counted (T6 stuck visible)" 'node "$HB_SRC/plugin/templates/hb-report.js" "$HB" | grep -q circuit_breaker_tripped'
 
-echo "═══ T14 — hb-viz (v1.2) ═══"
+grp "T14 — hb-viz (v1.2)"
 node "$HB_SRC/plugin/templates/hb-viz.js" "$HB" >/dev/null
 check "T14.1 dag-view.html generated" '[ -f "$HB/dag-view.html" ]'
 check "T14.2 self-contained (no external URL)" '! grep -qE "https?://" "$HB/dag-view.html"'
 check "T14.3 task statuses embedded" 'grep -q "t-done" "$HB/dag-view.html" && grep -q P0T1 "$HB/dag-view.html"'
 
-echo "═══ T15 — packaging Claude Code (plugin + install script) ═══"
+grp "T15 — packaging Claude Code (plugin + install script)"
 check "T15.1 plugin.json valid + name=heartbeat" \
   'node -e "const m=JSON.parse(require(String.raw\`fs\`).readFileSync(process.argv[1]));process.exit(m.name===\"heartbeat\"?0:1)" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 check "T15.2 marketplace.json valid + lists heartbeat" \
@@ -186,7 +190,7 @@ check "T15.7 skill installed by script has concrete paths (var substituted)" \
 check "T15.8 skill documents /heartbeat plan (plan → dag.json conversion)" \
   'grep -q "/heartbeat plan" "$HB_SRC/plugin/skills/heartbeat/SKILL.md" && grep -q "Spec-first" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
 
-echo "═══ T16 — hb CLI & event-sourced projection (v1.3, #1/#2) ═══"
+grp "T16 — hb CLI & event-sourced projection (v1.3, #1/#2)"
 P16="$TMP/p16"; bash "$HB_SRC/plugin/bootstrap.sh" "$P16" >/dev/null 2>&1 </dev/null; H16="$P16/.hb"
 node "$H16/hb.js" start P0T1 >/dev/null; node "$H16/hb.js" done P0T1 >/dev/null
 check "T16.1 hb done → task in completed_tasks (derived from the log)" 'node "$H16/hb.js" state | grep -q "\"P0T1\""'
@@ -204,7 +208,7 @@ node -e "const fs=require(\"fs\");const f=\"$H16b/state.json\";const s=JSON.pars
 node "$H16b/hb.js" import >/dev/null
 check "T16.5 legacy migration (hb import) → log reconstructed (P0T1 done)" 'node "$H16b/hb.js" state | grep -q "\"P0T1\""'
 
-echo "═══ T17 — objective no-progress detection (v1.3, #3) ═══"
+grp "T17 — objective no-progress detection (v1.3, #3)"
 P17="$TMP/p17"; bash "$HB_SRC/plugin/bootstrap.sh" "$P17" >/dev/null 2>&1 </dev/null; H17="$P17/.hb"
 # simulate a woken agent that makes no progress AND releases its lease → re-served every tick
 t17(){ rm -rf "$H17/.lock" "$H17/leases"; STUCK_TICKS=3 bash "$H17/tick.sh"; }
@@ -220,14 +224,14 @@ o17c=$(t17)
 check "T17.3 progress (hb done) → counter reset, tick resumes" \
   'echo "$o17c" | grep -q next_task && [ ! -f "$H17/.noprogress-alerted" ]'
 
-echo "═══ T18 — gate criteria timeout (v1.3, #4) ═══"
+grp "T18 — gate criteria timeout (v1.3, #4)"
 P18="$TMP/p18"; bash "$HB_SRC/plugin/bootstrap.sh" "$P18" >/dev/null 2>&1 </dev/null; H18="$P18/.hb"
 node -e "const fs=require(\"fs\");const f=\"$H18/dag.json\";const d=JSON.parse(fs.readFileSync(f,\"utf8\"));d.gates.GATE_SLOW={desc:\"s\",criteria:[{id:\"S\",desc:\"hang\",cmd:\"sleep 10\"}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
 s18=$(date +%s); GATE_TIMEOUT_S=1 bash "$H18/gate.sh" GATE_SLOW >/dev/null 2>&1; rc18=$?; e18=$(date +%s)
 check "T18.1 slow criterion → gate blocked (exit 1)" '[ "$rc18" -eq 1 ]'
 check "T18.2 fast timeout (< 5s — no frozen tick)" '[ $((e18-s18)) -lt 5 ]'
 
-echo "═══ T19 — leases & bounded concurrency (v1.3, #5) ═══"
+grp "T19 — leases & bounded concurrency (v1.3, #5)"
 P19="$TMP/p19"; bash "$HB_SRC/plugin/bootstrap.sh" "$P19" >/dev/null 2>&1 </dev/null; H19="$P19/.hb"
 node -e "const fs=require(\"fs\");const f=\"$H19/dag.json\";const d=JSON.parse(fs.readFileSync(f,\"utf8\"));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'a',requires:[]},{id:'B',title:'b',requires:[]},{id:'C',title:'c',requires:[]}]}];d.gates={GATE_P0:{desc:'g',criteria:[{id:'g',desc:'ok',cmd:'true'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
 node -e "const fs=require(\"fs\");const f=\"$H19/state.json\";const s=JSON.parse(fs.readFileSync(f,\"utf8\"));s.completed_tasks=[];s.completed_phases=[];s.active_tasks=[];fs.writeFileSync(f,JSON.stringify(s,null,2))"
@@ -239,7 +243,7 @@ check "T19.3 no double-claim (atomic mkdir lease)" '! mkdir "$H19/leases/A" 2>/d
 f19=$(ls "$H19/leases" | head -1); node "$H19/hb.js" done "$f19" >/dev/null
 check "T19.4 hb done frees a slot → remaining task served" 'o=$(t19); echo "$o" | grep -q next_task'
 
-echo "═══ T20 — mid-session heartbeat (fast reclaim of hung leases) ═══"
+grp "T20 — mid-session heartbeat (fast reclaim of hung leases)"
 P20="$TMP/p20"; bash "$HB_SRC/plugin/bootstrap.sh" "$P20" >/dev/null 2>&1 </dev/null; H20="$P20/.hb"
 mkdir -p "$H20/leases/P0T1"
 node "$H20/hb.js" heartbeat P0T1 >/dev/null
@@ -256,7 +260,7 @@ rm -rf "$H20/.lock"; HEARTBEAT_STALE_S=120 bash "$H20/tick.sh" >/dev/null 2>&1
 check "T20.4 lease without beat & recent → kept (LOCK_STALE_S fallback, no false reclaim)" \
   '[ -d "$H20/leases/P0T4" ] && ! ( grep lease_expired "$H20/events.jsonl" | grep -q P0T4 )'
 
-echo "═══ T21 — hb-lint advisory warnings (v1.4, #1) ═══"
+grp "T21 — hb-lint advisory warnings (v1.4, #1)"
 LINT="$HB_SRC/plugin/templates/hb-lint.js"
 warns(){ node "$LINT" "$1" --json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write((JSON.parse(d).warnings||[]).join('\n')))"; }
 check "T21.1 dag template → 'skeleton' warning (placeholder)" \
@@ -270,7 +274,7 @@ check "T21.4 warnings do not change the exit (valid DAG → 0)" \
 check "T21.5 structural error → always exit 1" \
   '! node "$LINT" "$FX/lint-dup-ids.json" >/dev/null 2>&1'
 
-echo "═══ T22 — notify hook (v1.4, #2) ═══"
+grp "T22 — notify hook (v1.4, #2)"
 P22="$TMP/p22"; bash "$HB_SRC/plugin/bootstrap.sh" "$P22" >/dev/null 2>&1 </dev/null; H22="$P22/.hb"
 NF22="$TMP/notify22.log"; : > "$NF22"
 NCMD22="printf '%s|%s|%s\n' \"\$1\" \"\$2\" \"\$3\" >> $NF22"
@@ -290,7 +294,7 @@ out=$(HB_NOTIFY_CMD="nope_xyz; exit 7" bash "$H22/tick.sh" 2>&1); rc=$?
 check "T22.4 failing notify → never interrupts the tick" \
   '[ $rc -eq 0 ] && echo "$out" | grep -q build_stuck'
 
-echo "═══ T23 — hb ready & parallelism (v1.4, #4) ═══"
+grp "T23 — hb ready & parallelism (v1.4, #4)"
 P23="$TMP/p23"; bash "$HB_SRC/plugin/bootstrap.sh" "$P23" >/dev/null 2>&1 </dev/null; H23="$P23/.hb"
 node -e "const fs=require('fs');const f='$H23/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'a',requires:[]},{id:'B',title:'b',requires:[]},{id:'C',title:'c',requires:['A']}]}];d.gates={GATE_P0:{desc:'g',criteria:[{id:'g',desc:'ok',cmd:'true'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
 node "$H23/hb.js" rebuild >/dev/null
@@ -307,7 +311,7 @@ rm -rf "$H23/leases"; node "$H23/hb.js" start A >/dev/null; node "$H23/hb.js" do
 check "T23.4 dependency satisfied → task unblocked (B,C ready)" \
   'test "$(node "$H23/hb.js" ready | ids23)" = "B,C"'
 
-echo "═══ T24 — adversarial gate / second agent (v1.4, #3) ═══"
+grp "T24 — adversarial gate / second agent (v1.4, #3)"
 hasP0(){ node "$1" state | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.exit(JSON.parse(d).completed_phases.includes('P0')?0:1))"; }
 P24="$TMP/p24"; bash "$HB_SRC/plugin/bootstrap.sh" "$P24" >/dev/null 2>&1 </dev/null; H24="$P24/.hb"
 node -e "const fs=require('fs');const f='$H24/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'a',requires:[]}]}];d.gates={GATE_P0:{desc:'g',review:{prompt:'Refute that P0 is done'},criteria:[{id:'g',desc:'ok',cmd:'true'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
@@ -330,7 +334,7 @@ node "$H24b/hb.js" start P0T2 >/dev/null; node "$H24b/hb.js" done P0T2 >/dev/nul
 bash "$H24b/gate.sh" GATE_P0 >/dev/null 2>&1
 check "T24.6 back-compat: gate WITHOUT review → advances on deterministic pass alone" 'hasP0 "$H24b/hb.js"'
 
-echo "═══ T25 — DAG schema & per-task timing (v1.4, #5) ═══"
+grp "T25 — DAG schema & per-task timing (v1.4, #5)"
 SCHEMA="$HB_SRC/plugin/dag.schema.json"; TDAG="$HB_SRC/plugin/templates/dag.json"
 check "T25.1 dag.schema.json valid + required gates/phases" \
   'node -e "const s=require(\"$SCHEMA\");process.exit(s.type===\"object\"&&s.required.includes(\"gates\")&&s.required.includes(\"phases\")?0:1)"'
@@ -343,7 +347,7 @@ check "T25.3 --json report includes task_durations for P0T1" \
 check "T25.4 text report shows the task durations section" \
   'node "$HB_SRC/plugin/templates/hb-report.js" "$H25" | grep -qi "longest tasks"'
 
-echo "═══ T26 — git init at bootstrap & commit-on-gate-pass (v1.4) ═══"
+grp "T26 — git init at bootstrap & commit-on-gate-pass (v1.4)"
 if command -v git >/dev/null 2>&1; then
   PG26="$TMP/p26"; HB_NO_GIT="" bash "$HB_SRC/plugin/bootstrap.sh" "$PG26" >/dev/null 2>&1 </dev/null
   check "T26.1 bootstrap → git repository initialized" '[ -d "$PG26/.git" ]'
@@ -365,7 +369,7 @@ else
   echo "  (git absent — T26 skipped)"
 fi
 
-echo "═══ T27 — hb doctor : rot detection (v1.5) ═══"
+grp "T27 — hb doctor : rot detection (v1.5)"
 P27="$TMP/p27"; bash "$HB_SRC/plugin/bootstrap.sh" "$P27" >/dev/null 2>&1 </dev/null; H27="$P27/.hb"
 node -e "const fs=require('fs');const f='$H27/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'spec',description:'author tests/e2e/x.spec.js',requires:[]}]}];d.gates={GATE_P0:{desc:'g',criteria:[{id:'g1',desc:'spec',cmd:'node \"\$PROJECT_DIR/tests/e2e/x.spec.js\"'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
 node "$H27/hb.js" rebuild >/dev/null
@@ -377,7 +381,7 @@ check "T27.2 phase DONE + file removed → doctor reports rot (exit 1)" '! node 
 check "T27.3 doctor names the missing file + 'reproducible'" \
   'o=$(node "$H27/hb.js" doctor 2>&1 || true); echo "$o" | grep -q "x.spec.js" && echo "$o" | grep -qi reproducible'
 
-echo "═══ T28 — gate.sh --check / --all read-only (v1.5) ═══"
+grp "T28 — gate.sh --check / --all read-only (v1.5)"
 P28="$TMP/p28"; bash "$HB_SRC/plugin/bootstrap.sh" "$P28" >/dev/null 2>&1 </dev/null; H28="$P28/.hb"
 E28=$(wc -l < "$H28/events.jsonl")
 check "T28.1 --check GATE_P0 (passes) → exit 0" 'bash "$H28/gate.sh" --check GATE_P0 >/dev/null 2>&1'
@@ -387,7 +391,7 @@ check "T28.3 --check failing gate → exit 1" '! bash "$H28/gate.sh" --check GAT
 check "T28.4 --all re-evaluates all gates read-only (no event)" \
   'EB=$(wc -l < "$H28/events.jsonl"); bash "$H28/gate.sh" --all >/dev/null 2>&1; [ "$(wc -l < "$H28/events.jsonl")" -eq "$EB" ]'
 
-echo "═══ T29 — review no-progress → review_stuck (v1.6, thread 2) ═══"
+grp "T29 — review no-progress → review_stuck (v1.6, thread 2)"
 P29="$TMP/p29"; bash "$HB_SRC/plugin/bootstrap.sh" "$P29" >/dev/null 2>&1 </dev/null; H29="$P29/.hb"
 node -e "const fs=require('fs');const f='$H29/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'a',requires:[]}]}];d.gates={GATE_P0:{desc:'g',review:{prompt:'r'},criteria:[{id:'g',desc:'ok',cmd:'true'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
 node "$H29/hb.js" rebuild >/dev/null
@@ -402,7 +406,7 @@ node "$H29/hb.js" review GATE_P0 pass --artifact "$P29/refute.md" >/dev/null
 check "T29.3 hb review pass → phase advanced (P0)" \
   'node "$H29/hb.js" state | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>process.exit(JSON.parse(d).completed_phases.includes(\"P0\")?0:1))"'
 
-echo "═══ T30 — rot detection : wake at tick (v1.6, thread 1) ═══"
+grp "T30 — rot detection : wake at tick (v1.6, thread 1)"
 P30="$TMP/p30"; bash "$HB_SRC/plugin/bootstrap.sh" "$P30" >/dev/null 2>&1 </dev/null; H30="$P30/.hb"
 node -e "const fs=require('fs');const f='$H30/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.phases=[{id:'P0',title:'P',gate_entry:null,gate_exit:'GATE_P0',tasks:[{id:'A',title:'a',description:'tests/x.spec.js',requires:[]}]}];d.gates={GATE_P0:{desc:'g',criteria:[{id:'g',desc:'ok',cmd:'node \"\$PROJECT_DIR/tests/x.spec.js\"'}]}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
 node "$H30/hb.js" rebuild >/dev/null
@@ -416,7 +420,7 @@ check "T30.2 next tick → gate_rot_waiting (silence)" \
 check "T30.3 HB_ROT_CHECK=0 → no gate_rot" \
   'rm -rf "$H30/.lock" "$H30/.rot-alerted"; HB_ROT_CHECK=0 bash "$H30/tick.sh" | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>process.exit(/gate_rot/.test(JSON.parse(d).data.reason)?1:0))"'
 
-echo "═══ T31 — pre-commit rot guard (v1.6, thread 1) ═══"
+grp "T31 — pre-commit rot guard (v1.6, thread 1)"
 if command -v git >/dev/null 2>&1; then
   P31="$TMP/p31"; HB_NO_GIT="" bash "$HB_SRC/plugin/bootstrap.sh" "$P31" >/dev/null 2>&1 </dev/null; H31="$P31/.hb"
   check "T31.1 pre-commit hook installed" '[ -x "$P31/.git/hooks/pre-commit" ]'
@@ -432,7 +436,7 @@ else
   echo "  (git absent — T31 skipped)"
 fi
 
-echo "═══ T32 — protocol source of truth (v1.7, #1) ═══"
+grp "T32 — protocol source of truth (v1.7, #1)"
 P32="$TMP/p32"; bash "$HB_SRC/plugin/bootstrap.sh" "$P32" >/dev/null 2>&1 </dev/null; H32="$P32/.hb"
 check "T32.1 hb protocol lists all reasons" 'test "$(node "$H32/hb.js" protocol | wc -l)" -ge 12'
 check "T32.2 hb protocol <reason> returns that reason" 'node "$H32/hb.js" protocol review_pending | grep -q REFUTE'
@@ -442,7 +446,7 @@ check "T32.4 --md renders a table" \
   'node "$H32/hb.js" protocol --md | grep -q "tick protocol" && node "$H32/hb.js" protocol --md | grep -q next_task'
 check "T32.5 unknown reason → exit 1" '! node "$H32/hb.js" protocol nope >/dev/null 2>&1'
 
-echo "═══ T33 — self-describing ticks + PROTOCOL.md (v1.7, #1) ═══"
+grp "T33 — self-describing ticks + PROTOCOL.md (v1.7, #1)"
 P33="$TMP/p33"; bash "$HB_SRC/plugin/bootstrap.sh" "$P33" >/dev/null 2>&1 </dev/null; H33="$P33/.hb"
 check "T33.1 next_task tick embeds data.action" \
   'rm -rf "$H33/.lock"; bash "$H33/tick.sh" | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>{const j=JSON.parse(d);process.exit(j.data.action&&/hb start/.test(j.data.action)?0:1)})"'
@@ -459,7 +463,7 @@ check "T33.4 review_pending tick embeds a REFUTE action" \
 check "T33.5 every wake reason is covered by PROTOCOL (drift guard)" \
   'node -e "const {PROTOCOL}=require(\"$HB_SRC/plugin/templates/hb.js\");const need=[\"next_task\",\"gate_pending\",\"review_pending\",\"gate_blocked\",\"deadlock\",\"unsanctioned_drift\",\"gate_rot\",\"build_stuck\",\"review_stuck\",\"all_done\",\"state_corrupted\",\"dag_corrupted\"];process.exit(need.every(r=>PROTOCOL[r])?0:1)"'
 
-echo "═══ T34 — hb diagnose : computed root-cause (v1.7, #2) ═══"
+grp "T34 — hb diagnose : computed root-cause (v1.7, #2)"
 P34="$TMP/p34"; bash "$HB_SRC/plugin/bootstrap.sh" "$P34" >/dev/null 2>&1 </dev/null; H34="$P34/.hb"
 node -e "const fs=require('fs');const f='$H34/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GATE_P0.criteria=[{id:'G0_1',desc:'must exist',cmd:'test -f \"\$PROJECT_DIR/nope.txt\"'}];fs.writeFileSync(f,JSON.stringify(d,null,2))"
 node "$H34/hb.js" rebuild >/dev/null; bash "$H34/gate.sh" GATE_P0 >/dev/null 2>&1
@@ -484,7 +488,7 @@ else
   echo "  (git absent — T34.5 skipped)"
 fi
 
-echo "═══ T35 — SessionStart hook (v1.7, #1) ═══"
+grp "T35 — SessionStart hook (v1.7, #1)"
 check "T35.1 hooks.json valid + registers SessionStart" \
   'node -e "const h=require(\"$HB_SRC/plugin/hooks/hooks.json\");process.exit(h.hooks&&h.hooks.SessionStart?0:1)"'
 P35="$TMP/p35"; bash "$HB_SRC/plugin/bootstrap.sh" "$P35" >/dev/null 2>&1 </dev/null
@@ -493,7 +497,7 @@ check "T35.2 hook fires (prints pointer) on a .hb/ project" \
 check "T35.3 hook is silent on a non-HeartBeat dir" \
   '[ -z "$(CLAUDE_PROJECT_DIR="$TMP" bash "$HB_SRC/plugin/hooks/heartbeat-detect.sh")" ]'
 
-echo "═══ T36 — hb-exec driver: pluggable Stage B (v1.8) ═══"
+grp "T36 — hb-exec driver: pluggable Stage B (v1.8)"
 EXEC_SRC="$HB_SRC/plugin/templates/hb-exec.js"
 check "T36.1 hb-exec.js is requirable and exports run()" \
   'node -e "const m=require(\"'"$EXEC_SRC"'\");process.exit(typeof m.run===\"function\"?0:1)"'
@@ -551,7 +555,7 @@ set_dag "$H36f" "d.phases=[{id:'F0',title:'p',gate_entry:null,gate_exit:'GF0',ta
 out36f=$(STUB_REFUTE=true HB_EXEC_CMD="bash $STUB" HB_EXEC_MAX_ITERS=25 node "$H36f/hb-exec.js" run 2>&1)
 check "T36.8 refuter finds a hole → review fail → escalates gate_blocked" 'echo "$out36f" | grep -q "STOP: gate_blocked"'
 
-echo "═══ T37 — Agno backend adapter (v1.8) ═══"
+grp "T37 — Agno backend adapter (v1.8)"
 AGNO="$HB_SRC/plugin/templates/executors/agno_exec.py"
 if command -v python3 >/dev/null 2>&1; then
   check "T37.1 agno_exec.py is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$AGNO"'\").read())"'
@@ -567,7 +571,7 @@ else
   echo "  (python3 absent — T37 skipped)"
 fi
 
-echo "═══ T38 — CrewAI backend adapter (v1.8) ═══"
+grp "T38 — CrewAI backend adapter (v1.8)"
 CREW="$HB_SRC/plugin/templates/executors/crewai_exec.py"
 if command -v python3 >/dev/null 2>&1; then
   check "T38.1 crewai_exec.py is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$CREW"'\").read())"'
@@ -583,17 +587,17 @@ else
   echo "  (python3 absent — T38 skipped)"
 fi
 
-echo "═══ T39 — packaging: bootstrap ships the executor (v1.8) ═══"
+grp "T39 — packaging: bootstrap ships the executor (v1.8)"
 P39="$TMP/p39"; bash "$HB_SRC/plugin/bootstrap.sh" "$P39" >/dev/null 2>&1 </dev/null
 check "T39.1 bootstrap copies hb-exec.js into .hb/" '[ -f "$P39/.hb/hb-exec.js" ]'
 check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
   '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ] && [ -f "$P39/.hb/executors/langgraph_exec.py" ] && [ -f "$P39/.hb/executors/openai_agents_exec.py" ] && [ -f "$P39/.hb/executors/autogen_exec.py" ] && [ -f "$P39/.hb/executors/smolagents_exec.py" ] && [ -f "$P39/.hb/executors/pydanticai_exec.py" ]'
 check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
-check "T39.4 plugin version bumped to 1.15.0" \
-  'grep -q "1.15.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+check "T39.4 plugin version bumped to 1.16.0" \
+  'grep -q "1.16.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 
-echo "═══ T40 — parallel fan-out (v1.8) ═══"
+grp "T40 — parallel fan-out (v1.8)"
 # In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
 P40="$TMP/p40"; bash "$HB_SRC/plugin/bootstrap.sh" "$P40" >/dev/null 2>&1 </dev/null; H40="$P40/.hb"
 set_dag "$H40" "d.phases=[{id:'PA',title:'fan',gate_entry:null,gate_exit:'GPA',tasks:[{id:'PA1',title:'write PA1 to done.log',requires:[]},{id:'PA2',title:'write PA2 to done.log',requires:[]},{id:'PA3',title:'write PA3 to done.log',requires:[]}]}];d.gates={GPA:{desc:'all three',criteria:[{id:'c',desc:'all recorded',cmd:'grep -q PA1 \"\$PROJECT_DIR/done.log\" && grep -q PA2 \"\$PROJECT_DIR/done.log\" && grep -q PA3 \"\$PROJECT_DIR/done.log\"'}]}}"
@@ -615,7 +619,7 @@ else
   echo "  (git absent — T40.3/T40.4 skipped)"
 fi
 
-echo "═══ T41 — Ollama backend adapter (v1.8) ═══"
+grp "T41 — Ollama backend adapter (v1.8)"
 OLL="$HB_SRC/plugin/templates/executors/ollama_exec.py"
 if command -v python3 >/dev/null 2>&1; then
   check "T41.1 ollama_exec.py is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$OLL"'\").read())"'
@@ -628,7 +632,7 @@ else
   echo "  (python3 absent — T41 skipped)"
 fi
 
-echo "═══ T42 — DAG auditor: gate-quality (adversarial plan review) ═══"
+grp "T42 — DAG auditor: gate-quality (adversarial plan review)"
 AUD="$HB_SRC/plugin/templates/hb-audit.js"
 FIX="$HB_SRC/planning/audit-fixtures"
 check "T42.1 hb-audit.js is requirable and exports audit()" \
@@ -644,7 +648,7 @@ check "T42.5 a good (behavioral) DAG passes clean, no errors" \
 check "T42.6 a phase with a behavioral criterion is NOT hollow even with a sibling test -f" \
   'node -e "const {audit}=require(\"'"$AUD"'\");const d={phases:[{id:\"P\",gate_exit:\"G\",tasks:[{id:\"t\",title:\"x\"}]}],gates:{G:{criteria:[{id:\"a\",cmd:\"grep -q ok f\"},{id:\"b\",cmd:\"test -f f\"}]}}};process.exit(audit(d).errors===0?0:1)"'
 
-echo "═══ T43 — node ↔ python parity (lint / audit / state projection) ═══"
+grp "T43 — node ↔ python parity (lint / audit / state projection)"
 if command -v python3 >/dev/null 2>&1; then
   check "T43.1 node ≡ python on all parity fixtures" 'bash "$HB_SRC/tests/parity.sh" >/dev/null 2>&1'
   check "T43.2 parity covers audit, lint, and the state projection" \
@@ -653,14 +657,14 @@ else
   echo "  (python3 absent — T43 skipped)"
 fi
 
-echo "═══ T44 — /heartbeat plan acceptance folds in the auditor (v1.11) ═══"
+grp "T44 — /heartbeat plan acceptance folds in the auditor (v1.11)"
 SK="$HB_SRC/plugin/skills/heartbeat/SKILL.md"
 check "T44.1 plan acceptance runs hb-audit (gate quality)" \
   'awk "/heartbeat plan/{f=1} f&&/hb-audit/{found=1} END{exit !found}" "$SK"'
 check "T44.2 plan acceptance requires refuting the plan (SOUND) before proposing" \
   'grep -q "refute the plan" "$SK" && grep -q "SOUND" "$SK"'
 
-echo "═══ T45 — review-evidence hardening (holes stay closed) ═══"
+grp "T45 — review-evidence hardening (holes stay closed)"
 P45="$TMP/p45"; bash "$HB_SRC/plugin/bootstrap.sh" "$P45" >/dev/null 2>&1 </dev/null; H45="$P45/.hb"
 # a criteria-less gate must FAIL at the runtime, not just in audit
 set_dag "$H45" "d.gates.GEMPTY={desc:'empty',criteria:[]};d.phases.push({id:'PE',title:'e',gate_entry:'GATE_P1',gate_exit:'GEMPTY',tasks:[{id:'PET1',title:'t',requires:[]}]})"
@@ -694,7 +698,7 @@ set_dag "$H45c" "d.gates.GS0.criteria=[{id:'c',desc:'coin',cmd:'[ \$((RANDOM % 2
 check "T45.10 auditor flags arithmetic-context RANDOM as nondeterministic" \
   'node "$HB_SRC/plugin/templates/hb-audit.js" "$H45c/dag.json" 2>&1 | grep -qi "nondetermin"'
 
-echo "═══ T46 — review substance & identity (self-review) ═══"
+grp "T46 — review substance & identity (self-review)"
 P46="$TMP/p46"; bash "$HB_SRC/plugin/bootstrap.sh" "$P46" >/dev/null 2>&1 </dev/null; H46="$P46/.hb"
 set_dag "$H46" "d.phases=[{id:'A0',title:'p',gate_entry:null,gate_exit:'GA0',tasks:[{id:'A0T1',title:'write A0T1 to done.log',requires:[]}]}];d.gates={GA0:{desc:'p',review:{prompt:'Refute A0.'},criteria:[{id:'c',desc:'done',cmd:'grep -q A0T1 \"\$PROJECT_DIR/done.log\"'}]}}"
 printf 'A0T1\n' > "$P46/done.log"
@@ -712,7 +716,7 @@ check "T46.4 distinct reviewer with anchored findings advances the phase" \
 check "T46.5 the review event records reviewer identity + citations" \
   'grep review "$H46/events.jsonl" | grep -q "\"reviewer\":\"agent-B\"" && grep review "$H46/events.jsonl" | grep -q "\"cited\""'
 
-echo "═══ T47 — LangGraph backend adapter ═══"
+grp "T47 — LangGraph backend adapter"
 LG="$HB_SRC/plugin/templates/executors/langgraph_exec.py"
 if command -v python3 >/dev/null 2>&1; then
   check "T47.1 langgraph_exec.py is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$LG"'\").read())"'
@@ -728,7 +732,7 @@ else
   echo "  (python3 absent — T47 skipped)"
 fi
 
-echo "═══ T48 — OpenAI Agents SDK backend adapter ═══"
+grp "T48 — OpenAI Agents SDK backend adapter"
 OA="$HB_SRC/plugin/templates/executors/openai_agents_exec.py"
 if command -v python3 >/dev/null 2>&1; then
   check "T48.1 openai_agents_exec.py is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$OA"'\").read())"'
@@ -747,7 +751,7 @@ fi
 for spec in "T49:autogen:autogen_exec.py:autogen_agentchat" "T50:smolagents:smolagents_exec.py:smolagents" "T51:pydantic-ai:pydanticai_exec.py:pydantic_ai"; do
   TN="${spec%%:*}"; rest="${spec#*:}"; NAME="${rest%%:*}"; rest="${rest#*:}"; SCRIPT="${rest%%:*}"; IMP="${rest#*:}"
   P="$HB_SRC/plugin/templates/executors/$SCRIPT"
-  echo "═══ $TN — ${NAME} backend adapter ═══"
+  grp "$TN — ${NAME} backend adapter"
   if command -v python3 >/dev/null 2>&1; then
     check "$TN.1 $SCRIPT is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$P"'\").read())"'
     if python3 -c "import $IMP" 2>/dev/null; then
@@ -762,6 +766,19 @@ for spec in "T49:autogen:autogen_exec.py:autogen_agentchat" "T50:smolagents:smol
     echo "  (python3 absent — $TN skipped)"
   fi
 done
+
+grp "T52 — outcome-asserting coverage marker"
+# A coverage gate should assert a group PASSED, not that its header exists. The marker
+# lists only groups with zero failing checks, so `grep 'GROUPS-PASSED:.* T3 '` fails on a
+# red T3 (unlike `grep T3`, which matches the header on a red suite too).
+check "T52.1 real groups are tracked (T1 in the group set)" \
+  'printf "%s" "$_ALLG" | tr " " "\n" | grep -qx T1'
+check "T52.2 the passed-set computation EXCLUDES a failed group, keeps a passed one" \
+  'declare -A gf; gf[TX]=1; all="TX TY"; gp=""; for g in $all; do [ -z "${gf[$g]:-}" ] && gp="$gp $g"; done; echo "$gp" | grep -qw TY && ! echo "$gp" | grep -qw TX'
+
+# Outcome marker: groups with zero failing checks (a coverage gate keys on this).
+_gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
+echo "GROUPS-PASSED:$_gp "
 
 echo ""
 echo "═══════════════════════════════════════"

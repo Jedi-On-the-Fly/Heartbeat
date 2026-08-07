@@ -53,7 +53,7 @@
       "criteria": [
         { "id": "da1c1", "desc": "flags a hollow gate", "cmd": "node \"$PROJECT_DIR/plugin/templates/hb-audit.js\" \"$PROJECT_DIR/planning/audit-fixtures/hollow.json\" | grep -q hollow_gate" },
         { "id": "da1c2", "desc": "passes a good DAG clean (exit 0)", "cmd": "node \"$PROJECT_DIR/plugin/templates/hb-audit.js\" \"$PROJECT_DIR/planning/audit-fixtures/good.json\"" },
-        { "id": "da1c3", "desc": "suite covers the auditor (T42)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T42" }
+        { "id": "da1c3", "desc": "suite covers the auditor (T42 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T42 '" }
       ]
     },
     "GATE_DA2": {

@@ -42,7 +42,7 @@
       "desc": "The plan acceptance step audits and refutes before proposing.",
       "criteria": [
         { "id": "pf1c1", "desc": "plan acceptance runs hb-audit", "cmd": "cd \"$PROJECT_DIR\" && awk '/heartbeat plan/{f=1} f&&/hb-audit/{print; found=1} END{exit !found}' plugin/skills/heartbeat/SKILL.md" },
-        { "id": "pf1c2", "desc": "suite asserts the folded acceptance (T44)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T44" }
+        { "id": "pf1c2", "desc": "suite asserts the folded acceptance (T44 group PASSED, not just present)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T44 '" }
       ]
     },
     "GATE_PF2": {

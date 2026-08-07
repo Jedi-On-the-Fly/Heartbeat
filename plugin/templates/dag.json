@@ -66,7 +66,7 @@
         {
           "id": "P1T3",
           "title": "Integration test",
-          "description": "Verify A and B work together correctly.",
+          "description": "Verify A and B work together, and write output/result.json with {\"status\":\"ok\"} when the run succeeds (the artifact GATE_P1 checks).",
           "requires": ["P1T1", "P1T2"]
         }
       ]

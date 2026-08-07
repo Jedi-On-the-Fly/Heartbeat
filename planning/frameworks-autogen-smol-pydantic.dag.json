@@ -42,7 +42,7 @@
       "review": { "prompt": "Refute that MB0 is done: do all three backends implement execute AND refute in both runtimes, or stubs? Do they lazy-import (degrade to protocol-valid JSON without the lib)? Is the subprocess script hygienic (only JSON on stdout)? Does the registry resolve autogen/smolagents/pydantic-ai (including the pydantic-ai→pydanticai module mapping)?" },
       "criteria": [
         { "id": "mb0c1", "desc": "py registry resolves all three", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"from heartbeat.backends import get; assert get('autogen') and get('smolagents') and get('pydantic-ai')\"" },
-        { "id": "mb0c2", "desc": "each implements execute and refute (py)", "cmd": "for m in autogen smolagents pydanticai; do grep -q 'def execute' \"$PROJECT_DIR/py/src/heartbeat/backends/$m.py\" && grep -q 'def refute' \"$PROJECT_DIR/py/src/heartbeat/backends/$m.py\" || exit 1; done" },
+        { "id": "mb0c2", "desc": "each backend imports and exposes callable execute and refute (py)", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"import importlib; assert all(callable(getattr(importlib.import_module('heartbeat.backends.'+n),f)) for n in ['autogen','smolagents','pydanticai'] for f in ('execute','refute'))\"" },
         { "id": "mb0c3", "desc": "hb-exec.js knows all three", "cmd": "for b in autogen smolagents pydantic-ai; do grep -q \"$b\" \"$PROJECT_DIR/plugin/templates/hb-exec.js\" || exit 1; done" }
       ]
     },
@@ -50,7 +50,7 @@
       "desc": "Degrade/validity tests pass in both suites.",
       "criteria": [
         { "id": "mb1c1", "desc": "python framework-backend tests pass", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_backends_frameworks.py" },
-        { "id": "mb1c2", "desc": "node suite covers the new executors (T49-T51)", "cmd": "for t in T49 T50 T51; do bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q $t || exit 1; done" }
+        { "id": "mb1c2", "desc": "node suite covers the new executors (T49-T51 groups PASSED)", "cmd": "out=$(bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1); for t in T49 T50 T51; do printf '%s' \"$out\" | grep -q \"GROUPS-PASSED:.* $t \" || exit 1; done" }
       ]
     },
     "GATE_MB2": {

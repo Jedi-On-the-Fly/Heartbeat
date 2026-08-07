@@ -50,7 +50,7 @@
       "review": { "prompt": "Refute that HP0 is done: can a phase still advance on a self-asserted review pass? Does the artifact gate reduce to real evidence, or can a padded/filler artifact pass? Is the self-review guard actually enforced in the executor path (distinct actors), or opt-in only? Does a zero-criteria gate really fail at runtime? Are T45/T46 hollow (asserting the stub, not the guard)?" },
       "criteria": [
         { "id": "hp0c1", "desc": "node suite green", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" >/dev/null 2>&1" },
-        { "id": "hp0c2", "desc": "suite covers the hardening (T45 + T46)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T46 && bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T45" }
+        { "id": "hp0c2", "desc": "suite covers the hardening (T45 + T46 groups PASSED)", "cmd": "out=$(bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1); printf '%s' \"$out\" | grep -q 'GROUPS-PASSED:.* T45 ' && printf '%s' \"$out\" | grep -q 'GROUPS-PASSED:.* T46 '" }
       ]
     },
     "GATE_HP1": {

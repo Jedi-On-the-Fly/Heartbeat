@@ -47,7 +47,16 @@ phases). Otherwise write a fresh DAG.
   references must be produced by some task's description (⇒ no dangling-artifact warnings).
 - **Behavioral gates** — `criteria[].cmd`: one-line bash, exit 0 = pass, `$PROJECT_DIR`
   available, deterministic <5s. Assert behavior (returns 200, row persisted, invariant
-  holds), not `test -f`.
+  holds), not `test -f`. Prefer running code over grepping a source string: a gate that
+  greps `def foo` passes on a hollow stub — instead **import and assert callable/shape**
+  (`python3 -c "import m; assert callable(m.foo)"`) or exercise the entrypoint and check
+  its output.
+- **Coverage gates assert the OUTCOME, not a name.** A gate that pipes a test suite to
+  `grep Tnn` passes even on a *red* suite (the header prints before the run fails, and the
+  pipe hides the exit code). Instead assert the group actually PASSED: `tests/run-tests.sh`
+  emits a machine-checkable `GROUPS-PASSED: …` line listing only groups with zero failing
+  checks, so gate on `grep -q 'GROUPS-PASSED:.* Tnn '` (trailing space) — or run just that
+  test and check its real result.
 - **Adversarial review** on sensitive gates — add `"review": { "prompt": "Refute that
   this phase is done: …" }` so a second agent must fail to refute before it advances.
 - **No hardcoded values/counts** — derive from source/registry. Validate the shape

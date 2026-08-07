@@ -1,7 +1,25 @@
 # STATUS — HeartBeat
 
-**Version:** v1.15 (AutoGen + smolagents + pydantic-ai backends, over v1.14)
+**Version:** v1.16 (gate-quality strengthening, over v1.15)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.16 — gate-quality strengthening
+
+Three fixes so a gate can't pass on unverified work — from an audit of our own gates.
+
+- **Outcome-asserting coverage.** `tests/run-tests.sh` now tracks per-group pass/fail
+  (`grp` helper) and prints a machine-checkable `GROUPS-PASSED:` line listing only groups
+  with zero failing checks. A coverage gate keyed on `GROUPS-PASSED:.* Tnn ` asserts the
+  group actually PASSED, closing the old `run-tests.sh | grep Tnn` hole (a bare-header grep
+  passes on a red suite because the header prints before the run fails and the pipe hides
+  the exit code). +T52.
+- **Behavioral over source-grep.** Rewrote our `planning/*.dag.json` gates: source-string
+  greps (`grep 'def X' file`) → import + assert callable/shape or exercise the entrypoint
+  and check protocol output; every coverage gate → the outcome marker. All lint- and
+  audit-clean.
+- **Clean exemplar.** The default template (`plugin/templates/dag.json`) now audits with
+  0 warnings (the `GATE_P1` gate_offphase is resolved — a P1 task produces the artifact the
+  gate checks). `/heartbeat plan` guidance documents both rules.
 
 ## v1.15 — AutoGen + smolagents + pydantic-ai backends
 

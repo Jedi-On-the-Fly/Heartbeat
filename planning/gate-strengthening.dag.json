@@ -1,0 +1,61 @@
+{
+  "_meta": {
+    "project": "gate-strengthening",
+    "note": "Three gate-quality strengthenings from the self-analysis: (1) outcome-asserting coverage — run-tests.sh emits a machine-checkable GROUPS-PASSED line so a coverage gate asserts a group PASSED, not that a header exists (a bare-header grep passes on a red suite through a pipe); (2) replace source-string grep gates with behavioral checks and rewrite our planning coverage gates to the marker; (3) clean the default template's gate_offphase so the exemplar users copy is warning-free. This plan's own gates model the new pattern: outcome-asserting (green + marker) and behavioral (audit warns==0), never a bare-header grep."
+  },
+  "phases": [
+    {
+      "id": "GS0", "title": "Outcome-asserting suite marker", "gate_entry": null, "gate_exit": "GATE_GS0",
+      "tasks": [
+        { "id": "GS0T1", "title": "Author T52 (marker)", "requires": [],
+          "description": "Add T52 to tests/run-tests.sh asserting the suite prints a GROUPS-PASSED line that lists a fully-passing group (outcome), so coverage gates can assert a group PASSED rather than that its header exists." },
+        { "id": "GS0T2", "title": "Emit GROUPS-PASSED", "requires": ["GS0T1"],
+          "description": "In tests/run-tests.sh add per-group pass tracking (a grp helper sets the current group; ko records a failure for it) and print GROUPS-PASSED: <ids of groups with zero failures> before the RESULT line." }
+      ]
+    },
+    {
+      "id": "GS1", "title": "Strengthen our gates + guidance", "gate_entry": "GATE_GS0", "gate_exit": "GATE_GS1",
+      "tasks": [
+        { "id": "GS1T1", "title": "Rewrite our gate criteria", "requires": [],
+          "description": "Rewrite the coverage-gate criteria in planning/*.dag.json from a bare-header grep (run-tests.sh | grep Tnn) to the outcome form (green AND GROUPS-PASSED:.* Tnn), and replace source-string grep gates (grep 'def X' file) with behavioral checks (import + assert callable/shape). Keep every DAG lint- and audit-clean." },
+        { "id": "GS1T2", "title": "Skill guidance", "requires": [],
+          "description": "Update the /heartbeat plan rules in plugin/skills/heartbeat/SKILL.md: coverage gates must assert the OUTCOME (a group PASSED via GROUPS-PASSED / a specific test run), not that a name exists; prefer behavioral checks over grepping a source string." }
+      ]
+    },
+    {
+      "id": "GS2", "title": "Template exemplar + docs + version", "gate_entry": "GATE_GS1", "gate_exit": "GATE_GS2",
+      "tasks": [
+        { "id": "GS2T1", "title": "Clean the template", "requires": [],
+          "description": "Fix plugin/templates/dag.json so hb-audit reports 0 warnings (resolve the GATE_P1 gate_offphase: have a P1 task produce output/result.json, or re-point the gate), keeping the T2 assertions green (GATE_P0 passes on a fresh bootstrap)." },
+        { "id": "GS2T2", "title": "Docs + version", "requires": ["GS2T1"],
+          "description": "Add a STATUS.md note; bump plugin/.claude-plugin/plugin.json + marketplace.json to 1.16.0 and py/pyproject.toml to 0.8.0 (update the version-bump test); rebuild and extract-test the package." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_GS0": {
+      "desc": "The suite emits an outcome marker; a coverage gate can assert a group PASSED.",
+      "review": { "prompt": "Refute that GS0 is done: does GROUPS-PASSED actually list only groups with ZERO failing checks (so a red group is excluded), or does it list every group regardless? Would a coverage gate keyed on GROUPS-PASSED fail if that group's checks fail? Is T52 hollow (asserting the header, not the outcome)?" },
+      "criteria": [
+        { "id": "gs0c1", "desc": "suite is green AND prints GROUPS-PASSED", "cmd": "out=$(bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1) && printf '%s' \"$out\" | grep -q 'GROUPS-PASSED:'" },
+        { "id": "gs0c2", "desc": "T52 itself is in the passed set (outcome-asserting)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T52'" }
+      ]
+    },
+    "GATE_GS1": {
+      "desc": "Our gates use the outcome marker/behavioral checks; guidance updated.",
+      "criteria": [
+        { "id": "gs1c1", "desc": "every planning DAG audits with 0 errors", "cmd": "for f in \"$PROJECT_DIR\"/planning/*.dag.json; do node \"$PROJECT_DIR/plugin/templates/hb-audit.js\" \"$f\" >/dev/null 2>&1 || exit 1; done" },
+        { "id": "gs1c2", "desc": "our coverage gates now assert the outcome marker", "cmd": "grep -rq 'GROUPS-PASSED' \"$PROJECT_DIR/planning\"" },
+        { "id": "gs1c3", "desc": "the plan skill documents outcome-asserting gates", "cmd": "grep -q 'GROUPS-PASSED' \"$PROJECT_DIR/plugin/skills/heartbeat/SKILL.md\"" }
+      ]
+    },
+    "GATE_GS2": {
+      "desc": "Template is warning-free and still bootstraps green; versioned; suites green.",
+      "criteria": [
+        { "id": "gs2c1", "desc": "hb-audit on the template reports 0 warnings", "cmd": "[ \"$(node \"$PROJECT_DIR/plugin/templates/hb-audit.js\" \"$PROJECT_DIR/plugin/templates/dag.json\" --json | node -pe 'JSON.parse(require(\"fs\").readFileSync(0)).warns')\" = 0 ]" },
+        { "id": "gs2c2", "desc": "node suite green (incl T2 fresh-bootstrap gate)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" >/dev/null 2>&1" },
+        { "id": "gs2c3", "desc": "version bumped to 1.16.0", "cmd": "grep -q '1.16.0' \"$PROJECT_DIR/plugin/.claude-plugin/plugin.json\"" }
+      ]
+    }
+  }
+}
