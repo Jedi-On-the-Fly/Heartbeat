@@ -845,6 +845,22 @@ else
   echo "  (python3 absent — T58 skipped)"
 fi
 
+grp "T59 — adoption on-ramp howto proofs (docs/howto)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T59.1 the quickstart runs end-to-end (init -> gate -> done)" \
+    'bash "'"$GEX"'/quickstart-e2e.sh" 2>&1 | grep -q "QUICKSTART-OK"'
+  check "T59.2 a worked DAG lints+audits+runs; a hollow-gate DAG is rejected" \
+    'bash "'"$GEX"'/dag-authoring-check.sh" 2>&1 | grep -q "DAG-AUTHORING-OK"'
+  check "T59.3 completed work survives a dead session; the run continues" \
+    'bash "'"$GEX"'/stop-resume.sh" 2>&1 | grep -q "STOP-RESUME-OK"'
+  check "T59.4 the real ollama backend completes a gated task (mock model)" \
+    'bash "'"$GEX"'/ollama-backend.sh" 2>&1 | grep -q "OLLAMA-BACKEND-OK"'
+  check "T59.5 the real claude-code adapter completes a gated task (stub CLI)" \
+    'bash "'"$GEX"'/claude-backend.sh" 2>&1 | grep -q "CLAUDE-BACKEND-OK"'
+else
+  echo "  (python3 absent — T59 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

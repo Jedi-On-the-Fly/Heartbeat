@@ -38,6 +38,11 @@ just prose. The full roadmap (created + planned, across families A–J) is in
   can roll back to.
 - [Spend the model only on work](spend-the-model-only-on-work.md) — the tick wakes the worker
   only when there's actionable work.
+- [HeartBeat in 5 minutes](heartbeat-in-5-minutes.md) — the whole first-run cycle, end to end.
+- [Turn a plan into a DAG](turn-a-plan-into-a-dag.md) — prose → phases/tasks/behavioral gates.
+- [Stop and resume a project](stop-and-resume-a-project.md) — kill it and continue from the log.
+- [Use HeartBeat with Ollama](use-heartbeat-with-ollama.md) — a local model as the worker.
+- [Use HeartBeat with Claude Code](use-heartbeat-with-claude-code.md) — headless Claude as the worker.
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).

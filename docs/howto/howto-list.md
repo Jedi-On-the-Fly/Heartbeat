@@ -13,10 +13,10 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 
 | How-to | Status |
 |---|---|
-| HeartBeat in 5 Minutes | ⬜ Not available yet |
-| Your First HeartBeat Project | ⬜ Not available yet |
+| HeartBeat in 5 Minutes | ✅ [heartbeat-in-5-minutes.md](heartbeat-in-5-minutes.md) — T59 |
+| Your First HeartBeat Project | ✅ [heartbeat-in-5-minutes.md](heartbeat-in-5-minutes.md) — T59 |
 | Your First HeartBeat Failure | ⬜ Not available yet *(→ diagnose-a-stuck-project.md)* |
-| Stop and Resume a Project | ⬜ Not available yet *(→ recover-a-dead-or-corrupted-run.md)* |
+| Stop and Resume a Project | ✅ [stop-and-resume-a-project.md](stop-and-resume-a-project.md) — T59 |
 | Run the Same DAG with Another Worker | ✅ [swap-workers-without-changing-the-dag.md](swap-workers-without-changing-the-dag.md) — T57 |
 | Run HeartBeat Without Claude Code | ⬜ Not available yet |
 
@@ -24,7 +24,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 
 | How-to | Status |
 |---|---|
-| Turn an Existing Plan into a HeartBeat DAG | ⬜ Not available yet |
+| Turn an Existing Plan into a HeartBeat DAG | ✅ [turn-a-plan-into-a-dag.md](turn-a-plan-into-a-dag.md) — T59 |
 | Break a Large Task into HeartBeat-Sized Units | ⬜ Not available yet |
 | Decide What Belongs in a Phase | ⬜ Not available yet |
 | Write Dependencies That Don't Over-Constrain | ⬜ Not available yet |
@@ -71,8 +71,8 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 
 | How-to | Status |
 |---|---|
-| Use HeartBeat with Claude Code | ⬜ Not available yet |
-| Use HeartBeat with Ollama | ⬜ Not available yet |
+| Use HeartBeat with Claude Code | ✅ [use-heartbeat-with-claude-code.md](use-heartbeat-with-claude-code.md) — T59 |
+| Use HeartBeat with Ollama | ✅ [use-heartbeat-with-ollama.md](use-heartbeat-with-ollama.md) — T59 |
 | Use HeartBeat with Agno | ⬜ Not available yet |
 | Use HeartBeat with CrewAI | ⬜ Not available yet |
 | Run a Custom Script Backend | ✅ [build-and-test-a-backend.md](build-and-test-a-backend.md) — T57 |

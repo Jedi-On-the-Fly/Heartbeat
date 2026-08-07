@@ -1,0 +1,100 @@
+{
+  "_meta": {
+    "project": "howto-adoption-onramp",
+    "note": "The next 5 how-tos — the adoption on-ramp completing hero journeys 1 (prompt loop -> controlled project) and 3 (model dependency -> worker neutrality). Same dogfooded discipline: runnable proof per claim + adversarial refutation. All proofs are DETERMINISTIC: the two backend guides mock the model/CLI (a canned local HTTP server for Ollama; a stub `claude` on PATH) so the REAL adapter+driver+gate path is exercised without a live model. Q0: a full init->author->drive->gate->done cycle. DA0: a worked-example DAG is lint+audit clean and runs, and a prompt-shaped/hollow DAG is rejected by the auditor. SR0: kill and resume — completed work survives from the event log (state.json is disposable) and the tick continues from the next task, not a redo. OL0: drive the real ollama backend against a mock server end-to-end to a passing gate. CC0: drive the real claude-code adapter with a stub claude to a passing gate, and confirm it degrades when claude is absent. DW0: the five guides + index + suite enforcement (T59). Each proof carries a negative/silent control."
+  },
+  "phases": [
+    {
+      "id": "Q0", "title": "HeartBeat in 5 minutes (end-to-end)", "gate_entry": null, "gate_exit": "GATE_Q0",
+      "tasks": [
+        { "id": "Q0T1", "title": "Write quickstart-e2e.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/quickstart-e2e.sh: run the exact 5-minute flow — hb init, author a minimal one-phase DAG with a behavioral gate, drive it with a deterministic script backend that produces the artifact, and assert the phase completes (completed_phases includes it, the gate passed). Control: with a backend that does NOT produce the artifact, the phase does NOT complete (so completion is real). Print QUICKSTART-OK only when the full cycle completes." }
+      ]
+    },
+    {
+      "id": "DA0", "title": "Turn a plan into a DAG", "gate_entry": "GATE_Q0", "gate_exit": "GATE_DA0",
+      "tasks": [
+        { "id": "DA0T1", "title": "Write dag-authoring-check.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/dag-authoring-check.sh: a worked-example DAG (phases -> tasks -> a behavioral gate) is lint-clean AND audit-clean AND runs green under a deterministic script backend; and a common-mistake DAG — a prompt-shaped one whose gate is hollow (test -f / true) — is REJECTED by hb-audit (hollow_gate). Print DAG-AUTHORING-OK only when the good DAG is clean and runnable and the bad DAG is caught." }
+      ]
+    },
+    {
+      "id": "SR0", "title": "Stop and resume a project", "gate_entry": "GATE_DA0", "gate_exit": "GATE_SR0",
+      "tasks": [
+        { "id": "SR0T1", "title": "Write stop-resume.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/stop-resume.sh: a two-phase project; complete phase 1; simulate a dead session by deleting state.json (the projection); resume by rebuilding from the event log and assert phase 1 is STILL completed (state comes from events, not memory) and the tick now points to phase 2's task (it continues, it does not redo phase 1). Control: before resume, deleting state.json loses the projection; rebuild restores it identically. Print STOP-RESUME-OK only when the completed work survives and the run continues from the next task." }
+      ]
+    },
+    {
+      "id": "OL0", "title": "Use HeartBeat with Ollama", "gate_entry": "GATE_SR0", "gate_exit": "GATE_OL0",
+      "tasks": [
+        { "id": "OL0T1", "title": "Write ollama-backend.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/ollama-backend.sh: stand up a local mock Ollama server (a canned /api/generate returning a FILE-block) on an OS-assigned port, drive the REAL ollama backend via hb exec run against it, and assert the artifact is written and the phase's behavioral gate passes (deterministic — the model is mocked, the adapter+driver+gate path is real). Control: pointed at a dead host the backend degrades and the phase does not complete. Print OLLAMA-BACKEND-OK only when the mock-driven run completes." }
+      ]
+    },
+    {
+      "id": "CC0", "title": "Use HeartBeat with Claude Code", "gate_entry": "GATE_OL0", "gate_exit": "GATE_CC0",
+      "tasks": [
+        { "id": "CC0T1", "title": "Write claude-backend.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/claude-backend.sh: put a stub `claude` on PATH that produces the artifact and exits 0, drive the REAL claude-code adapter via hb exec run, and assert the phase completes through its behavioral gate (deterministic — the CLI is mocked, the adapter+driver+gate path is real). Control: with no claude on PATH the adapter degrades to a protocol-valid failure and the phase does NOT complete (escalates). Print CLAUDE-BACKEND-OK only when the stub-driven run completes and the degrade control holds." }
+      ]
+    },
+    {
+      "id": "DW0", "title": "Five guides + wiring", "gate_entry": "GATE_CC0", "gate_exit": "GATE_DW0",
+      "tasks": [
+        { "id": "DW0T1", "title": "Write the journey-1 guides", "requires": [],
+          "description": "Write docs/howto/heartbeat-in-5-minutes.md (proof: quickstart-e2e.sh), docs/howto/turn-a-plan-into-a-dag.md (proof: dag-authoring-check.sh), and docs/howto/stop-and-resume-a-project.md (proof: stop-resume.sh). Human-facing, current-state; link the concept ([heartbeat.md]) and the gates guide rather than restating them." },
+        { "id": "DW0T2", "title": "Write the backend guides", "requires": [],
+          "description": "Write docs/howto/use-heartbeat-with-ollama.md (proof: ollama-backend.sh; include the real live command a reader runs against a local model) and docs/howto/use-heartbeat-with-claude-code.md (proof: claude-backend.sh). Link the backend contract (dev-python.md, build-and-test-a-backend.md) rather than restating it." },
+        { "id": "DW0T3", "title": "Index + enforce", "requires": ["DW0T1", "DW0T2"],
+          "description": "Add the five guides to docs/howto/README.md and flip their rows in docs/howto/howto-list.md from Not-available-yet to the file; add a T59 group to tests/run-tests.sh running quickstart-e2e.sh, dag-authoring-check.sh, stop-resume.sh, ollama-backend.sh, and claude-backend.sh and asserting their markers, so the proofs cannot rot." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_Q0": {
+      "desc": "The full init->author->drive->gate->done cycle completes.",
+      "review": { "prompt": "Refute that Q0 is done: does it drive the REAL runtime end-to-end (init, a real DAG, a real gate)? Is completion asserted on completed_phases (the gate passing), not just the task running? Is the no-artifact control load-bearing (a backend that doesn't produce the artifact fails to complete)? Could it pass vacuously?" },
+      "criteria": [
+        { "id": "q0c1", "desc": "the quickstart end-to-end proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/quickstart-e2e.sh\" 2>&1 | grep -q 'QUICKSTART-OK'" }
+      ]
+    },
+    "GATE_DA0": {
+      "desc": "A worked-example DAG is clean and runnable; a hollow/prompt-shaped DAG is rejected.",
+      "review": { "prompt": "Refute that DA0 is done: is the good DAG genuinely lint- AND audit-clean AND does it actually run to completion (not just validate)? Is the bad DAG genuinely rejected by the auditor for the RIGHT reason (hollow_gate), demonstrating the transformation quality? Could either check be vacuous?" },
+      "criteria": [
+        { "id": "da0c1", "desc": "the dag-authoring proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/dag-authoring-check.sh\" 2>&1 | grep -q 'DAG-AUTHORING-OK'" }
+      ]
+    },
+    "GATE_SR0": {
+      "desc": "Completed work survives a dead session via the event log; the run continues from the next task.",
+      "review": { "prompt": "Refute that SR0 is done: does it drive the real CLI? Is the 'kill' real (state.json removed) and does resume genuinely reconstruct completed phase 1 from events (not from a leftover projection)? Does the tick after resume point to phase 2's task (continue), not re-run phase 1? Is the survival load-bearing (would it fail if rebuild lost the completed phase)?" },
+      "criteria": [
+        { "id": "sr0c1", "desc": "the stop-and-resume proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/stop-resume.sh\" 2>&1 | grep -q 'STOP-RESUME-OK'" }
+      ]
+    },
+    "GATE_OL0": {
+      "desc": "The real ollama backend drives a task to a passing gate against a mock server; degrades on a dead host.",
+      "review": { "prompt": "Refute that OL0 is done: does it drive the REAL ollama backend (not a reimplementation)? Is the mock server a stand-in only for the MODEL (the HTTP/parse/write/gate path is the real adapter)? Does the phase genuinely complete via its behavioral gate? Is the dead-host degrade control load-bearing (the phase does NOT complete)? Is the port handling deterministic (no fixed-port flakiness)?" },
+      "criteria": [
+        { "id": "ol0c1", "desc": "the ollama backend proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/ollama-backend.sh\" 2>&1 | grep -q 'OLLAMA-BACKEND-OK'" }
+      ]
+    },
+    "GATE_CC0": {
+      "desc": "The real claude-code adapter drives a task to a passing gate with a stub CLI; degrades when claude is absent.",
+      "review": { "prompt": "Refute that CC0 is done: does it drive the REAL claude-code adapter (the stub only stands in for the `claude` CLI)? Does the phase complete through its behavioral gate with the stub present? Is the degrade control load-bearing — with no claude on PATH does the adapter emit a protocol-valid failure and the phase NOT complete? Could it pass vacuously?" },
+      "criteria": [
+        { "id": "cc0c1", "desc": "the claude-code backend proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/claude-backend.sh\" 2>&1 | grep -q 'CLAUDE-BACKEND-OK'" }
+      ]
+    },
+    "GATE_DW0": {
+      "desc": "Each guide points at a proof that runs; the index and roadmap list all five; the suite enforces the demos.",
+      "review": { "prompt": "Refute that DW0 is done: does any guide claim a proof that does not run? Does any restate the enforced mechanisms rather than link them? Are all five guides in the index AND flipped in howto-list.md? Does T59 actually run all five demos and assert their markers?" },
+      "criteria": [
+        { "id": "dw0c1", "desc": "each guide references its runnable proof", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'quickstart-e2e' heartbeat-in-5-minutes.md && grep -q 'dag-authoring-check' turn-a-plan-into-a-dag.md && grep -q 'stop-resume' stop-and-resume-a-project.md && grep -q 'ollama-backend' use-heartbeat-with-ollama.md && grep -q 'claude-backend' use-heartbeat-with-claude-code.md" },
+        { "id": "dw0c2", "desc": "the index lists all five guides", "cmd": "for f in heartbeat-in-5-minutes turn-a-plan-into-a-dag stop-and-resume-a-project use-heartbeat-with-ollama use-heartbeat-with-claude-code; do grep -q \"$f\" \"$PROJECT_DIR/docs/howto/README.md\" || exit 1; done" },
+        { "id": "dw0c3", "desc": "the node suite enforces the demos (T59 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T59 '" }
+      ]
+    }
+  }
+}
