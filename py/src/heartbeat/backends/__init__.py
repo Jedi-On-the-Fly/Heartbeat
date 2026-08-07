@@ -6,11 +6,13 @@ For arbitrary/external backends, the executor uses a subprocess wire protocol in
 """
 import importlib
 
-_KNOWN = {"ollama", "agno", "crewai", "claude", "claude-code"}
+_KNOWN = {"ollama", "agno", "crewai", "claude", "claude-code", "langgraph", "openai-agents"}
+_MODULE = {"claude-code": "claude", "openai-agents": "openai_agents"}
+_MODULES = {"ollama", "agno", "crewai", "claude", "langgraph", "openai_agents"}
 
 
 def get(name):
-    mod = "claude" if name == "claude-code" else name
-    if mod not in {"ollama", "agno", "crewai", "claude"}:
+    mod = _MODULE.get(name, name)
+    if mod not in _MODULES:
         raise ValueError(f"unknown in-process backend: {name} (set HB_EXEC_CMD for a custom command)")
     return importlib.import_module(f"heartbeat.backends.{mod}")

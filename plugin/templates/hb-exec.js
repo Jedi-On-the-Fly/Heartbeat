@@ -47,7 +47,9 @@ function defaultCmd(backend) {
     case 'claude-code': return `bash "${path.join(ex, 'claude-exec.sh')}"`;
     case 'agno':        return `python3 "${path.join(ex, 'agno_exec.py')}"`;
     case 'crewai':      return `python3 "${path.join(ex, 'crewai_exec.py')}"`;
-    case 'ollama':      return `python3 "${path.join(ex, 'ollama_exec.py')}"`;
+    case 'ollama':        return `python3 "${path.join(ex, 'ollama_exec.py')}"`;
+    case 'langgraph':     return `python3 "${path.join(ex, 'langgraph_exec.py')}"`;
+    case 'openai-agents': return `python3 "${path.join(ex, 'openai_agents_exec.py')}"`;
     default:            return backend;   // 'script'/custom: the backend IS the command
   }
 }

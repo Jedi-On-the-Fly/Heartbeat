@@ -48,7 +48,7 @@ state.reproject(hb)
 
 os.environ["HB_EXEC_BACKEND"] = backend
 os.environ["HB_EXEC_MODEL"] = model
-if backend in ("agno", "crewai"):
+if backend in ("agno", "crewai", "langgraph", "openai-agents"):
     os.environ.setdefault("HB_EXEC_PROVIDER", "ollama")
 os.environ["HB_EXEC_MAX_ITERS"] = "8"
 

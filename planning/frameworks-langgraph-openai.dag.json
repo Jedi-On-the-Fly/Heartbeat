@@ -1,0 +1,64 @@
+{
+  "_meta": {
+    "project": "frameworks-langgraph-openai",
+    "note": "Add two agent-framework backends — LangGraph and the OpenAI Agents SDK — in BOTH runtimes (py in-process backends/ + plugin subprocess executors/), following the agno/crewai pattern: two-method contract (execute/refute), graceful degrade when the lib is absent, native file tool with a FILE-block fallback, keyless-testable via Ollama. Backends are not a parity surface, so parity is unaffected (must stay green). Gate cmds are behavioral and non-side-effecting."
+  },
+  "phases": [
+    {
+      "id": "FB0", "title": "Backends (both runtimes) + registry", "gate_entry": null, "gate_exit": "GATE_FB0",
+      "tasks": [
+        { "id": "FB0T1", "title": "LangGraph backend", "requires": [],
+          "description": "Add py/src/heartbeat/backends/langgraph.py (in-process) and plugin/templates/executors/langgraph_exec.py (subprocess wire) — execute/refute, graceful degrade, FILE-block writing (reuse _fileblocks), provider ollama|openai via langchain-ollama / a chat model, fd-1→stderr hygiene in the subprocess script." },
+        { "id": "FB0T2", "title": "OpenAI Agents SDK backend", "requires": [],
+          "description": "Add py/src/heartbeat/backends/openai_agents.py and plugin/templates/executors/openai_agents_exec.py — same contract; provider ollama (via the OpenAI-compatible /v1 endpoint, keyless) or openai (key)." },
+        { "id": "FB0T3", "title": "Register + extras", "requires": ["FB0T1", "FB0T2"],
+          "description": "Register the backends: py backends/__init__.py _KNOWN + name→module mapping (openai-agents→openai_agents); hb-exec.js defaultCmd cases; add langgraph and openai-agents optional-dependencies to py/pyproject.toml." }
+      ]
+    },
+    {
+      "id": "FB1", "title": "Degrade + validity tests", "gate_entry": "GATE_FB0", "gate_exit": "GATE_FB1",
+      "tasks": [
+        { "id": "FB1T1", "title": "Python degrade tests", "requires": [],
+          "description": "Add py/tests/test_backends_frameworks.py: each backend module imports, and execute/refute degrade to protocol-valid JSON ({ok:false}/{refuted:false}) when the framework lib is absent." },
+        { "id": "FB1T2", "title": "Node validity/degrade tests", "requires": [],
+          "description": "Add T47 (LangGraph) and T48 (OpenAI Agents) to tests/run-tests.sh: the executor scripts are valid python and degrade to protocol-valid JSON without the lib; bootstrap ships them under .hb/executors/." }
+      ]
+    },
+    {
+      "id": "FB2", "title": "Live proof + docs + version", "gate_entry": "GATE_FB1", "gate_exit": "GATE_FB2",
+      "tasks": [
+        { "id": "FB2T1", "title": "Live proof against Ollama", "requires": [],
+          "description": "Install the libs in venvs and run py/real-backend.py for langgraph and openai-agents against a local Ollama model; record the outcome (a model writes code, a behavioral gate runs it)." },
+        { "id": "FB2T2", "title": "Docs + version + package", "requires": ["FB2T1"],
+          "description": "Document the two backends in docs/dev-python.md, the SKILL backends line, and STATUS.md; bump plugin/.claude-plugin/plugin.json + marketplace.json to 1.14.0 and py/pyproject.toml to 0.6.0; rebuild and extract-test the package." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_FB0": {
+      "desc": "Both backends exist in both runtimes and are registered.",
+      "review": { "prompt": "Refute that FB0 is done: do the backends REALLY implement execute AND refute for both runtimes, or a stub? Do they degrade to protocol-valid JSON when the lib is missing (import lazy, not at module top)? Is the subprocess script hygienic (only JSON on stdout)? Are they actually registered so `hb exec --backend langgraph|openai-agents` resolves?" },
+      "criteria": [
+        { "id": "fb0c1", "desc": "py registry resolves both backends", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"from heartbeat.backends import get; assert get('langgraph') and get('openai-agents')\"" },
+        { "id": "fb0c2", "desc": "both backends implement execute and refute (py)", "cmd": "grep -q 'def execute' \"$PROJECT_DIR/py/src/heartbeat/backends/langgraph.py\" && grep -q 'def refute' \"$PROJECT_DIR/py/src/heartbeat/backends/openai_agents.py\"" },
+        { "id": "fb0c3", "desc": "hb-exec.js knows the new backends", "cmd": "grep -q langgraph \"$PROJECT_DIR/plugin/templates/hb-exec.js\" && grep -q 'openai-agents' \"$PROJECT_DIR/plugin/templates/hb-exec.js\"" }
+      ]
+    },
+    "GATE_FB1": {
+      "desc": "Degrade/validity tests pass in both suites.",
+      "criteria": [
+        { "id": "fb1c1", "desc": "python framework-backend tests pass", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_backends_frameworks.py" },
+        { "id": "fb1c2", "desc": "node suite covers the new executors (T47/T48)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T47 && bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T48" }
+      ]
+    },
+    "GATE_FB2": {
+      "desc": "Documented, versioned, both suites + parity green.",
+      "criteria": [
+        { "id": "fb2c1", "desc": "version bumped to 1.14.0", "cmd": "grep -q '1.14.0' \"$PROJECT_DIR/plugin/.claude-plugin/plugin.json\"" },
+        { "id": "fb2c2", "desc": "node suite green", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" >/dev/null 2>&1" },
+        { "id": "fb2c3", "desc": "python suite green", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q >/dev/null 2>&1" },
+        { "id": "fb2c4", "desc": "parity still green", "cmd": "bash \"$PROJECT_DIR/tests/parity.sh\" >/dev/null 2>&1" }
+      ]
+    }
+  }
+}

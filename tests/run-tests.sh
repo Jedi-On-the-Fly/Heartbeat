@@ -587,11 +587,11 @@ echo "═══ T39 — packaging: bootstrap ships the executor (v1.8) ═══
 P39="$TMP/p39"; bash "$HB_SRC/plugin/bootstrap.sh" "$P39" >/dev/null 2>&1 </dev/null
 check "T39.1 bootstrap copies hb-exec.js into .hb/" '[ -f "$P39/.hb/hb-exec.js" ]'
 check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
-  '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ]'
+  '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ] && [ -f "$P39/.hb/executors/langgraph_exec.py" ] && [ -f "$P39/.hb/executors/openai_agents_exec.py" ]'
 check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
-check "T39.4 plugin version bumped to 1.13.0" \
-  'grep -q "1.13.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+check "T39.4 plugin version bumped to 1.14.0" \
+  'grep -q "1.14.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 
 echo "═══ T40 — parallel fan-out (v1.8) ═══"
 # In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
@@ -711,6 +711,38 @@ check "T46.4 distinct reviewer with anchored findings advances the phase" \
   'HB_ACTOR=agent-B node "$H46/hb.js" review GA0 pass --artifact "$P46/real.md" >/dev/null 2>&1; node -e "const s=require(\"'"$H46"'/state.json\");process.exit(s.completed_phases.includes(\"A0\")?0:1)"'
 check "T46.5 the review event records reviewer identity + citations" \
   'grep review "$H46/events.jsonl" | grep -q "\"reviewer\":\"agent-B\"" && grep review "$H46/events.jsonl" | grep -q "\"cited\""'
+
+echo "═══ T47 — LangGraph backend adapter ═══"
+LG="$HB_SRC/plugin/templates/executors/langgraph_exec.py"
+if command -v python3 >/dev/null 2>&1; then
+  check "T47.1 langgraph_exec.py is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$LG"'\").read())"'
+  if python3 -c "import langgraph" 2>/dev/null; then
+    echo "  (langgraph installed — degrade-path assertions skipped)"
+  else
+    check "T47.2 execute degrades to protocol-valid JSON without langgraph" \
+      'printf "{}" | python3 "'"$LG"'" execute | grep -q "\"ok\": false"'
+    check "T47.3 refute degrades to protocol-valid JSON without langgraph" \
+      'printf "{}" | python3 "'"$LG"'" refute | grep -q "\"refuted\": false"'
+  fi
+else
+  echo "  (python3 absent — T47 skipped)"
+fi
+
+echo "═══ T48 — OpenAI Agents SDK backend adapter ═══"
+OA="$HB_SRC/plugin/templates/executors/openai_agents_exec.py"
+if command -v python3 >/dev/null 2>&1; then
+  check "T48.1 openai_agents_exec.py is valid python" 'python3 -c "import ast; ast.parse(open(\"'"$OA"'\").read())"'
+  if python3 -c "import agents" 2>/dev/null; then
+    echo "  (openai-agents installed — degrade-path assertions skipped)"
+  else
+    check "T48.2 execute degrades to protocol-valid JSON without openai-agents" \
+      'printf "{}" | python3 "'"$OA"'" execute | grep -q "\"ok\": false"'
+    check "T48.3 refute degrades to protocol-valid JSON without openai-agents" \
+      'printf "{}" | python3 "'"$OA"'" refute | grep -q "\"refuted\": false"'
+  fi
+else
+  echo "  (python3 absent — T48 skipped)"
+fi
 
 echo ""
 echo "═══════════════════════════════════════"

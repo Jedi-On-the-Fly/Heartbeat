@@ -166,9 +166,10 @@ node <project-dir>/.hb/hb-exec.js config    # show the resolved backend config
 ```
 
 **Backends** (`.hb/executor.json` `{ "backend": … }`, or `HB_EXEC_BACKEND`):
-`claude-code` (headless `claude -p`, default), `agno`, `crewai`, `ollama` (local
-models — `HB_EXEC_MODEL`, stdlib-only), or a raw `script` (`HB_EXEC_CMD="<cmd>"`).
-Each backend is a small adapter under `.hb/executors/` speaking the same protocol:
+`claude-code` (headless `claude -p`, default), `agno`, `crewai`, `langgraph`,
+`openai-agents`, `ollama` (local models — `HB_EXEC_MODEL`, stdlib-only), or a raw
+`script` (`HB_EXEC_CMD="<cmd>"`). Each backend is a small adapter under
+`.hb/executors/` speaking the same protocol:
 ```
 driver → backend:  argv[last] = execute|refute, stdin = payload JSON
 backend → driver:  execute → {"ok":bool,"summary":str}   refute → {"refuted":bool,"findings":str}

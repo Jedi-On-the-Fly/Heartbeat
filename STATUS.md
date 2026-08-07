@@ -1,7 +1,20 @@
 # STATUS — HeartBeat
 
-**Version:** v1.13 (review-evidence hardening, over v1.11)
+**Version:** v1.14 (more framework backends, over v1.13)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.14 — LangGraph + OpenAI Agents SDK backends
+
+- Two more Stage-B backends in both runtimes (in-process `backends/` + subprocess
+  `executors/`): **`langgraph`** (LangGraph ReAct agent + `save_file` tool) and
+  **`openai-agents`** (OpenAI Agents SDK Agent + function tool). Same two-method contract,
+  graceful degrade when the lib is absent, FILE-block fallback.
+- Keyless-testable via Ollama (`HB_EXEC_PROVIDER=ollama`; the OpenAI SDK uses Ollama's
+  OpenAI-compatible `/v1`). Both **proven live end-to-end** (model writes code, a
+  behavioral gate runs it). Backends: claude-code · agno · crewai · langgraph ·
+  openai-agents · ollama · script.
+- Backends aren't a parity surface — parity unaffected. +T47/T48 (node degrade/validity),
+  +test_backends_frameworks.py (python), pyproject extras `[langgraph]` / `[openai-agents]`.
 
 ## v1.13 — review-evidence hardening (both runtimes)
 

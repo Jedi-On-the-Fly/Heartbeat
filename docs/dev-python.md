@@ -79,6 +79,8 @@ Registry `backends.get(name)` → module with `execute(payload) → {ok, summary
 | `ollama` | stdlib `urllib` → local model; FILE-block writer (`backends/_fileblocks.py`) | — |
 | `agno` | Agno agent + `FileTools` | `HB_EXEC_PROVIDER=anthropic\|ollama` |
 | `crewai` | CrewAI Agent+Task+Crew; FILE-block writer | `HB_EXEC_PROVIDER` |
+| `langgraph` | LangGraph ReAct agent + `save_file` tool | `HB_EXEC_PROVIDER=anthropic\|ollama\|openai` |
+| `openai-agents` | OpenAI Agents SDK Agent + function tool | `HB_EXEC_PROVIDER=openai\|ollama` |
 | `claude` | subprocess `claude -p` | — |
 
 `HB_EXEC_MODEL` selects the model; `OLLAMA_HOST` the server. Backend degrade: missing lib/server → protocol-valid `{ok:false}` / `{refuted:false}`.
