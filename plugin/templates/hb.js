@@ -45,7 +45,7 @@ const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0
 const PROTOCOL = {
   next_task:          'hb start <id> → do the work → hb done <id> (or hb fail <id> if you could not complete it). Never hand-edit state.json.',
   gate_pending:       'bash .hb/gate.sh <gate> — a pass advances the phase, UNLESS the gate has a review block (then a review is owed next).',
-  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?), then: node .hb/hb.js review <gate> pass|fail "<findings>".',
+  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?). Write its full attempt to a findings file, then: node .hb/hb.js review <gate> fail "<holes>"  OR  node .hb/hb.js review <gate> pass --artifact <findings-file> (a pass MUST cite the refuter\'s written attempt — no rubber-stamps).',
   gate_blocked:       'Run: node .hb/hb.js diagnose — fix the ROOT cause (do NOT weaken the gate), then re-run bash .hb/gate.sh <gate>.',
   at_capacity:        'Nothing to do — max tasks already in flight. No action.',
   state_corrupted:    'node .hb/hb.js rebuild (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable.',
@@ -54,7 +54,7 @@ const PROTOCOL = {
   unsanctioned_drift: 'Review the diff. If the change is intended: bash .hb/tick.sh --freeze.',
   gate_rot:           'Run: node .hb/hb.js diagnose — a completed phase\'s gate references a deleted file; restore it or re-point the gate.',
   build_stuck:        'Run: node .hb/hb.js diagnose — woken repeatedly without progress; root-cause it or surface a blocker report for a human.',
-  review_stuck:       'The adversarial review never resolved — spawn the refuter and record hb review <gate> pass|fail, or surface for a human.',
+  review_stuck:       'The adversarial review never resolved — spawn the refuter, write its findings to a file, and record hb review <gate> fail "<holes>" or hb review <gate> pass --artifact <file>, or surface for a human.',
   all_done:           'Write the final project report.',
 };
 function renderProtocolMd() {
@@ -195,8 +195,11 @@ function reproject() {
   return state;
 }
 
+const ACTOR = process.env.HB_ACTOR || 'unknown';
+
 function appendEvent(ev) {
   ev.ts = ev.ts || nowIso();
+  if (ev.actor === undefined) ev.actor = ACTOR;   // who recorded this (identity for adversarial review)
   fs.appendFileSync(EVENTS, JSON.stringify(ev) + '\n');
 }
 
@@ -271,6 +274,23 @@ function doctor() {
       if (age > LOCK_STALE_S) notes.push(`stale lease ${t} (~${Math.round(age)}s) — a tick will reclaim it`);
     }
   } catch (e) {}
+
+  // Sev-1: every review_passed must remain backed by a readable, substantive artifact.
+  // A pass whose findings file is gone/emptied is un-reinspectable = rot.
+  {
+    const passedRev = {};
+    for (const e of readEvents()) {
+      if (e.event === 'review_passed') passedRev[e.gate] = e;
+      if (e.event === 'review_failed') delete passedRev[e.gate];
+    }
+    for (const [g, e] of Object.entries(passedRev)) {
+      const rel = e.artifact || `reviews/${g}.md`;
+      let body = null;
+      try { body = fs.readFileSync(path.join(HB_DIR, rel), 'utf8'); } catch (x) {}
+      if (body == null) problems.push(`${g} review_passed but backing artifact ${rel} is missing — the refutation can no longer be inspected (Sev-1 rot)`);
+      else if (body.trim().length < 40) problems.push(`${g} review_passed but backing artifact ${rel} is empty/thin — not a real refutation`);
+    }
+  }
 
   return { problems, notes };
 }
@@ -393,11 +413,57 @@ switch (cmd) {
   }
 
   case 'review': {
-    // v1.4 (#3): record the adversarial reviewer's verdict for a gate.
-    const gate = arg1, verdict = rest[0], note = rest.slice(1).join(' ');
-    if (!gate || (verdict !== 'pass' && verdict !== 'fail')) die('usage: hb review <gate> pass|fail [note]');
-    mutate({ event: verdict === 'pass' ? 'review_passed' : 'review_failed', gate, ...(note ? { note } : {}) });
-    process.stdout.write(`review ${verdict} ${gate}\n`);
+    // Sev-1 hardening: a PASS is only accepted when backed by a stored refutation
+    // artifact — the refuter's actual findings on disk — that (a) is substantive,
+    // (b) cites real anchors from THIS phase, and (c) was recorded by a DIFFERENT
+    // actor than the one who did the phase's work. Closes the self-pass hole.
+    const gate = arg1, verdict = rest[0];
+    const ai = rest.indexOf('--artifact');
+    let artifact = null;
+    if (ai !== -1) { artifact = rest[ai + 1]; rest.splice(ai, 2); }
+    const note = rest.slice(1).join(' ');
+    if (!gate || (verdict !== 'pass' && verdict !== 'fail'))
+      die('usage: hb review <gate> pass|fail [--artifact <findings-file>] [note]');
+    if (verdict === 'fail') {
+      mutate({ event: 'review_failed', gate, ...(note ? { note } : {}) });
+      process.stdout.write(`review fail ${gate}\n`);
+      break;
+    }
+    if (!artifact) die('review pass requires --artifact <findings-file>: the refuter\'s written attempt to break the phase (a pass must cite evidence, not just assert one).');
+    const ap = path.isAbsolute(artifact) ? artifact : path.join(PROJECT_DIR, artifact);
+    let body = '';
+    try { body = fs.readFileSync(ap, 'utf8'); } catch (e) { die(`review pass: cannot read artifact ${artifact} (${e.code || e.message})`); }
+    if (body.trim().length < 40) die(`review pass: artifact ${artifact} is too thin (${body.trim().length} chars) to be a real refutation attempt — a rubber-stamp is not a review.`);
+    // Substance: a genuine refutation inspects THIS phase's actual work, so require the
+    // artifact to cite real anchors — the gate id, a phase task id, or a path the gate's
+    // criteria reference. Filler references none.
+    const dag = readDag();
+    const phaseForGate = (dag.phases || []).find(p => p.gate_exit === gate);
+    const anchors = new Set([gate]);
+    if (phaseForGate) { anchors.add(phaseForGate.id); for (const t of (phaseForGate.tasks || [])) anchors.add(t.id); }
+    const { extractPaths } = require('./hb-lint.js');
+    for (const c of (((dag.gates || {})[gate] || {}).criteria || []))
+      for (const pth of extractPaths(c.cmd || '')) { anchors.add(pth); anchors.add(pth.split('/').pop()); }
+    const hay = body.toLowerCase();
+    const cited = [...anchors].filter(a => a && String(a).length > 1 && hay.includes(String(a).toLowerCase()));
+    if (cited.length === 0)
+      die(`review pass: artifact ${artifact} does not reference the phase under review (it cites nothing real; expected one of: ${[...anchors].filter(a => a && String(a).length > 1).join(', ')}).`);
+    // Identity: reject a self-review — a pass whose actor also recorded this phase's
+    // task_done events is grading its own homework. Adjudicated only when actors are set.
+    const reviewer = process.env.HB_ACTOR || 'unknown';
+    if (reviewer !== 'unknown' && phaseForGate) {
+      const phaseTaskIds = new Set((phaseForGate.tasks || []).map(t => t.id));
+      const doers = new Set();
+      for (const e of readEvents())
+        if (e.event === 'task_done' && phaseTaskIds.has(e.task) && e.actor && e.actor !== 'unknown') doers.add(e.actor);
+      if (doers.has(reviewer))
+        die(`review pass: reviewer '${reviewer}' also executed this phase's work — a self-review is not adversarial. Have a DIFFERENT actor refute (set HB_ACTOR).`);
+    }
+    const revDir = path.join(HB_DIR, 'reviews');
+    try { fs.mkdirSync(revDir, { recursive: true }); } catch (e) {}
+    fs.writeFileSync(path.join(revDir, `${gate}.md`), body);
+    mutate({ event: 'review_passed', gate, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, ...(note ? { note } : {}) });
+    process.stdout.write(`review pass ${gate} (backed by reviews/${gate}.md, ${body.trim().length} chars, cites: ${cited.slice(0, 3).join(', ')})\n`);
     break;
   }
 

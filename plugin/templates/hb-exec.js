@@ -81,6 +81,9 @@ function gitIsolation() {
 
 // ── driver ↔ HeartBeat helpers ──────────────────────────────────────────────
 function hb(...args) { return execFileSync('node', [HB, ...args], { cwd: PROJECT_DIR, encoding: 'utf8' }); }
+// Same, but stamps HB_ACTOR — so the driver can record the refuter under a distinct
+// identity from the worker (the self-review guard needs reviewer != doer).
+function hbAs(actor, ...args) { return execFileSync('node', [HB, ...args], { cwd: PROJECT_DIR, encoding: 'utf8', env: { ...process.env, HB_ACTOR: actor } }); }
 
 function runTick() {
   const out = execFileSync('bash', [TICK], { cwd: PROJECT_DIR, encoding: 'utf8', env: process.env });
@@ -232,6 +235,11 @@ async function fanOut(c, attempts) {
 async function run() {
   const c = config();
   const maxIters = parseInt(process.env.HB_EXEC_MAX_ITERS || '0', 10) || Infinity;
+  // Distinct identities: the worker stamps task_done, the refuter stamps the review pass —
+  // guaranteed different so the self-review guard is enforced in the automated path.
+  const workerActor = process.env.HB_ACTOR || 'hb-exec:worker';
+  process.env.HB_ACTOR = workerActor;
+  const refuterActor = `${workerActor}:refuter`;
   const attempts = {};
 
   for (let i = 0; i < maxIters; i++) {
@@ -297,8 +305,22 @@ async function run() {
         if (!r.json || typeof r.json.refuted !== 'boolean') {
           escalate('review_error', `${gate}: backend returned no verdict`); return 1;
         }
-        if (r.json.refuted) hb('review', gate, 'fail', r.json.findings || 'refuted');
-        else                hb('review', gate, 'pass');
+        if (r.json.refuted) {
+          hb('review', gate, 'fail', r.json.findings || 'refuted');
+        } else {
+          // Sev-1: a "could not refute" pass must cite the refuter's ACTUAL written
+          // attempt. Persist findings + pass --artifact so the verdict is reducible to
+          // evidence on disk (doctor re-checks it). An empty pass is not a refutation.
+          const findings = (r.json.findings || '').trim();
+          if (findings.length < 40) {
+            escalate('review_error', `${gate}: refuter returned a pass with no substantive findings — refusing to rubber-stamp`); return 1;
+          }
+          const fdir = path.join(HB_DIR, 'reviews');
+          try { fs.mkdirSync(fdir, { recursive: true }); } catch (e) {}
+          const fpath = path.join(fdir, `${gate}.attempt.md`);
+          fs.writeFileSync(fpath, `# Refutation attempt for ${gate}\n\nVerdict: could not refute (refuted=false)\n\n${findings}\n`);
+          hbAs(refuterActor, 'review', gate, 'pass', '--artifact', fpath);
+        }
         break;
       }
 

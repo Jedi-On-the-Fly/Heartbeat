@@ -37,6 +37,18 @@ eval_gate() {
   local G="$1"; PASS=0; FAIL=0
   echo "=== Gate: $G ==="
   echo ""
+  # Hollow-gate floor: a gate with zero criteria proves nothing. The auditor warns
+  # about this upstream; the runtime must also refuse it, so an un-audited or
+  # post-audit-mutated DAG can't buy a free phase advance.
+  local CRIT_COUNT
+  CRIT_COUNT=$(node -e "const d=JSON.parse(require('fs').readFileSync('$DAG_FILE','utf8'));console.log((((d.gates||{})['$G']||{}).criteria||[]).length)" 2>/dev/null || echo 0)
+  if [ "${CRIT_COUNT:-0}" -eq 0 ]; then
+    echo "  ✗ [--] gate $G has NO criteria — a gate must assert something"
+    echo ""
+    echo "=== $G: 0 passed, 1 failed ==="
+    FAIL=1
+    return
+  fi
   while IFS=$'\x1f' read -r ID DESC CMD; do
     if run_criterion "$CMD" >/dev/null 2>&1; then
       echo "  ✓ [$ID] $DESC"; PASS=$((PASS + 1))

@@ -320,7 +320,9 @@ check "T24.2 deterministic gate passed but review due → phase NOT advanced" '!
 check "T24.3 tick → review_pending" 'test "$(reason24)" = "review_pending"'
 node "$H24/hb.js" review GATE_P0 fail hollow >/dev/null
 check "T24.4 review fail → gate_blocked (re-gate)" 'test "$(reason24)" = "gate_blocked"'
-bash "$H24/gate.sh" GATE_P0 >/dev/null 2>&1; node "$H24/hb.js" review GATE_P0 pass >/dev/null
+bash "$H24/gate.sh" GATE_P0 >/dev/null 2>&1
+printf 'Refutation attempt for GATE_P0 / phase P0: searched for hollow criteria and faked output, re-ran the gate. No hole found.\n' > "$P24/refute.md"
+node "$H24/hb.js" review GATE_P0 pass --artifact "$P24/refute.md" >/dev/null
 check "T24.5 review pass → phase advanced (P0 completed)" 'hasP0 "$H24/hb.js"'
 P24b="$TMP/p24b"; bash "$HB_SRC/plugin/bootstrap.sh" "$P24b" >/dev/null 2>&1 </dev/null; H24b="$P24b/.hb"
 node "$H24b/hb.js" start P0T1 >/dev/null; node "$H24b/hb.js" done P0T1 >/dev/null
@@ -395,7 +397,8 @@ rr29 >/dev/null; rr29 >/dev/null; rr29 >/dev/null
 o29=$(rr29)
 check "T29.1 review unresolved N times → review_stuck" 'test "$o29" = "review_stuck"'
 check "T29.2 next tick → silence (review_waiting)" 'test "$(rr29)" = "review_waiting"'
-node "$H29/hb.js" review GATE_P0 pass >/dev/null
+printf 'Refutation attempt for GATE_P0 / phase P0: inspected the criteria and output, re-ran the gate. No hole found.\n' > "$P29/refute.md"
+node "$H29/hb.js" review GATE_P0 pass --artifact "$P29/refute.md" >/dev/null
 check "T29.3 hb review pass → phase advanced (P0)" \
   'node "$H29/hb.js" state | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>process.exit(JSON.parse(d).completed_phases.includes(\"P0\")?0:1))"'
 
@@ -506,7 +509,7 @@ case "$mode" in
     id=$(printf '%s' "$payload" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).task.id' 2>/dev/null)
     if [ "${STUB_DISTINCT:-0}" = 1 ]; then printf 'done\n' > "$id.out"; else printf '%s\n' "$id" >> done.log; fi
     printf '{"ok":true,"summary":"did %s"}\n' "$id" ;;
-  refute) printf '{"refuted":%s,"findings":"stub"}\n' "${STUB_REFUTE:-false}" ;;
+  refute) printf '{"refuted":%s,"findings":"Attempted to refute: inspected done.log for the task output, checked the gate criteria for hollowness, re-ran the behavioral check. No hole found."}\n' "${STUB_REFUTE:-false}" ;;
 esac
 STUBEOF
 # set_dag <hbdir> <js> — overwrite dag.json (strip skeleton) and reproject.
@@ -656,6 +659,58 @@ check "T44.1 plan acceptance runs hb-audit (gate quality)" \
   'awk "/heartbeat plan/{f=1} f&&/hb-audit/{found=1} END{exit !found}" "$SK"'
 check "T44.2 plan acceptance requires refuting the plan (SOUND) before proposing" \
   'grep -q "refute the plan" "$SK" && grep -q "SOUND" "$SK"'
+
+echo "═══ T45 — review-evidence hardening (holes stay closed) ═══"
+P45="$TMP/p45"; bash "$HB_SRC/plugin/bootstrap.sh" "$P45" >/dev/null 2>&1 </dev/null; H45="$P45/.hb"
+# a criteria-less gate must FAIL at the runtime, not just in audit
+set_dag "$H45" "d.gates.GEMPTY={desc:'empty',criteria:[]};d.phases.push({id:'PE',title:'e',gate_entry:'GATE_P1',gate_exit:'GEMPTY',tasks:[{id:'PET1',title:'t',requires:[]}]})"
+check "T45.1 gate.sh FAILS a zero-criteria gate (hollow floor)" '! bash "$H45/gate.sh" GEMPTY >/dev/null 2>&1'
+check "T45.2 gate.sh --check also refuses it" '! bash "$H45/gate.sh" --check GEMPTY >/dev/null 2>&1'
+# review pass without an artifact is rejected
+P45b="$TMP/p45b"; bash "$HB_SRC/plugin/bootstrap.sh" "$P45b" >/dev/null 2>&1 </dev/null; H45b="$P45b/.hb"
+set_dag "$H45b" "d.phases=[{id:'A0',title:'p',gate_entry:null,gate_exit:'GA0',tasks:[{id:'A0T1',title:'write A0T1 to done.log',requires:[]}]}];d.gates={GA0:{desc:'p',review:{prompt:'Refute A0.'},criteria:[{id:'c',desc:'done',cmd:'grep -q A0T1 \"\$PROJECT_DIR/done.log\"'}]}}"
+printf 'A0T1\n' > "$P45b/done.log"
+node "$H45b/hb.js" start A0T1 >/dev/null; node "$H45b/hb.js" done A0T1 >/dev/null; bash "$H45b/gate.sh" GA0 >/dev/null 2>&1
+check "T45.3 review pass WITHOUT --artifact is rejected" '! node "$H45b/hb.js" review GA0 pass >/dev/null 2>&1'
+check "T45.4 phase did NOT advance on the rejected self-pass" \
+  'node -e "const s=require(\"'"$H45b"'/state.json\");process.exit(s.completed_phases.includes(\"A0\")?1:0)"'
+printf 'ok\n' > "$P45b/thin.md"
+check "T45.5 review pass with a THIN artifact is rejected (no rubber-stamp)" \
+  '! node "$H45b/hb.js" review GA0 pass --artifact "$P45b/thin.md" >/dev/null 2>&1'
+printf 'Refutation attempt for GA0: searched for hollow criteria and faked output, re-ran the behavioral gate, inspected done.log. No hole found.\n' > "$P45b/real.md"
+node "$H45b/hb.js" review GA0 pass --artifact "$P45b/real.md" >/dev/null 2>&1
+check "T45.6 review pass WITH a substantive artifact advances the phase" \
+  'node -e "const s=require(\"'"$H45b"'/state.json\");process.exit(s.completed_phases.includes(\"A0\")?0:1)"'
+check "T45.7 the backing artifact is stored under .hb/reviews/" '[ -f "$H45b/reviews/GA0.md" ]'
+rm -f "$H45b/reviews/GA0.md" 2>/dev/null
+check "T45.8 doctor flags a review_passed whose artifact vanished (Sev-1 rot)" \
+  'd458=$(node "$H45b/hb.js" doctor 2>&1); echo "$d458" | grep -qi "artifact"'
+# a self-fabricating criterion is flagged by the auditor
+P45c="$TMP/p45c"; bash "$HB_SRC/plugin/bootstrap.sh" "$P45c" >/dev/null 2>&1 </dev/null; H45c="$P45c/.hb"
+set_dag "$H45c" "d.phases=[{id:'S0',title:'p',gate_entry:null,gate_exit:'GS0',tasks:[{id:'S0T1',title:'produce result',requires:[]}]}];d.gates={GS0:{desc:'p',criteria:[{id:'c',desc:'self-made',cmd:'echo ok > \"\$PROJECT_DIR/out.json\"; test -f \"\$PROJECT_DIR/out.json\"'}]}}"
+check "T45.9 auditor flags a self-fabricating (side-effecting) criterion" \
+  'node "$HB_SRC/plugin/templates/hb-audit.js" "$H45c/dag.json" 2>&1 | grep -qi "side_effect\|OBSERVE"'
+set_dag "$H45c" "d.gates.GS0.criteria=[{id:'c',desc:'coin',cmd:'[ \$((RANDOM % 2)) -eq 0 ]'}]"
+check "T45.10 auditor flags arithmetic-context RANDOM as nondeterministic" \
+  'node "$HB_SRC/plugin/templates/hb-audit.js" "$H45c/dag.json" 2>&1 | grep -qi "nondetermin"'
+
+echo "═══ T46 — review substance & identity (self-review) ═══"
+P46="$TMP/p46"; bash "$HB_SRC/plugin/bootstrap.sh" "$P46" >/dev/null 2>&1 </dev/null; H46="$P46/.hb"
+set_dag "$H46" "d.phases=[{id:'A0',title:'p',gate_entry:null,gate_exit:'GA0',tasks:[{id:'A0T1',title:'write A0T1 to done.log',requires:[]}]}];d.gates={GA0:{desc:'p',review:{prompt:'Refute A0.'},criteria:[{id:'c',desc:'done',cmd:'grep -q A0T1 \"\$PROJECT_DIR/done.log\"'}]}}"
+printf 'A0T1\n' > "$P46/done.log"
+HB_ACTOR=agent-A node "$H46/hb.js" start A0T1 >/dev/null; HB_ACTOR=agent-A node "$H46/hb.js" done A0T1 >/dev/null; bash "$H46/gate.sh" GA0 >/dev/null 2>&1
+printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' > "$P46/pad.md"
+check "T46.1 padded artifact citing nothing real is rejected" \
+  'o=$(HB_ACTOR=agent-B node "$H46/hb.js" review GA0 pass --artifact "$P46/pad.md" 2>&1); echo "$o" | grep -qi "cites nothing\|does not reference"'
+printf 'Refutation for GA0: inspected A0T1 in done.log, re-ran the gate, no hole.\n' > "$P46/real.md"
+check "T46.2 self-review (same actor did the work) is rejected" \
+  'o=$(HB_ACTOR=agent-A node "$H46/hb.js" review GA0 pass --artifact "$P46/real.md" 2>&1); echo "$o" | grep -qi "self-review"'
+check "T46.3 self-review did NOT advance the phase" \
+  'node -e "const s=require(\"'"$H46"'/state.json\");process.exit(s.completed_phases.includes(\"A0\")?1:0)"'
+check "T46.4 distinct reviewer with anchored findings advances the phase" \
+  'HB_ACTOR=agent-B node "$H46/hb.js" review GA0 pass --artifact "$P46/real.md" >/dev/null 2>&1; node -e "const s=require(\"'"$H46"'/state.json\");process.exit(s.completed_phases.includes(\"A0\")?0:1)"'
+check "T46.5 the review event records reviewer identity + citations" \
+  'grep review "$H46/events.jsonl" | grep -q "\"reviewer\":\"agent-B\"" && grep review "$H46/events.jsonl" | grep -q "\"cited\""'
 
 echo ""
 echo "═══════════════════════════════════════"

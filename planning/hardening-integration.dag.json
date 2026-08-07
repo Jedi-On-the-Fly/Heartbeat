@@ -1,0 +1,74 @@
+{
+  "_meta": {
+    "project": "hardening-integration",
+    "note": "Integrate the v1.13 review-evidence hardening (from the hardened-beta zip) into our dual-runtime version, SYMMETRICALLY. Node = spec (T45/T46 = baseline). Then mirror to Python, restore TRUE parity (new audit rules + fixtures that exercise them), enforce identity (executor stamps distinct actors), and fix two bugs (gate.sh unicode marks; calibrate side_effecting). Gate cmds are behavioral and non-side-effecting so this plan passes hb-audit."
+  },
+  "phases": [
+    {
+      "id": "HP0", "title": "Node hardening", "gate_entry": null, "gate_exit": "GATE_HP0",
+      "tasks": [
+        { "id": "HP0T1", "title": "Author T45/T46 + update review call-sites", "requires": [],
+          "description": "Port the hardened build's T45 (hollow floor, artifact-required, thin/substantive, artifact rot, side_effecting, RANDOM) and T46 (anchor-citation, self-review identity) into tests/run-tests.sh, and update existing review pass call-sites (T24, T29) to use --artifact." },
+        { "id": "HP0T2", "title": "gate.sh hollow floor + fix marks", "requires": ["HP0T1"],
+          "description": "Add a runtime hollow-gate floor to plugin/templates/gate.sh (a zero-criteria gate FAILS), using literal check marks consistent with the rest of the file (not the buggy \\u escapes)." },
+        { "id": "HP0T3", "title": "hb.js review-evidence + doctor + actor", "requires": ["HP0T1"],
+          "description": "In plugin/templates/hb.js: add HB_ACTOR → actor field on events; make hb review pass require --artifact (>=40 chars), cite phase anchors (gate id / task ids / gate-referenced paths), and reject a self-review (reviewer == doer); store the artifact under .hb/reviews/; add a doctor check that a review_passed keeps a readable backing artifact; update the review PROTOCOL text." },
+        { "id": "HP0T4", "title": "hb-audit.js side_effecting + nondet", "requires": ["HP0T1"],
+          "description": "In plugin/templates/hb-audit.js: expand the nondeterminism pattern (RANDOM, shuf, /dev/urandom, SECONDS, $$, mktemp, date) and add a side_effecting rule (a gate criterion that writes/creates files fabricates its own evidence) — calibrated to ignore /dev/null and /tmp scratch." },
+        { "id": "HP0T5", "title": "hb-exec.js driver compliance + identity", "requires": ["HP0T3"],
+          "description": "In plugin/templates/hb-exec.js: on a refuter pass, require substantive findings, persist them under .hb/reviews/ and pass --artifact (escalate on an empty pass); stamp distinct HB_ACTOR for the worker vs the refuter so the self-review guard is enforced in the automated path." }
+      ]
+    },
+    {
+      "id": "HP1", "title": "Python mirror + true parity", "gate_entry": "GATE_HP0", "gate_exit": "GATE_HP1",
+      "tasks": [
+        { "id": "HP1T1", "title": "Author py tests + parity fixtures", "requires": [],
+          "description": "Add py/tests/test_hardening.py (artifact required/thin/anchor/self-review, doctor artifact-rot, gate hollow floor, audit side_effecting) and add planning/audit-fixtures/side-effect.json; wire the new fixture into tests/parity.sh so parity exercises the new audit rules." },
+        { "id": "HP1T2", "title": "Mirror state/gate/audit", "requires": ["HP1T1"],
+          "description": "Mirror into the port: state.py (actor field from HB_ACTOR), gate.py (zero-criteria hollow floor), audit.py (expanded NONDET + side_effecting rule identical to node)." },
+        { "id": "HP1T3", "title": "Mirror review + doctor + protocol", "requires": ["HP1T1"],
+          "description": "Mirror into cli.py (hb review pass --artifact + anchor + self-review + store), doctor.py (review-artifact rot), and protocol.py (review action text)." },
+        { "id": "HP1T4", "title": "Mirror executor + call-sites", "requires": ["HP1T3"],
+          "description": "Mirror into executor.py (persist refuter findings, --artifact, escalate on empty, distinct actors) and update the python review call-sites (test_exec, test_review stubs) to the artifact form." },
+        { "id": "HP1T5", "title": "Restore true parity", "requires": ["HP1T2", "HP1T4"],
+          "description": "Extend tests/parity.sh to compare node vs python audit on the side-effect fixture, so a future divergence in the new rules is caught. Confirm node == python across all fixtures." }
+      ]
+    },
+    {
+      "id": "HP2", "title": "Docs + version", "gate_entry": "GATE_HP1", "gate_exit": "GATE_HP2",
+      "tasks": [
+        { "id": "HP2T1", "title": "Docs + invariant", "requires": [],
+          "description": "Document the review-evidence contract in plugin/skills/heartbeat/SKILL.md, add the review-evidence invariant to AGENTS.md, and add a v1.13 section to STATUS.md." },
+        { "id": "HP2T2", "title": "Version + package", "requires": ["HP2T1"],
+          "description": "Bump plugin/.claude-plugin/plugin.json and .claude-plugin/marketplace.json to 1.13.0 and py/pyproject.toml to 0.5.0 (update the version-bump test), then rebuild and extract-test the package." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_HP0": {
+      "desc": "The node review-evidence hardening holds.",
+      "review": { "prompt": "Refute that HP0 is done: can a phase still advance on a self-asserted review pass? Does the artifact gate reduce to real evidence, or can a padded/filler artifact pass? Is the self-review guard actually enforced in the executor path (distinct actors), or opt-in only? Does a zero-criteria gate really fail at runtime? Are T45/T46 hollow (asserting the stub, not the guard)?" },
+      "criteria": [
+        { "id": "hp0c1", "desc": "node suite green", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" >/dev/null 2>&1" },
+        { "id": "hp0c2", "desc": "suite covers the hardening (T45 + T46)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T46 && bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q T45" }
+      ]
+    },
+    "GATE_HP1": {
+      "desc": "Python mirrors node and parity truly catches divergence.",
+      "review": { "prompt": "Refute that HP1 is done: is the Python side ACTUALLY hardened the same way, or a stub? Does parity now EXERCISE the side_effecting/nondet rules (a fixture that triggers them), so a node/python divergence would fail the test — or is it still a false-green? Do node and python agree on the new audit findings?" },
+      "criteria": [
+        { "id": "hp1c1", "desc": "python suite green", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q >/dev/null 2>&1" },
+        { "id": "hp1c2", "desc": "parity green", "cmd": "bash \"$PROJECT_DIR/tests/parity.sh\" >/dev/null 2>&1" },
+        { "id": "hp1c3", "desc": "parity now exercises the side-effect rule", "cmd": "bash \"$PROJECT_DIR/tests/parity.sh\" 2>&1 | grep -qi 'side'" }
+      ]
+    },
+    "GATE_HP2": {
+      "desc": "Documented, versioned, both suites green.",
+      "criteria": [
+        { "id": "hp2c1", "desc": "version bumped to 1.13.0", "cmd": "grep -q '1.13.0' \"$PROJECT_DIR/plugin/.claude-plugin/plugin.json\"" },
+        { "id": "hp2c2", "desc": "node suite green", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" >/dev/null 2>&1" },
+        { "id": "hp2c3", "desc": "python suite green", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q >/dev/null 2>&1" }
+      ]
+    }
+  }
+}

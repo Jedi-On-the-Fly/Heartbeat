@@ -18,7 +18,11 @@ const { extractPaths } = require('./hb-lint.js');
 
 const VACUOUS   = /^\s*(true|:|exit\s+0|echo\b|test\s+1\s*=\s*1|\[\s+1\s+=\s+1\s+\])\s*;?\s*$/;
 const EXISTENCE = /^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls(\s|$))/;
-const NONDET    = /\bcurl\b|\bwget\b|\bnc\b|\bping\b|\bsleep\b|\$RANDOM\b|\bdate\b|https?:\/\/(?!localhost|127\.0\.0\.1)/;
+const NONDET    = /\bcurl\b|\bwget\b|\bnc\b|\bping\b|\bsleep\b|\bRANDOM\b|\bshuf\b|\/dev\/urandom|\bSECONDS\b|\$\$|\bmktemp\b(?!\s+-u)|\bdate\b|https?:\/\/(?!localhost|127\.0\.0\.1)/;
+// A criterion that CREATES evidence can fabricate its own pass. Gates must observe
+// reality, not produce it. Read-only redirections (/dev/null, /tmp scratch, 2>&1) are
+// exempt; writes into the project tree are the risk.
+const SIDE_EFFECT = /(^|[^0-9>])>{1,2}\s*(?!\/dev\/null|\/tmp|&\s*[12])|\btee\b|\bcp\b|\bmv\b|\bmkdir\b|\btouch\b|\bdd\b|\bsed\s+-i\b|\binstall\s+-D\b/;
 
 function classify(cmd) {
   const c = (cmd || '').trim();
@@ -27,6 +31,7 @@ function classify(cmd) {
   return 'behavioral';
 }
 const isNondet = (cmd) => NONDET.test(cmd || '');
+const isSideEffecting = (cmd) => SIDE_EFFECT.test(cmd || '');
 
 function audit(dag) {
   const findings = [];
@@ -55,6 +60,9 @@ function audit(dag) {
         { gate: p.gate_exit, criterion: c.id });
       if (isNondet(c.cmd)) F('warn', 'nondeterministic', p.id,
         `${p.gate_exit}[${c.id}] touches network/time — may flake; gates must be deterministic`,
+        { gate: p.gate_exit, criterion: c.id });
+      if (isSideEffecting(c.cmd)) F('warn', 'side_effecting', p.id,
+        `${p.gate_exit}[${c.id}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)`,
         { gate: p.gate_exit, criterion: c.id });
     }
     if (behavioral === 0)
