@@ -139,3 +139,11 @@ An auditor and a fleet raise the floor; they do not choose the assertion for you
 can be deterministic, behavioral, and audit-clean while testing the wrong thing. Picking
 the assertion that actually means "the work is done" is judgment — this guide sharpens it,
 it does not replace it.
+
+## See also
+
+- [10 rules for a good gate](writing-gates-10-rules.md) — the checklist form.
+- [Add refutation to a sensitive gate](add-refutation-to-a-sensitive-gate.md) — when a
+  deterministic pass isn't enough.
+- [Write fast, deterministic gates](write-fast-deterministic-gates.md).
+- [Write gates for non-code work](write-gates-for-non-code-work.md).

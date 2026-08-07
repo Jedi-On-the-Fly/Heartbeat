@@ -24,6 +24,12 @@ Proven iff all three hold:
 Use this when the weakness is *discriminating power* (the gate can't tell the stub
 from real work): hollow, existence, coverage-header-grep.
 
+The artifact need not be code. A **non-code deliverable** — a document, a dataset, a
+config — uses the same triple: the stub is the placeholder or wrong-shape version a lazy
+worker emits (a `TODO` section, a header-only CSV), and the behavioral gate asserts the
+deliverable actually carries its content (a real recommendation, rows that parse to the
+right schema).
+
 ## Property mode
 
 Some weaknesses aren't about stub-vs-real; they're a property of the gate itself

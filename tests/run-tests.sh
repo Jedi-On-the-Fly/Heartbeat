@@ -789,6 +789,16 @@ else
   echo "  (python3 absent — T53 skipped)"
 fi
 
+grp "T54 — behavioral-gate HowTo mechanism demos (docs/howto)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T54.1 the refutation guard demo drives the real hb CLI end-to-end" \
+    'bash "'"$GEX"'/refutation-demo.sh" 2>&1 | grep -q "REFUTATION-GUARDS-OK"'
+  check "T54.2 the example corpus is deterministic across runs and within budget" \
+    'bash "'"$GEX"'/fast-determinism-check.sh" 2>&1 | grep -q "FAST-DETERMINISTIC-OK"'
+else
+  echo "  (python3 absent — T54 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

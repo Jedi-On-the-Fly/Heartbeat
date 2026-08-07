@@ -1,0 +1,64 @@
+{
+  "_meta": {
+    "project": "howto-gate-complements",
+    "note": "Four complementary how-to files for the behavioral-gates guide, same dogfooded approach: every claim backed by a runnable proof + adversarially refuted by a distinct actor. New runnable proofs reuse the existing self-verifying runner where possible. RG0 extends the example corpus to NON-CODE deliverables (a document, a dataset) proven by the same run.sh triple. RG1 adds two mechanism demos that drive the REAL runtime: refutation-demo.sh drives the public hb CLI review guard (pass needs a substantive, anchored artifact from a DIFFERENT actor); fast-determinism-check.sh proves the corpus is deterministic across runs and completes well under a time budget. RG2 writes the four docs (10 rules, add refutation, fast+deterministic, non-code), wires them into the index + main guide, and enforces the new proofs in the node suite (T54) so they cannot rot."
+  },
+  "phases": [
+    {
+      "id": "RG0", "title": "Non-code gate examples", "gate_entry": null, "gate_exit": "GATE_RG0",
+      "tasks": [
+        { "id": "RG0T1", "title": "Note non-code deliverables in the spec", "requires": [],
+          "description": "Spec-first: extend docs/howto/gate-examples/SPEC.md to note that an example's artifact need not be code — a document or dataset deliverable uses the same discriminating triple (stub / weak_gate / strong_gate)." },
+        { "id": "RG0T2", "title": "Author the non-code examples", "requires": ["RG0T1"],
+          "description": "Add docs/howto/gate-examples/non-code-doc/ (a report.md whose Recommendation section must have real content, not a TODO placeholder) and docs/howto/gate-examples/non-code-data/ (a data.csv that must parse to the right schema with at least one valid row) — each a self-contained example proven by docs/howto/gate-examples/run.sh, no model." }
+      ]
+    },
+    {
+      "id": "RG1", "title": "Mechanism demos (real runtime)", "gate_entry": "GATE_RG0", "gate_exit": "GATE_RG1",
+      "tasks": [
+        { "id": "RG1T1", "title": "Refutation guard demo", "requires": [],
+          "description": "Write docs/howto/gate-examples/refutation-demo.sh: bootstrap a throwaway project via the public hb CLI, drive a review-gated phase to review_pending, and assert the real guard — a pass is rejected with no --artifact, rejected for a thin/anchorless artifact, rejected for a self-review (same HB_ACTOR as the doer), and accepted only for a substantive, phase-anchored artifact from a DIFFERENT actor. Print REFUTATION-GUARDS-OK when all four hold." },
+        { "id": "RG1T2", "title": "Fast + deterministic demo", "requires": [],
+          "description": "Write docs/howto/gate-examples/fast-determinism-check.sh: run docs/howto/gate-examples/run.sh twice and assert byte-identical output (deterministic: same artifacts, same verdict), and assert the whole corpus completes under a generous time budget via timeout (fast, not a flaky tight bound). Print FAST-DETERMINISTIC-OK when both hold." }
+      ]
+    },
+    {
+      "id": "RG2", "title": "The four docs + wiring", "gate_entry": "GATE_RG1", "gate_exit": "GATE_RG2",
+      "tasks": [
+        { "id": "RG2T1", "title": "Write 10-rules + refutation docs", "requires": [],
+          "description": "Write docs/howto/writing-gates-10-rules.md (ten numbered rules, each pointing at a runnable proof in gate-examples/ or a sibling how-to; a checklist that links, not a fourth copy of the enforced rules) and docs/howto/add-refutation-to-a-sensitive-gate.md (how to add a review block; its proof is refutation-demo.sh)." },
+        { "id": "RG2T2", "title": "Write fast + non-code docs", "requires": [],
+          "description": "Write docs/howto/write-fast-deterministic-gates.md (proof: fast-determinism-check.sh) and docs/howto/write-gates-for-non-code-work.md (proof: the non-code-doc and non-code-data examples). Follow the project doc rules (current-state, no archeology); link the enforced rules rather than restating them." },
+        { "id": "RG2T3", "title": "Index, cross-link, enforce", "requires": ["RG2T1", "RG2T2"],
+          "description": "Add all four docs to docs/howto/README.md and a See-also from docs/howto/writing-behavioral-gates.md; add a T54 group to tests/run-tests.sh that runs refutation-demo.sh and fast-determinism-check.sh and asserts their markers, so the proofs cannot rot." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_RG0": {
+      "desc": "Non-code deliverables are gated behaviorally: the same runner proves a document and a dataset example, weak gate fooled, behavioral gate rejects the placeholder/wrong-shape stub.",
+      "review": { "prompt": "Refute that RG0 is done: is either non-code strong_gate really behavioral, or existence in disguise (does non-code-doc's strong gate actually reject a TODO placeholder, and non-code-data's reject a header-only CSV)? Does the weak gate genuinely pass on the stub? Are both proven by the shared runner?" },
+      "criteria": [
+        { "id": "rg0c1", "desc": "the runner proves every example including the new ones", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/run.sh\" 2>&1 | grep -q 'ALL-EXAMPLES-PROVEN:'" },
+        { "id": "rg0c2", "desc": "both non-code examples are proven by name", "cmd": "out=$(bash \"$PROJECT_DIR/docs/howto/gate-examples/run.sh\" 2>&1); for e in non-code-doc non-code-data; do printf '%s' \"$out\" | grep -q \"^PROVEN:$e$\" || exit 1; done" }
+      ]
+    },
+    "GATE_RG1": {
+      "desc": "Both mechanism demos drive the real runtime and report their markers.",
+      "review": { "prompt": "Refute that RG1 is done: does refutation-demo.sh drive the REAL hb CLI review guard (not a mock), and does it actually check all four outcomes (no-artifact / thin / self-review / distinct-actor)? Does fast-determinism-check.sh really re-run and diff two runs and enforce a timeout, or is the marker cosmetic?" },
+      "criteria": [
+        { "id": "rg1c1", "desc": "refutation guard demo passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refutation-demo.sh\" 2>&1 | grep -q 'REFUTATION-GUARDS-OK'" },
+        { "id": "rg1c2", "desc": "fast + deterministic demo passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/fast-determinism-check.sh\" 2>&1 | grep -q 'FAST-DETERMINISTIC-OK'" }
+      ]
+    },
+    "GATE_RG2": {
+      "desc": "Each doc points at a proof that runs; the index and main guide link them; the suite enforces the demos.",
+      "review": { "prompt": "Refute that RG2 is done: does any doc claim a proof that does not run? Is writing-gates-10-rules.md a fourth copy of the enforced rules that will drift, rather than a checklist that links them? Is any of the four docs missing from the index or unlinked from the main guide? Does T54 actually enforce the demos?" },
+      "criteria": [
+        { "id": "rg2c1", "desc": "each doc references its runnable proof", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'refutation-demo' add-refutation-to-a-sensitive-gate.md && grep -q 'fast-determinism-check' write-fast-deterministic-gates.md && grep -q 'non-code-doc' write-gates-for-non-code-work.md && grep -q 'non-code-data' write-gates-for-non-code-work.md && grep -q 'gate-examples' writing-gates-10-rules.md" },
+        { "id": "rg2c2", "desc": "the index lists all four docs", "cmd": "for f in writing-gates-10-rules add-refutation-to-a-sensitive-gate write-fast-deterministic-gates write-gates-for-non-code-work; do grep -q \"$f\" \"$PROJECT_DIR/docs/howto/README.md\" || exit 1; done" },
+        { "id": "rg2c3", "desc": "the node suite enforces the demos (T54 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T54 '" }
+      ]
+    }
+  }
+}
