@@ -18,7 +18,7 @@ Three moves follow from that:
 
 Underneath: state is event-sourced, so a dead session rebuilds and continues; every gate pass commits and tags, so each phase is a restore point; the tick notices stuck loops and gates that silently rot and escalates instead of waiting forever.
 
-It runs two ways — a Claude Code plugin, or `pip install` as a pure-Python package with one `hb` console that runs anywhere Python does. Stage B (the worker) is a two-method contract, so you can drive it with a local model, Agno, CrewAI, or any command. The two implementations are kept identical by a parity test.
+It runs two ways — a Claude Code plugin, or `pip install` as a pure-Python package with one `hb` console that runs anywhere Python does. Stage B (the worker) is a two-method contract, so you can drive it with a local model, any of seven agent frameworks (Agno, CrewAI, LangGraph, the OpenAI Agents SDK, AutoGen, smolagents, pydantic-ai), or any command — the same DAG runs under all of them. The two implementations are kept identical by a parity test.
 
 The honest part: it's only as good as your gates. A weak gate gives you *false* confidence, which is worse than none — so it ships an auditor that refuses hollow gates before you run. It won't guarantee a gate tests the *right* thing; that's still on you. And it earns its keep on long, verifiable work, not throwaway scripts.
 

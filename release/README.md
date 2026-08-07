@@ -23,7 +23,7 @@ Most agent tooling helps you *run* agents. HeartBeat is about the harder half: k
 | **Adversarial verification** | A second agent must fail to refute completion — at execution time *and* plan time. |
 | **Restore points** | Every gate pass commits and tags, so each phase is a `git reset` away. |
 | **Liveness** | The tick detects stuck loops, unanswered reviews, and gates that silently rot, and escalates instead of waiting forever. |
-| **Pluggable workers** | Stage B is a two-method contract; drive it with a local model, Agno, CrewAI, headless Claude, or any command. |
+| **Pluggable workers** | Stage B is a two-method contract; drive it with a local model, headless Claude, seven agent frameworks (Agno, CrewAI, LangGraph, the OpenAI Agents SDK, AutoGen, smolagents, pydantic-ai), or any command. |
 
 ## Two ways to run it
 
@@ -53,14 +53,16 @@ Describe the work as a DAG (`phases → tasks → behavioral gates`), audit and 
 
 ## Backends
 
-Stage B is swappable. A backend implements two functions — `execute → {ok}` and `refute → {refuted}`.
+Stage B is swappable. A backend implements two functions — `execute → {ok}` and `refute → {refuted}` — so the *same DAG* runs under any of them; the framework is an implementation detail, the gates are the durable asset.
 
 | Backend | Worker |
 |---|---|
 | `claude-code` | headless `claude -p` |
-| `agno` / `crewai` | framework agents; local models (no API key) or a provider |
+| `agno` · `crewai` · `langgraph` · `openai-agents` · `autogen` · `smolagents` · `pydantic-ai` | agent frameworks; local models (no API key) or a provider |
 | `ollama` | local models, stdlib only, offline |
 | `script` | any command, any language |
+
+Adding another framework is one small adapter (two methods + graceful degrade) — it doesn't touch the core, and it can't break the runtime parity.
 
 ## How it works
 
