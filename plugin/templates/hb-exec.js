@@ -50,6 +50,9 @@ function defaultCmd(backend) {
     case 'ollama':        return `python3 "${path.join(ex, 'ollama_exec.py')}"`;
     case 'langgraph':     return `python3 "${path.join(ex, 'langgraph_exec.py')}"`;
     case 'openai-agents': return `python3 "${path.join(ex, 'openai_agents_exec.py')}"`;
+    case 'autogen':       return `python3 "${path.join(ex, 'autogen_exec.py')}"`;
+    case 'smolagents':    return `python3 "${path.join(ex, 'smolagents_exec.py')}"`;
+    case 'pydantic-ai':   return `python3 "${path.join(ex, 'pydanticai_exec.py')}"`;
     default:            return backend;   // 'script'/custom: the backend IS the command
   }
 }

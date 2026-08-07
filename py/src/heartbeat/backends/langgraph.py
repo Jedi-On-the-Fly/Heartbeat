@@ -7,7 +7,7 @@ Degrades to protocol-valid JSON if langgraph/langchain isn't installed.
 """
 import os
 
-from ._fileblocks import write_blocks
+from ._fileblocks import write_blocks, norm_rel
 
 
 def _model():
@@ -46,7 +46,7 @@ def execute(payload):
     @tool
     def save_file(path: str, content: str) -> str:
         """Write content to a file at a RELATIVE path in the current working directory."""
-        rel = path.lstrip("/")
+        rel = norm_rel(path, cwd)
         base = os.path.realpath(cwd)
         dest = os.path.realpath(os.path.join(base, rel))
         if not dest.startswith(base + os.sep) or rel.startswith(".hb/"):

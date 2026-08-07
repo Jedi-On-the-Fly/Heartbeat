@@ -1,0 +1,66 @@
+{
+  "_meta": {
+    "project": "frameworks-autogen-smol-pydantic",
+    "note": "Add three more agent-framework backends — AutoGen, smolagents, pydantic-ai — in BOTH runtimes, following the langgraph/openai-agents recipe: two-method contract (execute/refute), graceful degrade when the lib is absent, native file tool with a FILE-block fallback, keyless-testable via Ollama. Backends are not a parity surface, so parity is unaffected. Docs updated per project rules (dense, current-state). Gate cmds are behavioral and non-side-effecting."
+  },
+  "phases": [
+    {
+      "id": "MB0", "title": "Backends (both runtimes) + registry", "gate_entry": null, "gate_exit": "GATE_MB0",
+      "tasks": [
+        { "id": "MB0T1", "title": "AutoGen backend", "requires": [],
+          "description": "Add py/src/heartbeat/backends/autogen.py + plugin/templates/executors/autogen_exec.py — execute/refute over an AutoGen AssistantAgent (autogen-agentchat), FILE-block writing, provider ollama (OpenAI-compatible /v1) | openai, graceful degrade, fd hygiene in the subprocess." },
+        { "id": "MB0T2", "title": "smolagents backend", "requires": [],
+          "description": "Add py/src/heartbeat/backends/smolagents.py + executors/smolagents_exec.py — execute/refute over a smolagents ToolCallingAgent with a save_file tool + FILE-block fallback, provider ollama via OpenAIServerModel." },
+        { "id": "MB0T3", "title": "pydantic-ai backend", "requires": [],
+          "description": "Add py/src/heartbeat/backends/pydanticai.py + executors/pydanticai_exec.py — execute/refute over a pydantic-ai Agent with a save_file tool + FILE-block fallback, provider ollama via an OpenAI-compatible model." },
+        { "id": "MB0T4", "title": "Register + extras", "requires": ["MB0T1", "MB0T2", "MB0T3"],
+          "description": "Register in py backends/__init__.py (_KNOWN + name→module; pydantic-ai→pydanticai), hb-exec.js defaultCmd cases, and py/pyproject.toml optional-dependencies." }
+      ]
+    },
+    {
+      "id": "MB1", "title": "Degrade + validity tests", "gate_entry": "GATE_MB0", "gate_exit": "GATE_MB1",
+      "tasks": [
+        { "id": "MB1T1", "title": "Python degrade tests", "requires": [],
+          "description": "Extend py/tests/test_backends_frameworks.py: registry resolves autogen/smolagents/pydantic-ai and each degrades to protocol-valid JSON when the lib is absent." },
+        { "id": "MB1T2", "title": "Node validity/degrade tests", "requires": [],
+          "description": "Add T49/T50/T51 to tests/run-tests.sh (autogen/smolagents/pydantic-ai executor scripts valid + degrade) and extend T39.2 to check bootstrap ships them." }
+      ]
+    },
+    {
+      "id": "MB2", "title": "Live proof + docs + version", "gate_entry": "GATE_MB1", "gate_exit": "GATE_MB2",
+      "tasks": [
+        { "id": "MB2T1", "title": "Live proof against Ollama", "requires": [],
+          "description": "Install each lib in a venv and run py/real-backend.py for autogen, smolagents, pydantic-ai against a local Ollama model; record outcomes (best-effort — note any that need API tuning)." },
+        { "id": "MB2T2", "title": "Docs + version + package", "requires": ["MB2T1"],
+          "description": "Update docs/dev-python.md (backends table), the SKILL backends line, and STATUS.md per the project doc rules; bump plugin/.claude-plugin/plugin.json + marketplace.json to 1.15.0 and py/pyproject.toml to 0.7.0; rebuild and extract-test the package." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_MB0": {
+      "desc": "All three backends exist in both runtimes and are registered.",
+      "review": { "prompt": "Refute that MB0 is done: do all three backends implement execute AND refute in both runtimes, or stubs? Do they lazy-import (degrade to protocol-valid JSON without the lib)? Is the subprocess script hygienic (only JSON on stdout)? Does the registry resolve autogen/smolagents/pydantic-ai (including the pydantic-ai→pydanticai module mapping)?" },
+      "criteria": [
+        { "id": "mb0c1", "desc": "py registry resolves all three", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"from heartbeat.backends import get; assert get('autogen') and get('smolagents') and get('pydantic-ai')\"" },
+        { "id": "mb0c2", "desc": "each implements execute and refute (py)", "cmd": "for m in autogen smolagents pydanticai; do grep -q 'def execute' \"$PROJECT_DIR/py/src/heartbeat/backends/$m.py\" && grep -q 'def refute' \"$PROJECT_DIR/py/src/heartbeat/backends/$m.py\" || exit 1; done" },
+        { "id": "mb0c3", "desc": "hb-exec.js knows all three", "cmd": "for b in autogen smolagents pydantic-ai; do grep -q \"$b\" \"$PROJECT_DIR/plugin/templates/hb-exec.js\" || exit 1; done" }
+      ]
+    },
+    "GATE_MB1": {
+      "desc": "Degrade/validity tests pass in both suites.",
+      "criteria": [
+        { "id": "mb1c1", "desc": "python framework-backend tests pass", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_backends_frameworks.py" },
+        { "id": "mb1c2", "desc": "node suite covers the new executors (T49-T51)", "cmd": "for t in T49 T50 T51; do bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q $t || exit 1; done" }
+      ]
+    },
+    "GATE_MB2": {
+      "desc": "Documented, versioned, both suites + parity green.",
+      "criteria": [
+        { "id": "mb2c1", "desc": "version bumped to 1.15.0", "cmd": "grep -q '1.15.0' \"$PROJECT_DIR/plugin/.claude-plugin/plugin.json\"" },
+        { "id": "mb2c2", "desc": "node suite green", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" >/dev/null 2>&1" },
+        { "id": "mb2c3", "desc": "python suite green", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q >/dev/null 2>&1" },
+        { "id": "mb2c4", "desc": "parity still green", "cmd": "bash \"$PROJECT_DIR/tests/parity.sh\" >/dev/null 2>&1" }
+      ]
+    }
+  }
+}

@@ -6,9 +6,11 @@ For arbitrary/external backends, the executor uses a subprocess wire protocol in
 """
 import importlib
 
-_KNOWN = {"ollama", "agno", "crewai", "claude", "claude-code", "langgraph", "openai-agents"}
-_MODULE = {"claude-code": "claude", "openai-agents": "openai_agents"}
-_MODULES = {"ollama", "agno", "crewai", "claude", "langgraph", "openai_agents"}
+_KNOWN = {"ollama", "agno", "crewai", "claude", "claude-code", "langgraph", "openai-agents",
+          "autogen", "smolagents", "pydantic-ai"}
+_MODULE = {"claude-code": "claude", "openai-agents": "openai_agents", "pydantic-ai": "pydanticai"}
+_MODULES = {"ollama", "agno", "crewai", "claude", "langgraph", "openai_agents",
+            "autogen", "smolagents", "pydanticai"}
 
 
 def get(name):

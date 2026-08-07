@@ -11,7 +11,7 @@ model call. Provider HB_EXEC_PROVIDER = anthropic (default) | ollama | openai. A
 import sys, os, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
-    from _fileblocks import write_blocks
+    from _fileblocks import write_blocks, norm_rel
 except Exception:
     def write_blocks(text, cwd=None):
         return []
@@ -60,7 +60,7 @@ def do_execute(payload):
     @tool
     def save_file(path: str, content: str) -> str:
         """Write content to a RELATIVE path in the current working directory."""
-        rel = path.lstrip("/")
+        rel = norm_rel(path, cwd)
         base = os.path.realpath(cwd)
         dest = os.path.realpath(os.path.join(base, rel))
         if not dest.startswith(base + os.sep) or rel.startswith(".hb/"):

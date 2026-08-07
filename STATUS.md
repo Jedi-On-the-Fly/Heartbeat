@@ -1,7 +1,22 @@
 # STATUS — HeartBeat
 
-**Version:** v1.14 (more framework backends, over v1.13)
+**Version:** v1.15 (AutoGen + smolagents + pydantic-ai backends, over v1.14)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.15 — AutoGen + smolagents + pydantic-ai backends
+
+- Three more Stage-B backends in both runtimes (in-process `backends/` + subprocess
+  `executors/`): **`autogen`** (AutoGen AssistantAgent, FILE-block writer),
+  **`smolagents`** (ToolCallingAgent + `save_file` tool), **`pydantic-ai`** (Agent +
+  `save_file` tool). Same two-method contract, graceful degrade, keyless via Ollama.
+- Hardened path handling: `_fileblocks.norm_rel` (strip `$PROJECT_DIR`, map absolute →
+  relative-under-cwd/basename) now backs both the FILE-block writer and every `save_file`
+  tool, so a model that emits an absolute or prefixed path can't nest files.
+- All three proven to drive their framework end-to-end against local Ollama (agent writes
+  a file, a behavioral gate runs it). Backends now: claude-code · agno · crewai ·
+  langgraph · openai-agents · autogen · smolagents · pydantic-ai · ollama · script.
+- Not a parity surface — parity unaffected. +T49/T50/T51 (node), +3 python degrade tests,
+  pyproject extras `[autogen]` / `[smolagents]` / `[pydantic-ai]`.
 
 ## v1.14 — LangGraph + OpenAI Agents SDK backends
 

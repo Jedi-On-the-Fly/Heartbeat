@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "heartbeat-hb"
-version = "0.6.0"
+version = "0.7.0"
 description = "HeartBeat — tick-driven agent orchestration (pure-Python port, zero node/bash)"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -16,6 +16,9 @@ agno = ["agno", "openai"]
 crewai = ["crewai"]
 langgraph = ["langgraph", "langchain-ollama"]
 openai-agents = ["openai-agents"]
+autogen = ["autogen-agentchat", "autogen-ext[openai]"]
+smolagents = ["smolagents", "openai"]
+pydantic-ai = ["pydantic-ai"]
 
 [project.scripts]
 hb = "heartbeat.cli:main"
