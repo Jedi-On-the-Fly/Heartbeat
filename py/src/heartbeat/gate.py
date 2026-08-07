@@ -39,9 +39,14 @@ def eval_gate(hbdir, gate_id, timeout=None):
     gate = (st.read_dag(hbdir).get("gates") or {}).get(gate_id)
     if gate is None:
         return None
+    criteria = gate.get("criteria") or []
+    if not criteria:
+        # Hollow-gate floor: a zero-criteria gate proves nothing — refuse it at runtime.
+        return {"passed": 0, "failed": 1,
+                "lines": [f"  ✗ [--] gate {gate_id} has NO criteria — a gate must assert something"]}
     passed = failed = 0
     lines = []
-    for c in (gate.get("criteria") or []):
+    for c in criteria:
         ok = _run_cmd(c.get("cmd", ""), hbdir, timeout)
         lines.append(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')}")
         passed += 1 if ok else 0

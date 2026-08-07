@@ -179,6 +179,7 @@ def atomic_write(path, data):
 
 def append_event(hbdir, ev):
     ev.setdefault("ts", now_iso())
+    ev.setdefault("actor", os.environ.get("HB_ACTOR", "unknown"))   # identity for adversarial review
     with open(events_path(hbdir), "a") as f:
         f.write(json.dumps(ev) + "\n")
 

@@ -204,9 +204,26 @@ def _fan_out(hbdir, cfg, attempts):
 
 
 def run(hbdir):
+    # In-process, so don't leak HB_ACTOR into the caller's environment.
+    _saved = os.environ.get("HB_ACTOR")
+    try:
+        return _run(hbdir)
+    finally:
+        if _saved is None:
+            os.environ.pop("HB_ACTOR", None)
+        else:
+            os.environ["HB_ACTOR"] = _saved
+
+
+def _run(hbdir):
     cfg = config(hbdir)
     max_iters = int(os.environ.get("HB_EXEC_MAX_ITERS", "0")) or 10 ** 9
     attempts = {}
+    # Distinct identities: the worker stamps task_done, the refuter stamps the review pass —
+    # guaranteed different so the self-review guard is enforced in the automated path.
+    worker_actor = os.environ.get("HB_ACTOR", "hb-exec:worker")
+    os.environ["HB_ACTOR"] = worker_actor
+    refuter_actor = f"{worker_actor}:refuter"
     for _ in range(max_iters):
         out = tickmod.tick(hbdir)
         data = out.get("data", {})
@@ -259,8 +276,33 @@ def run(hbdir):
             if not isinstance(r.get("refuted"), bool):
                 print(f"HB-EXEC STOP: review_error — {g}")
                 return 1
-            st.mutate(hbdir, {"event": "review_failed" if r["refuted"] else "review_passed", "gate": g,
-                              **({"note": r.get("findings", "")} if r["refuted"] else {})})
+            if r["refuted"]:
+                st.mutate(hbdir, {"event": "review_failed", "gate": g, "note": (r.get("findings", "") or "")[:200]})
+            else:
+                # Sev-1: a "could not refute" pass must cite the refuter's ACTUAL written
+                # attempt. Persist findings + route through the validated review path (as a
+                # distinct refuter actor), so the pass is reducible to evidence — no rubber-stamp.
+                findings = (r.get("findings") or "").strip()
+                if len(findings) < 40:
+                    print(f"HB-EXEC STOP: review_error — {g}: refuter returned a pass with no substantive findings")
+                    return 1
+                fdir = Path(hbdir) / "reviews"
+                fdir.mkdir(parents=True, exist_ok=True)
+                fpath = fdir / f"{g}.attempt.md"
+                fpath.write_text(f"# Refutation attempt for {g}\n\nVerdict: could not refute (refuted=false)\n\n{findings}\n")
+                from . import cli as _cli
+                saved = os.environ.get("HB_ACTOR")
+                os.environ["HB_ACTOR"] = refuter_actor
+                try:
+                    rc = _cli.main(["review", g, "pass", "--artifact", str(fpath), "--dir", str(hbdir)])
+                finally:
+                    if saved is None:
+                        os.environ["HB_ACTOR"] = worker_actor
+                    else:
+                        os.environ["HB_ACTOR"] = saved
+                if rc != 0:
+                    print(f"HB-EXEC STOP: review_error — {g}: review pass rejected by validation")
+                    return 1
         elif reason == "all_done":
             print(reportmod.render(hbdir))
             print("HB-EXEC DONE: all phases complete")

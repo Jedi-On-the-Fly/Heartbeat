@@ -45,6 +45,24 @@ def doctor(hbdir):
            k(on_disk.get("completed_phases")) != k(state["completed_phases"]):
             notes.append("state.json differs from the event-log projection — run: hb rebuild")
 
+    # Sev-1: every review_passed must remain backed by a readable, substantive artifact.
+    passed_rev = {}
+    for e in st.read_events(hbdir):
+        if e.get("event") == "review_passed":
+            passed_rev[e.get("gate")] = e
+        elif e.get("event") == "review_failed":
+            passed_rev.pop(e.get("gate"), None)
+    for g, e in passed_rev.items():
+        rel = e.get("artifact") or f"reviews/{g}.md"
+        try:
+            body = (Path(hbdir) / rel).read_text()
+        except OSError:
+            body = None
+        if body is None:
+            problems.append(f"{g} review_passed but backing artifact {rel} is missing — the refutation can no longer be inspected (Sev-1 rot)")
+        elif len(body.strip()) < 40:
+            problems.append(f"{g} review_passed but backing artifact {rel} is empty/thin — not a real refutation")
+
     return {"problems": problems, "notes": notes}
 
 

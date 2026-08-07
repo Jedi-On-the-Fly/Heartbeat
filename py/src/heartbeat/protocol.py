@@ -8,7 +8,7 @@ implementations stay reason-compatible.
 PROTOCOL = {
     "next_task":          "hb start <id> -> do the work -> hb done <id> (or hb fail <id> if you could not complete it). Never hand-edit state.json.",
     "gate_pending":       "hb gate <gate> — a pass advances the phase, UNLESS the gate has a review block (then a review is owed next).",
-    "review_pending":     "Spawn a skeptical reviewer to REFUTE that the phase is done (hollow tests? faked output?), then: hb review <gate> pass|fail \"<findings>\".",
+    "review_pending":     "Spawn a skeptical reviewer to REFUTE that the phase is done (hollow tests? faked output?). Write its full attempt to a findings file, then: hb review <gate> fail \"<holes>\"  OR  hb review <gate> pass --artifact <findings-file> (a pass MUST cite the refuter's written attempt — no rubber-stamps).",
     "gate_blocked":       "Run: hb diagnose — fix the ROOT cause (do NOT weaken the gate), then re-run hb gate <gate>.",
     "at_capacity":        "Nothing to do — max tasks already in flight. No action.",
     "state_corrupted":    "hb rebuild (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable.",
@@ -17,7 +17,7 @@ PROTOCOL = {
     "unsanctioned_drift": "Review the diff. If the change is intended: hb tick --freeze.",
     "gate_rot":           "Run: hb diagnose — a completed phase's gate references a deleted file; restore it or re-point the gate.",
     "build_stuck":        "Run: hb diagnose — woken repeatedly without progress; root-cause it or surface a blocker report for a human.",
-    "review_stuck":       "The adversarial review never resolved — spawn the refuter and record hb review <gate> pass|fail, or surface for a human.",
+    "review_stuck":       "The adversarial review never resolved — spawn the refuter, write its findings to a file, and record hb review <gate> fail \"<holes>\" or hb review <gate> pass --artifact <file>, or surface for a human.",
     "all_done":           "Write the final project report.",
 }
 

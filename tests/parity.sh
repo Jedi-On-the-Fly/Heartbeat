@@ -24,7 +24,7 @@ cmp(){ # label nodeval pyval
 }
 
 echo "── audit parity ──"
-for f in hollow existence nondeterministic good; do
+for f in hollow existence nondeterministic good side-effect; do
   cmp "audit:$f" "$(a_node "$ROOT/planning/audit-fixtures/$f.json")" "$(a_py "$ROOT/planning/audit-fixtures/$f.json")"
 done
 

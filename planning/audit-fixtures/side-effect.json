@@ -1,0 +1,5 @@
+{ "phases": [ { "id": "P0", "title": "writes and flips", "gate_entry": null, "gate_exit": "G0",
+      "tasks": [ { "id": "T", "title": "write out.json and flip a coin", "requires": [] } ] } ],
+  "gates": { "G0": { "desc": "g", "criteria": [
+      { "id": "a", "desc": "self-made evidence", "cmd": "echo ok > \"$PROJECT_DIR/out.json\"; grep -q ok \"$PROJECT_DIR/out.json\"" },
+      { "id": "b", "desc": "coin flip", "cmd": "[ $((RANDOM % 2)) -eq 0 ]" } ] } } }

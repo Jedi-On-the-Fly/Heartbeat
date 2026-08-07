@@ -15,7 +15,7 @@ case "$mode" in
     id=$(printf '%s' "$payload" | python3 -c 'import sys,json;print(json.load(sys.stdin)["task"]["id"])')
     if [ "${STUB_DISTINCT:-0}" = 1 ]; then printf 'done\\n' > "$id.out"; else printf '%s\\n' "$id" >> done.log; fi
     printf '{"ok":true,"summary":"did %s"}\\n' "$id" ;;
-  refute) printf '{"refuted":%s,"findings":"stub"}\\n' "${STUB_REFUTE:-false}" ;;
+  refute) printf '{"refuted":%s,"findings":"Attempted to refute: inspected done.log for the task output, checked the gate criteria for hollowness, re-ran the behavioral check. No hole found."}\\n' "${STUB_REFUTE:-false}" ;;
 esac
 """
 
