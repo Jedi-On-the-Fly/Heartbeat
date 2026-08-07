@@ -11,7 +11,7 @@ is easy to build. Update as we add cross-implementation surface.
 | Projector | `hb.js project()` | `heartbeat.state.project()` | same events+dag → same `completed_tasks/phases`, `pending_reviews`, `build_stuck_count`, `current_phase` |
 | Resolver | `hb-next-task.js resolve/readyTasks` | `heartbeat.resolver` | same state → same next action / ready set |
 | Lint | `hb-lint.js lint()` | `heartbeat.lint.lint()` | same dag → same errors (warnings may differ in wording) |
-| Protocol | `hb.js PROTOCOL` | `heartbeat.protocol.PROTOCOL` | same reason set + action strings |
+| Protocol | `hb.js PROTOCOL` | `heartbeat.protocol.PROTOCOL` | same reason KEYS (action text is runtime-specific by design — see below) |
 | **Auditor** | `hb-audit.js audit()` | `heartbeat.audit.audit()` | same dag → same findings (rule + severity per gate) |
 
 Fixtures for the auditor live in `planning/audit-fixtures/` and are consumed by BOTH
