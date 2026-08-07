@@ -102,7 +102,9 @@ node <project-dir>/.hb/hb-audit.js <project-dir>/.hb/dag.json    # exit 1 if any
 ```
 Flags: **hollow_gate** (a phase whose gate has no behavioral criterion), **ungated**,
 **unguarded_phase**, existence-only / vacuous criteria, **nondeterministic** gates
-(network/time → flaky), and **gate_offphase** (the gate tests nothing the phase produces).
+(network/time → flaky), **side_effecting** (a gate that writes/creates files can fabricate
+its own evidence — observe, don't produce), and **gate_offphase** (the gate tests nothing
+the phase produces).
 
 **Adversarial layer (agent).** The static rules catch *structural* weakness; a second
 *read* catches semantic gaps — a gate that asserts the **wrong** behaviour, a phase whose
@@ -271,7 +273,7 @@ When woken by a tick (`data.reason` present), act by reason:
 |---|---|
 | `next_task` | `node .hb/hb.js start <id>` → do the work → `node .hb/hb.js done <id>` (or `fail <id>` if you couldn't complete it). No hand-edited JSON. |
 | `gate_pending` | `bash .hb/gate.sh <data.next_task.gate>`. A pass advances the phase — UNLESS the gate has a `review` block, in which case an adversarial review is owed (next). |
-| `review_pending` | The deterministic gate passed; now **spawn a second, skeptical agent** (Agent tool, `isolation` optional) told to *refute* that the phase is truly complete — hollow tests, criteria not really met, faked outputs. Then `node .hb/hb.js review <gate> pass` (couldn't refute) or `fail "<findings>"` (found holes → routes to `gate_blocked`; fix, re-gate, re-review). |
+| `review_pending` | The deterministic gate passed; now **spawn a second, skeptical agent** (Agent tool) told to *refute* that the phase is truly complete — hollow tests, criteria not really met, faked outputs. **Write its attempt to a findings file**, then `node .hb/hb.js review <gate> fail "<holes>"` (found holes → `gate_blocked`) or `node .hb/hb.js review <gate> pass --artifact <file>` (couldn't refute). A pass **requires** a substantive artifact that cites the phase and comes from a different actor than the doer — no rubber-stamps. |
 | `gate_blocked` | `node .hb/hb.js diagnose` → shows which criteria fail + attempts; fix the ROOT cause (never weaken the gate), re-run `bash .hb/gate.sh <gate>`. |
 | `at_capacity` | Nothing to do — max tasks already in flight (or the only ready task is leased). The tick handled it; no wake. |
 | `state_corrupted` | `node .hb/hb.js rebuild` (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable. |

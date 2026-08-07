@@ -1,7 +1,29 @@
 # STATUS — HeartBeat
 
-**Version:** v1.11 (audited plan step + full parity, over v1.10)
+**Version:** v1.13 (review-evidence hardening, over v1.11)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.13 — review-evidence hardening (both runtimes)
+
+Closes the "grade your own homework" hole: a review **pass** is now reducible to evidence
+the deterministic layer can re-inspect.
+
+- **Artifact-backed pass.** `hb review <gate> pass` requires `--artifact <file>` — the
+  refuter's written attempt. It must be substantive, **cite a real phase anchor** (gate id
+  / task id / a path the gate's criteria reference), and be recorded by a **different actor**
+  than the doer (`HB_ACTOR`) — self-reviews are rejected. The artifact is stored under
+  `.hb/reviews/` and re-checked by `doctor` (a vanished/thin artifact is Sev-1 rot).
+- **Runtime hollow-gate floor.** A zero-criteria gate now fails at `gate.sh`/`gate.run_gate`,
+  not just in audit — an un-audited or post-audit-mutated DAG can't buy a free advance.
+- **Auditor reach.** New **side_effecting** rule (a gate that writes/creates files can
+  fabricate its own pass) + broader nondeterminism (`RANDOM`, `shuf`, `/dev/urandom`,
+  `SECONDS`, `$$`, `mktemp`).
+- **Driver enforcement.** `hb-exec` persists the refuter's findings, passes `--artifact`
+  (escalates on an empty pass), and stamps **distinct worker/refuter actors** so the
+  self-review guard is enforced in the automated path.
+- **Symmetric + parity-locked.** Mirrored in the Python port; `tests/parity.sh` gains a
+  `side-effect` fixture that exercises the new audit rules, so a node/python divergence now
+  fails T43 (no false-green).
 
 ## v1.11 — audited plan step + full-coverage parity
 
