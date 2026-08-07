@@ -833,6 +833,18 @@ else
   echo "  (python3 absent — T57 skipped)"
 fi
 
+grp "T58 — re-verify / restore-points / tick-economics howto proofs (docs/howto)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T58.1 a completed gate re-verifies read-only; a decayed proof is caught" \
+    'bash "'"$GEX"'/gate-reverify.sh" 2>&1 | grep -q "REVERIFY-OK"'
+  check "T58.2 a gate pass tags a restore point; reset restores the passing state" \
+    'bash "'"$GEX"'/restore-points.sh" 2>&1 | grep -q "RESTORE-POINTS-OK"'
+  check "T58.3 the tick wakes on work and sleeps while a task is in flight" \
+    'bash "'"$GEX"'/tick-economics.sh" 2>&1 | grep -q "TICK-ECONOMICS-OK"'
+else
+  echo "  (python3 absent — T58 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

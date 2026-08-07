@@ -31,6 +31,12 @@ just prose.
   a reusable conformance harness.
 - [Diagnose a stuck project](diagnose-a-stuck-project.md) — `hb diagnose` names the specific
   cause (failing criterion, missing file, awaiting gate).
+- [Re-verify completed gates](re-verify-completed-gates.md) — a passed gate is a claim about
+  current reality; `--check` / `--all` re-run it and catch decay.
+- [Restore a verified phase](restore-a-verified-phase.md) — every gate pass is a git tag you
+  can roll back to.
+- [Spend the model only on work](spend-the-model-only-on-work.md) — the tick wakes the worker
+  only when there's actionable work.
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).

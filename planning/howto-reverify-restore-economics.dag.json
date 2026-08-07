@@ -1,0 +1,70 @@
+{
+  "_meta": {
+    "project": "howto-reverify-restore-economics",
+    "note": "Tier 2 of the operator how-tos, same dogfooded discipline (runnable proof per claim + adversarial refutation by a distinct actor), all DETERMINISTIC. RV0: gate re-verifiability — a completed gate's proof is re-runnable read-only (hb gate --check / --all); if the artifact regresses, re-verification catches it (would_block), and --check appends no events. RP0: restore points — every gate pass commits and tags, so a destructive change is undone by resetting to the gate's tag, and the gate passes again; HB_GIT_AUTOCOMMIT=0 opts out (no tag). TE0: tick economics — the tick wakes only when there is actionable work (a ready task) and sleeps (at_capacity) while a task is in flight, so no model is spent in the idle loop. DW0: the three guides + index + suite enforcement (T58). NOTE: the merge-conflict slice of parallelism was dropped from tier 2 — its honest proof is timing-dependent (worktree merge interleaving is nondeterministic), which would make a flaky suite test; restore points is the deterministic substitute. Each proof carries a silent/negative control so it can't pass vacuously."
+  },
+  "phases": [
+    {
+      "id": "RV0", "title": "Gate re-verifiability", "gate_entry": null, "gate_exit": "GATE_RV0",
+      "tasks": [
+        { "id": "RV0T1", "title": "Write gate-reverify.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/gate-reverify.sh: complete a phase, then re-verify its gate read-only (hb gate --check would_pass, hb gate --all passes) and assert re-verification appends NO events (read-only). Then regress the gate's artifact (change it so the criterion no longer holds) and assert re-verification now reports would_block / some gates would block — a decayed proof is caught. Print REVERIFY-OK only when the intact gate re-verifies, the regressed gate is caught, and --check is read-only." }
+      ]
+    },
+    {
+      "id": "RP0", "title": "Restore points", "gate_entry": "GATE_RV0", "gate_exit": "GATE_RP0",
+      "tasks": [
+        { "id": "RP0T1", "title": "Write restore-points.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/restore-points.sh: in a git project, complete a phase so the gate pass commits and force-tags the gate id; assert the tag exists. Make a destructive change to the tracked artifact and assert the gate would_block. git reset --hard <gate-tag> and assert the artifact is restored and the gate would_pass again. Control: with HB_GIT_AUTOCOMMIT=0 the gate pass creates NO tag (the restore point is opt-out). Print RESTORE-POINTS-OK only when the round-trip restores the passing state and the opt-out control holds." }
+      ]
+    },
+    {
+      "id": "TE0", "title": "Tick economics (spend only on work)", "gate_entry": "GATE_RP0", "gate_exit": "GATE_TE0",
+      "tasks": [
+        { "id": "TE0T1", "title": "Write tick-economics.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/tick-economics.sh: drive the real tick and assert it wakes only on actionable work — a ready task yields wakeAgent=true (next_task), but the SAME task in flight (leased) yields wakeAgent=false (at_capacity), so no second agent is spent while one is working. Print TICK-ECONOMICS-OK only when work wakes the agent and an in-flight task does not." }
+      ]
+    },
+    {
+      "id": "DW0", "title": "Three guides + wiring", "gate_entry": "GATE_TE0", "gate_exit": "GATE_DW0",
+      "tasks": [
+        { "id": "DW0T1", "title": "Write the three guides", "requires": [],
+          "description": "Write docs/howto/re-verify-completed-gates.md (proof: gate-reverify.sh), docs/howto/restore-a-verified-phase.md (proof: restore-points.sh), and docs/howto/spend-the-model-only-on-work.md (proof: tick-economics.sh). Human-facing, current-state; link AGENTS rule 1 and the tick/gate mechanisms rather than restating them." },
+        { "id": "DW0T2", "title": "Index + enforce", "requires": ["DW0T1"],
+          "description": "Add the three guides to docs/howto/README.md; add a T58 group to tests/run-tests.sh running gate-reverify.sh, restore-points.sh, and tick-economics.sh and asserting their markers, so the proofs cannot rot." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_RV0": {
+      "desc": "A completed gate re-verifies read-only; a regressed artifact is caught; --check appends no events.",
+      "review": { "prompt": "Refute that RV0 is done: does it drive the real hb CLI? Is the regression real (the artifact actually changed so the criterion fails) and is would_block genuinely reported only after it? Is the intact re-verify a would_pass (not vacuous)? Is --check truly read-only (event count unchanged)? Could any assertion be a constant?" },
+      "criteria": [
+        { "id": "rv0c1", "desc": "the re-verify proof passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/gate-reverify.sh\" 2>&1 | grep -q 'REVERIFY-OK'" }
+      ]
+    },
+    "GATE_RP0": {
+      "desc": "A gate pass tags a restore point; resetting to it restores the passing state; autocommit=0 opts out.",
+      "review": { "prompt": "Refute that RP0 is done: is the tag genuinely created by the gate pass (not pre-existing)? After the destructive change, does the gate really block, and after git reset --hard <tag> does it really pass again (the artifact restored)? Is the HB_GIT_AUTOCOMMIT=0 control load-bearing (no tag when opted out)? Does it drive the real CLI in a real git repo?" },
+      "criteria": [
+        { "id": "rp0c1", "desc": "the restore-points proof passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/restore-points.sh\" 2>&1 | grep -q 'RESTORE-POINTS-OK'" }
+      ]
+    },
+    "GATE_TE0": {
+      "desc": "The tick wakes on actionable work and sleeps while a task is in flight.",
+      "review": { "prompt": "Refute that TE0 is done: does it drive the real tick? Is the wake=true case genuinely a ready task (next_task) and the wake=false case genuinely an in-flight lease (at_capacity)? Would the assertions fail if the tick woke when it shouldn't (or slept when work exists)? Could any comparison be vacuous (e.g. empty == empty)?" },
+      "criteria": [
+        { "id": "te0c1", "desc": "the tick-economics proof passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/tick-economics.sh\" 2>&1 | grep -q 'TICK-ECONOMICS-OK'" }
+      ]
+    },
+    "GATE_DW0": {
+      "desc": "Each guide points at a proof that runs; the index lists all three; the suite enforces the demos.",
+      "review": { "prompt": "Refute that DW0 is done: does any guide claim a proof that does not run? Does any restate the enforced mechanisms rather than link them? Is any guide missing from the index? Does T58 actually run all three demos and assert their markers?" },
+      "criteria": [
+        { "id": "dw0c1", "desc": "each guide references its runnable proof", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'gate-reverify' re-verify-completed-gates.md && grep -q 'restore-points' restore-a-verified-phase.md && grep -q 'tick-economics' spend-the-model-only-on-work.md" },
+        { "id": "dw0c2", "desc": "the index lists all three guides", "cmd": "for f in re-verify-completed-gates restore-a-verified-phase spend-the-model-only-on-work; do grep -q \"$f\" \"$PROJECT_DIR/docs/howto/README.md\" || exit 1; done" },
+        { "id": "dw0c3", "desc": "the node suite enforces the demos (T58 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T58 '" }
+      ]
+    }
+  }
+}
