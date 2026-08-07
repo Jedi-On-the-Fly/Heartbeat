@@ -3,7 +3,7 @@
 The full how-to map, organized by job (families **A–J**, after the original ideas list).
 Each entry is either **created** (linked file, with the suite group that enforces its proof)
 or **Not available yet**. Created guides are runnable-proof-backed and CI-enforced across
-`tests/run-tests.sh` groups **T53–T58**; see the [index](README.md) for the shipped set.
+`tests/run-tests.sh` groups **T53–T60**; see the [index](README.md) for the shipped set.
 
 Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives in a nearby guide.
 
@@ -117,11 +117,13 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | How to Size a HeartBeat Phase | ⬜ Not available yet |
 | How to Write a Good DAG | ⬜ Not available yet |
 | When Not to Use HeartBeat | ⬜ Not available yet |
-| When to Escalate Instead of Retry | ⬜ Not available yet *(→ keep-stage-b-untrusted.md, prove-liveness.md)* |
+| When to Escalate Instead of Retry | ✅ [escalate-instead-of-retry.md](escalate-instead-of-retry.md) — T60 |
 | Ten Rules for a Good Gate | ✅ [writing-gates-10-rules.md](writing-gates-10-rules.md) — T53 |
+| Refute High-Risk Claims, Not Every Task | ✅ [refute-high-risk-claims.md](refute-high-risk-claims.md) — T60 |
 | Never Let the Worker Define Its Own Acceptance | ✅ [add-refutation-to-a-sensitive-gate.md](add-refutation-to-a-sensitive-gate.md) — T54 |
 | Recheck Old Proof After Relevant Change | ✅ [re-verify-completed-gates.md](re-verify-completed-gates.md) — T58 |
-| Never Hand-Edit HeartBeat State | ⬜ Not available yet *(→ recover-a-dead-or-corrupted-run.md)* |
+| Never Hand-Edit HeartBeat State | ✅ [never-hand-edit-state.md](never-hand-edit-state.md) — T60 |
+| Keep Worker Context Derived from Settled Reality | ✅ [context-from-settled-reality.md](context-from-settled-reality.md) — T60 |
 | Treat the Event Log as Truth | ✅ [recover-a-dead-or-corrupted-run.md](recover-a-dead-or-corrupted-run.md) — T55 |
 | Prefer Explicit Failure to Silent Waiting | ✅ [prove-liveness.md](prove-liveness.md) — T56 |
 | Make Every Completed Phase Reproducible | ✅ [re-verify-completed-gates.md](re-verify-completed-gates.md) — T58 |

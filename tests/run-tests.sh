@@ -861,6 +861,20 @@ else
   echo "  (python3 absent — T59 skipped)"
 fi
 
+grp "T60 — best-practice howto proofs (docs/howto)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T60.1 a hand-edited state.json is flagged and the log overwrites it" \
+    'bash "'"$GEX"'/never-hand-edit-state.sh" 2>&1 | grep -q "STATE-DISCIPLINE-OK"'
+  check "T60.2 a failing task is retried up to the cap, then the driver escalates" \
+    'bash "'"$GEX"'/escalate-vs-retry.sh" 2>&1 | grep -q "ESCALATE-VS-RETRY-OK"'
+  check "T60.3 a review block holds a phase; a non-review phase advances" \
+    'bash "'"$GEX"'/selective-refutation.sh" 2>&1 | grep -q "SELECTIVE-REFUTATION-OK"'
+  check "T60.4 the worker context is recomputed from settled state" \
+    'bash "'"$GEX"'/context-from-state.sh" 2>&1 | grep -q "CONTEXT-FROM-STATE-OK"'
+else
+  echo "  (python3 absent — T60 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

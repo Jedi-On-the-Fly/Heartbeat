@@ -1,0 +1,84 @@
+{
+  "_meta": {
+    "project": "howto-best-practices",
+    "note": "A batch of Best-Practice (family H) how-tos — but only the ones whose rule has a MECHANICAL consequence we can prove deterministically (a hollow gate on pure judgment would violate the project's own rule; excluded: size-a-task/phase, write-a-good-DAG [redundant], when-not-to-use, gate-what-matters). Four included, each with a runnable proof of the mechanism the rule rests on. HE0 (never hand-edit state): a hand-edited state.json is flagged as drift and the log wins on rebuild. ER0 (escalate vs retry): a failing worker is retried up to the attempt cap, then the driver escalates instead of looping forever. RS0 (refute selectively): a review block HOLDS a phase at review_pending after the deterministic gate passes, while a non-review phase advances — so refutation is a selective lever applied to high-risk phases. CX0 (context from settled reality): the worker context is derived from current state (it reflects completed work and the gate's definition of done), recomputed each time, not a stale narrative. DW0: the four guides + index + roadmap flips + suite enforcement (T60). Each proof carries a negative/silent control."
+  },
+  "phases": [
+    {
+      "id": "HE0", "title": "Never hand-edit state", "gate_entry": null, "gate_exit": "GATE_HE0",
+      "tasks": [
+        { "id": "HE0T1", "title": "Write never-hand-edit-state.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/never-hand-edit-state.sh: complete a phase, then hand-edit state.json to a wrong-but-valid value; assert hb doctor flags 'differs from the event-log projection'; then run the CLI (rebuild) and assert state.json is overwritten back to the true projection (the log wins — the hand-edit is discarded). Control: an in-sync state.json produces no drift. Print STATE-DISCIPLINE-OK only when the drift is flagged and the log overwrites the hand-edit." }
+      ]
+    },
+    {
+      "id": "ER0", "title": "Escalate instead of retry forever", "gate_entry": "GATE_HE0", "gate_exit": "GATE_ER0",
+      "tasks": [
+        { "id": "ER0T1", "title": "Write escalate-vs-retry.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/escalate-vs-retry.sh: drive the real executor with a worker that always fails, and assert the task is RETRIED up to HB_EXEC_ATTEMPT_CAP times (bounded, not infinite) and then the driver ESCALATES (non-zero, attempts_exhausted) with the phase not completed. Control: a worker that succeeds completes on the first attempt (no escalation). Print ESCALATE-VS-RETRY-OK only when retries are bounded by the cap and the driver then escalates." }
+      ]
+    },
+    {
+      "id": "RS0", "title": "Refute high-risk claims, not every task", "gate_entry": "GATE_ER0", "gate_exit": "GATE_RS0",
+      "tasks": [
+        { "id": "RS0T1", "title": "Write selective-refutation.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/selective-refutation.sh: show refutation is a selective lever — a review-gated phase, after its deterministic gate passes, is HELD (pending_reviews includes the gate; the phase is NOT completed until a review pass), while a non-review phase advances on the same deterministic pass. Print SELECTIVE-REFUTATION-OK only when the review-gated phase is held and the non-review phase completes (so a review block is a cost you apply to high-risk phases only)." }
+      ]
+    },
+    {
+      "id": "CX0", "title": "Keep worker context from settled reality", "gate_entry": "GATE_RS0", "gate_exit": "GATE_CX0",
+      "tasks": [
+        { "id": "CX0T1", "title": "Write context-from-state.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/context-from-state.sh: assert the context the driver assembles for a task is DERIVED from current settled state — for a task in a phase, the context before a sibling task is done contains no 'already completed' note, and after it is done it does (the context is recomputed from state, not a stale narrative), and it always includes the gate's criteria (the definition of done). Print CONTEXT-FROM-STATE-OK only when the context changes with state and carries the gate." }
+      ]
+    },
+    {
+      "id": "DW0", "title": "Four guides + wiring", "gate_entry": "GATE_CX0", "gate_exit": "GATE_DW0",
+      "tasks": [
+        { "id": "DW0T1", "title": "Write the four guides", "requires": [],
+          "description": "Write docs/howto/never-hand-edit-state.md (proof: never-hand-edit-state.sh), docs/howto/escalate-instead-of-retry.md (proof: escalate-vs-retry.sh), docs/howto/refute-high-risk-claims.md (proof: selective-refutation.sh), and docs/howto/context-from-settled-reality.md (proof: context-from-state.sh). Short, opinionated, current-state; link AGENTS rule 1/5 and the mechanisms rather than restating them." },
+        { "id": "DW0T2", "title": "Index + roadmap + enforce", "requires": ["DW0T1"],
+          "description": "Add the four guides to docs/howto/README.md and flip their rows in docs/howto/howto-list.md from Not-available-yet to the file; add a T60 group to tests/run-tests.sh running the four demos and asserting their markers, so the proofs cannot rot." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_HE0": {
+      "desc": "A hand-edited state.json is flagged as drift and the log overwrites it.",
+      "review": { "prompt": "Refute that HE0 is done: does it drive the real CLI? Is the hand-edit a genuine wrong-but-valid state.json (not garbage)? Does doctor flag the drift only when out of sync (silent control when in sync)? Does the CLI genuinely OVERWRITE the hand-edit from the log (the discarded edit is gone), or could the assertion pass vacuously?" },
+      "criteria": [
+        { "id": "he0c1", "desc": "the never-hand-edit-state proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/never-hand-edit-state.sh\" 2>&1 | grep -q 'STATE-DISCIPLINE-OK'" }
+      ]
+    },
+    "GATE_ER0": {
+      "desc": "A failing worker is retried up to the cap, then the driver escalates.",
+      "review": { "prompt": "Refute that ER0 is done: does it drive the real executor? Is the retry genuinely BOUNDED by HB_EXEC_ATTEMPT_CAP (count the failures) and does the driver then escalate (non-zero, phase not completed)? Is the success control load-bearing (a good worker completes without escalation)? Could the failure count be a constant?" },
+      "criteria": [
+        { "id": "er0c1", "desc": "the escalate-vs-retry proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/escalate-vs-retry.sh\" 2>&1 | grep -q 'ESCALATE-VS-RETRY-OK'" }
+      ]
+    },
+    "GATE_RS0": {
+      "desc": "A review block holds a phase after the deterministic pass; a non-review phase advances.",
+      "review": { "prompt": "Refute that RS0 is done: does it drive the real runtime? Is the review-gated phase genuinely HELD after its deterministic gate passes (pending_reviews set, phase not completed), and does the non-review phase genuinely COMPLETE on the same pass? Would the proof fail if the review block did NOT hold advancement (proving the lever is real)?" },
+      "criteria": [
+        { "id": "rs0c1", "desc": "the selective-refutation proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/selective-refutation.sh\" 2>&1 | grep -q 'SELECTIVE-REFUTATION-OK'" }
+      ]
+    },
+    "GATE_CX0": {
+      "desc": "The worker context is derived from settled state and carries the gate.",
+      "review": { "prompt": "Refute that CX0 is done: does it call the REAL assemble_context? Does the context genuinely change with state (no 'already completed' before a sibling is done; present after), proving it is recomputed from settled state, not stale? Does it always include the gate criteria? Could either check be vacuous (e.g. matching a substring regardless)?" },
+      "criteria": [
+        { "id": "cx0c1", "desc": "the context-from-state proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/context-from-state.sh\" 2>&1 | grep -q 'CONTEXT-FROM-STATE-OK'" }
+      ]
+    },
+    "GATE_DW0": {
+      "desc": "Each guide points at a proof that runs; the index and roadmap list all four; the suite enforces the demos.",
+      "review": { "prompt": "Refute that DW0 is done: does any guide claim a proof that does not run? Does any restate the enforced rules rather than link them? Are all four guides in the index AND flipped in howto-list.md? Does T60 actually run all four demos and assert their markers?" },
+      "criteria": [
+        { "id": "dw0c1", "desc": "each guide references its runnable proof", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'never-hand-edit-state' never-hand-edit-state.md && grep -q 'escalate-vs-retry' escalate-instead-of-retry.md && grep -q 'selective-refutation' refute-high-risk-claims.md && grep -q 'context-from-state' context-from-settled-reality.md" },
+        { "id": "dw0c2", "desc": "the index lists all four guides", "cmd": "for f in never-hand-edit-state escalate-instead-of-retry refute-high-risk-claims context-from-settled-reality; do grep -q \"$f\" \"$PROJECT_DIR/docs/howto/README.md\" || exit 1; done" },
+        { "id": "dw0c3", "desc": "the node suite enforces the demos (T60 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T60 '" }
+      ]
+    }
+  }
+}

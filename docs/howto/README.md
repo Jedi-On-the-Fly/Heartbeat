@@ -43,6 +43,10 @@ just prose. The full roadmap (created + planned, across families A–J) is in
 - [Stop and resume a project](stop-and-resume-a-project.md) — kill it and continue from the log.
 - [Use HeartBeat with Ollama](use-heartbeat-with-ollama.md) — a local model as the worker.
 - [Use HeartBeat with Claude Code](use-heartbeat-with-claude-code.md) — headless Claude as the worker.
+- [Never hand-edit state](never-hand-edit-state.md) — the log is truth; the CLI mutates, rebuild overwrites edits.
+- [Escalate instead of retry forever](escalate-instead-of-retry.md) — bounded retries, then surface to a human.
+- [Refute high-risk claims, not every task](refute-high-risk-claims.md) — a review block is a selective lever.
+- [Keep worker context from settled reality](context-from-settled-reality.md) — context is computed from state, not stale chat.
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).
