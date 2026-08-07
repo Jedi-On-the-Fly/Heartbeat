@@ -19,6 +19,12 @@ just prose.
   contract, and proving the parity alarm actually fires.
 - [Recover a dead or corrupted run](recover-a-dead-or-corrupted-run.md) — the event log is
   truth; rebuild heals, doctor flags drift and rot.
+- [Keep Stage B untrusted](keep-stage-b-untrusted.md) — the driver escalates on a failing
+  gate, rejects malformed output, and kills a hung gate; it never trusts the worker.
+- [Prove liveness](prove-liveness.md) — stuck builds, stale leases, and unresolved reviews
+  escalate instead of hanging.
+- [The auditor catches each weakness](the-auditor-catches-each-weakness.md) — every rule
+  fires on a must-trip DAG, and a clean DAG trips none.
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).

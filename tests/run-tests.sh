@@ -809,6 +809,18 @@ else
   echo "  (python3 absent — T55 skipped)"
 fi
 
+grp "T56 — driver / liveness / auditor howto proofs (docs/howto)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T56.1 the driver keeps Stage B untrusted (escalate, reject junk, kill hung gate)" \
+    'bash "'"$GEX"'/driver-guarantees.sh" 2>&1 | grep -q "STAGE-B-UNTRUSTED-OK"'
+  check "T56.2 liveness alarms fire (build_stuck, stale-lease reclaim, review_stuck)" \
+    'bash "'"$GEX"'/liveness-demo.sh" 2>&1 | grep -q "LIVENESS-OK"'
+  check "T56.3 the auditor catches each weakness and doesn't cry wolf" \
+    'bash "'"$GEX"'/audit-rules-check.sh" 2>&1 | grep -q "AUDIT-RULES-PROVEN"'
+else
+  echo "  (python3 absent — T56 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

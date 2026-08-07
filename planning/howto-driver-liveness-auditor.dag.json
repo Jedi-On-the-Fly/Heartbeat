@@ -1,0 +1,70 @@
+{
+  "_meta": {
+    "project": "howto-driver-liveness-auditor",
+    "note": "Three how-tos whose proofs are 'does the alarm fire?' negative tests of safety invariants that today are only ever watched pass. US0: the driver keeps Stage B untrusted (AGENTS rule 5) — drive the real executor with stub backends and prove it escalates on an unpassable gate leaving the DAG unchanged, does NOT advance a phase when the worker claims ok but the gate fails, rejects malformed backend output, and kills a hung gate at GATE_TIMEOUT_S. LV0: liveness — a no-progress loop raises build_stuck, a stale lease is reclaimed (lease_expired), an unresolved review is surfaced as review_stuck, instead of hanging forever. AU0: the auditor catches each weakness and does not cry wolf — every hb-audit rule fires on a must-trip fixture and a clean DAG trips none. DW0: the three guides + index + suite enforcement (T56). Same dogfooded discipline: each claim a runnable proof, each phase refuted by a distinct actor. Each alarm proof includes a silent-when-healthy control so it cannot pass vacuously."
+  },
+  "phases": [
+    {
+      "id": "US0", "title": "Untrusted Stage B (driver guarantees)", "gate_entry": null, "gate_exit": "GATE_US0",
+      "tasks": [
+        { "id": "US0T1", "title": "Write driver-guarantees.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/driver-guarantees.sh: drive the real Python executor via HB_EXEC_CMD stub backends and prove — (1) with a compliant worker (ok:true) but an unpassable phase gate, the phase does NOT complete, the executor escalates (non-zero) with gate_blocked, and dag.json is byte-unchanged (the driver never weakens a gate); (2) a backend that emits malformed/non-JSON output never advances a task (treated as failed, escalated); (3) a gate that hangs (sleep) is killed at GATE_TIMEOUT_S, blocked not hung. Include silent-when-healthy controls (a passable gate DOES complete). Print STAGE-B-UNTRUSTED-OK only when all hold." }
+      ]
+    },
+    {
+      "id": "LV0", "title": "Liveness (escalate, don't hang)", "gate_entry": "GATE_US0", "gate_exit": "GATE_LV0",
+      "tasks": [
+        { "id": "LV0T1", "title": "Write liveness-demo.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/liveness-demo.sh: via the real hb CLI prove the liveness alarms fire instead of hanging — a no-progress loop raises build_stuck once past STUCK_TICKS (and is silent before it); a lease past its staleness threshold is reclaimed (a lease_expired event is appended and the lease removed, silent while fresh); an unresolved review is surfaced as review_stuck by diagnose. Print LIVENESS-OK only when all hold." }
+      ]
+    },
+    {
+      "id": "AU0", "title": "Auditor catches each weakness", "gate_entry": "GATE_LV0", "gate_exit": "GATE_AU0",
+      "tasks": [
+        { "id": "AU0T1", "title": "Write audit-rules-check.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/audit-rules-check.sh: for every rule hb-audit emits (hollow_gate, ungated, unguarded_phase, vacuous, existence, nondeterministic, side_effecting, gate_offphase) generate a minimal must-trip DAG inline, run node hb-audit --json, and assert that rule appears; then assert a clean DAG trips none of them (no cry wolf). Derive the rule set from the auditor, not a hardcoded copy. Print AUDIT-RULES-PROVEN with the count of rules proven." }
+      ]
+    },
+    {
+      "id": "DW0", "title": "Three guides + wiring", "gate_entry": "GATE_AU0", "gate_exit": "GATE_DW0",
+      "tasks": [
+        { "id": "DW0T1", "title": "Write the three guides", "requires": [],
+          "description": "Write docs/howto/keep-stage-b-untrusted.md (proof: driver-guarantees.sh), docs/howto/prove-liveness.md (proof: liveness-demo.sh), and docs/howto/the-auditor-catches-each-weakness.md (proof: audit-rules-check.sh). Human-facing, current-state; link AGENTS rule 5 and the enforced auditor/SKILL rules rather than restating them." },
+        { "id": "DW0T2", "title": "Index + enforce", "requires": ["DW0T1"],
+          "description": "Add the three guides to docs/howto/README.md; add a T56 group to tests/run-tests.sh running driver-guarantees.sh, liveness-demo.sh, and audit-rules-check.sh and asserting their markers, so the proofs cannot rot." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_US0": {
+      "desc": "The driver mediates an untrusted Stage B: escalates on a failing gate without weakening it, rejects malformed output, and kills a hung gate.",
+      "review": { "prompt": "Refute that US0 is done: does driver-guarantees.sh drive the REAL executor (not a mock)? Is each guard load-bearing — would guard 1 pass if the gate were actually passable (control present)? Does the escalation truly leave dag.json byte-unchanged, and is the phase genuinely not completed despite the worker's ok:true? Is malformed output really rejected (not coincidentally parsed)? Is the hung gate killed BY the timeout (fast because of GATE_TIMEOUT_S), not because it returns quickly anyway?" },
+      "criteria": [
+        { "id": "us0c1", "desc": "the driver-guarantees proof passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/driver-guarantees.sh\" 2>&1 | grep -q 'STAGE-B-UNTRUSTED-OK'" }
+      ]
+    },
+    "GATE_LV0": {
+      "desc": "Liveness alarms fire instead of hanging: build_stuck, stale-lease reclaim, review_stuck.",
+      "review": { "prompt": "Refute that LV0 is done: does liveness-demo.sh drive the real runtime? Is each alarm load-bearing and silent-when-healthy — does build_stuck fire only after STUCK_TICKS (not before), is the lease reclaimed only when stale (not while fresh), is review_stuck surfaced only for an actually-unresolved review? Could any assertion be a constant?" },
+      "criteria": [
+        { "id": "lv0c1", "desc": "the liveness proof passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/liveness-demo.sh\" 2>&1 | grep -q 'LIVENESS-OK'" }
+      ]
+    },
+    "GATE_AU0": {
+      "desc": "Every auditor rule fires on a must-trip fixture, and a clean DAG trips none.",
+      "review": { "prompt": "Refute that AU0 is done: does each must-trip fixture genuinely trip the claimed rule (and is it the RIGHT rule, not a coincidental other finding)? Is any rule the auditor emits silently omitted from the check? Does the clean-DAG 'no cry wolf' assertion actually pass with zero of these rules? Is the rule set derived from the auditor or hardcoded (so a new rule would be missed)?" },
+      "criteria": [
+        { "id": "au0c1", "desc": "the auditor-rules proof passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/audit-rules-check.sh\" 2>&1 | grep -q 'AUDIT-RULES-PROVEN'" }
+      ]
+    },
+    "GATE_DW0": {
+      "desc": "Each guide points at a proof that runs; the index lists all three; the suite enforces the demos.",
+      "review": { "prompt": "Refute that DW0 is done: does any guide claim a proof that does not run? Does any restate the enforced rules (AGENTS, auditor, SKILL) rather than link them? Is any guide missing from the index? Does T56 actually run all three demos and assert their markers?" },
+      "criteria": [
+        { "id": "dw0c1", "desc": "each guide references its runnable proof", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'driver-guarantees' keep-stage-b-untrusted.md && grep -q 'liveness-demo' prove-liveness.md && grep -q 'audit-rules-check' the-auditor-catches-each-weakness.md" },
+        { "id": "dw0c2", "desc": "the index lists all three guides", "cmd": "for f in keep-stage-b-untrusted prove-liveness the-auditor-catches-each-weakness; do grep -q \"$f\" \"$PROJECT_DIR/docs/howto/README.md\" || exit 1; done" },
+        { "id": "dw0c3", "desc": "the node suite enforces the demos (T56 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T56 '" }
+      ]
+    }
+  }
+}
