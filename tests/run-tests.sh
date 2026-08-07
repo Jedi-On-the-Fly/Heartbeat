@@ -776,6 +776,19 @@ check "T52.1 real groups are tracked (T1 in the group set)" \
 check "T52.2 the passed-set computation EXCLUDES a failed group, keeps a passed one" \
   'declare -A gf; gf[TX]=1; all="TX TY"; gp=""; for g in $all; do [ -z "${gf[$g]:-}" ] && gp="$gp $g"; done; echo "$gp" | grep -qw TY && ! echo "$gp" | grep -qw TX'
 
+grp "T53 — behavioral-gate HowTo proofs (docs/howto)"
+GEX="$HB_SRC/docs/howto/gate-examples"
+if command -v python3 >/dev/null 2>&1; then
+  check "T53.1 every weakness example is proven (ALL-EXAMPLES-PROVEN)" \
+    'bash "'"$GEX"'/run.sh" 2>&1 | grep -q "ALL-EXAMPLES-PROVEN:"'
+  check "T53.2 the runner rejects an injected hollow example (--selftest)" \
+    'bash "'"$GEX"'/run.sh" --selftest 2>&1 | grep -q "SELFTEST-CAUGHT:"'
+  check "T53.3 the discovery harness runs deterministically (--dry)" \
+    'bash "'"$GEX"'/discover.sh" --dry 2>&1 | grep -q "DISCOVERY:"'
+else
+  echo "  (python3 absent — T53 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

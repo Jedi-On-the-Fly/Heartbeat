@@ -74,7 +74,7 @@ HeartBeat is only as good as your gates. A weak gate produces *false* confidence
 
 ## Docs
 
-Concept: [heartbeat.md](../docs/heartbeat.md). Backend reference: [dev-plugin.md](../docs/dev-plugin.md) · [dev-python.md](../docs/dev-python.md) · [dev-tests.md](../docs/dev-tests.md). Contributor rules: [AGENTS.md](../AGENTS.md).
+Concept: [heartbeat.md](../docs/heartbeat.md). How-to: [writing behavioral gates](../docs/howto/writing-behavioral-gates.md). Backend reference: [dev-plugin.md](../docs/dev-plugin.md) · [dev-python.md](../docs/dev-python.md) · [dev-tests.md](../docs/dev-tests.md). Contributor rules: [AGENTS.md](../AGENTS.md).
 
 ## License
 

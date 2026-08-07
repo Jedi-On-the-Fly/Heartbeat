@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "project": "howto-behavioral-gates",
+    "note": "First HowTo guide: how to write behavioral gates. Dogfooded — the guide about behavioral gates is itself gated behaviorally. The spine is a self-verifying runner (docs/howto/gate-examples/): each weakness is a runnable proof triple — a stub a lazy worker might emit, a WEAK gate that wrongly passes on it, and a STRONG gate that rejects the stub and passes on real output. Frameworks are an adversarial DISCOVERY fleet (Python runtime + local Ollama), not a test matrix (a correct gate is backend-agnostic by contract); any live-discovered exploit is reduced to a deterministic fixture so the guide's examples run with no model. Reader = a human DAG author; the guide LINKS the enforced audit/SKILL rules, never re-copies them."
+  },
+  "phases": [
+    {
+      "id": "HG0", "title": "Runnable weakness catalogue (fixtures)", "gate_entry": null, "gate_exit": "GATE_HG0",
+      "tasks": [
+        { "id": "HG0T1", "title": "Author the proof-contract spec", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/SPEC.md defining the contract every example must satisfy — a stub artifact a lazy worker might emit, a WEAK gate that (wrongly) passes on that stub, and a STRONG behavioral gate; the runner must prove weak-passes-on-stub, strong-fails-on-stub, and strong-passes-on-a-correct-artifact. Written before the runner and examples." },
+        { "id": "HG0T2", "title": "Implement the self-verifying runner", "requires": ["HG0T1"],
+          "description": "Create docs/howto/gate-examples/run.sh: for every example directory under docs/howto/gate-examples/ it checks the three proof assertions in an isolated temp dir, prints one 'PROVEN:<name>' line per example, and prints 'ALL-EXAMPLES-PROVEN:<count>' only when all pass. Add a '--selftest' mode that injects a deliberately broken example (a STRONG gate that also passes on the stub) and prints 'SELFTEST-CAUGHT:' when the runner correctly rejects it — proving the tester can detect a bad example." },
+        { "id": "HG0T3", "title": "Author the deterministic examples", "requires": ["HG0T2"],
+          "description": "Add one example directory under docs/howto/gate-examples/ per weakness the auditor names (hollow, existence, nondeterministic, side_effecting, gate_offphase) plus the suite-header-grep coverage anti-pattern fixed in v1.16 — each a self-contained fixture (stub + weak gate + strong gate) requiring no model, exercised by run.sh." }
+      ]
+    },
+    {
+      "id": "HG1", "title": "Framework discovery pass (adversarial fleet)", "gate_entry": "GATE_HG0", "gate_exit": "GATE_HG1",
+      "tasks": [
+        { "id": "HG1T1", "title": "Author the discovery harness", "requires": [],
+          "description": "Write docs/howto/gate-examples/discover.sh: define a task plus a plausibly-behavioral-but-weak candidate gate, drive it with at least two Python backends (repo py runtime) against local Ollama, and record whether any worker satisfied the candidate gate without doing the real work. A '--dry' mode exercises the harness against a dead host (no model) and still emits a 'DISCOVERY:' outcome line, so the method is reproducible." },
+        { "id": "HG1T2", "title": "Distill findings into a fixture", "requires": ["HG1T1"],
+          "description": "Run the discovery pass; write the outcome to docs/howto/discovery-notes.md (which backends ran, what was attempted, exploit found or explicitly none-and-why — no silent cap), separating a weak gate from a weak local model. Reduce any real exploit to a deterministic example under docs/howto/gate-examples/ so the runner docs/howto/gate-examples/run.sh proves it without a model." }
+      ]
+    },
+    {
+      "id": "HG2", "title": "The guide + wiring", "gate_entry": "GATE_HG1", "gate_exit": "GATE_HG2",
+      "tasks": [
+        { "id": "HG2T1", "title": "Write the guide", "requires": [],
+          "description": "Write docs/howto/writing-behavioral-gates.md for a human DAG author: the central technique (a good gate FAILS on a hollow artifact), the weakness catalogue where each entry links to its runnable proof under docs/howto/gate-examples/, and the 'frameworks as adversarial fleet' method. Link to the auditor and the /heartbeat plan rules rather than restating them; follow the project doc rules (current-state, no archeology)." },
+        { "id": "HG2T2", "title": "Wire cross-links and index", "requires": ["HG2T1"],
+          "description": "Add docs/howto/README.md as the HowTo index; reference the guide from AGENTS.md, the SKILL plan rules, and release/README.md (link, not duplicate). Verify doc-to-runner sync — every example directory under docs/howto/gate-examples/ is referenced by the guide, and the runner docs/howto/gate-examples/run.sh still proves every example." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_HG0": {
+      "desc": "Every weakness example is a runnable proof: the weak gate passes on the stub, the behavioral gate rejects it and passes on real output; the runner can catch a bad example.",
+      "review": { "prompt": "Refute that HG0 is done: is any 'strong' gate hollow itself (passes on everything)? does any 'weak' gate fail to actually pass on its stub, so the demonstration is fake? is any weakness from the auditor's taxonomy silently missing? does --selftest really inject a bad example, or is SELFTEST-CAUGHT printed unconditionally?" },
+      "criteria": [
+        { "id": "hg0c1", "desc": "runner proves every example (outcome marker)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/run.sh\" 2>&1 | grep -q 'ALL-EXAMPLES-PROVEN:'" },
+        { "id": "hg0c2", "desc": "every example dir is actually exercised (proven count == dir count, derived from registry)", "cmd": "d=$(ls -d \"$PROJECT_DIR\"/docs/howto/gate-examples/*/ | wc -l); p=$(bash \"$PROJECT_DIR/docs/howto/gate-examples/run.sh\" 2>&1 | grep -c '^PROVEN:'); [ \"$d\" -gt 0 ] && [ \"$d\" = \"$p\" ]" },
+        { "id": "hg0c3", "desc": "the runner detects an injected bad example (the tester works)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/run.sh\" --selftest 2>&1 | grep -q 'SELFTEST-CAUGHT:'" }
+      ]
+    },
+    "GATE_HG1": {
+      "desc": "The discovery method is real and reproducible; any distilled exploit is a runnable fixture and the runner stays green.",
+      "review": { "prompt": "Refute that HG1 is done: is a reported exploit a genuine gate weakness, or just a 7B model failing the task? is the harness reproducible (documents backends, degrades with --dry) or a one-off? was a null result honestly recorded, or a cap hidden? did adding a distilled fixture quietly break the runner?" },
+      "criteria": [
+        { "id": "hg1c1", "desc": "discovery harness runs and emits a reproducible outcome (no model)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/discover.sh\" --dry 2>&1 | grep -q 'DISCOVERY:'" },
+        { "id": "hg1c2", "desc": "runner still proves every example after distillation", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/run.sh\" 2>&1 | grep -q 'ALL-EXAMPLES-PROVEN:'" }
+      ]
+    },
+    "GATE_HG2": {
+      "desc": "Every example the guide claims is a runnable proof; it links (not copies) the enforced rules; the entry points point to it.",
+      "review": { "prompt": "Refute that HG2 is done: does the guide claim any exploit that has no runnable example under gate-examples/? is it a fourth copy of the audit/SKILL rules that will drift, instead of a link? is any example directory undocumented, or any documented example missing from the runner?" },
+      "criteria": [
+        { "id": "hg2c1", "desc": "every example dir is documented in the guide (doc-to-runner sync, derived from registry)", "cmd": "for d in \"$PROJECT_DIR\"/docs/howto/gate-examples/*/; do n=$(basename \"$d\"); grep -q \"$n\" \"$PROJECT_DIR/docs/howto/writing-behavioral-gates.md\" || exit 1; done" },
+        { "id": "hg2c2", "desc": "the runner still proves all examples (the guide's proofs actually run)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/run.sh\" 2>&1 | grep -q 'ALL-EXAMPLES-PROVEN:'" },
+        { "id": "hg2c3", "desc": "SKILL and AGENTS link the guide", "cmd": "grep -q 'writing-behavioral-gates' \"$PROJECT_DIR/plugin/skills/heartbeat/SKILL.md\" && grep -q 'writing-behavioral-gates' \"$PROJECT_DIR/AGENTS.md\"" }
+      ]
+    }
+  }
+}

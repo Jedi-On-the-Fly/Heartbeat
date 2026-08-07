@@ -50,7 +50,8 @@ phases). Otherwise write a fresh DAG.
   holds), not `test -f`. Prefer running code over grepping a source string: a gate that
   greps `def foo` passes on a hollow stub — instead **import and assert callable/shape**
   (`python3 -c "import m; assert callable(m.foo)"`) or exercise the entrypoint and check
-  its output.
+  its output. For depth (a catalogue of gate weaknesses, each a runnable proof), see
+  [writing-behavioral-gates.md](../../../docs/howto/writing-behavioral-gates.md).
 - **Coverage gates assert the OUTCOME, not a name.** A gate that pipes a test suite to
   `grep Tnn` passes even on a *red* suite (the header prints before the run fails, and the
   pipe hides the exit code). Instead assert the group actually PASSED: `tests/run-tests.sh`
