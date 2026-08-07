@@ -25,6 +25,12 @@ just prose.
   escalate instead of hanging.
 - [The auditor catches each weakness](the-auditor-catches-each-weakness.md) — every rule
   fires on a must-trip DAG, and a clean DAG trips none.
+- [Swap workers without changing the DAG](swap-workers-without-changing-the-dag.md) — the
+  same DAG completes under any backend; hidden worker-coupling is detectable.
+- [Build and test a backend](build-and-test-a-backend.md) — the two-method wire contract and
+  a reusable conformance harness.
+- [Diagnose a stuck project](diagnose-a-stuck-project.md) — `hb diagnose` names the specific
+  cause (failing criterion, missing file, awaiting gate).
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).

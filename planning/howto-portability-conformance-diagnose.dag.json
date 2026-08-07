@@ -1,0 +1,70 @@
+{
+  "_meta": {
+    "project": "howto-portability-conformance-diagnose",
+    "note": "Tier 1 of the operator/ecosystem how-tos, same dogfooded discipline (runnable proof per claim + adversarial refutation by a distinct actor). BN0: backend neutrality — the SAME DAG run under two different deterministic backends yields identical gate outcomes, and a worker-coupled gate is DETECTED (a portability self-test, parity's sibling). BC0: a reusable backend-conformance harness — every shipped adapter degrades to protocol-valid JSON (execute->{ok:bool}, refute->{refuted:bool}, JSON on the last stdout line), and a non-conformant backend is REJECTED. DA0: diagnose accuracy — a blocked project's `hb diagnose` names the SPECIFIC cause (the failing criterion, the missing rotted file, the awaiting-review gate), and a healthy project reports no blocker. DW0: the three guides + index + suite enforcement (T57). Each proof carries a silent/negative control so it can't pass vacuously."
+  },
+  "phases": [
+    {
+      "id": "BN0", "title": "Backend neutrality (same DAG, any worker)", "gate_entry": null, "gate_exit": "GATE_BN0",
+      "tasks": [
+        { "id": "BN0T1", "title": "Write portability-selftest.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/portability-selftest.sh: run the SAME DAG through two different deterministic script backends and assert identical gate outcomes (both complete the phase); then run a worker-COUPLED DAG (a gate that greps a marker only one backend writes) under both backends and assert the outcomes DIVERGE (the coupling is detected). Print PORTABILITY-OK only when the neutral DAG matches across backends AND the coupled DAG is caught." }
+      ]
+    },
+    {
+      "id": "BC0", "title": "Backend conformance harness", "gate_entry": "GATE_BN0", "gate_exit": "GATE_BC0",
+      "tasks": [
+        { "id": "BC0T1", "title": "Write backend-conformance.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/backend-conformance.sh: a reusable battery a backend must pass — execute emits {\"ok\":bool}, refute emits {\"refuted\":bool}, and the protocol object is valid JSON on the last stdout line. Assert every shipped adapter under plugin/templates/executors/*_exec.py conforms in degrade mode (derive the list from the directory, not a hardcoded set), and assert a deliberately non-conformant stub (wrong shape / junk last line) is REJECTED. Print BACKEND-CONFORMANCE-OK with the count of adapters checked." }
+      ]
+    },
+    {
+      "id": "DA0", "title": "Diagnose accuracy (name the real cause)", "gate_entry": "GATE_BC0", "gate_exit": "GATE_DA0",
+      "tasks": [
+        { "id": "DA0T1", "title": "Write diagnose-accuracy.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/diagnose-accuracy.sh: via the real hb CLI, block a project three ways and assert hb diagnose names the SPECIFIC cause — a failing gate criterion (gate_blocked names the gate and the ✗ criterion), a deleted completed-gate artifact (gate_rot names the missing file), an unresolved review (review_stuck names the gate) — and assert a healthy project reports 'no blocker detected'. Print DIAGNOSE-ACCURACY-OK only when each names its real cause and the healthy control is silent." }
+      ]
+    },
+    {
+      "id": "DW0", "title": "Three guides + wiring", "gate_entry": "GATE_DA0", "gate_exit": "GATE_DW0",
+      "tasks": [
+        { "id": "DW0T1", "title": "Write the three guides", "requires": [],
+          "description": "Write docs/howto/swap-workers-without-changing-the-dag.md (proof: portability-selftest.sh), docs/howto/build-and-test-a-backend.md (proof: backend-conformance.sh), and docs/howto/diagnose-a-stuck-project.md (proof: diagnose-accuracy.sh). Human-facing, current-state; link the backend contract (dev-python.md), AGENTS rule 5, and the tick protocol rather than restating them." },
+        { "id": "DW0T2", "title": "Index + enforce", "requires": ["DW0T1"],
+          "description": "Add the three guides to docs/howto/README.md; add a T57 group to tests/run-tests.sh running portability-selftest.sh, backend-conformance.sh, and diagnose-accuracy.sh and asserting their markers, so the proofs cannot rot." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_BN0": {
+      "desc": "The same DAG produces the same gate outcome under different backends; a worker-coupled gate is detected.",
+      "review": { "prompt": "Refute that BN0 is done: are the two backends genuinely different workers (not the same script twice)? Does the neutral-DAG assertion truly require BOTH to complete the phase (not vacuously equal on 'blocked')? Is the coupling detection real — does the coupled DAG actually pass under one backend and block under the other, and would the check FAIL if the executor leaked backend identity so both matched? Does it drive the real executor?" },
+      "criteria": [
+        { "id": "bn0c1", "desc": "the portability self-test passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/portability-selftest.sh\" 2>&1 | grep -q 'PORTABILITY-OK'" }
+      ]
+    },
+    "GATE_BC0": {
+      "desc": "Every shipped adapter conforms in degrade mode; a non-conformant backend is rejected.",
+      "review": { "prompt": "Refute that BC0 is done: is the adapter list derived from the directory (so a new adapter is included), or hardcoded? Does the conformance check actually validate the protocol shape (ok/refuted are booleans, JSON on the last line), or just that output is non-empty? Is the non-conformant stub genuinely rejected — would a wrong-shape or junk-last-line backend fail? Could it pass vacuously?" },
+      "criteria": [
+        { "id": "bc0c1", "desc": "the conformance harness passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/backend-conformance.sh\" 2>&1 | grep -q 'BACKEND-CONFORMANCE-OK'" }
+      ]
+    },
+    "GATE_DA0": {
+      "desc": "diagnose names the specific cause for each blocked state, and is silent when healthy.",
+      "review": { "prompt": "Refute that DA0 is done: does it drive the real hb CLI? For each blocked state, does diagnose name the SPECIFIC cause (the actual failing criterion id, the actual missing file, the actual gate) rather than a generic message? Is the healthy control real (diagnose says no blocker only when nothing is wrong)? Could any assertion be a constant / substring that matches regardless?" },
+      "criteria": [
+        { "id": "da0c1", "desc": "the diagnose-accuracy proof passes end-to-end", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/diagnose-accuracy.sh\" 2>&1 | grep -q 'DIAGNOSE-ACCURACY-OK'" }
+      ]
+    },
+    "GATE_DW0": {
+      "desc": "Each guide points at a proof that runs; the index lists all three; the suite enforces the demos.",
+      "review": { "prompt": "Refute that DW0 is done: does any guide claim a proof that does not run? Does any restate the enforced contract (dev-python.md, AGENTS, protocol) rather than link it? Is any guide missing from the index? Does T57 actually run all three demos and assert their markers?" },
+      "criteria": [
+        { "id": "dw0c1", "desc": "each guide references its runnable proof", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'portability-selftest' swap-workers-without-changing-the-dag.md && grep -q 'backend-conformance' build-and-test-a-backend.md && grep -q 'diagnose-accuracy' diagnose-a-stuck-project.md" },
+        { "id": "dw0c2", "desc": "the index lists all three guides", "cmd": "for f in swap-workers-without-changing-the-dag build-and-test-a-backend diagnose-a-stuck-project; do grep -q \"$f\" \"$PROJECT_DIR/docs/howto/README.md\" || exit 1; done" },
+        { "id": "dw0c3", "desc": "the node suite enforces the demos (T57 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T57 '" }
+      ]
+    }
+  }
+}

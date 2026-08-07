@@ -821,6 +821,18 @@ else
   echo "  (python3 absent — T56 skipped)"
 fi
 
+grp "T57 — portability / conformance / diagnose howto proofs (docs/howto)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T57.1 the same DAG completes under different backends; coupling detected" \
+    'bash "'"$GEX"'/portability-selftest.sh" 2>&1 | grep -q "PORTABILITY-OK"'
+  check "T57.2 every shipped adapter conforms; non-conformant backends rejected" \
+    'bash "'"$GEX"'/backend-conformance.sh" 2>&1 | grep -q "BACKEND-CONFORMANCE-OK"'
+  check "T57.3 diagnose names the specific cause of a blocked project" \
+    'bash "'"$GEX"'/diagnose-accuracy.sh" 2>&1 | grep -q "DIAGNOSE-ACCURACY-OK"'
+else
+  echo "  (python3 absent — T57 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
