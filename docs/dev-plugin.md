@@ -180,12 +180,13 @@ Wire protocol — driver spawns `bash -c "<cmd> <mode>"`, mode ∈ `execute|refu
 | `execute` | `{"ok": bool, "summary": str}` |
 | `refute` | `{"refuted": bool, "findings": str}` |
 
-`defaultCmd`: `claude-code`→`claude-exec.sh`, `codex`→`codex-exec.sh`; each framework/local backend → its `<name>_exec.py` under `executors/` (`agno` `crewai` `ollama` `langgraph` `openai_agents` `autogen` `smolagents` `pydanticai`); else the string is the command. Backends never touch `state.json`/`gate.sh`.
+`defaultCmd`: `claude-code`→`claude-exec.sh`, `codex`→`codex-exec.sh`, `opencode`→`opencode-exec.sh`; each framework/local backend → its `<name>_exec.py` under `executors/` (`agno` `crewai` `ollama` `langgraph` `openai_agents` `autogen` `smolagents` `pydanticai`); else the string is the command. Backends never touch `state.json`/`gate.sh`.
 
 | Backend | Worker mechanism | Notes |
 |---|---|---|
 | `claude-code` | headless `claude -p` | default |
 | `codex` | headless `codex exec` (stdin closed) | `HB_EXEC_PROVIDER=oss` → keyless Ollama |
+| `opencode` | headless `opencode run --format json` | `HB_EXEC_MODEL=provider/model` |
 | `agno` | Agno agent + `FileTools` | `HB_EXEC_PROVIDER=anthropic\|ollama` |
 | `crewai` | CrewAI Agent+Task+Crew | `HB_EXEC_PROVIDER`; FILE-block writer |
 | `langgraph` | LangGraph ReAct agent + `save_file` | `HB_EXEC_PROVIDER=anthropic\|ollama\|openai` |

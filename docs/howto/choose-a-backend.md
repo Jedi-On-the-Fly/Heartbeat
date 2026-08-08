@@ -10,6 +10,8 @@ swap later ([swap-workers-without-changing-the-dag.md](swap-workers-without-chan
   installed and authenticated ([use-heartbeat-with-claude-code.md](use-heartbeat-with-claude-code.md)).
 - **`codex`** — headless `codex exec` (OpenAI's terminal agent); authed via `codex login`, or
   `HB_EXEC_PROVIDER=oss` for a keyless local model ([use-heartbeat-with-codex.md](use-heartbeat-with-codex.md)).
+- **`opencode`** — headless `opencode run` (SST's provider-agnostic agent); model via
+  `HB_EXEC_MODEL` (`provider/model`) ([use-heartbeat-with-opencode.md](use-heartbeat-with-opencode.md)).
 - **`ollama`** — a local model, offline, no API key; stdlib-only. Choose it for privacy, cost,
   or air-gapped runs; set expectations to the model's size
   ([use-heartbeat-with-ollama.md](use-heartbeat-with-ollama.md)).

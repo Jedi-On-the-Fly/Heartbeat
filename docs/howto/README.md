@@ -65,6 +65,8 @@ families A–J) is in [howto-list.md](howto-list.md).
 - [Use HeartBeat with smolagents](use-heartbeat-with-smolagents.md) — a code agent gated on its outcome.
 - [Use HeartBeat with pydantic-ai](use-heartbeat-with-pydantic-ai.md) — typed outputs + behavioral gates.
 - [Use HeartBeat with Codex](use-heartbeat-with-codex.md) — OpenAI's terminal agent as the worker.
+- [Use HeartBeat with OpenCode](use-heartbeat-with-opencode.md) — SST's agent: drive it, or let it
+  drive HeartBeat over MCP.
 - [Drive HeartBeat over MCP](drive-heartbeat-over-mcp.md) — the inverse: an MCP agent calls
   HeartBeat's tick/gate/state tools; `hb mcp-serve` is a stdlib-only stdio/HTTP server.
 - [Install the HeartBeat plugin](install-the-heartbeat-plugin.md) — one plugin, both hosts

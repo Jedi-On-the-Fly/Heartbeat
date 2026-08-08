@@ -3,7 +3,7 @@
 The full how-to map, organized by job (families **A–J**, after the original ideas list).
 Each entry is either **created** (linked file, with the suite group that enforces it) or
 **Not available yet**. Created guides are CI-enforced across `tests/run-tests.sh` groups
-**T53–T71**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
+**T53–T72**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
 integrity check (links resolve, no placeholders, only real commands) plus adversarial clarity
 review, and the framework guides (T64) by a Docker-free harness check + backend conformance
 (their live proof is the reproducible pinned Docker in `tests/frameworks/`). See the
@@ -78,6 +78,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Use HeartBeat with Claude Code | ✅ [use-heartbeat-with-claude-code.md](use-heartbeat-with-claude-code.md) — T59 |
 | Use HeartBeat with Ollama | ✅ [use-heartbeat-with-ollama.md](use-heartbeat-with-ollama.md) — T59 |
 | Use HeartBeat with Codex | ✅ [use-heartbeat-with-codex.md](use-heartbeat-with-codex.md) — T66 |
+| Use HeartBeat with OpenCode | ✅ [use-heartbeat-with-opencode.md](use-heartbeat-with-opencode.md) — T72 |
 | Drive HeartBeat over MCP | ✅ [drive-heartbeat-over-mcp.md](drive-heartbeat-over-mcp.md) — T67, T68, T70 |
 | Install the HeartBeat plugin | ✅ [install-the-heartbeat-plugin.md](install-the-heartbeat-plugin.md) — T69 |
 | Secure the MCP server | ✅ [secure-the-mcp-server.md](secure-the-mcp-server.md) — T71 |

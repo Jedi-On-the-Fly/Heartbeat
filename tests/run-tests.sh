@@ -1013,6 +1013,20 @@ else
   echo "  (python3 absent — T71 skipped)"
 fi
 
+grp "T72 — opencode backend (stub proof) + MCP wiring, Docker-free"
+if command -v python3 >/dev/null 2>&1; then
+  check "T72.1 the real opencode adapter drives a gated task via a stub CLI (fail-stub does not)" \
+    'bash "'"$GEX"'/opencode-backend.sh" 2>&1 | grep -q "OPENCODE-BACKEND-OK"'
+  check "T72.2 both runtimes register opencode (registry resolves + plugin defaultCmd/executor)" \
+    'cd "'"$HB_SRC"'/py" && PYTHONPATH=src python3 -c "from heartbeat.backends import get; assert get(\"opencode\").__name__.endswith(\"opencode\")" && grep -q "opencode-exec.sh" "'"$HB_SRC"'/plugin/templates/hb-exec.js" && [ -f "'"$HB_SRC"'/plugin/templates/executors/opencode-exec.sh" ]'
+  check "T72.3 the opencode.json mcp config is valid + the wired hb mcp-serve command spins a server" \
+    'bash "'"$GEX"'/opencode-mcp.sh" 2>&1 | grep -q "OPENCODE-MCP-OK"'
+  check "T72.4 the opencode guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/use-heartbeat-with-opencode.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+else
+  echo "  (python3 absent — T72 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

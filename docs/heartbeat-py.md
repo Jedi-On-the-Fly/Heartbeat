@@ -73,6 +73,7 @@ Stage B is swappable. Choose with `.hb/executor.json` `{"backend": …}` or
   models, or `anthropic`/`openai` with the matching key.
 - `claude-code` — headless `claude -p`.
 - `codex` — headless `codex exec` (OpenAI's Claude-Code analog); authed, or `HB_EXEC_PROVIDER=oss` for keyless local.
+- `opencode` — headless `opencode run` (SST's provider-agnostic agent); model via `HB_EXEC_MODEL=provider/model`.
 - `script` — any command, via `HB_EXEC_CMD`.
 
 `hb exec config` prints the resolved backend and settings (both runtimes).

@@ -74,7 +74,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 
 ## Backends
 
-Registry `backends.get(name)` → module with `execute(payload) → {ok, summary}` and `refute(payload) → {refuted, findings}`. Known: `ollama`, `agno`, `crewai`, `claude` (`claude-code` alias), `codex`, and the framework backends. `payload` carries `context`, `cwd`, and `task`. In-process (no subprocess) for the bundled backends; arbitrary commands use the subprocess path via `HB_EXEC_CMD`.
+Registry `backends.get(name)` → module with `execute(payload) → {ok, summary}` and `refute(payload) → {refuted, findings}`. Known: `ollama`, `agno`, `crewai`, `claude` (`claude-code` alias), `codex`, `opencode`, and the framework backends. `payload` carries `context`, `cwd`, and `task`. In-process (no subprocess) for the bundled backends; arbitrary commands use the subprocess path via `HB_EXEC_CMD`.
 
 ## MCP server (`hb mcp-serve`)
 
