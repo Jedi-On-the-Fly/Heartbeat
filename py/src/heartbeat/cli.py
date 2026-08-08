@@ -50,7 +50,7 @@ def main(argv=None):
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
     p = sub.add_parser("exec"); p.add_argument("action", nargs="?", default="run"); p.add_argument("--parallel", type=int, default=0); _add_dir(p)
-    p = sub.add_parser("mcp-serve"); _add_dir(p)
+    p = sub.add_parser("mcp-serve"); p.add_argument("--http", action="store_true"); p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=0); _add_dir(p)
 
     args = ap.parse_args(argv)
     if not args.cmd:
@@ -234,6 +234,8 @@ def main(argv=None):
         return executor.run(hb)
     elif args.cmd == "mcp-serve":
         from . import mcp_server
+        if args.http:
+            return mcp_server.serve_http(hb, args.host, args.port)
         return mcp_server.serve(hb)
     return 0
 

@@ -43,6 +43,15 @@ Both hosts run the same binary — the server is Python-delivered and host-neutr
 non-parity, noted in [parity-notes.md](../../planning/parity-notes.md)). Once registered, the
 agent can call `tick` to get the next action, do the work, then `gate` to verify it.
 
+Or skip the manual wiring: install the HeartBeat plugin and it registers the server for you, on
+either host — see [install-the-heartbeat-plugin.md](install-the-heartbeat-plugin.md).
+
+### Remote (HTTP)
+
+For a remote/hosted client, `hb mcp-serve --http --host <h> --port <p>` serves the same tools over
+a minimal streamable-HTTP endpoint (stdlib-only; stdio stays the default). Point a client at the
+URL — e.g. `codex mcp add heartbeat --url http://<h>:<p>`.
+
 ## Trust doesn't change
 
 An agent calling `gate` or `done` still can't fabricate a pass: the gate is behavioral and the
@@ -66,6 +75,6 @@ drives it with an actual JSON-RPC client over stdio:
 
 ## Scope
 
-stdio + tools, stdlib-only (no MCP SDK — the core stays dependency-free). A streamable-HTTP
-transport for remote/hosted clients is deferred; the design is in
-[mcp-server-scope.md](../../planning/mcp-server-scope.md).
+stdlib-only (no MCP SDK — the core stays dependency-free). Both transports ship: stdio (default)
+and the minimal streamable-HTTP endpoint above (`--http`, single JSON response per POST, no SSE
+server-push). The full design is in [mcp-server-scope.md](../../planning/mcp-server-scope.md).

@@ -971,6 +971,24 @@ else
   echo "  (python3 absent — T67 skipped)"
 fi
 
+grp "T68 — MCP HTTP transport (hb mcp-serve --http, Docker-free)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T68.1 a real HTTP JSON-RPC client drives hb mcp-serve --http (read + act, matching the CLI)" \
+    'bash "'"$GEX"'/mcp-http.sh" 2>&1 | grep -q "MCP-HTTP-OK"'
+else
+  echo "  (python3 absent — T68 skipped)"
+fi
+
+grp "T69 — plugin registers the MCP server (surface B) + install guide"
+if command -v python3 >/dev/null 2>&1; then
+  check "T69.1 the plugin registers hb mcp-serve (static; codex-live where present, isolated + offline)" \
+    'bash "'"$GEX"'/plugin-mcp.sh" 2>&1 | grep -q "PLUGIN-MCP-OK"'
+  check "T69.2 the install guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/install-the-heartbeat-plugin.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+else
+  echo "  (python3 absent — T69 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

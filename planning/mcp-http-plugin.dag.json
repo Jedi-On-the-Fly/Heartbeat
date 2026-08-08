@@ -1,0 +1,64 @@
+{
+  "_meta": {
+    "project": "mcp-http-plugin",
+    "note": "Two deliverables the MCP core opened up (planning/mcp-server-scope.md). (H) scope step 4 — an OPTIONAL streamable-HTTP transport for `hb mcp-serve` (a minimal, stdlib-only http.server POST/JSON-RPC endpoint; stdio stays the default) so remote/hosted MCP clients can reach it. (B) surface B — the Codex/Claude plugin REGISTERS the MCP server, so install = wired (no manual `codex mcp add`). Decisive live investigation (codex 0.147, this machine): Codex reads the SAME `.claude-plugin/marketplace.json` format HeartBeat already ships, and `codex plugin list --available` already discovers our `heartbeat` plugin; adding `plugin/.mcp.json` ({mcpServers:{heartbeat:{command:hb,args:[mcp-serve]}}}) makes `codex plugin add` + `codex mcp list` surface the heartbeat stdio server — proven OFFLINE, KEYLESS, in an isolated CODEX_HOME (so the suite never touches the user's ~/.codex). One plugin, both hosts; the MCP server is Python-delivered (needs pip `hb`). Both proofs are deterministic and Docker-free; the codex-live tier is conditional on `command -v codex` (skips cleanly where codex is absent, like python3-gated groups)."
+  },
+  "phases": [
+    {
+      "id": "HT1", "title": "Streamable-HTTP transport for mcp-serve (scope step 4)", "gate_entry": null, "gate_exit": "GATE_HT1",
+      "tasks": [
+        { "id": "HT1T1", "title": "Author the HTTP-transport proof spec", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/mcp-http.sh — spin `hb mcp-serve --http --host 127.0.0.1 --port 0` as a subprocess, read the bound port from its stderr readiness line (blocking on that line eliminates the bind race), then POST JSON-RPC over HTTP with urllib (stdlib): (1) initialize returns a valid handshake; (2) tools/list carries the tools; (3) tools/call state matches `hb state` — POP `last_updated` before comparing (state.project stamps now_iso per projection, so the two projections differ only there — mirror nostamp() in mcp-server.sh); (4) an act tool (gate on a passing project) over HTTP records gate_passed in events.jsonl and advances. Print MCP-HTTP-OK. Deterministic, localhost-only (no external network), no model, no Docker." },
+        { "id": "HT1T2", "title": "Implement the HTTP transport", "requires": ["HT1T1"],
+          "description": "Add serve_http(hbdir, host, port) to py/src/heartbeat/mcp_server.py using stdlib http.server (ThreadingHTTPServer + BaseHTTPRequestHandler): POST reads the JSON-RPC body, dispatches through the SAME _handle used by stdio, and writes the response as application/json; a notification (no id) returns 202 with no body; malformed JSON returns a JSON-RPC parse error. Bind, then print the actual host:port to stderr as the readiness signal (supports --port 0). Must stay stdlib-only (the mc1c4 invariant)." },
+        { "id": "HT1T3", "title": "Wire `mcp-serve --http/--host/--port`", "requires": ["HT1T2"],
+          "description": "Extend the cli.py `mcp-serve` subparser with --http (flag), --host (default 127.0.0.1), --port (int, default 0); dispatch to mcp_server.serve_http when --http else serve (stdio stays the default). The new work is the DISPATCH BRANCH — a parsed flag that isn't wired to serve_http would leave stdio running, which the HTTP proof (ht1c1) catches by actually round-tripping over HTTP. No node changes." }
+      ]
+    },
+    {
+      "id": "PB1", "title": "Plugin registers the MCP server (surface B, both hosts)", "gate_entry": "GATE_HT1", "gate_exit": "GATE_PB1",
+      "tasks": [
+        { "id": "PB1T1", "title": "Author the plugin-registration proof spec", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/plugin-mcp.sh with two tiers. STATIC (always): plugin/.mcp.json is valid JSON and declares an mcpServers.heartbeat whose command is `hb` and args include `mcp-serve`; .claude-plugin/marketplace.json lists the `heartbeat` plugin (source ./plugin). CODEX-LIVE (only if `command -v codex`, in an isolated CODEX_HOME=mktemp so the user's ~/.codex is never touched, offline): `codex plugin marketplace add <repo> --json`, `codex plugin add heartbeat@heartbeat-marketplace --json`, then `codex mcp list --json` shows a `heartbeat` stdio server with command `hb` and args `[mcp-serve]`. Parse the `--json` STDOUT for that assertion (2>/dev/null) — codex prints a harmless 'Refusing to create helper binaries under temporary dir' WARNING to stderr when CODEX_HOME is a tempdir; tolerate it. Print PLUGIN-MCP-OK (noting whether the codex-live tier ran or was skipped)." },
+        { "id": "PB1T2", "title": "Add plugin/.mcp.json (register hb mcp-serve)", "requires": ["PB1T1"],
+          "description": "Add plugin/.mcp.json = {\"mcpServers\":{\"heartbeat\":{\"command\":\"hb\",\"args\":[\"mcp-serve\"]}}} so installing the HeartBeat plugin in Codex OR Claude Code registers the MCP server (it defaults --dir to the workspace ./.hb). Additive only — do not renumber/bump versions or change existing plugin manifests. Confirm the node suite's bootstrap/plugin tests stay green." }
+      ]
+    },
+    {
+      "id": "DG1", "title": "Docs + suite wiring", "gate_entry": "GATE_PB1", "gate_exit": "GATE_DG1",
+      "tasks": [
+        { "id": "DG1T1", "title": "Write the plugin-install guide + extend the MCP guide", "requires": [],
+          "description": "Write docs/howto/install-the-heartbeat-plugin.md: one plugin, both hosts — Codex (`codex plugin marketplace add <path>` then `codex plugin add heartbeat@heartbeat-marketplace`) and Claude Code (its plugin/marketplace install); installing registers the `hb mcp-serve` MCP server (needs the pip-installed Python `hb` on PATH — an honest cross-runtime note); then the agent drives HeartBeat over MCP. Add a short 'remote/HTTP' note to docs/howto/drive-heartbeat-over-mcp.md pointing at `--http` and `codex mcp add --url`. Reference the real proofs; only real commands." },
+        { "id": "DG1T2", "title": "Wire docs + T68/T69 suite groups", "requires": ["DG1T1"],
+          "description": "Update docs/dev-python.md (the `mcp-serve --http/--host/--port` flags + a line on the plugin-registered server), docs/howto/README.md + howto-list.md (index the install guide), and planning/mcp-server-scope.md (mark step 4 built: optional HTTP transport). Add two Docker-free suite groups to tests/run-tests.sh: T68 runs mcp-http.sh (MCP-HTTP-OK); T69 runs plugin-mcp.sh (PLUGIN-MCP-OK) and prose-checks the install guide. Both python3-gated; T69's codex-live tier self-skips when codex is absent." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_HT1": {
+      "desc": "hb mcp-serve gains an optional stdlib-only HTTP transport; a real HTTP JSON-RPC client drives it (read + act) matching the CLI; the core stays stdlib-only.",
+      "review": { "prompt": "Refute that HT1 is done: does mcp-http.sh spin the REAL `hb mcp-serve --http` and POST actual JSON-RPC over HTTP (urllib), not a mock? Does it read the bound port from a readiness signal (works with --port 0, no fixed-port flake)? Do read tools match the CLI and does an act tool over HTTP record via the log (invariant)? Is the transport stdlib-only (http.server/urllib — no third-party), sharing the same _handle as stdio? Is stdio still the default? Localhost-only, no external network, no Docker?" },
+      "criteria": [
+        { "id": "ht1c1", "desc": "the HTTP-transport proof passes (real urllib HTTP JSON-RPC round-trip; the --http flag actually binds + serves, read + act)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-http.sh\" 2>&1 | grep -q 'MCP-HTTP-OK'" },
+        { "id": "ht1c2", "desc": "the server stays stdlib-only after adding HTTP (no third-party import)", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"import ast,sys; t=ast.parse(open('src/heartbeat/mcp_server.py').read()); m=[n.name.split('.')[0] for x in ast.walk(t) if isinstance(x,ast.Import) for n in x.names]+[x.module.split('.')[0] for x in ast.walk(t) if isinstance(x,ast.ImportFrom) and x.level==0 and x.module]; bad=[x for x in m if x not in sys.stdlib_module_names]; assert not bad, bad\"" }
+      ]
+    },
+    "GATE_PB1": {
+      "desc": "Installing the HeartBeat plugin registers the hb mcp-serve MCP server — proven live in Codex (isolated, offline) where codex is present, and statically everywhere.",
+      "review": { "prompt": "Refute that PB1 is done: does plugin/.mcp.json actually declare a `heartbeat` mcpServers entry wiring `hb mcp-serve`? Does plugin-mcp.sh's codex-live tier run in an ISOLATED CODEX_HOME (never touching ~/.codex), fully OFFLINE, and assert `codex mcp list` shows the heartbeat stdio server with command hb / args mcp-serve (not just that the plugin is discovered)? Is the codex tier load-bearing where codex exists, and does it skip cleanly where codex is absent (static tier still enforced)? Does adding .mcp.json break the existing plugin or the node suite?" },
+      "criteria": [
+        { "id": "pb1c1", "desc": ".mcp.json validly wires hb mcp-serve", "cmd": "python3 -c \"import json; s=json.load(open('$PROJECT_DIR/plugin/.mcp.json'))['mcpServers']['heartbeat']; assert s['command']=='hb' and 'mcp-serve' in s['args']\"" },
+        { "id": "pb1c2", "desc": "the plugin-registration proof passes (static + codex-live where present)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/plugin-mcp.sh\" 2>&1 | grep -q 'PLUGIN-MCP-OK'" }
+      ]
+    },
+    "GATE_DG1": {
+      "desc": "The install guide is accurate + integrity-checked, docs/scope are updated, and the suite enforces both new proofs Docker-free.",
+      "review": { "prompt": "Refute that DG1 is done: is the install guide accurate to the real flow (codex plugin marketplace add + plugin add; Claude Code install) with the honest 'needs pip hb' cross-runtime note, and no overclaim? Prose-integrity (only real commands, links resolve)? Are the dev-python HTTP flags + the scope 'step 4 built' honest? Do T68/T69 actually run the proofs, Docker-free, with T69 self-skipping when codex is absent? Indexed in README + howto-list?" },
+      "criteria": [
+        { "id": "dg1c1", "desc": "the install guide references its proof and passes prose-integrity", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'plugin-mcp' install-the-heartbeat-plugin.md && bash gate-examples/prose-check.sh install-the-heartbeat-plugin.md 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "dg1c2", "desc": "docs + scope + index updated for HTTP + the plugin server", "cmd": "grep -q -- '--http' \"$PROJECT_DIR/docs/dev-python.md\" && grep -qi 'step 4' \"$PROJECT_DIR/planning/mcp-server-scope.md\" && grep -q 'install-the-heartbeat-plugin' \"$PROJECT_DIR/docs/howto/README.md\" && grep -q 'install-the-heartbeat-plugin' \"$PROJECT_DIR/docs/howto/howto-list.md\"" },
+        { "id": "dg1c3", "desc": "the node suite enforces both new proofs Docker-free (T68 + T69 PASSED)", "cmd": "o=\"$(bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1)\"; printf '%s' \"$o\" | grep -q 'GROUPS-PASSED:.* T68 ' && printf '%s' \"$o\" | grep -q 'GROUPS-PASSED:.* T69 '" }
+      ]
+    }
+  }
+}

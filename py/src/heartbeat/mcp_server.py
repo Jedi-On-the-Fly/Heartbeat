@@ -176,3 +176,48 @@ def serve(hbdir, stdin=None, stdout=None):
         if resp is not None:
             stdout.write(json.dumps(resp) + "\n"); stdout.flush()
     return 0
+
+
+def serve_http(hbdir, host="127.0.0.1", port=0):
+    """Optional streamable-HTTP transport: a stdlib http.server endpoint that
+    answers JSON-RPC POSTs through the same _handle dispatch as stdio. Minimal by
+    design (single JSON response per POST; no SSE server-push). Binds, then prints
+    the actual host:port to stderr as a readiness signal (supports --port 0)."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass  # quiet
+
+        def _send(self, obj, code=200):
+            data = json.dumps(obj).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            body = self.rfile.read(length).decode() if length else ""
+            try:
+                msg = json.loads(body)
+            except ValueError:
+                self._send(_error(None, -32700, "parse error"), 400)
+                return
+            resp = _handle(hbdir, msg)
+            if resp is None:                       # a notification — no response body
+                self.send_response(202)
+                self.end_headers()
+                return
+            self._send(resp)
+
+    httpd = ThreadingHTTPServer((host, port), Handler)
+    bound_host, bound_port = httpd.server_address[0], httpd.server_address[1]
+    sys.stderr.write(f"HeartBeat MCP server (HTTP) listening on {bound_host}:{bound_port}\n")
+    sys.stderr.flush()
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    return 0

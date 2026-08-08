@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "heartbeat": {
+      "command": "hb",
+      "args": ["mcp-serve"]
+    }
+  }
+}

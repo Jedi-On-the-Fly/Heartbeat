@@ -1,8 +1,10 @@
 # Scope — HeartBeat as an MCP server (the neutral core)
 
-**Status: steps 1–2 BUILT** (stdio server + read *and* act tools — `hb mcp-serve`, proven by
-`docs/howto/gate-examples/mcp-server.sh`; guide: [drive-heartbeat-over-mcp.md](../docs/howto/drive-heartbeat-over-mcp.md)).
-Step 4 (streamable-HTTP transport) remains deferred. This doc defines the rock: exposing
+**Status: steps 1–4 BUILT** — stdio server + read *and* act tools (`hb mcp-serve`), the optional
+streamable-HTTP transport (`--http`), and surface B (the plugin registers the server for both
+hosts). Proven by `mcp-server.sh` / `mcp-http.sh` / `plugin-mcp.sh`; guides:
+[drive-heartbeat-over-mcp.md](../docs/howto/drive-heartbeat-over-mcp.md),
+[install-the-heartbeat-plugin.md](../docs/howto/install-the-heartbeat-plugin.md). This doc defines the rock: exposing
 HeartBeat's deterministic verification surface over the Model Context Protocol so that *any*
 MCP-capable agent — Codex, Claude Code, Cursor, and future hosts — drives the same tick / gate /
 state operations through one integration, instead of a bespoke plugin per host.
@@ -84,8 +86,11 @@ agent tiers.
 2. Add the act tools (`gate`/`start`/`done`/`fail`/`review`) through the real mutate path; extend
    the proof to the record-and-advance + negative control cases.
 3. Docs + wiring: Codex (`codex mcp add`) and Claude Code; then surface B (a thin Codex plugin
-   that registers the server).
-4. Optional: streamable-HTTP transport for remote/hosted clients.
+   that registers the server). **BUILT** — `plugin/.mcp.json` registers `hb mcp-serve` for both
+   hosts (proof: `docs/howto/gate-examples/plugin-mcp.sh`; guide:
+   `docs/howto/install-the-heartbeat-plugin.md`).
+4. **Step 4 BUILT** — an optional streamable-HTTP transport (`hb mcp-serve --http`) for
+   remote/hosted clients (stdlib `http.server`; proof: `docs/howto/gate-examples/mcp-http.sh`).
 
 ## Risks & non-goals
 

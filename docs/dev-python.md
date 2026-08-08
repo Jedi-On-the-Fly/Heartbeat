@@ -62,7 +62,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | `start/done/fail/heartbeat <id>` | state mutations (+ lease) |
 | `review <gate> pass\|fail [note]` | record adversarial verdict |
 | `exec [run\|config] [--parallel N]` | `run` (default) drives the loop with a backend; `config` prints the resolved executor config |
-| `mcp-serve` | run the MCP server (JSON-RPC over stdio) so an MCP client drives HeartBeat; see below |
+| `mcp-serve [--http] [--host H] [--port P]` | run the MCP server so an MCP client drives HeartBeat; stdio by default, `--http` for a streamable-HTTP endpoint; see below |
 
 ## Executor
 
@@ -86,6 +86,13 @@ MCP stdio transport (newline-delimited JSON) — no MCP SDK, so the core stays d
 `review`). Act tools route every state change through `state.mutate` / the validated review path —
 the mutate-only-through-the-log invariant holds exactly as in the CLI. Proof:
 `docs/howto/gate-examples/mcp-server.sh`; guide: `docs/howto/drive-heartbeat-over-mcp.md`.
+
+Transports: **stdio** by default; `serve_http(hbdir, host, port)` adds an optional
+streamable-HTTP endpoint (stdlib `http.server`, `--http`/`--host`/`--port`; `--port 0` binds an
+ephemeral port and prints it) sharing the same `_handle` dispatch. The HeartBeat **plugin** also
+registers the server: `plugin/.mcp.json` declares `heartbeat → hb mcp-serve`, so installing the
+plugin in Codex or Claude Code wires it with no manual `mcp add` (proof:
+`docs/howto/gate-examples/plugin-mcp.sh`; guide: `docs/howto/install-the-heartbeat-plugin.md`).
 
 | Backend | Worker | Provider |
 |---|---|---|
