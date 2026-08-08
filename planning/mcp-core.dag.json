@@ -1,0 +1,66 @@
+{
+  "_meta": {
+    "project": "mcp-core",
+    "note": "Build the MCP-server core scoped in planning/mcp-server-scope.md: HeartBeat as an MCP server so any MCP-capable agent (Codex, Claude Code, …) drives the same tick/gate/state operations through one integration. Delivery: a new `hb mcp-serve` subcommand (Python) implementing a minimal, stdlib-only JSON-RPC 2.0 server over newline-delimited stdio (MCP stdio transport) — NO MCP SDK, so the stdlib-only core stays intact (the scope's top risk). Tools map 1:1 to the `hb` library; act tools route every state change through `state.mutate` (the mutate-only-through-the-log invariant, AGENTS rule 1). The proof is deterministic and model/network-free: spin the server as a subprocess, speak JSON-RPC over stdio, assert responses + that act calls append the event to events.jsonl and state stays a pure projection. Scope steps 1-3 (read tools + handshake; act tools; docs + wiring + suite); step 4 (HTTP transport) stays deferred. The server is Python-delivered and consumed by BOTH hosts (like `pip install`) — an intentional non-parity recorded in parity-notes.md, not a mirrored node surface."
+  },
+  "phases": [
+    {
+      "id": "MC1", "title": "MCP stdio server: handshake + read tools", "gate_entry": null, "gate_exit": "GATE_MC1",
+      "tasks": [
+        { "id": "MC1T1", "title": "Author the read-tools proof spec", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/mcp-server.sh that spins `hb mcp-serve --dir <proj>` as a subprocess and speaks newline-delimited JSON-RPC 2.0 over stdio. Read section: (1) `initialize` returns serverInfo + a tools capability and echoes the protocolVersion; (2) `tools/list` contains tick/next/state/report/diagnose; (3) `tools/call` tick returns a result whose next-action matches `hb tick --dir <proj>`; (4) `tools/call` state matches `hb state`. Print MCP-READ-OK. Docker-free, no model/network. The server impl lands in MC1T2/T3, so the script is authored here but only passes once they're in." },
+        { "id": "MC1T2", "title": "Minimal stdlib JSON-RPC/MCP stdio server", "requires": ["MC1T1"],
+          "description": "Add py/src/heartbeat/mcp_server.py — a minimal, stdlib-only MCP server over stdio: a read loop over newline-delimited JSON-RPC 2.0 requests dispatching initialize (return protocolVersion echo, capabilities.tools, serverInfo{name,version}), notifications/initialized (no reply), tools/list (name+description+inputSchema per tool), and tools/call (returns content:[{type:text,text:<json>}], isError on failure). Proper JSON-RPC error objects for unknown method / bad params. A tool registry maps tool name -> handler + inputSchema. `serve(hbdir)` runs the loop on sys.stdin/sys.stdout." },
+        { "id": "MC1T3", "title": "Wire read tools + `hb mcp-serve` subcommand", "requires": ["MC1T2"],
+          "description": "Register the read tools in mcp_server.py, each calling the SAME hb library function cli.py calls and returning its JSON: tick (tick.tick), next (resolver.resolve), ready (resolver.ready_tasks), state (state.project), report (report.build), diagnose (doctor.diagnose), doctor (doctor.doctor), lint (lint.lint), audit (audit.audit). Add a `mcp-serve` subparser to cli.py (with --dir) dispatching to mcp_server.serve(hbdir). No node changes (Python-delivered surface)." }
+      ]
+    },
+    {
+      "id": "MC2", "title": "Act tools through the mutate path", "gate_entry": "GATE_MC1", "gate_exit": "GATE_MC2",
+      "tasks": [
+        { "id": "MC2T1", "title": "Author the act-tools proof spec", "requires": [],
+          "description": "Extend docs/howto/gate-examples/mcp-server.sh with an act section: (1) `tools/call` gate on a passing project records gate_passed AND the same event appears in events.jsonl AND the phase advances (read completed_phases from state, not just the tool's return string); (2) negative control — gate on an unpassable project returns blocked and does NOT advance; (3) start/done via the tools mutate the log, and state.json on disk equals the event-log projection EXCLUDING the nondeterministic `last_updated` field (project() stamps now_iso every call — compare with last_updated popped) — proving the server never side-writes state.json (the mutate-only-through-the-log invariant). Print MCP-ACT-OK, then MCP-INVARIANT-OK after the disk-equals-projection check." },
+        { "id": "MC2T2", "title": "Implement act tools via state.mutate", "requires": ["MC2T1"],
+          "description": "Add the act tools to mcp_server.py routing every state change through the same library path cli.py uses: gate (gate.run_gate — records gate_passed/failed via the log), start (state.acquire_lease + state.mutate task_started), done (state.mutate task_done + release_lease), fail (state.mutate task_failed + release_lease), review (the validated artifact-backed review path). NO direct state.json writes anywhere — state stays a projection of events.jsonl." }
+      ]
+    },
+    {
+      "id": "MC3", "title": "Docs, wiring, suite group", "gate_entry": "GATE_MC2", "gate_exit": "GATE_MC3",
+      "tasks": [
+        { "id": "MC3T1", "title": "Write the MCP how-to guide", "requires": [],
+          "description": "Write docs/howto/drive-heartbeat-over-mcp.md: the agent-drives-HeartBeat relationship (distinct from HeartBeat-drives-the-agent backends), the tool surface (read + act), stdio wiring for Codex (`codex mcp add heartbeat -- hb mcp-serve --dir <project>`) and Claude Code (its MCP config, same binary), the deterministic proof reference (mcp-server.sh), and an honest note (stdlib-only, stdio-first, HTTP deferred; the invariant is preserved because act tools go through the log). Reference only real commands + the real proof." },
+        { "id": "MC3T2", "title": "Wire docs + parity note + T67 suite group", "requires": ["MC3T1"],
+          "description": "First patch docs/howto/gate-examples/prose-check.sh to accept hyphenated subcommands (both the add_parser derivation and the `hb <sub>` scanner use [a-z]+ which drops the hyphen — a guide's `hb mcp-serve` would otherwise extract `hb mcp` and PROSE-FAIL); change those classes to [a-z-]+ and confirm --selftest still passes. Then update dev-python.md (the `hb mcp-serve` subcommand + mcp_server module row), parity-notes.md (intentional divergence: the MCP server is Python-delivered and consumed by both hosts, not a mirrored node surface), docs/howto/README.md + howto-list.md (index the new guide), and mark planning/mcp-server-scope.md as steps 1-2 built (stdio + read/act tools). Add a Docker-free T67 group to tests/run-tests.sh: mcp-server.sh emits MCP-READ-OK + MCP-ACT-OK + MCP-INVARIANT-OK, and the guide passes prose-integrity." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_MC1": {
+      "desc": "The MCP server starts, completes the JSON-RPC handshake, lists tools, and answers read tools over stdio — matching the CLI.",
+      "review": { "prompt": "Refute that MC1 is done: does mcp-server.sh spin the REAL `hb mcp-serve` and speak actual newline-delimited JSON-RPC 2.0 over stdio (not a mock)? Does initialize return a valid MCP handshake (protocolVersion, tools capability, serverInfo)? Does tools/list actually contain the read tools, and does tools/call tick/state return results that MATCH `hb tick`/`hb state` (proving the tools call the real library, not canned output)? Is it truly model/network/Docker-free? Is the server stdlib-only (no MCP SDK import)?" },
+      "criteria": [
+        { "id": "mc1c1", "desc": "mcp_server imports and exposes a callable serve, stdlib-only", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"import heartbeat.mcp_server as m; assert callable(m.serve)\"" },
+        { "id": "mc1c2", "desc": "`hb mcp-serve` is a real subcommand", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m heartbeat.cli mcp-serve --help >/dev/null 2>&1" },
+        { "id": "mc1c3", "desc": "the read-tools stdio proof passes (handshake + tools match the CLI)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-server.sh\" 2>&1 | grep -q 'MCP-READ-OK'" },
+        { "id": "mc1c4", "desc": "the server is stdlib-only (no MCP SDK / third-party import) — the scope's #1 risk", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"import ast,sys; t=ast.parse(open('src/heartbeat/mcp_server.py').read()); m=[n.name.split('.')[0] for x in ast.walk(t) if isinstance(x,ast.Import) for n in x.names]+[x.module.split('.')[0] for x in ast.walk(t) if isinstance(x,ast.ImportFrom) and x.level==0 and x.module]; bad=[x for x in m if x not in sys.stdlib_module_names]; assert not bad, bad\"" }
+      ]
+    },
+    "GATE_MC2": {
+      "desc": "Act tools mutate only through the log: a gate call records the event in events.jsonl and advances; a failing gate does not; state stays a pure projection.",
+      "review": { "prompt": "Refute that MC2 is done: does the gate tool actually run the behavioral gate and record gate_passed VIA THE LOG (the same event appears in events.jsonl), and advance the phase? Is the negative control load-bearing (unpassable gate -> blocked, no advance)? Do start/done go through state.mutate such that `hb rebuild` reproduces the identical state (proving NO direct state.json side-write — the invariant)? Could any act tool fabricate a pass or bypass the gate?" },
+      "criteria": [
+        { "id": "mc2c1", "desc": "the act-tools stdio proof passes (record-and-advance + negative control)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-server.sh\" 2>&1 | grep -q 'MCP-ACT-OK'" },
+        { "id": "mc2c2", "desc": "the mutate-only-through-the-log invariant holds (rebuild reproduces state)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-server.sh\" 2>&1 | grep -q 'MCP-INVARIANT-OK'" }
+      ]
+    },
+    "GATE_MC3": {
+      "desc": "The MCP guide is accurate + integrity-checked, docs/parity notes are updated, and the suite enforces the server Docker-free.",
+      "review": { "prompt": "Refute that MC3 is done: is the guide accurate to the real subcommand + tools, with real wiring commands (codex mcp add; Claude Code MCP config) and no overclaim (stdlib-only, stdio-first, HTTP deferred)? Does it pass prose-integrity (only real commands, links resolve)? Is the Python-delivered non-parity recorded honestly in parity-notes.md? Is T67 Docker-free and does it actually run mcp-server.sh (all three markers) + prose-check? Indexed in README + howto-list?" },
+      "criteria": [
+        { "id": "mc3c1", "desc": "the guide references its proof and passes prose-integrity", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'mcp-server' drive-heartbeat-over-mcp.md && bash gate-examples/prose-check.sh drive-heartbeat-over-mcp.md 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "mc3c2", "desc": "docs + parity note + index updated for the mcp server", "cmd": "grep -q 'mcp-serve' \"$PROJECT_DIR/docs/dev-python.md\" && grep -qi 'mcp' \"$PROJECT_DIR/planning/parity-notes.md\" && grep -q 'drive-heartbeat-over-mcp' \"$PROJECT_DIR/docs/howto/README.md\" && grep -q 'drive-heartbeat-over-mcp' \"$PROJECT_DIR/docs/howto/howto-list.md\"" },
+        { "id": "mc3c3", "desc": "the node suite enforces the mcp server Docker-free (T67 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T67 '" }
+      ]
+    }
+  }
+}

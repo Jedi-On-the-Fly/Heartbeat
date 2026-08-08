@@ -956,6 +956,21 @@ else
   echo "  (python3 absent — T66 skipped)"
 fi
 
+grp "T67 — MCP server (hb mcp-serve, stdio, Docker-free) + guide"
+if command -v python3 >/dev/null 2>&1; then
+  bash "$GEX/mcp-server.sh" > "$TMP/mcp.out" 2>&1
+  check "T67.1 read tools over stdio match the CLI (handshake + tick/next/state)" \
+    'grep -q "MCP-READ-OK" "'"$TMP"'/mcp.out"'
+  check "T67.2 act tools record via the log and advance; a failing gate does not" \
+    'grep -q "MCP-ACT-OK" "'"$TMP"'/mcp.out"'
+  check "T67.3 the mutate-only-through-the-log invariant holds (state.json = projection)" \
+    'grep -q "MCP-INVARIANT-OK" "'"$TMP"'/mcp.out"'
+  check "T67.4 the mcp guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/drive-heartbeat-over-mcp.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+else
+  echo "  (python3 absent — T67 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

@@ -43,6 +43,15 @@ Two gotchas it encodes:
   both) is enforced by the node suite's `T63` group instead. The executor generally is not a
   parity surface — backends and their config are runtime-local.
 
+- **`hb mcp-serve`** (the MCP server) is **Python-delivered only** and is *not* mirrored in the
+  node+bash plugin. Like `pip install`, it's a single host-neutral binary that **both** hosts
+  consume (`codex mcp add … -- hb mcp-serve`; Claude Code's MCP config points at the same command),
+  so there is no second implementation to keep byte-equal. Parity with the CLI is instead
+  *automatic*: its tools call the same `heartbeat` library functions `hb <cmd>` calls, and its proof
+  (`docs/howto/gate-examples/mcp-server.sh`) asserts each tool's answer equals the corresponding
+  `hb` command. AGENTS rule 2 governs shared *logic*; the MCP server is a thin adapter over that
+  shared logic, not a new shared surface that needs a mirror.
+
 Extend it when a new shared surface lands.
 
 ## Auditor ruleset (identical regexes in both)

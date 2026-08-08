@@ -13,7 +13,7 @@ CLI="$ROOT/py/src/heartbeat/cli.py"
 
 # Real subcommands: add_parser("x") names + the start/done/fail/heartbeat loop. Derived, not hardcoded.
 _subcommands(){
-  { grep -oE 'add_parser\("[a-z]+"' "$CLI" | grep -oE '"[a-z]+"' | tr -d '"'
+  { grep -oE 'add_parser\("[a-z-]+"' "$CLI" | grep -oE '"[a-z-]+"' | tr -d '"'
     printf '%s\n' start done fail heartbeat; } | sort -u
 }
 SUBS="$(_subcommands)"
@@ -34,7 +34,7 @@ check_doc(){
   done || return 1
   # every backticked `hb <sub>` is a real subcommand
   local sub
-  grep -oE '`hb [a-z]+' "$f" | sed -E 's/^`hb //' | sort -u | while read -r sub; do
+  grep -oE '`hb [a-z-]+' "$f" | sed -E 's/^`hb //' | sort -u | while read -r sub; do
     printf '%s\n' "$SUBS" | grep -qx "$sub" || { echo "  unknown hb command in $f: hb $sub"; exit 3; }
   done || return 1
   return 0

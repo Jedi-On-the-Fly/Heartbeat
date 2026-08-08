@@ -1,6 +1,8 @@
 # Scope — HeartBeat as an MCP server (the neutral core)
 
-**Status: scope / design proposal. Not yet built.** This defines the next big rock: exposing
+**Status: steps 1–2 BUILT** (stdio server + read *and* act tools — `hb mcp-serve`, proven by
+`docs/howto/gate-examples/mcp-server.sh`; guide: [drive-heartbeat-over-mcp.md](../docs/howto/drive-heartbeat-over-mcp.md)).
+Step 4 (streamable-HTTP transport) remains deferred. This doc defines the rock: exposing
 HeartBeat's deterministic verification surface over the Model Context Protocol so that *any*
 MCP-capable agent — Codex, Claude Code, Cursor, and future hosts — drives the same tick / gate /
 state operations through one integration, instead of a bespoke plugin per host.

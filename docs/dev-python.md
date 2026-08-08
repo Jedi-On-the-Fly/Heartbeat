@@ -35,6 +35,7 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 | `protocol.py` | `PROTOCOL`, `render_md()` | reason keys = plugin; action text cites `hb` console |
 | `executor.py` | `run(hbdir)`, `config(hbdir)`, `dispatch(...)`, `assemble_context`, in-process + subprocess dispatch, worktree parallel | pluggable Stage B |
 | `backends/` | in-process backend registry | see below |
+| `mcp_server.py` | `serve(hbdir)`, `TOOLS` | `hb mcp-serve` — minimal stdlib-only MCP server over stdio; see below |
 | `cli.py` | `main(argv=None)` → argparse dispatch | the `hb` entry |
 
 State mutation path (`mutate`): `with_wlock` (`.wlock`) → `append_event` → `reproject` → atomic write. Constants read from env at import: `LOCK_STALE_S`, `HEARTBEAT_STALE_S`, `STUCK_TICKS`, `HB_MAX_CONCURRENCY`, `HB_ROT_CHECK`, `GATE_TIMEOUT_S`.
@@ -61,6 +62,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | `start/done/fail/heartbeat <id>` | state mutations (+ lease) |
 | `review <gate> pass\|fail [note]` | record adversarial verdict |
 | `exec [run\|config] [--parallel N]` | `run` (default) drives the loop with a backend; `config` prints the resolved executor config |
+| `mcp-serve` | run the MCP server (JSON-RPC over stdio) so an MCP client drives HeartBeat; see below |
 
 ## Executor
 
@@ -73,6 +75,17 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 ## Backends
 
 Registry `backends.get(name)` → module with `execute(payload) → {ok, summary}` and `refute(payload) → {refuted, findings}`. Known: `ollama`, `agno`, `crewai`, `claude` (`claude-code` alias), `codex`, and the framework backends. `payload` carries `context`, `cwd`, and `task`. In-process (no subprocess) for the bundled backends; arbitrary commands use the subprocess path via `HB_EXEC_CMD`.
+
+## MCP server (`hb mcp-serve`)
+
+The inverse of a backend: instead of HeartBeat driving an agent, an MCP-capable agent drives
+HeartBeat. `mcp_server.serve(hbdir)` runs a minimal, **stdlib-only** JSON-RPC 2.0 server over the
+MCP stdio transport (newline-delimited JSON) — no MCP SDK, so the core stays dependency-free.
+`TOOLS` maps each tool to the same library function the CLI calls: read (`tick`, `next`, `ready`,
+`state`, `report`, `diagnose`, `doctor`, `lint`, `audit`) and act (`gate`, `start`, `done`, `fail`,
+`review`). Act tools route every state change through `state.mutate` / the validated review path —
+the mutate-only-through-the-log invariant holds exactly as in the CLI. Proof:
+`docs/howto/gate-examples/mcp-server.sh`; guide: `docs/howto/drive-heartbeat-over-mcp.md`.
 
 | Backend | Worker | Provider |
 |---|---|---|
