@@ -1,0 +1,45 @@
+{
+  "_meta": {
+    "project": "howto-framework-fanout",
+    "note": "Fan out the framework how-tos to the remaining five (agno, openai-agents, autogen, smolagents, pydantic-ai) on the existing DRY Docker harness (tests/frameworks/) — no Dockerfile/harness changes, only pinned matrix lines + guides. Same honest three-tier proof as CrewAI/LangGraph: deterministic suite gate (Docker-free --check derived from registry∩extras + conformance/degrade + prose-integrity), and reproducible LIVE evidence in pinned Docker images captured to RESULTS.md (Docker never gates the suite). Reproducible environment != reproducible output: a small local model may reach only 'wiring-ok' not a strict pass, which is recorded honestly per framework — a guide ships on genuine wiring, not an inflated claim. If a framework can't be made to build/run under a reasonable pin (adapter/API drift), that is a real finding, documented, and that one is deferred rather than shipping a false guide. FF0: matrix pins + live runs for the five. GG0: five guides for typical users of each framework (framework-specific division-of-labor: agno wrap, openai-agents handoffs-within-a-task, autogen group-chat-within-a-task, smolagents code-agent gated on outcome, pydantic-ai typed-vs-behavioral synergy) + index/roadmap + a Docker-free T65 suite group."
+  },
+  "phases": [
+    {
+      "id": "FF0", "title": "Matrix pins + live runs (5 frameworks)", "gate_entry": null, "gate_exit": "GATE_FF0",
+      "tasks": [
+        { "id": "FF0T1", "title": "Add pinned matrix lines", "requires": [],
+          "description": "Add pinned lines to tests/frameworks/matrix.txt for agno, openai-agents, autogen, smolagents, pydantic-ai — each spec installs the framework's real packages (matching its pyproject extra, incl. any provider lib the ollama path needs) at a resolved, installable version. Verify run.sh --check passes for all five and --check-all is OK (Docker-free)." },
+        { "id": "FF0T2", "title": "Build + live-run each of the five against Ollama", "requires": ["FF0T1"],
+          "description": "Run tests/frameworks/run.sh <fw> for each of the five: build the pinned image, drive the REAL adapter (HB_EXEC_PROVIDER=ollama) against local Ollama, and append an honest entry to tests/frameworks/RESULTS.md (framework, pinned version, model, date, verdict: phase-complete / wiring-ok strict-missed / degrade). Adjust a pin if a build breaks and freeze the working pin; if a framework genuinely can't run, record the finding and defer its guide." }
+      ]
+    },
+    {
+      "id": "GG0", "title": "Five guides + wiring", "gate_entry": "GATE_FF0", "gate_exit": "GATE_GG0",
+      "tasks": [
+        { "id": "GG0T1", "title": "Write the five framework guides", "requires": [],
+          "description": "Write docs/howto/use-heartbeat-with-agno.md, use-heartbeat-with-openai-agents.md, use-heartbeat-with-autogen.md, use-heartbeat-with-smolagents.md, use-heartbeat-with-pydantic-ai.md — each for that framework's typical user: framework-specific division of labor, real HB_EXEC_* config matching the adapter, the bring-your-own-agent seam (edit the small adapter; not zero-code), one gotcha, and the containerized live-proof section pointing at tests/frameworks/run.sh + RESULTS.md. Honest about each framework's recorded verdict; reference only real commands/backends; do not overclaim." },
+        { "id": "GG0T2", "title": "Index + roadmap + T65 suite group", "requires": ["GG0T1"],
+          "description": "Add the five guides to docs/howto/README.md and flip their rows in docs/howto/howto-list.md; add a Docker-free T65 group to tests/run-tests.sh — run.sh --check for the five, --check-all, backend conformance/degrade, and prose-integrity on the five guides — so the suite enforces the fan-out without depending on Docker." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_FF0": {
+      "desc": "The five frameworks are pinned + harness-valid, and RESULTS.md records a substantive live run for each (evidence validated by review).",
+      "review": { "prompt": "Refute that FF0 is done: are the RESULTS.md entries GENUINE — did the pinned Docker images actually build and drive the real framework (not the degrade stub) against Ollama (re-run one to check)? Is each verdict HONEST (a 'wiring-ok, strict missed' not inflated to 'phase-complete')? Are the pins real (installed version == matrix pin, not latest)? Does --check derive from source so a bogus/un-pinned framework is still rejected? Is any framework that failed to run silently claimed as working?" },
+      "criteria": [
+        { "id": "ff0c1", "desc": "--check passes for all five and the whole matrix is valid (Docker-free)", "cmd": "for f in agno openai-agents autogen smolagents pydantic-ai; do bash \"$PROJECT_DIR/tests/frameworks/run.sh\" --check \"$f\" 2>&1 | grep -q \"FRAMEWORK-HARNESS-OK:$f\" || exit 1; done && bash \"$PROJECT_DIR/tests/frameworks/run.sh\" --check-all 2>&1 | grep -q 'HARNESS-ALL-OK'" },
+        { "id": "ff0c2", "desc": "RESULTS.md records a substantive run for each of the five (version + model + date + verdict)", "cmd": "for f in agno openai-agents autogen smolagents pydantic-ai; do python3 -c \"import sys,re; t=open('$PROJECT_DIR/tests/frameworks/RESULTS.md').read(); b=re.search(r'(?ims)^#+\\s*'+re.escape(sys.argv[1])+r'\\b.*?(?=^#+\\s|\\Z)', t); s=b.group(0) if b else ''; sys.exit(0 if (b and re.search(r'\\d+\\.\\d+', s) and re.search(r'20\\d\\d-\\d\\d-\\d\\d', s) and 'model' in s.lower() and 'verdict' in s.lower()) else 1)\" \"$f\" || exit 1; done" }
+      ]
+    },
+    "GATE_GG0": {
+      "desc": "Five accurate guides that reference their proof, are indexed/roadmapped, and are enforced Docker-free by the suite.",
+      "review": { "prompt": "Refute that GG0 is done: does each guide land ITS framework's division-of-labor accurately for that framework's typical user (not a generic copy)? Is each config real (matches the adapter's HB_EXEC_PROVIDER/MODEL)? Does any overclaim bring-your-own (must be edit-the-adapter, not zero-code)? Does any guide claim a verdict better than RESULTS.md records? Is T65 genuinely Docker-free? Any guide missing from index/roadmap or citing a proof that doesn't run?" },
+      "criteria": [
+        { "id": "gg0c1", "desc": "each guide references its proof and passes prose-integrity", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && for f in agno openai-agents autogen smolagents pydantic-ai; do grep -q 'tests/frameworks' \"use-heartbeat-with-$f.md\" || exit 1; done && bash gate-examples/prose-check.sh use-heartbeat-with-agno.md use-heartbeat-with-openai-agents.md use-heartbeat-with-autogen.md use-heartbeat-with-smolagents.md use-heartbeat-with-pydantic-ai.md 2>&1 | grep -q 'ALL-PROSE-OK:5'" },
+        { "id": "gg0c2", "desc": "index + roadmap list all five", "cmd": "for f in agno openai-agents autogen smolagents pydantic-ai; do grep -q \"use-heartbeat-with-$f\" \"$PROJECT_DIR/docs/howto/README.md\" && grep -q \"use-heartbeat-with-$f\" \"$PROJECT_DIR/docs/howto/howto-list.md\" || exit 1; done" },
+        { "id": "gg0c3", "desc": "the node suite enforces the fan-out Docker-free (T65 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T65 '" }
+      ]
+    }
+  }
+}

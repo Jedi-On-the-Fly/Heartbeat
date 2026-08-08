@@ -59,6 +59,11 @@ families A–J) is in [howto-list.md](howto-list.md).
 - [When not to use HeartBeat](when-not-to-use-heartbeat.md) — where the ceremony isn't worth it.
 - [Use HeartBeat with CrewAI](use-heartbeat-with-crewai.md) — your crew as the worker; the DAG verifies across tasks.
 - [Use HeartBeat with LangGraph](use-heartbeat-with-langgraph.md) — your graph reasons; HeartBeat verifies.
+- [Use HeartBeat with Agno](use-heartbeat-with-agno.md) — your Agno agent as the worker.
+- [Use HeartBeat with the OpenAI Agents SDK](use-heartbeat-with-openai-agents.md) — handoffs within a task; HeartBeat across tasks.
+- [Use HeartBeat with AutoGen](use-heartbeat-with-autogen.md) — your conversation within a task; HeartBeat verifies.
+- [Use HeartBeat with smolagents](use-heartbeat-with-smolagents.md) — a code agent gated on its outcome.
+- [Use HeartBeat with pydantic-ai](use-heartbeat-with-pydantic-ai.md) — typed outputs + behavioral gates.
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).

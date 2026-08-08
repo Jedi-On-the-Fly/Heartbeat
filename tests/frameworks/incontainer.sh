@@ -7,8 +7,8 @@
 set -u
 fw="${HB_EXEC_BACKEND:-?}"
 model="${HB_EXEC_MODEL:-qwen2.5:7b-instruct}"
-ver="$(pip show "${fw%%-*}" 2>/dev/null | awk '/^Version:/{print $2}')"
-[ -z "$ver" ] && ver="$(pip freeze 2>/dev/null | grep -iE "^${fw%%-*}==" | head -1 | cut -d= -f3)"
+ver="$(pip show "$fw" 2>/dev/null | awk '/^Version:/{print $2}')"
+[ -z "$ver" ] && ver="$(pip freeze 2>/dev/null | grep -iE "^${fw}==" | head -1 | cut -d= -f3)"
 
 hb(){ python3 -m heartbeat.cli "$@"; }
 p="$(mktemp -d)"

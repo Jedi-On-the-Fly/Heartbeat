@@ -1,3 +1,8 @@
 # framework   pip install spec (pinned — the version the live proof is reproducible against)
 crewai        crewai==1.15.13
 langgraph     langgraph==1.2.10 langchain-ollama==1.1.0
+agno          agno==2.8.7 openai==2.53.0 ollama==0.6.2
+openai-agents openai-agents==0.19.4
+autogen       autogen-agentchat==0.7.5 autogen-ext[openai]==0.7.5
+smolagents    smolagents==1.26.0 openai==2.53.0
+pydantic-ai   pydantic-ai==2.27.0

@@ -12,7 +12,7 @@ license = { text = "MIT" }
 dependencies = []          # core is stdlib-only
 
 [project.optional-dependencies]
-agno = ["agno", "openai"]
+agno = ["agno", "openai", "ollama"]
 crewai = ["crewai"]
 langgraph = ["langgraph", "langchain-ollama"]
 openai-agents = ["openai-agents"]

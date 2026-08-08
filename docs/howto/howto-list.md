@@ -3,7 +3,7 @@
 The full how-to map, organized by job (families **A–J**, after the original ideas list).
 Each entry is either **created** (linked file, with the suite group that enforces it) or
 **Not available yet**. Created guides are CI-enforced across `tests/run-tests.sh` groups
-**T53–T64**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
+**T53–T65**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
 integrity check (links resolve, no placeholders, only real commands) plus adversarial clarity
 review, and the framework guides (T64) by a Docker-free harness check + backend conformance
 (their live proof is the reproducible pinned Docker in `tests/frameworks/`). See the
@@ -77,13 +77,17 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 |---|---|
 | Use HeartBeat with Claude Code | ✅ [use-heartbeat-with-claude-code.md](use-heartbeat-with-claude-code.md) — T59 |
 | Use HeartBeat with Ollama | ✅ [use-heartbeat-with-ollama.md](use-heartbeat-with-ollama.md) — T59 |
-| Use HeartBeat with Agno | ⬜ Not available yet *(harness ready — [tests/frameworks/](../../tests/frameworks/))* |
+| Use HeartBeat with Agno | ✅ [use-heartbeat-with-agno.md](use-heartbeat-with-agno.md) — T65 |
 | Use HeartBeat with CrewAI | ✅ [use-heartbeat-with-crewai.md](use-heartbeat-with-crewai.md) — T64 |
 | Use HeartBeat with LangGraph | ✅ [use-heartbeat-with-langgraph.md](use-heartbeat-with-langgraph.md) — T64 |
 | Run a Custom Script Backend | ✅ [build-and-test-a-backend.md](build-and-test-a-backend.md) — T57 |
 | Build a New HeartBeat Backend | ✅ [build-and-test-a-backend.md](build-and-test-a-backend.md) — T57 |
 | Test a Backend for Conformance | ✅ [build-and-test-a-backend.md](build-and-test-a-backend.md) — T57 |
 | Swap Models Without Changing the DAG | ✅ [swap-workers-without-changing-the-dag.md](swap-workers-without-changing-the-dag.md) — T57 |
+| Use HeartBeat with the OpenAI Agents SDK | ✅ [use-heartbeat-with-openai-agents.md](use-heartbeat-with-openai-agents.md) — T65 |
+| Use HeartBeat with AutoGen | ✅ [use-heartbeat-with-autogen.md](use-heartbeat-with-autogen.md) — T65 |
+| Use HeartBeat with smolagents | ✅ [use-heartbeat-with-smolagents.md](use-heartbeat-with-smolagents.md) — T65 |
+| Use HeartBeat with pydantic-ai | ✅ [use-heartbeat-with-pydantic-ai.md](use-heartbeat-with-pydantic-ai.md) — T65 |
 | Use Different Models for Execute and Refute | ⬜ Not available yet |
 
 ## F. State, Recovery & Operations — "what happens when things break"

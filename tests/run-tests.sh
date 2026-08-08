@@ -932,6 +932,18 @@ else
   echo "  (python3 absent — T64.4/5 skipped)"
 fi
 
+grp "T65 — framework fan-out (5 more): harness (Docker-free) + guides"
+check "T65.1 --check validates the five fan-out frameworks (Docker-free)" \
+  'ok=1; for f in agno openai-agents autogen smolagents pydantic-ai; do bash "'"$FWK"'/run.sh" --check "$f" 2>&1 | grep -q "FRAMEWORK-HARNESS-OK:$f" || ok=0; done; [ "$ok" = 1 ]'
+if command -v python3 >/dev/null 2>&1; then
+  check "T65.2 all shipped adapters conform/degrade (deterministic)" \
+    'bash "'"$GEX"'/backend-conformance.sh" 2>&1 | grep -q "BACKEND-CONFORMANCE-OK"'
+  check "T65.3 the five fan-out guides pass prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/use-heartbeat-with-agno.md" "'"$HB_SRC"'/docs/howto/use-heartbeat-with-openai-agents.md" "'"$HB_SRC"'/docs/howto/use-heartbeat-with-autogen.md" "'"$HB_SRC"'/docs/howto/use-heartbeat-with-smolagents.md" "'"$HB_SRC"'/docs/howto/use-heartbeat-with-pydantic-ai.md" 2>&1 | grep -q "ALL-PROSE-OK:5"'
+else
+  echo "  (python3 absent — T65.2/3 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
