@@ -68,13 +68,23 @@ Adding another framework is one small adapter (two methods + graceful degrade) �
 
 The concept, in plain terms: [The gaps are deterministic](../docs/heartbeat.md). Architecture: [plugin](../docs/heartbeat-arch-full.png) · [Python port](../docs/heartbeat-py-arch.png).
 
+## The docs are proofs
+
+HeartBeat is about verifying what actually happened — so its own guides are held to that
+standard. Every how-to in [docs/howto/](../docs/howto/) is backed by a runnable, self-verifying
+proof: the mechanism guides ship a script that demonstrates the behavior (and fails if it
+regresses), and the decision guides are integrity-checked (links resolve, only real commands)
+and adversarially reviewed for clarity. The whole library is enforced by the test suite, so a
+guide can't quietly drift from the code. Start at [writing behavioral gates](../docs/howto/writing-behavioral-gates.md)
+or the [roadmap](../docs/howto/howto-list.md).
+
 ## Honest limits
 
 HeartBeat is only as good as your gates. A weak gate produces *false* confidence, which is worse than none — so it ships an auditor that flags hollow gates before you run, and an adversarial reviewer that refutes the plan. Neither guarantees a gate tests the *right* behavior; that last mile is still on you. Its value concentrates in long, multi-phase, verifiable work; for a throwaway script the ceremony is overhead.
 
 ## Docs
 
-Concept: [heartbeat.md](../docs/heartbeat.md). How-to: [writing behavioral gates](../docs/howto/writing-behavioral-gates.md). Backend reference: [dev-plugin.md](../docs/dev-plugin.md) · [dev-python.md](../docs/dev-python.md) · [dev-tests.md](../docs/dev-tests.md). Contributor rules: [AGENTS.md](../AGENTS.md).
+Concept: [heartbeat.md](../docs/heartbeat.md). How-to library (runnable): [docs/howto/](../docs/howto/) · [roadmap](../docs/howto/howto-list.md). Backend reference: [dev-plugin.md](../docs/dev-plugin.md) · [dev-python.md](../docs/dev-python.md) · [dev-tests.md](../docs/dev-tests.md). Contributor rules: [AGENTS.md](../AGENTS.md).
 
 ## License
 

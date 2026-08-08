@@ -20,6 +20,8 @@ Underneath: state is event-sourced, so a dead session rebuilds and continues; ev
 
 It runs two ways — a Claude Code plugin, or `pip install` as a pure-Python package with one `hb` console that runs anywhere Python does. Stage B (the worker) is a two-method contract, so you can drive it with a local model, any of seven agent frameworks (Agno, CrewAI, LangGraph, the OpenAI Agents SDK, AutoGen, smolagents, pydantic-ai), or any command — the same DAG runs under all of them. The two implementations are kept identical by a parity test.
 
+Something I didn't plan: the documentation ended up dogfooded. Every how-to guide is backed by a small runnable proof — the one on behavioral gates ships a script that shows a weak gate passing on a stub and the behavioral one rejecting it; the operational guides drive the real CLI and assert what happened. The whole library is checked by the test suite, so a guide can't quietly drift from the code. Writing them that way actually turned up a real bug — a command that printed config in one runtime but silently ran in the other — which felt like the method working on itself.
+
 The honest part: it's only as good as your gates. A weak gate gives you *false* confidence, which is worse than none — so it ships an auditor that refuses hollow gates before you run. It won't guarantee a gate tests the *right* thing; that's still on you. And it earns its keep on long, verifiable work, not throwaway scripts.
 
 I have nothing to prove here — I've used it for my own work and it helped, and the approach felt worth putting out. If it's useful to you, good.
