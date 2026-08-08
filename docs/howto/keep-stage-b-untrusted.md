@@ -40,3 +40,7 @@ bash docs/howto/gate-examples/driver-guarantees.sh   # -> STAGE-B-UNTRUSTED-OK
 
 Corollary: never make a gate depend on the worker's output *about itself*
 ([side-effecting](gate-examples/side-effecting/)) — that hands the untrusted side the pen.
+
+The same trust boundary applies when an agent drives HeartBeat *over MCP*: it can't fabricate a
+pass, but it can trigger gate shell-commands — see
+[secure-the-mcp-server.md](secure-the-mcp-server.md).

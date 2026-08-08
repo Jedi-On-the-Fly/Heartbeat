@@ -1005,6 +1005,14 @@ else
   echo "  (python3 absent — T70 skipped)"
 fi
 
+grp "T71 — MCP security note (prose-integrity, proof-referenced), Docker-free"
+if command -v python3 >/dev/null 2>&1; then
+  check "T71.1 the security note references its proof and passes prose-integrity" \
+    'grep -q "mcp-http" "'"$HB_SRC"'/docs/howto/secure-the-mcp-server.md" && bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/secure-the-mcp-server.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+else
+  echo "  (python3 absent — T71 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

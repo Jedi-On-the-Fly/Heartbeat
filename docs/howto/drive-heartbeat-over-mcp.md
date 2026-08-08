@@ -55,7 +55,8 @@ URL — e.g. `codex mcp add heartbeat --url http://<h>:<p>`.
 The HTTP endpoint is unauthenticated and can run gate shell-commands, so it is hardened: it
 validates the `Origin` header (rejecting cross-origin browser requests — the DNS-rebinding
 defence) and **refuses to bind a non-loopback `--host` unless you pass `--allow-remote`**. Keep it
-on loopback unless you know what you're exposing.
+on loopback unless you know what you're exposing — see
+[secure-the-mcp-server.md](secure-the-mcp-server.md) for the full threat model.
 
 ## Protocol versions (dual-stack)
 

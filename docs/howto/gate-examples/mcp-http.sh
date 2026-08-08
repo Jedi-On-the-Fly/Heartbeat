@@ -109,6 +109,8 @@ try:
     assert code == 200, f"no-Origin rejected: {code}"
     code, _ = post({"Origin": f"http://localhost"})
     assert code == 200, f"loopback Origin rejected: {code}"
+    code, _ = post({"Origin": "http://[::1]"})            # IPv6 loopback accepted
+    assert code == 200, f"::1 loopback Origin rejected: {code}"
     # allowlist must be an exact host match, not a prefix — these attacker domains must be rejected
     for bad in ("http://127.0.0.1.evil.com", "http://localhost.evil.com"):
         code, _ = post({"Origin": bad})

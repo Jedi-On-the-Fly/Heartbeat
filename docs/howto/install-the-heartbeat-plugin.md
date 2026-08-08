@@ -47,3 +47,7 @@ Once installed, the agent drives HeartBeat: it asks `tick` what's next, does the
 behavioral and a review needs a distinct-actor artifact ([keep-stage-b-untrusted.md](keep-stage-b-untrusted.md)).
 See [drive-heartbeat-over-mcp.md](drive-heartbeat-over-mcp.md) for the tool surface and the remote
 (`--http`) option.
+
+Security note: the registered server's `gate` tool runs the DAG's gate criteria as shell commands,
+so the server is as trusted as whoever can reach it — read
+[secure-the-mcp-server.md](secure-the-mcp-server.md) before exposing it beyond local stdio.

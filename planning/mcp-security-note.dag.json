@@ -1,0 +1,44 @@
+{
+  "_meta": {
+    "project": "mcp-security-note",
+    "note": "Add an honest security note for the MCP server and link it from the related how-tos. The note is a mechanism how-to backed by the EXISTING proof docs/howto/gate-examples/mcp-http.sh (MCP-HTTP-SECURE-OK already asserts Origin-403 + --allow-remote refusal + the exact-loopback allowlist), so every security CLAIM it makes is gate-verified — no new proof, and no overclaim beyond what the code proves. Accurate posture: stdio has no network surface (preferred); the HTTP transport is unauthenticated by design → loopback-only default, refuses non-loopback bind without --allow-remote, validates Origin (DNS-rebinding). Trust model: a caller cannot fabricate a gate pass (behavioral gate + distinct-actor review artifact), but CAN mutate state and, via the `gate` tool, trigger execution of the DAG's gate shell-commands — so the server is as trusted as whoever can reach it, and dag.json is trusted input. Also refresh the related MCP how-tos (drive-heartbeat-over-mcp.md, install-the-heartbeat-plugin.md, keep-stage-b-untrusted.md) to link the note and fix a stale suite-ref in howto-list. Docs-only; suites stay green; prose-integrity enforced."
+  },
+  "phases": [
+    {
+      "id": "SN1", "title": "Write the MCP security note (proof-backed)", "gate_entry": null, "gate_exit": "GATE_SN1",
+      "tasks": [
+        { "id": "SN1T1", "title": "Author secure-the-mcp-server.md", "requires": [],
+          "description": "Write docs/howto/secure-the-mcp-server.md. Cover, accurately to the code: (1) what a caller CAN'T do — fabricate a gate pass (behavioral gate + distinct-actor review artifact; link keep-stage-b-untrusted.md); (2) what a caller CAN do — mutate state and, via the `gate` tool, trigger the DAG's gate shell-commands, so the server is as trusted as whoever can reach it and dag.json is trusted input; (3) transports — stdio (default, no network surface, preferred) vs HTTP (--http, unauthenticated by design); (4) built-in HTTP hardening — loopback-only default, refuses non-loopback --host without --allow-remote, validates Origin (exact-loopback match, DNS-rebinding defense), citing the proof gate-examples/mcp-http.sh; (5) if you must expose it — put it behind a reverse proxy that authenticates + terminates TLS (the server has no auth of its own), keep dag.json trusted, prefer stdio. Only real commands; every security claim must be one the proof already verifies (no overclaim)." }
+      ]
+    },
+    {
+      "id": "SN2", "title": "Link related how-tos + index + suite", "gate_entry": "GATE_SN1", "gate_exit": "GATE_SN2",
+      "tasks": [
+        { "id": "SN2T1", "title": "Link the note from related guides + fix stale refs", "requires": [],
+          "description": "Link docs/howto/secure-the-mcp-server.md from: drive-heartbeat-over-mcp.md (its HTTP/hardening area), install-the-heartbeat-plugin.md (a security caveat — installing registers a server whose gate tool runs shell-commands), and keep-stage-b-untrusted.md (the caller-trust angle). Add the note to docs/howto/README.md and a row to docs/howto/howto-list.md, and fix the stale suite-ref on the drive-heartbeat-over-mcp row (it is also covered by T70). Keep every touched guide prose-integrity clean and all links resolving." },
+        { "id": "SN2T2", "title": "Enforce the note in the suite", "requires": ["SN2T1"],
+          "description": "Add a Docker-free check to tests/run-tests.sh (extend the MCP T70 group or a new T71) asserting the security note passes prose-integrity and references its proof (mcp-http). Keep it python3-gated and consistent with the existing group idioms." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_SN1": {
+      "desc": "The security note exists, is substantive and accurate to the code posture, references its proof, and passes prose-integrity.",
+      "review": { "prompt": "Refute that SN1 is done: does secure-the-mcp-server.md accurately describe the REAL posture (stdio no-network default; HTTP unauthenticated; loopback-only + --allow-remote gate; exact-loopback Origin validation) without overclaiming beyond what mcp-http.sh proves? Does it correctly state the trust model — caller can't fake a pass but CAN trigger gate shell-commands, dag.json is trusted input? Does it reference the proof and only real commands? Prose-integrity clean?" },
+      "criteria": [
+        { "id": "sn1c1", "desc": "the note references its proof and passes prose-integrity", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'mcp-http' secure-the-mcp-server.md && bash gate-examples/prose-check.sh secure-the-mcp-server.md 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "sn1c2", "desc": "the note is substantive and covers the real security posture", "cmd": "f=\"$PROJECT_DIR/docs/howto/secure-the-mcp-server.md\"; [ \"$(grep -cvE '^[[:space:]]*$' \"$f\")\" -ge 20 ] && for s in 'Origin' 'allow-remote' 'loopback' 'gate' 'stdio'; do grep -qi \"$s\" \"$f\" || exit 1; done" },
+        { "id": "sn1c3", "desc": "the note is bound to the LIVE proof (its HTTP-hardening claims actually hold, incl. the ::1 example)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-http.sh\" 2>&1 | grep -q 'MCP-HTTP-SECURE-OK'" }
+      ]
+    },
+    "GATE_SN2": {
+      "desc": "The related MCP how-tos link the security note, it is indexed, and the suite enforces it — all prose clean.",
+      "review": { "prompt": "Refute that SN2 is done: do drive-heartbeat-over-mcp.md AND install-the-heartbeat-plugin.md actually link the security note (resolving links)? Is it indexed in README + howto-list, with the stale drive-row suite-ref fixed? Does the suite (T70/T71) enforce the note's prose-integrity Docker-free? Do all touched guides still pass prose-integrity?" },
+      "criteria": [
+        { "id": "sn2c1", "desc": "the related MCP guides link the security note", "cmd": "grep -q 'secure-the-mcp-server' \"$PROJECT_DIR/docs/howto/drive-heartbeat-over-mcp.md\" && grep -q 'secure-the-mcp-server' \"$PROJECT_DIR/docs/howto/install-the-heartbeat-plugin.md\"" },
+        { "id": "sn2c2", "desc": "the note is indexed and touched MCP guides pass prose-integrity", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'secure-the-mcp-server' README.md && grep -q 'secure-the-mcp-server' howto-list.md && bash gate-examples/prose-check.sh secure-the-mcp-server.md drive-heartbeat-over-mcp.md install-the-heartbeat-plugin.md 2>&1 | grep -q 'ALL-PROSE-OK:3'" },
+        { "id": "sn2c3", "desc": "the suite enforces the security note Docker-free (T71 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T71 '" }
+      ]
+    }
+  }
+}
