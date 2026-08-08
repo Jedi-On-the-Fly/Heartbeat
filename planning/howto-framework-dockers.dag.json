@@ -1,0 +1,61 @@
+{
+  "_meta": {
+    "project": "howto-framework-dockers",
+    "note": "Agent-framework how-tos, harness-first (CrewAI + LangGraph exemplars; fan out later). Reproducible pinned Docker per framework so a live proof is re-runnable and dep trees stay isolated (future-proof). HARD constraint: Docker is the on-demand LIVE tier, NEVER a suite gate — run-tests.sh / pytest / parity stay Docker-free and green everywhere. Reproducible environment != reproducible output (the LLM is nondeterministic; a small local model may miss a strict gate by luck), so the containerized proof verifies WIRING (real framework -> real adapter -> real gate produces gate-evaluable output) and is honest that a strict pass depends on model capability. FH0: a DRY parametrized Docker harness (ARG FRAMEWORK/VERSION + pinned matrix + run.sh with a Docker-free --check). LX0: actually build+run the two exemplars against local Ollama, capture RESULTS.md; the deterministic gate asserts conformance + a substantive results record, and the adversarial review validates the live evidence is genuine. GD0: the two guides (division-of-labor for typical framework users, real config, bring-your-own-agent seam, containerized live-proof section) + index/roadmap + a Docker-free T64 suite group. Dominant message: HeartBeat complements the framework (Stage B = reasoner), it does not replace it; the gate is the contract so frameworks are swappable (no lock-in)."
+  },
+  "phases": [
+    {
+      "id": "FH0", "title": "Reproducible Docker harness", "gate_entry": null, "gate_exit": "GATE_FH0",
+      "tasks": [
+        { "id": "FH0T1", "title": "Author the harness spec", "requires": [],
+          "description": "Spec-first: write tests/frameworks/README.md defining the contract — a parametrized Dockerfile (ARG FRAMEWORK, ARG VERSION) on a shared base, a pinned matrix (framework -> version), and run.sh <framework> [--check]. --check validates WITHOUT Docker (framework is in the matrix with a pin, is a real backend in the registry AND has a pyproject extra, Dockerfile declares the ARGs) and prints FRAMEWORK-HARNESS-OK:<fw>. Live mode builds the pinned image and drives the real adapter against local Ollama (--network host), asserting the wiring produced gate-evaluable output. State the constraint that this tier never gates the suite." },
+        { "id": "FH0T2", "title": "Build the parametrized Dockerfile + matrix + run.sh", "requires": ["FH0T1"],
+          "description": "Create tests/frameworks/Dockerfile (parametrized: installs heartbeat from the mounted repo + the pinned framework), tests/frameworks/matrix.txt (crewai + langgraph pins to start), and tests/frameworks/run.sh implementing --check (Docker-free validation, derives the registry from py/src/heartbeat/backends and extras from py/pyproject.toml) and the live build+run mode. Verify run.sh --check crewai and --check langgraph both emit FRAMEWORK-HARNESS-OK." }
+      ]
+    },
+    {
+      "id": "LX0", "title": "Exemplar live runs (CrewAI + LangGraph)", "gate_entry": "GATE_FH0", "gate_exit": "GATE_LX0",
+      "tasks": [
+        { "id": "LX0T1", "title": "Build + run the two pinned images against Ollama", "requires": [],
+          "description": "Run tests/frameworks/run.sh crewai and run.sh langgraph: build each pinned image, drive the real adapter (HB_EXEC_PROVIDER=ollama) against local Ollama through a real HeartBeat project, and record the outcome — framework, pinned version, model, date, and verdict (phase completed / produced output but strict gate is model-luck / model failed) — into tests/frameworks/RESULTS.md with a transcript snippet. Adjust the matrix pin if a build fails, and freeze the working pin." }
+      ]
+    },
+    {
+      "id": "GD0", "title": "Two guides + wiring", "gate_entry": "GATE_LX0", "gate_exit": "GATE_GD0",
+      "tasks": [
+        { "id": "GD0T1", "title": "Write the CrewAI + LangGraph guides", "requires": [],
+          "description": "Write docs/howto/use-heartbeat-with-crewai.md and docs/howto/use-heartbeat-with-langgraph.md for typical framework users: lead with the division of labor (defuse the framework-specific confusion — CrewAI 'does your DAG compete with my crew?'; LangGraph 'isn't this a redundant stateful graph?'), the real provider/model config (HB_EXEC_PROVIDER/MODEL, OLLAMA_HOST), the bring-your-own-agent seam (the adapter is a small replaceable file; a custom adapter conforms via build-and-test-a-backend), one gotcha, and a containerized live-proof section pointing at tests/frameworks/run.sh + RESULTS.md. Reference only real commands/backends; do not overclaim drop-in-your-crew." },
+        { "id": "GD0T2", "title": "Index + roadmap + T64 suite group", "requires": ["GD0T1"],
+          "description": "Add both guides to docs/howto/README.md and flip their rows in docs/howto/howto-list.md; add a T64 group to tests/run-tests.sh that is Docker-free — run.sh --check crewai/langgraph (harness well-formed), crewai+langgraph conformance/degrade, and prose-integrity on the two guides — so the suite enforces the harness + docs without depending on Docker." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_FH0": {
+      "desc": "A DRY, Docker-free-validatable framework harness: --check derives the registry+extras from source and validates the two exemplars; the matrix is well-formed.",
+      "review": { "prompt": "Refute that FH0 is done: is --check genuinely Docker-free (no docker invocation)? Does it DERIVE the valid framework set from the registry (backends/__init__.py) and pyproject extras, so a bogus framework or a matrix entry with no extra is rejected (not a hardcoded allowlist)? Is the Dockerfile actually parametrized (ARG FRAMEWORK/VERSION) and does the matrix carry real pins? Could --check pass for a framework that isn't real?" },
+      "criteria": [
+        { "id": "fh0c1", "desc": "--check validates both exemplars (Docker-free)", "cmd": "bash \"$PROJECT_DIR/tests/frameworks/run.sh\" --check crewai 2>&1 | grep -q 'FRAMEWORK-HARNESS-OK:crewai' && bash \"$PROJECT_DIR/tests/frameworks/run.sh\" --check langgraph 2>&1 | grep -q 'FRAMEWORK-HARNESS-OK:langgraph'" },
+        { "id": "fh0c2", "desc": "every matrix framework is a real backend with a pyproject extra, and a bogus one is rejected", "cmd": "bash \"$PROJECT_DIR/tests/frameworks/run.sh\" --check not-a-framework 2>&1 | grep -q 'not a real backend' && bash \"$PROJECT_DIR/tests/frameworks/run.sh\" --check-all 2>&1 | grep -q 'HARNESS-ALL-OK'" },
+        { "id": "fh0c3", "desc": "the Dockerfile is parametrized", "cmd": "grep -q 'ARG FRAMEWORK' \"$PROJECT_DIR/tests/frameworks/Dockerfile\" && grep -q 'ARG VERSION' \"$PROJECT_DIR/tests/frameworks/Dockerfile\"" }
+      ]
+    },
+    "GATE_LX0": {
+      "desc": "The two exemplars conform deterministically, and RESULTS.md records a substantive live run for each (evidence validated by review).",
+      "review": { "prompt": "Refute that LX0 is done: is the RESULTS.md evidence GENUINE — did the pinned Docker images actually build and drive the real framework against Ollama (re-run tests/frameworks/run.sh langgraph to check), or is it fabricated? Does each entry carry a real pinned version + model + date + an honest verdict (not overclaiming a strict pass if it was model-luck)? Does the deterministic conformance for crewai/langgraph genuinely hold? Is the Docker tier kept OUT of the suite gate?" },
+      "criteria": [
+        { "id": "lx0c1", "desc": "crewai + langgraph conformance/degrade holds (deterministic)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/backend-conformance.sh\" 2>&1 | grep -q 'BACKEND-CONFORMANCE-OK'" },
+        { "id": "lx0c2", "desc": "RESULTS.md records a substantive run for each exemplar (framework + version + model + date + verdict)", "cmd": "for f in crewai langgraph; do python3 -c \"import sys,re; t=open('$PROJECT_DIR/tests/frameworks/RESULTS.md').read(); b=re.search(r'(?ims)^#+\\s*'+sys.argv[1]+r'\\b.*?(?=^#+\\s|\\Z)', t); s=b.group(0) if b else ''; sys.exit(0 if (b and re.search(r'\\d+\\.\\d+', s) and re.search(r'20\\d\\d-\\d\\d-\\d\\d', s) and ('model' in s.lower()) and ('verdict' in s.lower() or 'outcome' in s.lower())) else 1)\" \"$f\" || exit 1; done" }
+      ]
+    },
+    "GATE_GD0": {
+      "desc": "Both guides are accurate, reference their proof, are indexed/roadmapped, and the suite enforces the harness + docs Docker-free.",
+      "review": { "prompt": "Refute that GD0 is done: does each guide land the division-of-labor for its framework's typical user (CrewAI 'competes with my crew?', LangGraph 'redundant graph?') accurately, or generically? Is the config real (matches the adapter's HB_EXEC_PROVIDER/MODEL/OLLAMA_HOST)? Does bring-your-own-agent overclaim (it must say the adapter is edited, not zero-code)? Is T64 genuinely Docker-free? Any guide missing from index/roadmap, or a proof it cites that doesn't run?" },
+      "criteria": [
+        { "id": "gd0c1", "desc": "each guide references its proof and passes prose-integrity", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'tests/frameworks' use-heartbeat-with-crewai.md && grep -q 'tests/frameworks' use-heartbeat-with-langgraph.md && bash gate-examples/prose-check.sh use-heartbeat-with-crewai.md use-heartbeat-with-langgraph.md 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "gd0c2", "desc": "index + roadmap list both guides", "cmd": "for f in use-heartbeat-with-crewai use-heartbeat-with-langgraph; do grep -q \"$f\" \"$PROJECT_DIR/docs/howto/README.md\" && grep -q \"$f\" \"$PROJECT_DIR/docs/howto/howto-list.md\" || exit 1; done" },
+        { "id": "gd0c3", "desc": "the node suite enforces the harness + guides Docker-free (T64 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T64 '" }
+      ]
+    }
+  }
+}

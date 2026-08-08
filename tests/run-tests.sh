@@ -915,6 +915,23 @@ else
   echo "  (python3 absent — T63 skipped)"
 fi
 
+grp "T64 — framework proof harness (Docker-free) + guides (docs/howto)"
+FWK="$HB_SRC/tests/frameworks"
+check "T64.1 harness --check validates the exemplars (Docker-free)" \
+  'bash "'"$FWK"'/run.sh" --check crewai 2>&1 | grep -q "FRAMEWORK-HARNESS-OK:crewai" && bash "'"$FWK"'/run.sh" --check langgraph 2>&1 | grep -q "FRAMEWORK-HARNESS-OK:langgraph"'
+check "T64.2 harness derives from source: a real backend without an extra is rejected, matrix all-ok" \
+  'o=$(bash "'"$FWK"'/run.sh" --check ollama 2>&1); printf "%s" "$o" | grep -q "not a real backend" && bash "'"$FWK"'/run.sh" --check-all 2>&1 | grep -q "HARNESS-ALL-OK"'
+check "T64.3 the suite never invokes the docker CLI (harness stays Docker-free)" \
+  '! grep -qE "docker (build|run|pull|images)" "'"$HB_SRC"'/tests/run-tests.sh"'
+if command -v python3 >/dev/null 2>&1; then
+  check "T64.4 crewai + langgraph adapters conform/degrade (deterministic)" \
+    'bash "'"$GEX"'/backend-conformance.sh" 2>&1 | grep -q "BACKEND-CONFORMANCE-OK"'
+  check "T64.5 the two framework guides pass prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/use-heartbeat-with-crewai.md" "'"$HB_SRC"'/docs/howto/use-heartbeat-with-langgraph.md" 2>&1 | grep -q "ALL-PROSE-OK:2"'
+else
+  echo "  (python3 absent — T64.4/5 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

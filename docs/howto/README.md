@@ -57,6 +57,8 @@ families A–J) is in [howto-list.md](howto-list.md).
 - [Choose Claude Code vs the Python runtime](choose-runtime.md) — same product; pick by environment.
 - [Choose a Stage B backend](choose-a-backend.md) — map requirements to a worker; the choice is reversible.
 - [When not to use HeartBeat](when-not-to-use-heartbeat.md) — where the ceremony isn't worth it.
+- [Use HeartBeat with CrewAI](use-heartbeat-with-crewai.md) — your crew as the worker; the DAG verifies across tasks.
+- [Use HeartBeat with LangGraph](use-heartbeat-with-langgraph.md) — your graph reasons; HeartBeat verifies.
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).
