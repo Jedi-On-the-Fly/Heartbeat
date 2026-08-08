@@ -944,6 +944,18 @@ else
   echo "  (python3 absent — T65.2/3 skipped)"
 fi
 
+grp "T66 — codex backend (stub proof, Docker-free) + guide"
+if command -v python3 >/dev/null 2>&1; then
+  check "T66.1 the real codex adapter drives a gated task via a stub CLI (fail-stub does not)" \
+    'bash "'"$GEX"'/codex-backend.sh" 2>&1 | grep -q "CODEX-BACKEND-OK"'
+  check "T66.2 both runtimes register codex (registry + plugin defaultCmd/executor)" \
+    'cd "'"$HB_SRC"'/py" && PYTHONPATH=src python3 -c "from heartbeat.backends import get; assert get(\"codex\").__name__.endswith(\"codex\")" && grep -q "codex-exec.sh" "'"$HB_SRC"'/plugin/templates/hb-exec.js" && [ -f "'"$HB_SRC"'/plugin/templates/executors/codex-exec.sh" ]'
+  check "T66.3 the codex guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/use-heartbeat-with-codex.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+else
+  echo "  (python3 absent — T66 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

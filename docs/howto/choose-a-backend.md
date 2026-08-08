@@ -8,6 +8,8 @@ swap later ([swap-workers-without-changing-the-dag.md](swap-workers-without-chan
 
 - **`claude-code`** — headless `claude -p`. The strongest default; needs the `claude` CLI
   installed and authenticated ([use-heartbeat-with-claude-code.md](use-heartbeat-with-claude-code.md)).
+- **`codex`** — headless `codex exec` (OpenAI's terminal agent); authed via `codex login`, or
+  `HB_EXEC_PROVIDER=oss` for a keyless local model ([use-heartbeat-with-codex.md](use-heartbeat-with-codex.md)).
 - **`ollama`** — a local model, offline, no API key; stdlib-only. Choose it for privacy, cost,
   or air-gapped runs; set expectations to the model's size
   ([use-heartbeat-with-ollama.md](use-heartbeat-with-ollama.md)).

@@ -45,6 +45,7 @@ function defaultCmd(backend) {
   const ex = path.join(HB_DIR, 'executors');
   switch (backend) {
     case 'claude-code': return `bash "${path.join(ex, 'claude-exec.sh')}"`;
+    case 'codex':       return `bash "${path.join(ex, 'codex-exec.sh')}"`;
     case 'agno':        return `python3 "${path.join(ex, 'agno_exec.py')}"`;
     case 'crewai':      return `python3 "${path.join(ex, 'crewai_exec.py')}"`;
     case 'ollama':        return `python3 "${path.join(ex, 'ollama_exec.py')}"`;

@@ -64,6 +64,7 @@ families A–J) is in [howto-list.md](howto-list.md).
 - [Use HeartBeat with AutoGen](use-heartbeat-with-autogen.md) — your conversation within a task; HeartBeat verifies.
 - [Use HeartBeat with smolagents](use-heartbeat-with-smolagents.md) — a code agent gated on its outcome.
 - [Use HeartBeat with pydantic-ai](use-heartbeat-with-pydantic-ai.md) — typed outputs + behavioral gates.
+- [Use HeartBeat with Codex](use-heartbeat-with-codex.md) — OpenAI's terminal agent as the worker.
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).

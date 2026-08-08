@@ -72,7 +72,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 
 ## Backends
 
-Registry `backends.get(name)` → module with `execute(payload) → {ok, summary}` and `refute(payload) → {refuted, findings}`. Known: `ollama`, `agno`, `crewai`, `claude` (`claude-code` alias). `payload` carries `context`, `cwd`, and `task`. In-process (no subprocess) for the bundled backends; arbitrary commands use the subprocess path via `HB_EXEC_CMD`.
+Registry `backends.get(name)` → module with `execute(payload) → {ok, summary}` and `refute(payload) → {refuted, findings}`. Known: `ollama`, `agno`, `crewai`, `claude` (`claude-code` alias), `codex`, and the framework backends. `payload` carries `context`, `cwd`, and `task`. In-process (no subprocess) for the bundled backends; arbitrary commands use the subprocess path via `HB_EXEC_CMD`.
 
 | Backend | Worker | Provider |
 |---|---|---|
@@ -85,6 +85,7 @@ Registry `backends.get(name)` → module with `execute(payload) → {ok, summary
 | `smolagents` | smolagents ToolCallingAgent + `save_file` tool | `HB_EXEC_PROVIDER=openai\|ollama` |
 | `pydantic-ai` | pydantic-ai Agent + `save_file` tool | `HB_EXEC_PROVIDER=openai\|ollama` |
 | `claude` | subprocess `claude -p` | — |
+| `codex` | subprocess `codex exec` (stdin closed) | `HB_EXEC_PROVIDER=oss` → keyless Ollama |
 
 `HB_EXEC_MODEL` selects the model; `OLLAMA_HOST` the server. Backend degrade: missing lib/server → protocol-valid `{ok:false}` / `{refuted:false}`.
 

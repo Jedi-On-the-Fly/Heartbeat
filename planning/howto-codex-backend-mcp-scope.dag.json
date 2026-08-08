@@ -1,0 +1,75 @@
+{
+  "_meta": {
+    "project": "howto-codex-backend-mcp-scope",
+    "note": "Bring HeartBeat to Codex (OpenAI's Claude-Code-analog CLI, verified installed at 0.147.0). Two deliverables: (A) a `codex` Stage-B backend + guide, shipped now; (C) a SCOPE doc for the strategic MCP-server core (the neutral verification surface every MCP agent — Codex, Claude Code, Cursor — can call). Findings from live investigation drive the design: `codex exec` is the non-interactive analog of `claude -p` but HANGS unless stdin is closed (</dev/null); provider is authed openai (default) or keyless local via `--oss --local-provider ollama -m <model>`; autonomous flags `-s workspace-write -C <cwd> --skip-git-repo-check -o <lastmsg>`. Auth here is stale (needs `codex login`) and a 7B via codex's loop is flaky, so — exactly like the claude-code backend — the deterministic SUITE proof is a stub `codex` on PATH (no auth/model), and the live run is documented/on-demand, not a flaky gate. Codex mirrors Claude Code across plugin-marketplace + MCP + headless-exec, so C is the real strategic rock and B (a Codex plugin) falls out thin over C. Both runtimes + registry for the backend (new shared surface → parity)."
+  },
+  "phases": [
+    {
+      "id": "CX0", "title": "Codex Stage-B backend (both runtimes)", "gate_entry": null, "gate_exit": "GATE_CX0",
+      "tasks": [
+        { "id": "CX0T1", "title": "Python codex backend", "requires": [],
+          "description": "Add py/src/heartbeat/backends/codex.py mirroring backends/claude.py: execute shells out to `codex exec` with stdin CLOSED (</dev/null), `-C <cwd> -s workspace-write --skip-git-repo-check -o <tmp last-message>`; provider via HB_EXEC_PROVIDER — default authed (openai), or `oss` adds `--oss --local-provider ollama -m $HB_EXEC_MODEL`; ok = returncode==0, summary from the last-message file; degrade to {ok:false}/{refuted:false} if `codex` not on PATH. refute runs `codex exec` with a refuter prompt. Register `codex` in backends/__init__ (_KNOWN)." },
+        { "id": "CX0T2", "title": "Plugin codex executor + wiring", "requires": [],
+          "description": "Add plugin/templates/executors/codex-exec.sh mirroring claude-exec.sh (same codex exec invocation incl </dev/null and the autonomous flags; degrade if codex absent). Wire hb-exec.js defaultCmd `codex`→codex-exec.sh and ensure bootstrap ships it. Keep the registry/defaultCmd names matching the python side (parity of the shared backend surface)." }
+      ]
+    },
+    {
+      "id": "PF0", "title": "Deterministic proof (stub on PATH)", "gate_entry": "GATE_CX0", "gate_exit": "GATE_PF0",
+      "tasks": [
+        { "id": "PF0T1", "title": "Write codex-backend.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/codex-backend.sh mirroring claude-backend.sh: a stub `codex` on PATH that emulates `codex exec` (writes the artifact into -C's dir, exits 0, and does not hang on stdin) drives the REAL codex-code adapter via `HB_EXEC_BACKEND=codex hb exec run` and the phase completes through its behavioral gate; a FAILING stub `codex` does NOT complete the phase (the driver never fakes completion). Print CODEX-BACKEND-OK. This is the Docker-free suite proof — no auth, no model." }
+      ]
+    },
+    {
+      "id": "CG0", "title": "Guide + docs + suite wiring", "gate_entry": "GATE_PF0", "gate_exit": "GATE_CG0",
+      "tasks": [
+        { "id": "CG0T1", "title": "Write the codex guide + backend-table updates", "requires": [],
+          "description": "Write docs/howto/use-heartbeat-with-codex.md for a Codex user: division of labor (Codex CLI is Stage B — the worker; HeartBeat is the harness that schedules + verifies), real config (HB_EXEC_BACKEND=codex; HB_EXEC_PROVIDER=openai authed via `codex login`, or `oss` keyless via Ollama; the adapter handles the stdin-close + sandbox flags), the stdin gotcha, and an HONEST live-proof note: --oss runs keyless end to end but a small local model may not complete a strict task through codex's loop (wiring-ok), authed needs a valid login; the suite proof is the stub (codex-backend.sh). Add `codex` to the backend tables in dev-python.md / dev-plugin.md / heartbeat-py.md / choose-a-backend.md. Reference only real commands." },
+        { "id": "CG0T2", "title": "Index + roadmap + T66 group", "requires": ["CG0T1"],
+          "description": "Add the guide to docs/howto/README.md and a row to docs/howto/howto-list.md (E section). Add a Docker-free T66 group to tests/run-tests.sh: codex-backend.sh (CODEX-BACKEND-OK), the registry resolves `codex` in both runtimes, and prose-integrity on the guide." }
+      ]
+    },
+    {
+      "id": "MS0", "title": "Scope the MCP-server core (C)", "gate_entry": "GATE_CG0", "gate_exit": "GATE_MS0",
+      "tasks": [
+        { "id": "MS0T1", "title": "Write the MCP-server scope/design doc", "requires": [],
+          "description": "Write planning/mcp-server-scope.md: the design for HeartBeat as an MCP server — the neutral verification surface any MCP agent calls. Cover: the tool surface (tick, next, ready, gate, state, report, diagnose — read/act, mutation only through the CLI/library invariant), stdio transport (mirrors `codex mcp-server`), how Codex wires it (`codex mcp add heartbeat -- <cmd>`) and Claude Code wires it, how a Codex plugin (B) becomes a thin wrapper over it, the deterministic PROOF strategy (spin the server, call a tool over stdio, assert the JSON response — no model/network, suite-gateable), what's reused (the `hb` library) vs new, sequencing, and risks/non-goals. Current-state, links real surfaces; this is a scope doc, not the implementation." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_CX0": {
+      "desc": "The codex backend resolves in both runtimes and degrades cleanly (no codex on PATH).",
+      "review": { "prompt": "Refute that CX0 is done: does the python adapter close stdin (</dev/null) so codex exec can't hang, use the autonomous flags (-s workspace-write, -C, --skip-git-repo-check, -o), and select provider via HB_EXEC_PROVIDER (authed openai vs --oss ollama)? Does it degrade to protocol-valid JSON without codex? Do BOTH runtimes register `codex` (registry + defaultCmd → codex-exec.sh)? Is it a faithful mirror of the claude-code adapter?" },
+      "criteria": [
+        { "id": "cx0c1", "desc": "python codex adapter imports and exposes callable execute/refute", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"import importlib; m=importlib.import_module('heartbeat.backends.codex'); assert callable(m.execute) and callable(m.refute)\"" },
+        { "id": "cx0c2", "desc": "codex is in the python registry and the plugin executor + defaultCmd", "cmd": "grep -q '\"codex\"' \"$PROJECT_DIR/py/src/heartbeat/backends/__init__.py\" && [ -f \"$PROJECT_DIR/plugin/templates/executors/codex-exec.sh\" ] && grep -q 'codex' \"$PROJECT_DIR/plugin/templates/hb-exec.js\"" },
+        { "id": "cx0c3", "desc": "the adapter closes stdin (guards the codex-exec hang)", "cmd": "grep -qiE 'devnull|dev/null' \"$PROJECT_DIR/py/src/heartbeat/backends/codex.py\" && grep -q 'dev/null' \"$PROJECT_DIR/plugin/templates/executors/codex-exec.sh\"" }
+      ]
+    },
+    "GATE_PF0": {
+      "desc": "A stub codex on PATH drives the real adapter to a passing gate; a failing stub does not complete.",
+      "review": { "prompt": "Refute that PF0 is done: does codex-backend.sh drive the REAL codex adapter (HB_EXEC_BACKEND=codex), with the stub only standing in for the `codex` CLI? Does the phase complete because the gate passed (not because the stub said so)? Is the failing-stub control load-bearing (phase does NOT complete)? Does the stub avoid the stdin hang (the adapter closes stdin)? No auth/model/Docker?" },
+      "criteria": [
+        { "id": "pf0c1", "desc": "the codex-backend stub proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/codex-backend.sh\" 2>&1 | grep -q 'CODEX-BACKEND-OK'" }
+      ]
+    },
+    "GATE_CG0": {
+      "desc": "The codex guide is accurate + honest, docs tables include codex, and the suite enforces it Docker-free.",
+      "review": { "prompt": "Refute that CG0 is done: is the config real (HB_EXEC_BACKEND=codex; provider authed vs --oss; the stdin/sandbox handling)? Is the live-proof note HONEST (stub is the suite proof; --oss runs but a small model may not complete a strict task; authed needs login) and not overclaiming a strict live pass? Do the backend tables (dev-python/dev-plugin/heartbeat-py/choose-a-backend) now include codex? Is T66 Docker-free and does it actually run codex-backend.sh + prose-check? Missing from index/roadmap?" },
+      "criteria": [
+        { "id": "cg0c1", "desc": "the guide references its proof and passes prose-integrity", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'codex-backend' use-heartbeat-with-codex.md && bash gate-examples/prose-check.sh use-heartbeat-with-codex.md 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "cg0c2", "desc": "codex is in the backend tables + index + roadmap", "cmd": "grep -q 'codex' \"$PROJECT_DIR/docs/dev-python.md\" && grep -q 'codex' \"$PROJECT_DIR/docs/howto/choose-a-backend.md\" && grep -q 'use-heartbeat-with-codex' \"$PROJECT_DIR/docs/howto/README.md\" && grep -q 'use-heartbeat-with-codex' \"$PROJECT_DIR/docs/howto/howto-list.md\"" },
+        { "id": "cg0c3", "desc": "the node suite enforces codex Docker-free (T66 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T66 '" }
+      ]
+    },
+    "GATE_MS0": {
+      "desc": "The MCP-server scope doc is substantive, covers the required design points, and is sound.",
+      "review": { "prompt": "Refute that MS0 is done: does the scope doc actually define the tool surface (tick/next/gate/state/…), the stdio transport, how Codex AND Claude Code wire it, how a Codex plugin becomes thin over it, and a DETERMINISTIC proof strategy (call a tool over stdio, assert response — no model)? Does it honestly separate reused (hb library) from new work, sequence it, and name risks/non-goals? Is it a genuine, feasible design or hand-wavy? Does it preserve the mutate-only-through-CLI invariant?" },
+      "criteria": [
+        { "id": "ms0c1", "desc": "the scope doc exists, is substantive, and covers the required sections", "cmd": "f=\"$PROJECT_DIR/planning/mcp-server-scope.md\"; [ \"$(grep -cvE '^[[:space:]]*$' \"$f\")\" -ge 30 ] && for s in 'tool surface' 'stdio' 'codex mcp' 'Claude Code' 'proof' 'invariant' 'sequenc' 'risk'; do grep -qi \"$s\" \"$f\" || exit 1; done" },
+        { "id": "ms0c2", "desc": "it stays honest: scope, not a claim of implementation", "cmd": "f=\"$PROJECT_DIR/planning/mcp-server-scope.md\"; grep -qiE 'scope|design|not (yet )?(built|implemented)|proposal' \"$f\"" }
+      ]
+    }
+  }
+}
