@@ -973,8 +973,11 @@ fi
 
 grp "T68 — MCP HTTP transport (hb mcp-serve --http, Docker-free)"
 if command -v python3 >/dev/null 2>&1; then
+  # capture once (the script prints multiple markers; a piped `grep -q` on an early one would
+  # SIGPIPE the still-writing script and, under pipefail, fail the check — so grep a file).
+  bash "$GEX/mcp-http.sh" > "$TMP/http.out" 2>&1
   check "T68.1 a real HTTP JSON-RPC client drives hb mcp-serve --http (read + act, matching the CLI)" \
-    'bash "'"$GEX"'/mcp-http.sh" 2>&1 | grep -q "MCP-HTTP-OK"'
+    'grep -q "MCP-HTTP-OK" "'"$TMP"'/http.out"'
 else
   echo "  (python3 absent — T68 skipped)"
 fi
@@ -987,6 +990,19 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/install-the-heartbeat-plugin.md" 2>&1 | grep -q "ALL-PROSE-OK"'
 else
   echo "  (python3 absent — T69 skipped)"
+fi
+
+grp "T70 — MCP 2026-07-28 dual-stack (server/discover, negotiation, HTTP security), Docker-free"
+if command -v python3 >/dev/null 2>&1; then
+  bash "$GEX/mcp-2026.sh" > "$TMP/2026.out" 2>&1        # capture (multi-line); grep a file, not a pipe
+  check "T70.1 server/discover + version negotiation + modern-only result semantics (old byte-identical)" \
+    'grep -q "MCP-2026-OK" "'"$TMP"'/2026.out"'
+  check "T70.2 HTTP transport hardened (Origin 403 + --allow-remote gate + modern header)" \
+    'grep -q "MCP-HTTP-SECURE-OK" "'"$TMP"'/http.out"'
+  check "T70.3 the classic handshake path is unregressed by the dual-stack change" \
+    'grep -q "MCP-INVARIANT-OK" "'"$TMP"'/mcp.out"'
+else
+  echo "  (python3 absent — T70 skipped)"
 fi
 
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).

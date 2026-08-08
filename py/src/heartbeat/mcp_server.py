@@ -23,9 +23,30 @@ from . import doctor as doc
 from . import audit as auditmod
 from . import __version__
 
-PROTOCOL_VERSION = "2025-06-18"
+PROTOCOL_VERSION = "2025-06-18"                      # default/fallback handshake version
+# Versions negotiated via the `initialize` handshake (all tools-compatible). A client that
+# requests any of these gets it echoed; anything else is negotiated down to PROTOCOL_VERSION.
+HANDSHAKE_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25")
+# Versions negotiated the 2026 way (via `server/discover` / per-request _meta).
+MODERN_VERSIONS = ("2026-07-28",)
+# Advertised by server/discover, newest first.
+DISCOVER_VERSIONS = ["2026-07-28", "2025-06-18"]
+_PROTO_META = "io.modelcontextprotocol/protocolVersion"
+_SERVERINFO_META = "io.modelcontextprotocol/serverInfo"
+_SERVER_INFO = {"name": "heartbeat", "version": __version__}
 
 _EMPTY = {"type": "object", "properties": {}}
+
+
+def _req_version(msg):
+    """The protocol version the client declared for THIS request (2026 path), or None."""
+    meta = (msg.get("params") or {}).get("_meta") or {}
+    return meta.get(_PROTO_META)
+
+
+def _is_modern(msg):
+    """True when the request declares a 2026-era protocol version (per-request, stateless)."""
+    return _req_version(msg) in MODERN_VERSIONS
 
 
 def _state(hb):
@@ -129,18 +150,32 @@ def _handle(hb, msg):
     mid = msg.get("id")
     method = msg.get("method")
     params = msg.get("params") or {}
+    modern = _is_modern(msg)
     if method == "initialize":
+        # Negotiate: echo the requested handshake version iff we support it, else our default —
+        # never claim a version we don't implement (no blind echo).
+        requested = params.get("protocolVersion")
+        negotiated = requested if requested in HANDSHAKE_VERSIONS else PROTOCOL_VERSION
         return _result(mid, {
-            "protocolVersion": params.get("protocolVersion", PROTOCOL_VERSION),
+            "protocolVersion": negotiated,
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "heartbeat", "version": __version__},
+            "serverInfo": dict(_SERVER_INFO),
+        })
+    if method == "server/discover":                 # 2026 negotiation pivot
+        return _result(mid, {
+            "supportedVersions": list(DISCOVER_VERSIONS),
+            "capabilities": {"tools": {}},
+            "_meta": {_SERVERINFO_META: dict(_SERVER_INFO)},
         })
     if method in ("notifications/initialized", "initialized"):
         return None
     if method == "tools/list":
-        return _result(mid, {"tools": [
+        res = {"tools": [
             {"name": n, "description": d, "inputSchema": s} for n, (_h, d, s) in TOOLS.items()
-        ]})
+        ]}
+        if modern:                                  # 2026 CacheableResult + resultType
+            res.update(resultType="complete", ttlMs=0, cacheScope="private")
+        return _result(mid, res)
     if method == "tools/call":
         name = params.get("name")
         args = params.get("arguments") or {}
@@ -149,9 +184,12 @@ def _handle(hb, msg):
             return _error(mid, -32602, f"unknown tool: {name}")
         try:
             out = entry[0](hb, args)
+            res = {"content": [{"type": "text", "text": json.dumps(out)}]}
         except Exception as e:  # a tool failure is a tool result, not a protocol error
-            return _result(mid, {"content": [{"type": "text", "text": str(e)}], "isError": True})
-        return _result(mid, {"content": [{"type": "text", "text": json.dumps(out)}]})
+            res = {"content": [{"type": "text", "text": str(e)}], "isError": True}
+        if modern:
+            res["resultType"] = "complete"
+        return _result(mid, res)
     if mid is None:
         return None  # unknown notification — ignore
     return _error(mid, -32601, f"unknown method: {method}")
@@ -178,11 +216,43 @@ def serve(hbdir, stdin=None, stdout=None):
     return 0
 
 
-def serve_http(hbdir, host="127.0.0.1", port=0):
+def _is_loopback_host(host):
+    import ipaddress
+    h = (host or "").strip().lower().strip("[]")
+    if h == "localhost":
+        return True
+    try:                                  # exact IP parse — NOT a prefix match:
+        return ipaddress.ip_address(h).is_loopback   # "127.0.0.1.evil.com" is not an IP → rejected
+    except ValueError:
+        return False
+
+
+def _origin_ok(origin):
+    """A browser sends Origin; a non-browser MCP client does not. Reject any Origin that
+    isn't loopback — the DNS-rebinding defence the MCP spec requires of local HTTP servers."""
+    if not origin:
+        return True
+    from urllib.parse import urlsplit
+    try:
+        return _is_loopback_host(urlsplit(origin).hostname)
+    except ValueError:
+        return False
+
+
+def serve_http(hbdir, host="127.0.0.1", port=0, allow_remote=False):
     """Optional streamable-HTTP transport: a stdlib http.server endpoint that
     answers JSON-RPC POSTs through the same _handle dispatch as stdio. Minimal by
     design (single JSON response per POST; no SSE server-push). Binds, then prints
-    the actual host:port to stderr as a readiness signal (supports --port 0)."""
+    the actual host:port to stderr as a readiness signal (supports --port 0).
+
+    Security: validates the Origin header (DNS-rebinding) and refuses a non-loopback
+    bind unless allow_remote is set — the endpoint is unauthenticated and can run gate
+    shell-commands, so remote exposure must be explicit."""
+    if not _is_loopback_host(host) and not allow_remote:
+        sys.stderr.write(f"refusing to bind the MCP HTTP server to non-loopback host {host!r} "
+                         f"without --allow-remote (unauthenticated endpoint can run gate shell-commands)\n")
+        sys.stderr.flush()
+        return 2
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     class Handler(BaseHTTPRequestHandler):
@@ -198,6 +268,9 @@ def serve_http(hbdir, host="127.0.0.1", port=0):
             self.wfile.write(data)
 
         def do_POST(self):
+            if not _origin_ok(self.headers.get("Origin")):    # DNS-rebinding defence
+                self._send(_error(None, -32001, "forbidden origin"), 403)
+                return
             length = int(self.headers.get("Content-Length", 0) or 0)
             body = self.rfile.read(length).decode() if length else ""
             try:
@@ -205,6 +278,15 @@ def serve_http(hbdir, host="127.0.0.1", port=0):
             except ValueError:
                 self._send(_error(None, -32700, "parse error"), 400)
                 return
+            pv = self.headers.get("mcp-protocol-version")      # modern detection over HTTP
+            if pv:
+                params = msg.get("params")
+                if not isinstance(params, dict):
+                    params = {}; msg["params"] = params
+                meta = params.get("_meta")
+                if not isinstance(meta, dict):
+                    meta = {}; params["_meta"] = meta
+                meta.setdefault(_PROTO_META, pv)
             resp = _handle(hbdir, msg)
             if resp is None:                       # a notification — no response body
                 self.send_response(202)

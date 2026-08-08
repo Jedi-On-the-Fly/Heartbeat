@@ -52,6 +52,27 @@ For a remote/hosted client, `hb mcp-serve --http --host <h> --port <p>` serves t
 a minimal streamable-HTTP endpoint (stdlib-only; stdio stays the default). Point a client at the
 URL — e.g. `codex mcp add heartbeat --url http://<h>:<p>`.
 
+The HTTP endpoint is unauthenticated and can run gate shell-commands, so it is hardened: it
+validates the `Origin` header (rejecting cross-origin browser requests — the DNS-rebinding
+defence) and **refuses to bind a non-loopback `--host` unless you pass `--allow-remote`**. Keep it
+on loopback unless you know what you're exposing.
+
+## Protocol versions (dual-stack)
+
+The server speaks both the classic handshake and the 2026 spec, negotiated per client:
+
+- **Older clients** (today's Codex, Claude Code) open with `initialize`; the server negotiates the
+  version it implements (never blind-echoes) and answers exactly as before.
+- **2026 clients** probe **`server/discover`** first (it advertises the supported versions —
+  `2026-07-28` and `2025-06-18` — plus capabilities and identity), then get 2026 result semantics
+  (`resultType`, cacheable list hints). The official MCP Python SDK v2 client negotiates
+  `2026-07-28` with the server this way; see the on-demand
+  [`tests/mcp-interop.sh`](../../tests/mcp-interop.sh) and its
+  [results](../../tests/MCP-INTEROP-RESULTS.md).
+
+Deprecated 2026 features (sampling, logging, roots, tasks) are intentionally out of scope — the
+tool surface is the durable core.
+
 ## Trust doesn't change
 
 An agent calling `gate` or `done` still can't fabricate a pass: the gate is behavioral and the

@@ -27,13 +27,20 @@ hb rebuild --dir "$p" >/dev/null 2>&1; echo ok > "$p/out.txt"
 out="$(python3 - "$p" <<'PY'
 import json, os, re, subprocess, sys, urllib.request
 proj = sys.argv[1]
+def wait_port(proc):                               # skip any stray stderr noise until readiness
+    for _ in range(30):
+        line = proc.stderr.readline()
+        if not line:
+            break
+        m = re.search(r"listening on (\S+):(\d+)", line)
+        if m:
+            return m.group(1), m.group(2)
+    raise AssertionError("no readiness line")
 srv = subprocess.Popen([sys.executable, "-m", "heartbeat.cli", "mcp-serve", "--http",
                         "--host", "127.0.0.1", "--port", "0", "--dir", proj],
                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-line = srv.stderr.readline()                       # readiness signal (printed AFTER bind)
-m = re.search(r"listening on (\S+):(\d+)", line)
-assert m, f"no readiness line: {line!r}"
-base = f"http://{m.group(1)}:{m.group(2)}"
+h, pt = wait_port(srv)                              # readiness signal (printed AFTER bind)
+base = f"http://{h}:{pt}"
 
 def rpc(method, params=None, mid=1):
     req = urllib.request.Request(base, data=json.dumps(
@@ -66,3 +73,63 @@ PY
 )" || fail "http driver: $out"
 printf '%s\n' "$out" | grep -q DRIVER-HTTP-OK || fail "http assertions failed: $out"
 echo "MCP-HTTP-OK: a real urllib HTTP client drove hb mcp-serve --http (handshake + tools/list + state matching the CLI + a gate recorded via the log)."
+
+# ── SECURITY ─────────────────────────────────────────────────────────────────
+sec="$(python3 - "$p" <<'PY'
+import json, re, subprocess, sys, urllib.request, urllib.error
+proj = sys.argv[1]
+def wait_port(proc):                               # skip any stray stderr noise until readiness
+    for _ in range(30):
+        line = proc.stderr.readline()
+        if not line:
+            break
+        m = re.search(r"listening on (\S+):(\d+)", line)
+        if m:
+            return m.group(1), m.group(2)
+    raise AssertionError("no readiness line")
+srv = subprocess.Popen([sys.executable, "-m", "heartbeat.cli", "mcp-serve", "--http",
+                        "--host", "127.0.0.1", "--port", "0", "--dir", proj],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+h, pt = wait_port(srv)
+base = f"http://{h}:{pt}"
+def post(headers):
+    req = urllib.request.Request(base, data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": {}}).encode(),
+                                 headers={"Content-Type": "application/json", **headers}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status, r.read().decode()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode()
+try:
+    # 1. cross-origin POST -> 403 (DNS-rebinding defence)
+    code, _ = post({"Origin": "http://evil.example"})
+    assert code == 403, f"cross-origin not rejected: {code}"
+    # 2. no-Origin (non-browser) and loopback Origin -> accepted
+    code, _ = post({})
+    assert code == 200, f"no-Origin rejected: {code}"
+    code, _ = post({"Origin": f"http://localhost"})
+    assert code == 200, f"loopback Origin rejected: {code}"
+    # allowlist must be an exact host match, not a prefix — these attacker domains must be rejected
+    for bad in ("http://127.0.0.1.evil.com", "http://localhost.evil.com"):
+        code, _ = post({"Origin": bad})
+        assert code == 403, f"origin allowlist bypass accepted ({bad}): {code}"
+    # 3. modern header -> a modern result over HTTP (resultType present)
+    req = urllib.request.Request(base, data=json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                                                        "params": {"name": "tick", "arguments": {}}}).encode(),
+                                 headers={"Content-Type": "application/json", "mcp-protocol-version": "2026-07-28",
+                                          "mcp-method": "tools/call", "mcp-name": "tick"}, method="POST")
+    with urllib.request.urlopen(req, timeout=10) as r:
+        assert json.loads(r.read().decode())["result"].get("resultType") == "complete", "modern HTTP header did not yield resultType"
+finally:
+    srv.terminate(); srv.wait(timeout=10)
+
+# 4. non-loopback bind WITHOUT --allow-remote refuses to start
+r = subprocess.run([sys.executable, "-m", "heartbeat.cli", "mcp-serve", "--http", "--host", "0.0.0.0",
+                    "--port", "0", "--dir", proj], capture_output=True, text=True, timeout=10)
+assert r.returncode != 0, "non-loopback bind without --allow-remote did NOT refuse"
+assert "allow-remote" in r.stderr, f"refusal message missing: {r.stderr!r}"
+print("DRIVER-HTTP-SECURE-OK")
+PY
+)" || fail "http security driver: $sec"
+printf '%s\n' "$sec" | grep -q DRIVER-HTTP-SECURE-OK || fail "http security assertions failed: $sec"
+echo "MCP-HTTP-SECURE-OK: cross-origin POST rejected (403); no-Origin/loopback accepted; modern header yields resultType; non-loopback bind refused without --allow-remote."

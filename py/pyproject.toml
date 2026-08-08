@@ -19,6 +19,7 @@ openai-agents = ["openai-agents"]
 autogen = ["autogen-agentchat", "autogen-ext[openai]"]
 smolagents = ["smolagents", "openai"]
 pydantic-ai = ["pydantic-ai"]
+mcp-test = ["mcp>=2"]              # official MCP SDK v2 — for the on-demand real-client interop proof only
 
 [project.scripts]
 hb = "heartbeat.cli:main"

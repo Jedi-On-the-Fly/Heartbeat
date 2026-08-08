@@ -39,7 +39,7 @@ direct write ([AGENTS.md](../AGENTS.md) rule 1).
 | `review` | the validated review path | act (artifact-backed) |
 | `diagnose` / `doctor` | `doctor` | read |
 
-`audit` / `lint` are pure functions and can be exposed read-only too. Tool inputs/outputs are
+`audit` / `lint` are pure functions exposed read-only as well. Tool inputs/outputs are
 JSON (the shapes the CLI already returns); a `--dir` equivalent selects the project.
 
 ## Transport & wiring
@@ -49,7 +49,8 @@ JSON (the shapes the CLI already returns); a `--dir` equivalent selects the proj
 - Codex wires it: `codex mcp add heartbeat -- hb mcp-serve --dir <project>` (stdio) — confirmed
   wire format (`codex mcp add <name> -- <command>` / `--url` for HTTP).
 - Claude Code wires it via its MCP config (stdio command) — same server binary.
-- An optional streamable-HTTP transport (`--url`) can come later for remote/hosted use.
+- The optional streamable-HTTP transport (`hb mcp-serve --http`, `--url` on the client) is built
+  for remote/hosted use (Origin-validated, loopback-only without `--allow-remote`).
 
 Delivery: a new `hb mcp-serve` subcommand (Python, stdlib + a small MCP layer) is the natural
 home — one console, runs anywhere Python does, reuses the library. A Codex plugin (surface B)
@@ -91,6 +92,13 @@ agent tiers.
    `docs/howto/install-the-heartbeat-plugin.md`).
 4. **Step 4 BUILT** — an optional streamable-HTTP transport (`hb mcp-serve --http`) for
    remote/hosted clients (stdlib `http.server`; proof: `docs/howto/gate-examples/mcp-http.sh`).
+5. **2026-07-28 dual-stack BUILT** — the server negotiates the classic handshake for older hosts
+   and the **`2026-07-28`** spec (via `server/discover` + per-request `_meta` version → `resultType`
+   / cacheable-list hints) for modern clients, without breaking today's Codex/Claude Code. HTTP is
+   hardened (Origin validation, `--allow-remote` gate). Proven deterministically
+   (`docs/howto/gate-examples/mcp-2026.sh`) and against the official MCP SDK v2 client
+   (`tests/mcp-interop.sh`). Out of scope (deprecated/optional in 2026): sampling, logging, roots,
+   tasks/MRTR, subscriptions.
 
 ## Risks & non-goals
 
@@ -105,8 +113,8 @@ agent tiers.
 - **Non-goal (now):** remote/hosted multi-tenant serving, and a rich resource/prompt surface —
   stdio + tools first.
 
-## Decision needed to start
+## Status
 
-Green-light `hb mcp-serve` (step 1: read tools + handshake, with a deterministic stdio proof) as
-the next build, or hold. B (Codex plugin) is explicitly deferred behind C — it becomes a
-one-line marketplace wrapper once this server exists.
+All of the above is built: `hb mcp-serve` (read + act tools), the HTTP transport, surface B (the
+plugin registers the server on both hosts), and the 2026-07-28 dual-stack — see the numbered
+status list above and the proofs under `docs/howto/gate-examples/` + `tests/mcp-interop.sh`.

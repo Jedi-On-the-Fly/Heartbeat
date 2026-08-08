@@ -87,9 +87,18 @@ MCP stdio transport (newline-delimited JSON) — no MCP SDK, so the core stays d
 the mutate-only-through-the-log invariant holds exactly as in the CLI. Proof:
 `docs/howto/gate-examples/mcp-server.sh`; guide: `docs/howto/drive-heartbeat-over-mcp.md`.
 
-Transports: **stdio** by default; `serve_http(hbdir, host, port)` adds an optional
+Versions (dual-stack, negotiated per request): older clients use the `initialize` handshake
+(negotiated among `HANDSHAKE_VERSIONS`, never blind-echoed); 2026 clients probe **`server/discover`**
+(advertises `DISCOVER_VERSIONS` = `2026-07-28` + `2025-06-18`, capabilities, serverInfo in `_meta`)
+and are detected per-request via `_meta` protocol version (`_is_modern`), which adds `resultType` +
+cacheable-list hints — old responses stay byte-identical. Verified against the official MCP SDK v2
+client (`tests/mcp-interop.sh`, on-demand). Out of scope: sampling/logging/roots/tasks (deprecated
+in 2026).
+
+Transports: **stdio** by default; `serve_http(hbdir, host, port, allow_remote)` adds an optional
 streamable-HTTP endpoint (stdlib `http.server`, `--http`/`--host`/`--port`; `--port 0` binds an
-ephemeral port and prints it) sharing the same `_handle` dispatch. The HeartBeat **plugin** also
+ephemeral port and prints it) sharing the same `_handle` dispatch. It validates the `Origin` header
+(DNS-rebinding) and refuses a non-loopback bind without `--allow-remote`. The HeartBeat **plugin** also
 registers the server: `plugin/.mcp.json` declares `heartbeat → hb mcp-serve`, so installing the
 plugin in Codex or Claude Code wires it with no manual `mcp add` (proof:
 `docs/howto/gate-examples/plugin-mcp.sh`; guide: `docs/howto/install-the-heartbeat-plugin.md`).

@@ -1,0 +1,80 @@
+{
+  "_meta": {
+    "project": "mcp-2026",
+    "note": "Upgrade the MCP server to dual-stack the 2026-07-28 spec (the largest MCP revision since launch, published 2026-07-28) WITHOUT breaking today's hosts. Decisive investigation against the official Python SDK v2.0.0 (the executable spec) pinned the exact contract: the v2 client probes `server/discover` first and FALLS BACK to `initialize` for older servers — so `server/discover` is the negotiation pivot. DiscoverResult = {supportedVersions:[...], capabilities} with serverInfo in _meta (io.modelcontextprotocol/serverInfo); per-request protocol version travels in _meta (io.modelcontextprotocol/protocolVersion) or the mcp-protocol-version HTTP header; resultType/ttlMs/cacheScope are optional-with-defaults in the SDK models. Design: per-request MODERN detection — a modern request (2026 meta/header) gets server/discover + resultType + cache fields; an old request keeps TODAY'S byte-identical response (zero regression to Codex/Claude Code, which send `initialize`). Also fixes the version-echo bug (advertise versions we implement; stop echoing) and hardens the HTTP transport (validate Origin against DNS-rebinding; refuse non-loopback bind without --allow-remote). Interop is PROVEN by the real SDK v2 client over stdio as an on-demand tier (optional .[mcp-test] extra); the core stays stdlib-only and network never gates the suite. Out of scope (deprecated/optional in 2026): sampling, logging, roots, tasks/MRTR, subscriptions."
+  },
+  "phases": [
+    {
+      "id": "MV1", "title": "2026 dual-stack protocol (server/discover + negotiation + modern results)", "gate_entry": null, "gate_exit": "GATE_MV1",
+      "tasks": [
+        { "id": "MV1T1", "title": "Author the 2026 wire-shape proof spec", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/mcp-2026.sh (our own stdlib JSON-RPC client over stdio, deterministic — no SDK, no network). Assert: (1) server/discover returns supportedVersions containing both '2026-07-28' and '2025-06-18', a capabilities.tools object, and serverInfo under _meta['io.modelcontextprotocol/serverInfo']; (2) initialize with a supported protocolVersion echoes it; initialize with an UNSUPPORTED version (e.g. '2999-01-01') returns a version we actually implement ('2025-06-18'), NOT the bogus one (the echo bug is fixed); (3) a MODERN tools/call (request params._meta['io.modelcontextprotocol/protocolVersion']='2026-07-28') returns a result carrying resultType='complete', and a modern tools/list carries ttlMs + cacheScope; (4) an OLD tools/call (no modern _meta) returns a result with NO resultType/cache fields — byte-identical to today. Print MCP-2026-OK." },
+        { "id": "MV1T2", "title": "Implement dual-stack negotiation + server/discover + modern results", "requires": ["MV1T1"],
+          "description": "In py/src/heartbeat/mcp_server.py: define HANDSHAKE_VERSIONS ({'2025-06-18'}), MODERN_VERSIONS ({'2026-07-28'}), DISCOVER_VERSIONS (['2026-07-28','2025-06-18']). Fix `initialize` to return the requested version iff supported, else our latest handshake version (stop echoing arbitrary strings). Add a `server/discover` handler returning {supportedVersions: DISCOVER_VERSIONS, capabilities:{tools:{}}, _meta:{'io.modelcontextprotocol/serverInfo':{name,version}}}. Add _is_modern(msg) (checks params._meta protocol version). For a modern request, add resultType='complete' to tools/call + tools/list results and ttlMs(0)+cacheScope('private') to list; for an old request leave the response exactly as today. The server stays STATELESS (a cold tools/call with no prior initialize already works) and STDLIB-ONLY (pure dict work, no new imports)." }
+      ]
+    },
+    {
+      "id": "MH1", "title": "HTTP transport hardening (Origin, loopback, 2026 headers)", "gate_entry": "GATE_MV1", "gate_exit": "GATE_MH1",
+      "tasks": [
+        { "id": "MH1T1", "title": "Author the HTTP-security proof spec", "requires": [],
+          "description": "Spec-first: extend docs/howto/gate-examples/mcp-http.sh with a security section (urllib over localhost, deterministic): (1) a POST with Origin: http://evil.example is rejected with HTTP 403 (DNS-rebinding defense); (2) a POST with no Origin (non-browser clients) and a POST with Origin http://localhost:<port> are accepted (200); (3) starting `hb mcp-serve --http --host 0.0.0.0` WITHOUT --allow-remote refuses to start (non-zero + a security message) while --host 127.0.0.1 (loopback) starts; (4) a modern POST carrying the mcp-protocol-version: 2026-07-28 header gets a resultType in its result (modern detection over HTTP), and the mcp-method/mcp-name headers are tolerated. Keep MCP-HTTP-OK; add MCP-HTTP-SECURE-OK." },
+        { "id": "MH1T2", "title": "Implement Origin validation + --allow-remote + header tolerance", "requires": ["MH1T1"],
+          "description": "In mcp_server.py serve_http + cli.py: reject a request whose Origin header is present and not loopback (localhost/127.0.0.1/[::1]) with 403 (no state touched). Add --allow-remote to the mcp-serve subparser; if --host is non-loopback and --allow-remote is not set, refuse to start with a clear security message and non-zero exit; print the security posture on start. Wire modern detection over HTTP via the mcp-protocol-version header (feed it into _is_modern's logic). Tolerate (ignore) mcp-method/mcp-name headers. Stay stdlib-only." }
+      ]
+    },
+    {
+      "id": "IX1", "title": "Real-client interop (official MCP SDK v2, on-demand tier)", "gate_entry": "GATE_MH1", "gate_exit": "GATE_IX1",
+      "tasks": [
+        { "id": "IX1T1", "title": "Add the [mcp-test] extra + the SDK-client interop proof", "requires": [],
+          "description": "Add an optional `mcp-test` extra to py/pyproject.toml (mcp>=2). Write tests/mcp-interop.sh (ON-DEMAND, not a core-suite gate — like tests/frameworks): in a throwaway venv install mcp>=2, then drive `hb mcp-serve` (stdio) with the REAL official SDK v2 client — ClientSession.discover() must return supportedVersions containing '2026-07-28'; list_tools() must contain tick/gate; call_tool('tick')/('state') must match the CLI. Print MCP-INTEROP-OK on success. If the SDK can't be installed (offline) or python venv unavailable, self-skip cleanly: print INTEROP-SKIPPED and exit 0 (network never gates). The core server stays stdlib-only — the SDK lives only in this test venv." },
+        { "id": "IX1T2", "title": "Run it live + record the outcome honestly", "requires": ["IX1T1"],
+          "description": "Run tests/mcp-interop.sh live against the installed SDK v2 and capture the real result (the official client negotiating 2026-07-28 with our server) into a short results note (e.g. tests/MCP-INTEROP-RESULTS.md or a section), the same honesty discipline as the framework live tier. Reference it from the MCP guide. Do not fabricate — record OK only if the real client actually completed discover+list+call." }
+      ]
+    },
+    {
+      "id": "DG2", "title": "Docs + suite wiring", "gate_entry": "GATE_IX1", "gate_exit": "GATE_DG2",
+      "tasks": [
+        { "id": "DG2T1", "title": "Update the MCP docs for dual-stack 2026 + HTTP security", "requires": [],
+          "description": "Update docs/howto/drive-heartbeat-over-mcp.md (dual-stack: old clients use initialize, modern clients use server/discover and get 2026 result semantics; the HTTP security posture — Origin validation, loopback default, --allow-remote; a pointer to the on-demand SDK interop). Update docs/dev-python.md (supported versions, server/discover, --allow-remote flag, modern detection) and planning/mcp-server-scope.md (2026-07-28 dual-stack built; note what stays out of scope). Only real commands; prose-integrity clean." },
+        { "id": "DG2T2", "title": "Suite groups for the 2026 proofs", "requires": ["DG2T1"],
+          "description": "Add a Docker-free, deterministic T70 group to tests/run-tests.sh running mcp-2026.sh (MCP-2026-OK) and the extended mcp-http.sh security marker (MCP-HTTP-SECURE-OK), plus a re-check that the existing mcp-server.sh handshake path is still green (no regression). The SDK interop (tests/mcp-interop.sh) stays ON-DEMAND (referenced, not a core gate). Update the howto index/roadmap if needed and keep prose-integrity green." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_MV1": {
+      "desc": "The server dual-stacks 2026: server/discover advertises supported versions, initialize negotiates (no echo bug), modern requests get 2026 result semantics, old requests stay byte-identical — and it's still stdlib-only with the handshake proof green.",
+      "review": { "prompt": "Refute that MV1 is done: does server/discover return supportedVersions with BOTH 2026-07-28 and 2025-06-18, capabilities.tools, and serverInfo in _meta (exact keys)? Is the echo bug really fixed (an unsupported initialize version returns a version we implement, not the client's arbitrary string)? Do modern requests (via _meta protocol version) get resultType + cache fields while OLD requests stay byte-identical (zero regression to Codex/Claude Code)? Is the server still stateless + stdlib-only? Does the existing mcp-server.sh (handshake path) still pass 3/3?" },
+      "criteria": [
+        { "id": "mv1c1", "desc": "the deterministic 2026 wire-shape proof passes (discover + negotiation + modern/old results)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-2026.sh\" 2>&1 | grep -q 'MCP-2026-OK'" },
+        { "id": "mv1c2", "desc": "the existing handshake path is unbroken (no regression)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-server.sh\" 2>&1 | grep -q 'MCP-INVARIANT-OK'" },
+        { "id": "mv1c3", "desc": "the server stays stdlib-only", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"import ast,sys; t=ast.parse(open('src/heartbeat/mcp_server.py').read()); m=[n.name.split('.')[0] for x in ast.walk(t) if isinstance(x,ast.Import) for n in x.names]+[x.module.split('.')[0] for x in ast.walk(t) if isinstance(x,ast.ImportFrom) and x.level==0 and x.module]; bad=[x for x in m if x not in sys.stdlib_module_names]; assert not bad, bad\"" }
+      ]
+    },
+    "GATE_MH1": {
+      "desc": "The HTTP transport validates Origin (DNS-rebinding), refuses non-loopback bind without --allow-remote, tolerates 2026 headers, and detects modern requests over HTTP.",
+      "review": { "prompt": "Refute that MH1 is done: is Origin validation real (a cross-origin POST gets 403, no state touched) and load-bearing? Does a non-loopback --host without --allow-remote actually REFUSE to start (not just warn)? Are loopback + no-Origin requests still accepted? Does the mcp-protocol-version header trigger modern result semantics over HTTP, and are mcp-method/mcp-name tolerated? Still stdlib-only? Does the existing MCP-HTTP-OK still pass?" },
+      "criteria": [
+        { "id": "mh1c1", "desc": "the HTTP security proof passes (Origin 403 + loopback/--allow-remote + modern header)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-http.sh\" 2>&1 | grep -q 'MCP-HTTP-SECURE-OK'" },
+        { "id": "mh1c2", "desc": "the original HTTP round-trip still passes (no regression)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-http.sh\" 2>&1 | grep -q 'MCP-HTTP-OK'" }
+      ]
+    },
+    "GATE_IX1": {
+      "desc": "A real official MCP SDK v2 client negotiates 2026-07-28 with our server and calls tools; the tier self-skips cleanly offline and never gates the stdlib core.",
+      "review": { "prompt": "Refute that IX1 is done: does tests/mcp-interop.sh drive the REAL official SDK v2 client (not our own client) over stdio — discover() returning 2026-07-28, list_tools, call_tool matching the CLI? Is the [mcp-test] extra (mcp>=2) added without contaminating the stdlib-only core? Does it self-skip (INTEROP-SKIPPED, exit 0) when the SDK can't be installed, so network never gates the suite? Was it actually run live (recorded honestly), or is the OK fabricated?" },
+      "criteria": [
+        { "id": "ix1c1", "desc": "the REAL official SDK v2 client negotiates 2026 with the server (skip is not honored where the SDK is obtainable, as here)", "cmd": "bash \"$PROJECT_DIR/tests/mcp-interop.sh\" 2>&1 | grep -q 'MCP-INTEROP-OK'" },
+        { "id": "ix1c2", "desc": "the optional extra exists and the core stays stdlib-only (SDK never imported by the server, even indented/lazily)", "cmd": "grep -q 'mcp-test' \"$PROJECT_DIR/py/pyproject.toml\" && ! grep -qE '(^|[[:space:]])(import mcp|from mcp )' \"$PROJECT_DIR/py/src/heartbeat/mcp_server.py\"" }
+      ]
+    },
+    "GATE_DG2": {
+      "desc": "The MCP docs describe dual-stack 2026 + HTTP security accurately, and the suite enforces the deterministic 2026 proofs Docker-free.",
+      "review": { "prompt": "Refute that DG2 is done: do the docs accurately describe the dual-stack model (old=initialize, modern=server/discover + 2026 results), the HTTP security posture (Origin, loopback, --allow-remote), and the on-demand SDK interop — with no overclaim and only real commands? Is the scope doc honest about what's built vs out-of-scope (sampling/logging/roots/tasks deferred)? Does T70 actually run mcp-2026.sh + the HTTP-secure marker Docker-free, with a no-regression check on the handshake path? Prose-integrity + index intact?" },
+      "criteria": [
+        { "id": "dg2c1", "desc": "the MCP guide passes prose-integrity and mentions server/discover", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'server/discover' drive-heartbeat-over-mcp.md && bash gate-examples/prose-check.sh drive-heartbeat-over-mcp.md 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "dg2c2", "desc": "docs record the 2026 dual-stack + security posture", "cmd": "grep -q 'server/discover' \"$PROJECT_DIR/docs/dev-python.md\" && grep -q 'allow-remote' \"$PROJECT_DIR/docs/dev-python.md\" && grep -qi '2026-07-28' \"$PROJECT_DIR/planning/mcp-server-scope.md\"" },
+        { "id": "dg2c3", "desc": "the node suite enforces the 2026 proofs Docker-free (T70 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T70 '" }
+      ]
+    }
+  }
+}
