@@ -279,6 +279,18 @@ Disable auto-commit with `HB_GIT_AUTOCOMMIT=0`.
 
 
 
+## Drive HeartBeat over MCP
+
+Besides driving agents, HeartBeat *is* an MCP server: `hb mcp-serve` (Python port)
+exposes its tick / gate / state tools over the Model Context Protocol, so an
+MCP client — **Codex, Claude Code, or OpenCode** — can drive HeartBeat mid-session
+(ask what's next, do the work, call the gate to verify). It is stdlib-only and
+dual-stacks the classic handshake and the 2026-07-28 revision. See
+[drive-heartbeat-over-mcp.md](docs/howto/drive-heartbeat-over-mcp.md) and the
+[security note](docs/howto/secure-the-mcp-server.md).
+
+
+
 ## Tests
 
 ```bash

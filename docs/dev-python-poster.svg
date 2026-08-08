@@ -34,8 +34,8 @@
   <text x="159" y="271" text-anchor="middle" font-size="10.5" fill="#6366f1">strict-gate mode</text>
   <rect x="300" y="178" width="214" height="104" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="1.6"/>
   <text x="407" y="200" text-anchor="middle" font-size="13" font-weight="700" fill="#4338ca">backends/</text>
-  <text x="407" y="219" text-anchor="middle" font-size="11" fill="#4338ca">ollama · claude · script</text>
-  <text x="407" y="236" text-anchor="middle" font-size="11" fill="#4338ca">+ agent frameworks</text>
+  <text x="407" y="219" text-anchor="middle" font-size="11" fill="#4338ca">ollama · claude · codex · opencode</text>
+  <text x="407" y="236" text-anchor="middle" font-size="11" fill="#4338ca">+ agent frameworks · script</text>
   <text x="407" y="256" text-anchor="middle" font-size="10.5" fill="#6366f1">in-process or subprocess</text>
   <text x="407" y="271" text-anchor="middle" font-size="10.5" fill="#6366f1">execute · refute</text>
   <line x1="264" y1="222" x2="298" y2="222" stroke="#6366f1" stroke-width="1.8" marker-end="url(#ai)"/>

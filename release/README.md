@@ -23,7 +23,8 @@ Most agent tooling helps you *run* agents. HeartBeat is about the harder half: k
 | **Adversarial verification** | A second agent must fail to refute completion — at execution time *and* plan time. |
 | **Restore points** | Every gate pass commits and tags, so each phase is a `git reset` away. |
 | **Liveness** | The tick detects stuck loops, unanswered reviews, and gates that silently rot, and escalates instead of waiting forever. |
-| **Pluggable workers** | Stage B is a two-method contract; drive it with a local model, headless Claude, seven agent frameworks (Agno, CrewAI, LangGraph, the OpenAI Agents SDK, AutoGen, smolagents, pydantic-ai), or any command. |
+| **Pluggable workers** | Stage B is a two-method contract; drive it with a local model, a headless CLI agent (Claude Code, Codex, OpenCode), seven agent frameworks (Agno, CrewAI, LangGraph, the OpenAI Agents SDK, AutoGen, smolagents, pydantic-ai), or any command. |
+| **Drives, or is driven** | Besides driving agents, HeartBeat *is* an MCP server: any MCP client (Codex, Claude Code, OpenCode) can call its tick / gate / state tools mid-session. |
 
 ## Two ways to run it
 
@@ -57,12 +58,18 @@ Stage B is swappable. A backend implements two functions — `execute → {ok}` 
 
 | Backend | Worker |
 |---|---|
-| `claude-code` | headless `claude -p` |
+| `claude-code` · `codex` · `opencode` | headless CLI agents (`claude -p` · `codex exec` · `opencode run`) |
 | `agno` · `crewai` · `langgraph` · `openai-agents` · `autogen` · `smolagents` · `pydantic-ai` | agent frameworks; local models (no API key) or a provider |
 | `ollama` | local models, stdlib only, offline |
 | `script` | any command, any language |
 
-Adding another framework is one small adapter (two methods + graceful degrade) — it doesn't touch the core, and it can't break the runtime parity.
+Adding another is one small adapter (two methods + graceful degrade) — it doesn't touch the core, and it can't break the runtime parity.
+
+## Drive HeartBeat from your agent (MCP)
+
+HeartBeat also runs the other way. `hb mcp-serve` exposes its `tick` / `gate` / `state` tools over the [Model Context Protocol](https://modelcontextprotocol.io), so an MCP-capable agent — **Codex, Claude Code, or OpenCode** — can drive HeartBeat mid-session: ask what's next, do the work, call the gate to verify, and act on the deterministic answer. One server, every client.
+
+It's **stdlib-only** (no SDK) and **dual-stacks** the spec — the classic handshake for today's hosts and the 2026-07-28 revision (via `server/discover`) for new ones — verified against the official MCP SDK reference client. The trust model is unchanged: a caller can't fabricate a pass (behavioral gate + distinct-actor review), and the HTTP transport is hardened (loopback default, Origin validation). See [drive HeartBeat over MCP](../docs/howto/drive-heartbeat-over-mcp.md) and the [security note](../docs/howto/secure-the-mcp-server.md).
 
 ## How it works
 
