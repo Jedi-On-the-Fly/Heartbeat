@@ -78,6 +78,14 @@ and adversarially reviewed for clarity. The whole library is enforced by the tes
 guide can't quietly drift from the code. Start at [writing behavioral gates](../docs/howto/writing-behavioral-gates.md)
 or the [roadmap](../docs/howto/howto-list.md).
 
+The agent-framework guides go a step further. Each is proven by a **live run in a pinned Docker
+image** — the real framework (CrewAI, LangGraph, Agno, the OpenAI Agents SDK, AutoGen, smolagents,
+pydantic-ai) driving the real adapter against a local model, captured in
+[tests/frameworks/](../tests/frameworks/). Pinning keeps the proof reproducible as frameworks
+drift, isolates each dependency tree, and — because the recipe is one parametrized Dockerfile plus
+a version matrix — adding a framework is a matrix line. (The Docker runs are an on-demand tier;
+they never gate the suite, which stays green with no Docker.)
+
 ## Honest limits
 
 HeartBeat is only as good as your gates. A weak gate produces *false* confidence, which is worse than none — so it ships an auditor that flags hollow gates before you run, and an adversarial reviewer that refutes the plan. Neither guarantees a gate tests the *right* behavior; that last mile is still on you. Its value concentrates in long, multi-phase, verifiable work; for a throwaway script the ceremony is overhead.
