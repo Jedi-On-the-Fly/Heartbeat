@@ -4,7 +4,7 @@ Backend reference for the pure-Python implementation. Narrative: [heartbeat-py.m
 
 Visual overview: [dev-python-poster.png](dev-python-poster.png).
 
-Same DAG / event / gate model as the plugin, reimplemented as a pip-installable package with a single `hb` console. Stdlib-only core; `agno`/`crewai` are optional extras. Scope of "zero node/bash": HeartBeat's own tooling is Python — gate `cmd`s remain user-authored shell (the DAG contract), run via the system shell.
+Same DAG / event / gate model as the plugin, reimplemented as a pip-installable package with a single `hb` console. Stdlib-only core; the agent-framework backends are optional extras. Scope of "zero node/bash": HeartBeat's own tooling is Python — gate `cmd`s remain user-authored shell (the DAG contract), run via the system shell.
 
 ## Package
 
@@ -13,7 +13,7 @@ Same DAG / event / gate model as the plugin, reimplemented as a pip-installable 
 | distribution | `heartbeat-hb` (`py/pyproject.toml`) |
 | import package | `heartbeat` (`py/src/heartbeat/`) |
 | console script | `hb = heartbeat.cli:main` |
-| extras | `[agno]` = agno, openai · `[crewai]` = crewai |
+| extras | one per framework backend: `[agno]` `[crewai]` `[langgraph]` `[openai-agents]` `[autogen]` `[smolagents]` `[pydantic-ai]` |
 | requires | Python ≥ 3.9; git optional |
 
 Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-completion rule, and `PROTOCOL` reason set are identical to the plugin — see [dev-plugin.md](dev-plugin.md#data-model). This doc covers the Python surface only.
@@ -60,7 +60,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | `rebuild` | reproject from log |
 | `start/done/fail/heartbeat <id>` | state mutations (+ lease) |
 | `review <gate> pass\|fail [note]` | record adversarial verdict |
-| `exec [run] [--parallel N]` | drive the loop with a backend |
+| `exec [run\|config] [--parallel N]` | `run` (default) drives the loop with a backend; `config` prints the resolved executor config |
 
 ## Executor
 

@@ -63,6 +63,25 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T42 | DAG auditor (gate quality) |
 | T43 | node ↔ python parity |
 | T44 | `/heartbeat plan` folds in the auditor |
+| T45 | review-evidence hardening (holes stay closed) |
+| T46 | review substance & identity (self-review) |
+| T47 | LangGraph adapter (validity + degrade) |
+| T48 | OpenAI Agents SDK adapter (validity + degrade) |
+| T49–T51 | AutoGen / smolagents / pydantic-ai adapters (validity + degrade) |
+| T52 | outcome-asserting coverage marker (`GROUPS-PASSED`) |
+| T53 | behavioral-gate how-to proofs (weakness catalogue) |
+| T54 | behavioral-gate how-to mechanism demos (refutation, fast/deterministic) |
+| T55 | parity self-test + recovery proofs |
+| T56 | untrusted-Stage-B / liveness / auditor proofs |
+| T57 | portability / backend conformance / diagnose proofs |
+| T58 | re-verify / restore-points / tick-economics proofs |
+| T59 | adoption on-ramp proofs (quickstart, DAG authoring, stop/resume, backends) |
+| T60 | best-practice proofs (state discipline, escalate, refute, context) |
+| T61 | CI / event-log / embed / refutation-loop proofs |
+| T62 | launch-prose integrity (links + real commands) + selftest |
+| T63 | `hb exec config` cross-runtime behavioral parity (prints, does not run) |
+
+The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T62; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md).
 
 ## Python suite — `py/tests/`
 
@@ -79,9 +98,11 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | `test_exec.py` | driver: drive-to-done, attempt cap, strict, parallel worktree |
 | `test_audit.py` | auditor rules vs fixtures |
 | `test_review.py` | `hb audit --agent` via stub backend, prompt build |
+| `test_hardening.py` | review-evidence: artifact required, substance, distinct actor, rot |
+| `test_backends_frameworks.py` | framework adapters resolve + degrade (no network) |
 | `test_smoke.py` | version, `--help`, protocol render |
 
-Backend tests drive a stub via `HB_EXEC_CMD` (subprocess wire); agno/crewai/ollama adapters are validity + graceful-degrade only (no network).
+Backend tests drive a stub via `HB_EXEC_CMD` (subprocess wire); framework/ollama adapters are validity + graceful-degrade only (no network).
 
 ## Parity
 

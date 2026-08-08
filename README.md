@@ -3,7 +3,7 @@
 > A cheap, deterministic **Stage A** (bash) runs on a schedule and wakes the
 > expensive **Stage B** (an LLM agent) *only when there is real work to do*.
 
-**Developer docs (source of truth):** [dev-plugin.md](docs/dev-plugin.md) · [dev-python.md](docs/dev-python.md) · [dev-tests.md](docs/dev-tests.md). Concept: [heartbeat.md](docs/heartbeat.md) · [heartbeat-py.md](docs/heartbeat-py.md).
+**Developer docs (source of truth):** [dev-plugin.md](docs/dev-plugin.md) · [dev-python.md](docs/dev-python.md) · [dev-tests.md](docs/dev-tests.md). Concept: [heartbeat.md](docs/heartbeat.md) · [heartbeat-py.md](docs/heartbeat-py.md). How-to guides (runnable): [docs/howto/](docs/howto/).
 
 HeartBeat lets an agent drive a long, multi-phase project autonomously without
 supervision, without losing the thread, and without burning tokens idling. The

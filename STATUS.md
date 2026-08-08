@@ -1,7 +1,27 @@
 # STATUS — HeartBeat
 
-**Version:** v1.16 (gate-quality strengthening, over v1.15)
+**Version:** v1.17 (runnable how-to library + exec-config parity, over v1.16)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.17 — runnable how-to library + exec-config parity
+
+A documentation release: a `docs/howto/` library where every guide is CI-enforced, plus one
+runtime fix the doc work surfaced.
+
+- **How-to library (`docs/howto/`)** — guides organized by job (roadmap in
+  `docs/howto/howto-list.md`). Mechanism guides are each backed by a runnable, self-verifying
+  proof under `docs/howto/gate-examples/` (weakness catalogue, refutation, parity self-test,
+  recovery, untrusted-Stage-B, liveness, auditor, portability, conformance, diagnose,
+  re-verify, restore points, tick economics, CI, event log, embed, quickstart, DAG authoring,
+  stop/resume, backends). Launch-prose guides (sizing, runtime/backend choice, when-not) are
+  integrity-checked (links resolve, only real commands) + adversarially clarity-reviewed.
+  Enforced by suite groups **T53–T62**.
+- **`hb exec config` parity fix** — the Python `hb exec` CLI ignored its `action` arg, so
+  `hb exec config` ran the executor instead of printing config (the plugin already printed it).
+  The handler now honors `config` / `run` / unknown. Behavioral parity locked by **T63**;
+  intentional key-format divergence recorded in `planning/parity-notes.md`.
+- **Coherence** — `__version__` now single-sourced from package metadata; docs, the test-group
+  map, and the architecture diagrams (version stamp removed) brought current.
 
 ## v1.16 — gate-quality strengthening
 

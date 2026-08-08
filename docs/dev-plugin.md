@@ -2,7 +2,7 @@
 
 Backend reference for the Claude Code plugin implementation. Concept: [heartbeat.md](heartbeat.md). Python port: [dev-python.md](dev-python.md). Tests: [dev-tests.md](dev-tests.md).
 
-Two stages. **Stage A** (`tick.sh`, bash) reads settled reality and decides whether to wake **Stage B** (a model/agent). State is an event-sourced projection. A project is a DAG. Runtime is bash + node; Python appears only inside three backend adapters.
+Two stages. **Stage A** (`tick.sh`, bash) reads settled reality and decides whether to wake **Stage B** (a model/agent). State is an event-sourced projection. A project is a DAG. Runtime is bash + node; Python appears only inside the backend adapters (`executors/*_exec.py`).
 
 ## Layout
 
@@ -180,13 +180,18 @@ Wire protocol — driver spawns `bash -c "<cmd> <mode>"`, mode ∈ `execute|refu
 | `execute` | `{"ok": bool, "summary": str}` |
 | `refute` | `{"refuted": bool, "findings": str}` |
 
-`defaultCmd`: `claude-code`→`claude-exec.sh`, `agno`→`agno_exec.py`, `crewai`→`crewai_exec.py`, `ollama`→`ollama_exec.py`, else the string is the command. Backends never touch `state.json`/`gate.sh`.
+`defaultCmd`: `claude-code`→`claude-exec.sh`; each framework/local backend → its `<name>_exec.py` under `executors/` (`agno` `crewai` `ollama` `langgraph` `openai_agents` `autogen` `smolagents` `pydanticai`); else the string is the command. Backends never touch `state.json`/`gate.sh`.
 
 | Backend | Worker mechanism | Notes |
 |---|---|---|
 | `claude-code` | headless `claude -p` | default |
 | `agno` | Agno agent + `FileTools` | `HB_EXEC_PROVIDER=anthropic\|ollama` |
 | `crewai` | CrewAI Agent+Task+Crew | `HB_EXEC_PROVIDER`; FILE-block writer |
+| `langgraph` | LangGraph ReAct agent + `save_file` | `HB_EXEC_PROVIDER=anthropic\|ollama\|openai` |
+| `openai-agents` | OpenAI Agents SDK + function tool | `HB_EXEC_PROVIDER=openai\|ollama` |
+| `autogen` | AutoGen AssistantAgent | `HB_EXEC_PROVIDER=openai\|ollama`; FILE-block writer |
+| `smolagents` | smolagents ToolCallingAgent + `save_file` | `HB_EXEC_PROVIDER=openai\|ollama` |
+| `pydantic-ai` | pydantic-ai Agent + `save_file` | `HB_EXEC_PROVIDER=openai\|ollama` |
 | `ollama` | stdlib `urllib` → local model | FILE-block mini-agent |
 | `script` | arbitrary `HB_EXEC_CMD` | subprocess, any language |
 

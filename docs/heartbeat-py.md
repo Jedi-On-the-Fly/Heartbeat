@@ -25,7 +25,7 @@ Python modules instead of a mix of bash and node:
 | Event-sourced state | `state.py` (append to `events.jsonl` → project `state.json`) |
 | Integrity + root cause | `doctor.py` (rot detection, `hb diagnose`) |
 | The driver (Stage B) | `executor.py` (serial or worktree-parallel, escalate-only) |
-| Pluggable workers | `backends/` (ollama · agno · crewai · claude, or a subprocess) |
+| Pluggable workers | `backends/` (ollama · claude · agno · crewai · langgraph · openai-agents · autogen · smolagents · pydantic-ai, or a subprocess) |
 | Scaffolding + CLI | `scaffold.py` (`hb init`), `cli.py`, `report.py` |
 
 Nothing is remembered; it's computed. The state is a projection of the log, exactly as
@@ -48,8 +48,9 @@ They share the DAG and the invariants; they don't share code. Each has its own t
 
 ```bash
 pip install ./py                 # core (stdlib only)
-pip install "./py[agno]"         # add the Agno backend
-pip install "./py[crewai]"       # add the CrewAI backend
+pip install "./py[agno]"         # add a framework backend (one extra per framework:
+                                 # agno, crewai, langgraph, openai-agents, autogen,
+                                 # smolagents, pydantic-ai)
 
 hb init  <project-dir>           # scaffold .hb/
 hb lint  --dir <project-dir>     # validate the DAG
@@ -67,10 +68,13 @@ Stage B is swappable. Choose with `.hb/executor.json` `{"backend": …}` or
 `HB_EXEC_BACKEND`:
 
 - `ollama` — local models, no API key, stdlib only.
-- `agno` / `crewai` — set `HB_EXEC_PROVIDER=ollama` to drive them with local models, or
-  `anthropic` with `ANTHROPIC_API_KEY`.
+- agent frameworks — `agno`, `crewai`, `langgraph`, `openai-agents`, `autogen`,
+  `smolagents`, `pydantic-ai`; set `HB_EXEC_PROVIDER=ollama` to drive them with local
+  models, or `anthropic`/`openai` with the matching key.
 - `claude-code` — headless `claude -p`.
 - `script` — any command, via `HB_EXEC_CMD`.
+
+`hb exec config` prints the resolved backend and settings (both runtimes).
 
 A backend is two functions: `execute(payload) → {ok, summary}` and
 `refute(payload) → {refuted, findings}`. The driver mediates every state transition, runs
