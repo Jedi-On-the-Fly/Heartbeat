@@ -1,8 +1,9 @@
 # HowTo
 
-Task-oriented guides for using HeartBeat well. Each guide is backed by runnable proofs, not
-just prose. The full roadmap (created + planned, across families A–J) is in
-[howto-list.md](howto-list.md).
+Task-oriented guides for using HeartBeat well. Mechanism guides are backed by a runnable proof;
+the decision/best-practice guides are integrity-checked (links resolve, only real commands) and
+clarity-reviewed. Every guide is CI-enforced. The full roadmap (created + planned, across
+families A–J) is in [howto-list.md](howto-list.md).
 
 - [Writing behavioral gates](writing-behavioral-gates.md) — how to make a gate assert the
   *right* behavior, a catalogue of gate weaknesses (each a runnable proof under
@@ -51,6 +52,11 @@ just prose. The full roadmap (created + planned, across families A–J) is in
 - [Read the event log](read-the-event-log.md) — reconstruct a run; why state.json is disposable.
 - [Embed HeartBeat in a Python app](embed-heartbeat-in-python.md) — drive it via the library, no CLI.
 - [Handle a successful refutation](handle-a-successful-refutation.md) — a found hole holds the phase; fix and re-verify.
+- [How to size a task](size-a-task.md) — one bounded unit of work with one observable result.
+- [How to size a phase](size-a-phase.md) — one verified milestone you'd roll back to.
+- [Choose Claude Code vs the Python runtime](choose-runtime.md) — same product; pick by environment.
+- [Choose a Stage B backend](choose-a-backend.md) — map requirements to a worker; the choice is reversible.
+- [When not to use HeartBeat](when-not-to-use-heartbeat.md) — where the ceremony isn't worth it.
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).

@@ -1,0 +1,82 @@
+{
+  "_meta": {
+    "project": "howto-prose-launch",
+    "note": "The launch prose tier — adoption decision/sizing guides that are judgment, not mechanism, so they get an HONEST gate for prose rather than a hollow behavioral one: a deterministic prose-integrity check (substantive, no placeholder/TODO, every relative link resolves, every backticked `hb <sub>` names a REAL subcommand derived from cli.py) PLUS an adversarial clarity/practicality review on each phase (the reviewer judges: clear? practical? honest, not overclaiming?). PC0 builds the checker and proves it with a selftest (a good doc passes, a doc with a broken link / placeholder / fake command is rejected). SZ0: size-a-task + size-a-phase. CB0: choose-runtime + choose-a-backend. WN0: when-not-to-use-heartbeat (the credibility guide). DW0: index + roadmap flips + suite enforcement (T62). No hollow gates: the gate checks verifiable integrity; clarity is enforced by refutation."
+  },
+  "phases": [
+    {
+      "id": "PC0", "title": "Prose-integrity checker", "gate_entry": null, "gate_exit": "GATE_PC0",
+      "tasks": [
+        { "id": "PC0T1", "title": "Write prose-check.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/prose-check.sh: a reusable integrity checker for a prose how-to. For each doc arg it asserts the doc is substantive (>= 15 non-blank lines), contains no placeholder (no TODO/TBD/FIXME/'fill in'/lorem-ipsum in the body), every relative markdown link resolves (relative to the doc's dir, ignoring http/# targets), and every backticked `hb <sub>` references a REAL subcommand derived from py/src/heartbeat/cli.py (add_parser names + the start/done/fail/heartbeat loop). Prints PROSE-OK:<file> per doc and ALL-PROSE-OK:<n> when all pass. A --selftest mode injects a good doc (must pass) and bad docs (broken link, placeholder body, fake `hb frobnicate` command — each must be rejected) and prints PROSE-CHECK-SELFTEST-OK only when the good doc passes and every bad doc is caught." }
+      ]
+    },
+    {
+      "id": "SZ0", "title": "Sizing guides", "gate_entry": "GATE_PC0", "gate_exit": "GATE_SZ0",
+      "tasks": [
+        { "id": "SZ0T1", "title": "Write the sizing guides", "requires": [],
+          "description": "Write docs/howto/size-a-task.md (one bounded unit of non-deterministic work; how to tell when a task is too big and split it; ties to recovery + verification clarity) and docs/howto/size-a-phase.md (one meaningful verified milestone = a useful restore point; over-grouping vs a phase-per-tiny-action). Practical, opinionated, current-state; link the DAG-authoring guide and restore-points/re-verify rather than restating mechanisms. Reference only real hb commands." }
+      ]
+    },
+    {
+      "id": "CB0", "title": "Runtime + backend choice guides", "gate_entry": "GATE_SZ0", "gate_exit": "GATE_CB0",
+      "tasks": [
+        { "id": "CB0T1", "title": "Write the choice guides", "requires": [],
+          "description": "Write docs/howto/choose-runtime.md (Claude Code plugin vs the pure-Python runtime: they are the same product with a parity contract; pick by environment — plugin inside Claude Code, Python for CI/servers/embedding) and docs/howto/choose-a-backend.md (map requirements to a Stage B backend: claude-code / ollama / a framework / a script; the gate is the contract so the choice is reversible). Each must name both/all the real options and link the relevant backend + parity guides. Reference only real hb commands and backends." }
+      ]
+    },
+    {
+      "id": "WN0", "title": "When not to use HeartBeat", "gate_entry": "GATE_CB0", "gate_exit": "GATE_WN0",
+      "tasks": [
+        { "id": "WN0T1", "title": "Write when-not-to-use-heartbeat.md", "requires": [],
+          "description": "Write docs/howto/when-not-to-use-heartbeat.md: the credibility guide — HeartBeat earns its ceremony on long, multi-phase, VERIFIABLE work; it is overhead for a one-shot prompt, throwaway scripts, or work whose 'done' can't be expressed as a deterministic check. Honest and balanced (name the real limits), so it builds trust rather than overselling. Link the honest-limits framing in the concept/behavioral-gates docs rather than restating." }
+      ]
+    },
+    {
+      "id": "DW0", "title": "Index + roadmap + enforce", "gate_entry": "GATE_WN0", "gate_exit": "GATE_DW0",
+      "tasks": [
+        { "id": "DW0T1", "title": "Index + roadmap + T62", "requires": [],
+          "description": "Add the five guides to docs/howto/README.md and flip their rows (plus the ones they cover via ->) in docs/howto/howto-list.md; add a T62 group to tests/run-tests.sh that runs prose-check.sh over the five new guides and asserts ALL-PROSE-OK, plus the prose-check selftest, so link-rot / placeholders / fake commands can't creep in." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_PC0": {
+      "desc": "The prose-integrity checker passes a good doc and rejects a broken-link / placeholder / fake-command doc.",
+      "review": { "prompt": "Refute that PC0 is done: does the checker actually resolve links relative to the doc dir (not cwd)? Does it derive the real subcommand list from cli.py (so a fake `hb frobnicate` is caught but real `hb exec` is not)? Does --selftest genuinely inject and catch each bad case (broken link, placeholder, fake command), or print the marker unconditionally? Could a bad doc slip through?" },
+      "criteria": [
+        { "id": "pc0c1", "desc": "the prose-check selftest passes (good passes, bad rejected)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" --selftest 2>&1 | grep -q 'PROSE-CHECK-SELFTEST-OK'" }
+      ]
+    },
+    "GATE_SZ0": {
+      "desc": "Both sizing guides pass prose-integrity; clear and practical.",
+      "review": { "prompt": "Refute that SZ0 is done: are size-a-task.md and size-a-phase.md actually CLEAR and PRACTICAL (a reader could size their own task/phase from them), or vague platitudes? Do they give a concrete test/heuristic, not just 'it depends'? Do they overclaim? Do they reference anything that isn't real? End SOUND or UNSOUND." },
+      "criteria": [
+        { "id": "sz0c1", "desc": "both sizing guides pass prose-integrity", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/size-a-task.md\" \"$PROJECT_DIR/docs/howto/size-a-phase.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" }
+      ]
+    },
+    "GATE_CB0": {
+      "desc": "Both choice guides pass prose-integrity and name their real options; clear and practical.",
+      "review": { "prompt": "Refute that CB0 is done: does choose-runtime.md give a clear rule for picking the plugin vs Python (by environment), and choose-a-backend.md a clear map from requirements to a real backend? Do they name the actual options (both runtimes; the real backends)? Are they practical decision aids, not marketing? Any overclaim or unreal reference? End SOUND or UNSOUND." },
+      "criteria": [
+        { "id": "cb0c1", "desc": "both choice guides pass prose-integrity", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/choose-runtime.md\" \"$PROJECT_DIR/docs/howto/choose-a-backend.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "cb0c2", "desc": "choose-runtime names both runtimes; choose-a-backend names multiple backends", "cmd": "grep -qi 'python' \"$PROJECT_DIR/docs/howto/choose-runtime.md\" && grep -qi 'claude code' \"$PROJECT_DIR/docs/howto/choose-runtime.md\" && grep -qi 'ollama' \"$PROJECT_DIR/docs/howto/choose-a-backend.md\" && grep -qi 'script' \"$PROJECT_DIR/docs/howto/choose-a-backend.md\"" }
+      ]
+    },
+    "GATE_WN0": {
+      "desc": "The when-not guide passes prose-integrity and is honestly balanced.",
+      "review": { "prompt": "Refute that WN0 is done: does when-not-to-use-heartbeat.md genuinely tell a reader when to AVOID HeartBeat (one-shot prompts, throwaway scripts, unverifiable 'done'), building credibility — or does it secretly sell it anyway? Is it honest and specific, not a disguised pitch? Any overclaim? End SOUND or UNSOUND." },
+      "criteria": [
+        { "id": "wn0c1", "desc": "the when-not guide passes prose-integrity", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/when-not-to-use-heartbeat.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" }
+      ]
+    },
+    "GATE_DW0": {
+      "desc": "All five guides are indexed and roadmap-flipped; the suite enforces prose-integrity.",
+      "review": { "prompt": "Refute that DW0 is done: are all five guides in the index AND flipped in howto-list.md? Does T62 actually run prose-check over the five and the selftest? Would link-rot or a fake command in these guides be caught by the suite now?" },
+      "criteria": [
+        { "id": "dw0c1", "desc": "the index lists all five guides", "cmd": "for f in size-a-task size-a-phase choose-runtime choose-a-backend when-not-to-use-heartbeat; do grep -q \"$f\" \"$PROJECT_DIR/docs/howto/README.md\" || exit 1; done" },
+        { "id": "dw0c2", "desc": "the node suite enforces the prose guides (T62 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T62 '" }
+      ]
+    }
+  }
+}

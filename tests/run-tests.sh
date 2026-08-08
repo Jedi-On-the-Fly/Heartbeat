@@ -889,6 +889,16 @@ else
   echo "  (python3 absent — T61 skipped)"
 fi
 
+grp "T62 — launch prose guides (integrity + selftest) (docs/howto)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T62.1 the prose-check selftest holds (good passes; bad rejected)" \
+    'bash "'"$GEX"'/prose-check.sh" --selftest 2>&1 | grep -q "PROSE-CHECK-SELFTEST-OK"'
+  check "T62.2 the five launch prose guides pass integrity (links + real commands)" \
+    'bash "'"$GEX"'/prose-check.sh" "$HB_SRC/docs/howto/size-a-task.md" "$HB_SRC/docs/howto/size-a-phase.md" "$HB_SRC/docs/howto/choose-runtime.md" "$HB_SRC/docs/howto/choose-a-backend.md" "$HB_SRC/docs/howto/when-not-to-use-heartbeat.md" 2>&1 | grep -q "ALL-PROSE-OK:5"'
+else
+  echo "  (python3 absent — T62 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

@@ -1,9 +1,11 @@
 # HeartBeat How-To Library — roadmap
 
 The full how-to map, organized by job (families **A–J**, after the original ideas list).
-Each entry is either **created** (linked file, with the suite group that enforces its proof)
-or **Not available yet**. Created guides are runnable-proof-backed and CI-enforced across
-`tests/run-tests.sh` groups **T53–T61**; see the [index](README.md) for the shipped set.
+Each entry is either **created** (linked file, with the suite group that enforces it) or
+**Not available yet**. Created guides are CI-enforced across `tests/run-tests.sh` groups
+**T53–T62**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
+integrity check (links resolve, no placeholders, only real commands) plus adversarial clarity
+review. See the [index](README.md) for the shipped set.
 
 Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives in a nearby guide.
 
@@ -25,13 +27,13 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | How-to | Status |
 |---|---|
 | Turn an Existing Plan into a HeartBeat DAG | ✅ [turn-a-plan-into-a-dag.md](turn-a-plan-into-a-dag.md) — T59 |
-| Break a Large Task into HeartBeat-Sized Units | ⬜ Not available yet |
-| Decide What Belongs in a Phase | ⬜ Not available yet |
+| Break a Large Task into HeartBeat-Sized Units | ✅ [size-a-task.md](size-a-task.md) — T62 |
+| Decide What Belongs in a Phase | ✅ [size-a-phase.md](size-a-phase.md) — T62 |
 | Write Dependencies That Don't Over-Constrain | ⬜ Not available yet |
 | Add HeartBeat to an Existing Repository | ⬜ Not available yet |
 | Migrate an Existing Agent Loop to HeartBeat | ⬜ Not available yet |
-| Choose Claude Code vs Python Runtime | ⬜ Not available yet |
-| Choose a Stage B Backend | ⬜ Not available yet |
+| Choose Claude Code vs Python Runtime | ✅ [choose-runtime.md](choose-runtime.md) — T62 |
+| Choose a Stage B Backend | ✅ [choose-a-backend.md](choose-a-backend.md) — T62 |
 
 ## C. Core Concepts — "why it works this way"
 
@@ -113,10 +115,10 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 
 | How-to | Status |
 |---|---|
-| How to Size a HeartBeat Task | ⬜ Not available yet |
-| How to Size a HeartBeat Phase | ⬜ Not available yet |
+| How to Size a HeartBeat Task | ✅ [size-a-task.md](size-a-task.md) — T62 |
+| How to Size a HeartBeat Phase | ✅ [size-a-phase.md](size-a-phase.md) — T62 |
 | How to Write a Good DAG | ⬜ Not available yet |
-| When Not to Use HeartBeat | ⬜ Not available yet |
+| When Not to Use HeartBeat | ✅ [when-not-to-use-heartbeat.md](when-not-to-use-heartbeat.md) — T62 |
 | When to Escalate Instead of Retry | ✅ [escalate-instead-of-retry.md](escalate-instead-of-retry.md) — T60 |
 | Ten Rules for a Good Gate | ✅ [writing-gates-10-rules.md](writing-gates-10-rules.md) — T53 |
 | Refute High-Risk Claims, Not Every Task | ✅ [refute-high-risk-claims.md](refute-high-risk-claims.md) — T60 |
