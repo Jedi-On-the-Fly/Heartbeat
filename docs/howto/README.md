@@ -47,6 +47,10 @@ just prose. The full roadmap (created + planned, across families A–J) is in
 - [Escalate instead of retry forever](escalate-instead-of-retry.md) — bounded retries, then surface to a human.
 - [Refute high-risk claims, not every task](refute-high-risk-claims.md) — a review block is a selective lever.
 - [Keep worker context from settled reality](context-from-settled-reality.md) — context is computed from state, not stale chat.
+- [Run HeartBeat in CI](run-heartbeat-in-ci.md) — exit codes gate the pipeline; no wrapper needed.
+- [Read the event log](read-the-event-log.md) — reconstruct a run; why state.json is disposable.
+- [Embed HeartBeat in a Python app](embed-heartbeat-in-python.md) — drive it via the library, no CLI.
+- [Handle a successful refutation](handle-a-successful-refutation.md) — a found hole holds the phase; fix and re-verify.
 
 Reference and concept docs live one level up in [`docs/`](../); contributor rules are in
 [`AGENTS.md`](../../AGENTS.md).

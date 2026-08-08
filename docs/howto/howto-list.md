@@ -3,7 +3,7 @@
 The full how-to map, organized by job (families **A–J**, after the original ideas list).
 Each entry is either **created** (linked file, with the suite group that enforces its proof)
 or **Not available yet**. Created guides are runnable-proof-backed and CI-enforced across
-`tests/run-tests.sh` groups **T53–T60**; see the [index](README.md) for the shipped set.
+`tests/run-tests.sh` groups **T53–T61**; see the [index](README.md) for the shipped set.
 
 Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives in a nearby guide.
 
@@ -63,7 +63,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Add Refutation to a Sensitive Gate | ✅ [add-refutation-to-a-sensitive-gate.md](add-refutation-to-a-sensitive-gate.md) — T54 |
 | Write a Good Refuter Prompt / Profile | ⬜ Not available yet |
 | Decide Which Gates Need Refutation | ⬜ Not available yet |
-| Handle a Successful Refutation | ⬜ Not available yet |
+| Handle a Successful Refutation | ✅ [handle-a-successful-refutation.md](handle-a-successful-refutation.md) — T61 |
 | Handle a Stuck Refutation Review | ✅ [prove-liveness.md](prove-liveness.md) (review_stuck) — T56 |
 | Test Whether Your Refuter Adds Value | ⬜ Not available yet *(needs a live model — not a deterministic proof)* |
 
@@ -85,7 +85,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 
 | How-to | Status |
 |---|---|
-| Read HeartBeat's Event Log | ⬜ Not available yet |
+| Read HeartBeat's Event Log | ✅ [read-the-event-log.md](read-the-event-log.md) — T61 |
 | Rebuild State from Events | ✅ [recover-a-dead-or-corrupted-run.md](recover-a-dead-or-corrupted-run.md) — T55 |
 | Diagnose a Stuck Project | ✅ [diagnose-a-stuck-project.md](diagnose-a-stuck-project.md) — T57 |
 | Recover from a Crashed Worker | ✅ [recover-a-dead-or-corrupted-run.md](recover-a-dead-or-corrupted-run.md) — T55 |
@@ -100,12 +100,12 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 
 | How-to | Status |
 |---|---|
-| Run HeartBeat in CI | ⬜ Not available yet |
+| Run HeartBeat in CI | ✅ [run-heartbeat-in-ci.md](run-heartbeat-in-ci.md) — T61 |
 | Schedule HeartBeat with Cron | ⬜ Not available yet |
 | Run Independent Tasks in Parallel | ⬜ Not available yet |
 | Understand Worktree Isolation | ⬜ Not available yet |
 | Handle Merge Conflicts from Parallel Work | ⬜ Not available yet *(honest proof is timing-dependent — see notes below)* |
-| Embed HeartBeat in a Python Application | ⬜ Not available yet |
+| Embed HeartBeat in a Python Application | ✅ [embed-heartbeat-in-python.md](embed-heartbeat-in-python.md) — T61 |
 | Run HeartBeat Fully Locally | ⬜ Not available yet |
 | Spend the Model Only on Work (tick economics) | ✅ [spend-the-model-only-on-work.md](spend-the-model-only-on-work.md) — T58 |
 

@@ -875,6 +875,20 @@ else
   echo "  (python3 absent — T60 skipped)"
 fi
 
+grp "T61 — CI / event-log / embed / refutation-loop howto proofs (docs/howto)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T61.1 CI can gate on exit codes (audit fails hollow; exec 0/non-zero)" \
+    'bash "'"$GEX"'/ci-flow.sh" 2>&1 | grep -q "CI-FLOW-OK"'
+  check "T61.2 the event log is valid, ordered, and the state reprojects from it" \
+    'bash "'"$GEX"'/event-log.sh" 2>&1 | grep -q "EVENT-LOG-OK"'
+  check "T61.3 a project runs to completion via the Python library API" \
+    'bash "'"$GEX"'/embed-python.sh" 2>&1 | grep -q "EMBED-PYTHON-OK"'
+  check "T61.4 a review fail holds; a valid distinct-actor pass advances" \
+    'bash "'"$GEX"'/handle-refutation.sh" 2>&1 | grep -q "HANDLE-REFUTATION-OK"'
+else
+  echo "  (python3 absent — T61 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

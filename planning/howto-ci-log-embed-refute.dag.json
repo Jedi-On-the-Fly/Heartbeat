@@ -1,0 +1,84 @@
+{
+  "_meta": {
+    "project": "howto-ci-log-embed-refute",
+    "note": "The last four how-tos that still admit an honest deterministic proof (the remaining roadmap entries are launch prose). CI0: HeartBeat is CI-usable — exit codes are meaningful, so a pipeline can gate on them (hb audit rejects a hollow DAG non-zero; a good project's exec run exits 0; an unpassable one exits non-zero). EL0: the event log is truth — after a run events.jsonl holds the expected event sequence, every line is valid JSON, and reprojecting the log reproduces the state. EM0: HeartBeat embeds as a library — drive a project via the public API (state.mutate / gate.run_gate / state.project) with no CLI, and a failing gate does not complete. HR0: handle a successful refutation — a review FAIL holds the phase (not completed), then fix + re-gate + a valid distinct-actor review PASS completes it. DW0: the four guides + index + roadmap flips + suite enforcement (T61). Each proof carries a negative/control."
+  },
+  "phases": [
+    {
+      "id": "CI0", "title": "Run HeartBeat in CI", "gate_entry": null, "gate_exit": "GATE_CI0",
+      "tasks": [
+        { "id": "CI0T1", "title": "Write ci-flow.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/ci-flow.sh: prove HeartBeat gates a CI pipeline by its exit codes — hb-audit on a hollow DAG exits non-zero (pre-flight catch), a good project driven by a script backend exits 0 from exec run (CI green), and a project whose gate cannot pass exits non-zero (CI red). Print CI-FLOW-OK only when the good flow is 0 and both the hollow DAG and the unpassable gate are non-zero." }
+      ]
+    },
+    {
+      "id": "EL0", "title": "Read the event log", "gate_entry": "GATE_CI0", "gate_exit": "GATE_EL0",
+      "tasks": [
+        { "id": "EL0T1", "title": "Write event-log.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/event-log.sh: complete a phase, then assert events.jsonl is a well-formed authoritative log — every line is valid JSON, the expected events appear in order (initialized, then task_started before task_done before gate_passed), and reprojecting the log reproduces the state (the completed phase). Control: an appended event changes the projection (the log drives state). Print EVENT-LOG-OK only when the sequence, validity, and reprojection all hold." }
+      ]
+    },
+    {
+      "id": "EM0", "title": "Embed HeartBeat in a Python app", "gate_entry": "GATE_EL0", "gate_exit": "GATE_EM0",
+      "tasks": [
+        { "id": "EM0T1", "title": "Write embed-python.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/embed-python.sh: drive a project entirely through the Python library API — no CLI subprocess. Using heartbeat.state.mutate / heartbeat.gate.run_gate / heartbeat.state.project, do the work and complete a phase, and assert completed_phases includes it. Control: with the artifact absent the gate does not pass and the phase does not complete (the library gate is real). Print EMBED-PYTHON-OK only when the library-driven run completes and the control holds." }
+      ]
+    },
+    {
+      "id": "HR0", "title": "Handle a successful refutation", "gate_entry": "GATE_EM0", "gate_exit": "GATE_HR0",
+      "tasks": [
+        { "id": "HR0T1", "title": "Write handle-refutation.sh", "requires": [],
+          "description": "Write docs/howto/gate-examples/handle-refutation.sh: on a review-gated phase whose deterministic gate has passed, record a review FAIL (a found hole) and assert the phase is NOT completed (the refutation held it). Then fix + re-run the gate + record a valid review PASS (a substantive artifact citing the phase, from a DIFFERENT actor than the doer) and assert the phase completes. Print HANDLE-REFUTATION-OK only when the fail holds the phase and the valid distinct-actor pass advances it." }
+      ]
+    },
+    {
+      "id": "DW0", "title": "Four guides + wiring", "gate_entry": "GATE_HR0", "gate_exit": "GATE_DW0",
+      "tasks": [
+        { "id": "DW0T1", "title": "Write the four guides", "requires": [],
+          "description": "Write docs/howto/run-heartbeat-in-ci.md (proof: ci-flow.sh), docs/howto/read-the-event-log.md (proof: event-log.sh), docs/howto/embed-heartbeat-in-python.md (proof: embed-python.sh), and docs/howto/handle-a-successful-refutation.md (proof: handle-refutation.sh). Current-state; link AGENTS rule 1 and the mechanisms rather than restating them." },
+        { "id": "DW0T2", "title": "Index + roadmap + enforce", "requires": ["DW0T1"],
+          "description": "Add the four guides to docs/howto/README.md and flip/add their rows in docs/howto/howto-list.md to the file; add a T61 group to tests/run-tests.sh running the four demos and asserting their markers, so the proofs cannot rot." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_CI0": {
+      "desc": "HeartBeat's exit codes gate a pipeline: hollow DAG and unpassable gate fail; a good flow passes.",
+      "review": { "prompt": "Refute that CI0 is done: does it drive the real CLI/auditor? Is each exit-code assertion load-bearing — does the good flow genuinely exit 0 because the gate passed, the hollow DAG exit non-zero from the auditor, and the unpassable gate exit non-zero from exec? Could any be vacuous (e.g. exit 0 for the wrong reason)?" },
+      "criteria": [
+        { "id": "ci0c1", "desc": "the CI-flow proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/ci-flow.sh\" 2>&1 | grep -q 'CI-FLOW-OK'" }
+      ]
+    },
+    "GATE_EL0": {
+      "desc": "The event log is a well-formed authoritative record and the state reprojects from it.",
+      "review": { "prompt": "Refute that EL0 is done: are the events genuinely parsed as JSON (not a substring grep)? Is the ordering assertion real (task_started before task_done before gate_passed)? Does reprojecting the log actually reproduce the completed phase (state is derived from the log), and would the proof fail if it didn't?" },
+      "criteria": [
+        { "id": "el0c1", "desc": "the event-log proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/event-log.sh\" 2>&1 | grep -q 'EVENT-LOG-OK'" }
+      ]
+    },
+    "GATE_EM0": {
+      "desc": "A project runs to completion driven only through the Python library API.",
+      "review": { "prompt": "Refute that EM0 is done: does it drive the project through the LIBRARY (state/gate modules), not the CLI subprocess? Does the phase genuinely complete via a real gate run? Is the control load-bearing (with the artifact absent the gate does not pass and the phase does not complete)?" },
+      "criteria": [
+        { "id": "em0c1", "desc": "the embed-python proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/embed-python.sh\" 2>&1 | grep -q 'EMBED-PYTHON-OK'" }
+      ]
+    },
+    "GATE_HR0": {
+      "desc": "A review fail holds the phase; a fix plus a valid distinct-actor review pass advances it.",
+      "review": { "prompt": "Refute that HR0 is done: does it drive the real hb CLI review path? Does a review FAIL genuinely hold the phase (not completed)? Does the phase advance only after a VALID review pass — a substantive artifact citing the phase from a DIFFERENT actor than the doer (not a rubber stamp)? Would the proof fail if the fail did not hold or the pass were invalid?" },
+      "criteria": [
+        { "id": "hr0c1", "desc": "the handle-refutation proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/handle-refutation.sh\" 2>&1 | grep -q 'HANDLE-REFUTATION-OK'" }
+      ]
+    },
+    "GATE_DW0": {
+      "desc": "Each guide points at a proof that runs; the index and roadmap list all four; the suite enforces the demos.",
+      "review": { "prompt": "Refute that DW0 is done: does any guide claim a proof that does not run? Does any restate the enforced mechanisms rather than link them? Are all four guides in the index AND in howto-list.md as created? Does T61 actually run all four demos and assert their markers?" },
+      "criteria": [
+        { "id": "dw0c1", "desc": "each guide references its runnable proof", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'ci-flow' run-heartbeat-in-ci.md && grep -q 'event-log' read-the-event-log.md && grep -q 'embed-python' embed-heartbeat-in-python.md && grep -q 'handle-refutation' handle-a-successful-refutation.md" },
+        { "id": "dw0c2", "desc": "the index lists all four guides", "cmd": "for f in run-heartbeat-in-ci read-the-event-log embed-heartbeat-in-python handle-a-successful-refutation; do grep -q \"$f\" \"$PROJECT_DIR/docs/howto/README.md\" || exit 1; done" },
+        { "id": "dw0c3", "desc": "the node suite enforces the demos (T61 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T61 '" }
+      ]
+    }
+  }
+}
