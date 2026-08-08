@@ -10,6 +10,7 @@ Two stages. **Stage A** (`tick.sh`, bash) reads settled reality and decides whet
 |---|---|
 | `plugin/.claude-plugin/plugin.json` | Plugin manifest (name, version) |
 | `.claude-plugin/marketplace.json` | Local marketplace descriptor (`source: ./plugin`) |
+| `plugin/.mcp.json` | Registers the HeartBeat MCP server (`hb mcp-serve`) so installing the plugin wires it (both hosts) |
 | `plugin/bootstrap.sh` | Scaffolds `<project>/.hb/`; git init + hooks |
 | `plugin/skills/heartbeat/SKILL.md` | `/heartbeat` command surface + Tick Protocol |
 | `plugin/hooks/hooks.json` + `heartbeat-detect.sh` | SessionStart pointer when a `.hb/` exists |

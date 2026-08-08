@@ -115,6 +115,7 @@ plugin in Codex or Claude Code wires it with no manual `mcp add` (proof:
 | `pydantic-ai` | pydantic-ai Agent + `save_file` tool | `HB_EXEC_PROVIDER=openai\|ollama` |
 | `claude` | subprocess `claude -p` | — |
 | `codex` | subprocess `codex exec` (stdin closed) | `HB_EXEC_PROVIDER=oss` → keyless Ollama |
+| `opencode` | subprocess `opencode run --format json` | `HB_EXEC_MODEL=provider/model` (e.g. `ollama/…`) |
 
 `HB_EXEC_MODEL` selects the model; `OLLAMA_HOST` the server. Backend degrade: missing lib/server → protocol-valid `{ok:false}` / `{refuted:false}`.
 

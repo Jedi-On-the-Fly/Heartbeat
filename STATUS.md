@@ -1,7 +1,34 @@
 # STATUS — HeartBeat
 
-**Version:** v1.18 (agent-framework how-tos + reproducible Docker proof harness, over v1.17)
+**Version:** v1.19 (MCP server + Codex/OpenCode backends, over v1.18)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.19 — MCP server (drives, or is driven) + Codex/OpenCode backends
+
+HeartBeat now works in both directions: it drives agents (new `codex`/`opencode` backends), and it
+*is* an MCP server that agents drive. Three MCP-client hosts (Codex, Claude Code, OpenCode) on one
+server.
+
+- **MCP server (`hb mcp-serve`, Python port)** — a minimal, **stdlib-only** JSON-RPC server (no SDK)
+  exposing the read (`tick`/`next`/`state`/`report`/`diagnose`/`doctor`/`lint`/`audit`) and act
+  (`gate`/`start`/`done`/`fail`/`review`) tools. Act tools route through the log, so the
+  mutate-only-through-the-log invariant holds. Enforced by **T67**.
+- **Dual-stacks the 2026-07-28 spec** — the classic `initialize` handshake for today's hosts and
+  the 2026 revision (via `server/discover` + per-request `_meta`; `resultType`/cacheable-list) for
+  new ones; old responses stay byte-identical. Verified against the official MCP Python SDK v2
+  client (`tests/mcp-interop.sh`, `[mcp-test]` extra). Enforced by **T70**.
+- **Streamable-HTTP transport** (`--http`) — unauthenticated by design, hardened: loopback-only
+  default, refuses a non-loopback bind without `--allow-remote`, exact-IP Origin validation
+  (DNS-rebinding). Enforced by **T68**; security note in `docs/howto/secure-the-mcp-server.md`
+  (**T71**).
+- **Plugin registers the server** (`plugin/.mcp.json`) — installing the HeartBeat plugin wires
+  `hb mcp-serve` for Codex *and* Claude Code (one manifest, both hosts). Enforced by **T69**.
+- **`codex` backend** — headless `codex exec` (stdin closed; `HB_EXEC_PROVIDER=oss` → keyless
+  Ollama). Enforced by **T66**.
+- **`opencode` backend** — headless `opencode run --format json` (SST's provider-agnostic agent;
+  `HB_EXEC_MODEL=provider/model`) + the opencode.json MCP wiring. Enforced by **T72**.
+- Both backends: both runtimes + registry (a new shared surface → parity), stub-on-PATH suite
+  proofs + honest on-demand live tiers. Guides under `docs/howto/`.
 
 ## v1.18 — agent-framework how-tos + reproducible Docker proof harness
 
@@ -22,8 +49,6 @@ Docker harness — plus one real packaging fix the harness surfaced.
 - **agno packaging fix** — agno's Ollama path needs the `ollama` client; added to the `[agno]`
   extra (a user hit the same gap).
 - Enforced by suite groups **T64–T65** (Docker-free: harness `--check` + conformance + prose).
-
-## v1.17 — runnable how-to library + exec-config parity
 
 ## v1.17 — runnable how-to library + exec-config parity
 

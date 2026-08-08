@@ -121,6 +121,6 @@ HeartBeat's Stage A (`tick.sh`) is meant to run on a timer. On Claude Code:
 ## Verify the install works
 
 ```bash
-bash tests/run-tests.sh        # full regression suite (160 assertions) → ALL GREEN
+bash tests/run-tests.sh        # full regression suite → ALL GREEN
 bash tests/real-backend.sh     # optional: live end-to-end run with a local model (ollama)
 ```

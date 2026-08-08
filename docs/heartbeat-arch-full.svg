@@ -30,7 +30,7 @@
   <rect x="90" y="120" width="250" height="82" rx="10" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
   <text x="215" y="150" text-anchor="middle" font-size="15" font-weight="700" fill="#4338ca">Agent (Stage B)</text>
   <text x="215" y="170" text-anchor="middle" font-size="12" fill="#4338ca">does one task · records facts</text>
-  <text x="215" y="189" text-anchor="middle" font-size="10" fill="#6366f1">pluggable: session · local · agno · crewai</text>
+  <text x="215" y="189" text-anchor="middle" font-size="9.5" fill="#6366f1">pluggable: claude · codex · opencode · frameworks</text>
 
   <rect x="560" y="120" width="290" height="82" rx="10" fill="#ffffff" stroke="#6366f1" stroke-width="2"/>
   <text x="705" y="152" text-anchor="middle" font-size="15" font-weight="700" fill="#4338ca">Adversarial reviewer</text>

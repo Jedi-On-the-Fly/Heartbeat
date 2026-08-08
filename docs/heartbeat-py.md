@@ -25,7 +25,8 @@ Python modules instead of a mix of bash and node:
 | Event-sourced state | `state.py` (append to `events.jsonl` → project `state.json`) |
 | Integrity + root cause | `doctor.py` (rot detection, `hb diagnose`) |
 | The driver (Stage B) | `executor.py` (serial or worktree-parallel, escalate-only) |
-| Pluggable workers | `backends/` (ollama · claude · agno · crewai · langgraph · openai-agents · autogen · smolagents · pydantic-ai, or a subprocess) |
+| Pluggable workers | `backends/` (ollama · claude · codex · opencode · agno · crewai · langgraph · openai-agents · autogen · smolagents · pydantic-ai, or a subprocess) |
+| Drive-over-MCP (inverse of a backend) | `mcp_server.py` (`hb mcp-serve` — an agent drives HeartBeat over MCP) |
 | Scaffolding + CLI | `scaffold.py` (`hb init`), `cli.py`, `report.py` |
 
 Nothing is remembered; it's computed. The state is a projection of the log, exactly as

@@ -2,7 +2,8 @@
 
 A `pip install`-able HeartBeat with **zero node/bash** in the substrate. The tick,
 resolver, gates, state projector, and executor are all Python (stdlib-only core); the
-model backends (`agno`, `crewai`, `ollama`) are optional extras that now fit natively.
+model backends — local (`ollama`), headless CLI agents (`claude-code`, `codex`, `opencode`),
+and seven agent frameworks — are optional and fit natively.
 
 This is a parallel implementation of the same DAG/gate/event model as the node+bash
 plugin — the `dag.json` format and the tick protocol are identical.
@@ -38,6 +39,7 @@ hb doctor --dir <project-dir>      # integrity / rot check
 hb diagnose --dir <project-dir>    # computed root-cause for a blocked state
 hb exec run --dir <project-dir>            # drive the loop with a backend
 hb exec run --parallel 4 --dir <dir>       # worktree-isolated fan-out
+hb mcp-serve --dir <project-dir>           # serve as an MCP server (stdio; --http for HTTP)
 ```
 
 State is mutated only through the CLI (`hb start|done|fail|review|rebuild`), never by
@@ -46,10 +48,11 @@ hand — `state.json` is a projection of `events.jsonl`.
 ## Backends
 
 Pick with `.hb/executor.json` `{"backend": …}` or `HB_EXEC_BACKEND`:
-`ollama` (local, no key), `agno`, `crewai` (set `HB_EXEC_PROVIDER=ollama` for local
-models or `anthropic` with `ANTHROPIC_API_KEY`), `claude-code`, or a `script`/command
-via `HB_EXEC_CMD`. In-process backends implement `execute(payload)->{ok,summary}` and
-`refute(payload)->{refuted,findings}`.
+`ollama` (local, no key); the headless CLI agents `claude-code`, `codex`, `opencode`; the
+seven agent frameworks `agno`/`crewai`/`langgraph`/`openai-agents`/`autogen`/`smolagents`/`pydantic-ai`
+(set `HB_EXEC_PROVIDER=ollama` for local models or `anthropic`/`openai` with a key); or a
+`script`/command via `HB_EXEC_CMD`. In-process backends implement `execute(payload)->{ok,summary}`
+and `refute(payload)->{refuted,findings}`.
 
 ## Live proof
 
@@ -62,5 +65,5 @@ and runs it — a fully node/bash-free end-to-end run.
 ## Tests
 
 ```bash
-cd py && PYTHONPATH=src python3 -m pytest -q      # 40+ assertions
+cd py && PYTHONPATH=src python3 -m pytest -q      # the full Python suite
 ```
