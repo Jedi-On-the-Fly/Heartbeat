@@ -1,7 +1,29 @@
 # STATUS — HeartBeat
 
-**Version:** v1.17 (runnable how-to library + exec-config parity, over v1.16)
+**Version:** v1.18 (agent-framework how-tos + reproducible Docker proof harness, over v1.17)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.18 — agent-framework how-tos + reproducible Docker proof harness
+
+Guides for driving HeartBeat with each of the seven agent frameworks, on a pinned, reproducible
+Docker harness — plus one real packaging fix the harness surfaced.
+
+- **Framework proof harness (`tests/frameworks/`)** — one parametrized Dockerfile
+  (`ARG FRAMEWORK`/`ARG VERSION`) + a pinned matrix + `run.sh`. `run.sh --check` validates the
+  harness **Docker-free** (valid set derived from the backend registry ∩ pyproject extras);
+  `run.sh <fw>` builds the pinned image and drives the real adapter against local Ollama.
+  RESULTS.md captures live outcomes. Docker is the on-demand LIVE tier — it never gates the suite.
+- **Seven framework guides (`docs/howto/use-heartbeat-with-*.md`)** — CrewAI, LangGraph, Agno,
+  OpenAI Agents SDK, AutoGen, smolagents, pydantic-ai. Each written for that framework's typical
+  user (division of labor: the framework is Stage B / the reasoner, HeartBeat is the harness that
+  verifies — not a replacement), with real `HB_EXEC_*` config, the bring-your-own-agent seam, and
+  a containerized live proof. Six reached a strict behavioral-gate pass live against Ollama
+  qwen2.5:7b; autogen is honestly recorded as wiring-ok (real run; strict miss was model-luck).
+- **agno packaging fix** — agno's Ollama path needs the `ollama` client; added to the `[agno]`
+  extra (a user hit the same gap).
+- Enforced by suite groups **T64–T65** (Docker-free: harness `--check` + conformance + prose).
+
+## v1.17 — runnable how-to library + exec-config parity
 
 ## v1.17 — runnable how-to library + exec-config parity
 

@@ -80,8 +80,10 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T61 | CI / event-log / embed / refutation-loop proofs |
 | T62 | launch-prose integrity (links + real commands) + selftest |
 | T63 | `hb exec config` cross-runtime behavioral parity (prints, does not run) |
+| T64 | framework proof harness (Docker-free `--check`) + CrewAI/LangGraph guides |
+| T65 | framework fan-out (agno/openai-agents/autogen/smolagents/pydantic-ai) harness + guides |
 
-The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T62; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md).
+The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T62; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-framework guides (T64–T65) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite.
 
 ## Python suite — `py/tests/`
 
