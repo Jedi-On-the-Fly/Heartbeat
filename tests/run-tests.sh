@@ -899,6 +899,22 @@ else
   echo "  (python3 absent — T62 skipped)"
 fi
 
+grp "T63 — exec config: cross-runtime behavioral parity (prints, does not run)"
+if command -v python3 >/dev/null 2>&1; then
+  P63="$TMP/p63"; HB_NO_GIT=1 bash "$HB_SRC/plugin/bootstrap.sh" "$P63" >/dev/null 2>&1 </dev/null
+  # Python: exec config prints a JSON object naming the backend.
+  check "T63.1 python exec config prints a backend" \
+    'HB_NO_GIT=1 PYTHONPATH="$HB_SRC/py/src" python3 -m heartbeat.cli exec config --dir "$P63" | python3 -c "import sys,json;sys.exit(0 if json.load(sys.stdin).get(\"backend\") else 1)"'
+  # Python: exec config must NOT run — the event log is unchanged.
+  check "T63.2 python exec config does not run (events unchanged)" \
+    'b=$(wc -l < "$P63/.hb/events.jsonl"); HB_NO_GIT=1 PYTHONPATH="$HB_SRC/py/src" python3 -m heartbeat.cli exec config --dir "$P63" >/dev/null 2>&1; a=$(wc -l < "$P63/.hb/events.jsonl"); [ "$b" = "$a" ]'
+  # Plugin: hb-exec.js config prints a backend too (the behavior Python now matches).
+  check "T63.3 plugin hb-exec.js config prints a backend" \
+    'HB_DIR="$P63/.hb" node "$P63/.hb/hb-exec.js" config | python3 -c "import sys,json;sys.exit(0 if json.load(sys.stdin).get(\"backend\") else 1)"'
+else
+  echo "  (python3 absent — T63 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

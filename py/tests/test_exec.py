@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -119,3 +120,33 @@ def test_parallel_worktree_isolation(tmp_path, monkeypatch, stub, capsys):
     assert rc == 0 and "worktree-isolated" in out
     assert (tmp_path / "WA.out").exists() and (tmp_path / "WB.out").exists()
     assert not list((hb / "wt").glob("*")) if (hb / "wt").exists() else True
+
+
+# ── `hb exec config` prints the resolved config and must NOT run (parity with the plugin) ──
+def test_exec_config_prints_and_does_not_run(tmp_path, monkeypatch, stub, capsys):
+    from heartbeat import cli
+    hb = _run(tmp_path, _dag([("P0", ["P0T1"])]), monkeypatch, stub)
+    before = (hb / "events.jsonl").read_text()
+    rc = cli.main(["exec", "config", "--dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    cfg = json.loads(out)                      # config prints valid JSON...
+    assert cfg.get("backend")                  # ...naming the resolved backend
+    assert (hb / "events.jsonl").read_text() == before   # ...and it did NOT run (no events)
+
+
+def test_exec_config_unknown_action_rejected(tmp_path, monkeypatch, stub):
+    from heartbeat import cli
+    hb = _run(tmp_path, _dag([("P0", ["P0T1"])]), monkeypatch, stub)
+    before = (hb / "events.jsonl").read_text()
+    rc = cli.main(["exec", "frobnicate", "--dir", str(tmp_path)])
+    assert rc != 0                                         # unknown action is a usage error
+    assert (hb / "events.jsonl").read_text() == before     # and does not run
+
+
+def test_exec_config_run_still_drives(tmp_path, monkeypatch, stub, capsys):
+    from heartbeat import cli
+    _run(tmp_path, _dag([("P0", ["P0T1"])]), monkeypatch, stub)
+    rc = cli.main(["exec", "run", "--dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 0 and "HB-EXEC DONE" in out               # `exec run` unchanged

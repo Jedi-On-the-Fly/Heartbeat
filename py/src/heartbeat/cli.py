@@ -222,6 +222,12 @@ def main(argv=None):
         print(json.dumps(rv.resolve(s, st.read_dag(hb), hb)))
     elif args.cmd == "exec":
         from . import executor
+        if args.action == "config":                # mirror the plugin's `hb-exec.js config`
+            print(json.dumps(executor.config(hb), indent=2))
+            return 0
+        if args.action != "run":
+            sys.stderr.write("usage: hb exec [run|config] [--parallel N]\n")
+            return 2
         if args.parallel:
             os.environ["HB_MAX_CONCURRENCY"] = str(args.parallel)
         return executor.run(hb)

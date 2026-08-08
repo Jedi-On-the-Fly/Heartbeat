@@ -1,0 +1,45 @@
+{
+  "_meta": {
+    "project": "fix-exec-config-parity",
+    "note": "Close a real plugin/Python divergence the how-to work surfaced: `hb exec config` prints the resolved executor config in the plugin (hb-exec.js), but the Python CLI declares exec's `action` arg and never reads it — so `hb exec config` there RUNS the executor instead of printing config. Fix: the Python exec handler honors action == 'config' (print executor.config as JSON) and 'run' (default), rejecting anything else. Spec-first: a failing pytest first. This is behavioral parity (both runtimes have `exec config` that prints and does not run) — NOT byte-equal output: the key format differs by design (plugin camelCase attemptCap/heartbeatMs, Python snake_case attempt_cap/heartbeat_s), so config stays out of the byte-equal parity.sh surface and is recorded as an intentional divergence in parity-notes. EC0: the fix + pytest. WR0: restore the choose-a-backend doc line (now true), note the intentional divergence in parity-notes, and add a T63 node-suite group asserting both runtimes' `exec config` print a backend and Python's does not run. Suites stay green."
+  },
+  "phases": [
+    {
+      "id": "EC0", "title": "Python exec config honors the action", "gate_entry": null, "gate_exit": "GATE_EC0",
+      "tasks": [
+        { "id": "EC0T1", "title": "Add the failing pytest", "requires": [],
+          "description": "Add a test to py/tests/test_exec.py: `hb exec config` on a bootstrapped project prints a JSON object whose 'backend' is the resolved backend, returns 0, and appends NO events (it must not run the executor). Also assert `hb exec run` still drives (unchanged) and an unknown action returns a usage error (non-zero). Write it first; it fails against the current handler." },
+        { "id": "EC0T2", "title": "Implement the config branch", "requires": ["EC0T1"],
+          "description": "In py/src/heartbeat/cli.py, make the exec handler honor args.action: 'config' -> print json.dumps(executor.config(hb), indent=2) and return 0; 'run' (default) -> existing behavior (respecting --parallel); anything else -> usage error to stderr, return 2. Mirrors the plugin's `hb-exec.js config`. Keep the Python and Node suites green." }
+      ]
+    },
+    {
+      "id": "WR0", "title": "Doc + parity-note + suite enforcement", "gate_entry": "GATE_EC0", "gate_exit": "GATE_WR0",
+      "tasks": [
+        { "id": "WR0T1", "title": "Restore the doc line + parity note", "requires": [],
+          "description": "In docs/howto/choose-a-backend.md, restore the now-true guidance that `hb exec config` shows the resolved choice (works in both runtimes). In planning/parity-notes.md, record `exec config` as a shared command with intentionally runtime-specific key format (plugin camelCase vs Python snake_case) — a deliberate divergence, so it is not on the byte-equal parity surface. Keep prose-check green on the doc." },
+        { "id": "WR0T2", "title": "Add the T63 suite group", "requires": ["WR0T1"],
+          "description": "Add a T63 group to tests/run-tests.sh: (1) Python `exec config` prints a JSON object with a 'backend' key; (2) Python `exec config` appends no events (does not run); (3) the plugin `hb-exec.js config` prints a 'backend' key — locking the behavioral parity of 'config prints, does not run' across both runtimes." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_EC0": {
+      "desc": "Python `hb exec config` prints the resolved config and does not run; run and unknown-action behavior intact.",
+      "review": { "prompt": "Refute that EC0 is done: does `hb exec config` genuinely PRINT the resolved config (JSON with the backend) and NOT run the executor (no events appended)? Was the pytest written first and does it fail against the old handler? Does `hb exec run` (and bare `hb exec`) still drive? Is an unknown action rejected? Could the config path accidentally still invoke executor.run?" },
+      "criteria": [
+        { "id": "ec0c1", "desc": "the exec-config pytest passes (prints backend, appends no events, run intact, unknown rejected)", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_exec.py -k exec_config" },
+        { "id": "ec0c2", "desc": "the whole exec test file stays green (no regression)", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_exec.py" }
+      ]
+    },
+    "GATE_WR0": {
+      "desc": "The doc reflects the fix, the divergence is noted, and the suite enforces cross-runtime config behavior.",
+      "review": { "prompt": "Refute that WR0 is done: does choose-a-backend.md again mention `hb exec config` (now true in both runtimes) without reintroducing the old bug's wording? Does parity-notes record the intentional key-format divergence (so a future reader doesn't try to byte-equal it)? Does T63 actually assert both runtimes print a backend AND that Python's config does not run? Does prose-check still pass on the doc?" },
+      "criteria": [
+        { "id": "wr0c1", "desc": "the doc mentions exec config again and still passes prose-check", "cmd": "grep -q 'hb exec config' \"$PROJECT_DIR/docs/howto/choose-a-backend.md\" && bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/choose-a-backend.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "wr0c2", "desc": "parity-notes records exec config as an intentional divergence", "cmd": "grep -qi 'exec config' \"$PROJECT_DIR/planning/parity-notes.md\"" },
+        { "id": "wr0c3", "desc": "the node suite enforces cross-runtime config (T63 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T63 '" }
+      ]
+    }
+  }
+}

@@ -33,6 +33,16 @@ Two gotchas it encodes:
    not the action strings. (If you ever want the reasons themselves to diverge, that's a
    real bug; the wording differing is not.)
 
+## Intentional divergences (not on the byte-equal surface)
+
+- **`hb exec config`** is a shared command (both runtimes print the resolved executor config and
+  neither runs), but the JSON **key format differs by design**: the plugin emits camelCase
+  (`attemptCap`, `heartbeatMs`) and the Python port snake_case (`attempt_cap`, `heartbeat_s`), and
+  the resolved `cmd` differs (the plugin fills a backend default). So `exec config` is **not** on
+  the byte-equal `parity.sh` surface; its *behavioral* parity ("config prints, does not run" in
+  both) is enforced by the node suite's `T63` group instead. The executor generally is not a
+  parity surface — backends and their config are runtime-local.
+
 Extend it when a new shared surface lands.
 
 ## Auditor ruleset (identical regexes in both)

@@ -17,8 +17,8 @@ swap later ([swap-workers-without-changing-the-dag.md](swap-workers-without-chan
 - **`script`** — any command in any language (`HB_EXEC_CMD`). Choose it for a deterministic
   worker, a wrapper around your own tool, or testing.
 
-Select with `HB_EXEC_BACKEND` (or the `backend` field in `.hb/executor.json`) — that's the
-resolved choice.
+Select with `HB_EXEC_BACKEND` (or the `backend` field in `.hb/executor.json`); `hb exec config`
+prints the resolved choice (in both runtimes).
 
 ## Don't over-decide
 
