@@ -14,7 +14,8 @@ families A–J) is in [howto-list.md](howto-list.md).
 - [Cross-model verification](cross-model-verification.md) — run the refuter on a *different*
   model than the doer; a model doesn't refute its own blind spots.
 - [Benchmark agents on the same DAG](benchmark-agents.md) — run the same DAG under N backends and
-  score each behaviorally; the gates are the rubric.
+  score each behaviorally; the gates are the rubric. Also: the `hb reward` verifiable-reward stream
+  and `hb bench --baseline` model-regression signal.
 - [Add refutation to a sensitive gate](add-refutation-to-a-sensitive-gate.md) — add a review
   block; make a pass cite evidence from a different actor.
 - [Write fast, deterministic gates](write-fast-deterministic-gates.md) — same artifact, same
@@ -22,7 +23,8 @@ families A–J) is in [howto-list.md](howto-list.md).
 - [Write gates for non-code work](write-gates-for-non-code-work.md) — gate documents,
   datasets, and migrations on content and shape, not `test -f`.
 - [Keep the two runtimes in parity](keep-the-runtimes-in-parity.md) — the node≡python
-  contract, and proving the parity alarm actually fires.
+  contract, proving the parity alarm actually fires, and the seeded fuzz oracle that finds
+  divergences the fixed fixtures miss.
 - [Recover a dead or corrupted run](recover-a-dead-or-corrupted-run.md) — the event log is
   truth; rebuild heals, doctor flags drift and rot.
 - [Keep Stage B untrusted](keep-stage-b-untrusted.md) — the driver escalates on a failing
@@ -53,6 +55,12 @@ families A–J) is in [howto-list.md](howto-list.md).
 - [Refute high-risk claims, not every task](refute-high-risk-claims.md) — a review block is a selective lever.
 - [Keep worker context from settled reality](context-from-settled-reality.md) — context is computed from state, not stale chat.
 - [Run HeartBeat in CI](run-heartbeat-in-ci.md) — exit codes gate the pipeline; no wrapper needed.
+- [Run independent tasks in parallel](run-tasks-in-parallel.md) — fan out the runnable set; each task in its own worktree so writes can't collide.
+- [Add HeartBeat to an existing repository](add-heartbeat-to-an-existing-repo.md) — additive setup; your files and history stay untouched.
+- [Write dependencies that don't over-constrain](write-sparse-dependencies.md) — real `requires` edges only; over-constraint serializes work that could run in parallel.
+- [Review an unsafe gate command](review-an-unsafe-gate.md) — gate cmds run with your privileges; spot self-produced evidence, non-determinism, and destructive commands.
+- [Run HeartBeat fully locally](run-heartbeat-fully-locally.md) — the pure-Python port + a local model; no cloud, no key, no Claude Code.
+- [Schedule HeartBeat unattended](schedule-heartbeat-unattended.md) — drive ticks on a timer via /loop, a cloud routine, or system cron.
 - [Read the event log](read-the-event-log.md) — reconstruct a run; why state.json is disposable.
 - [Embed HeartBeat in a Python app](embed-heartbeat-in-python.md) — drive it via the library, no CLI.
 - [Handle a successful refutation](handle-a-successful-refutation.md) — a found hole holds the phase; fix and re-verify.

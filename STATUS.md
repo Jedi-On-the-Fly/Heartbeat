@@ -1,7 +1,41 @@
 # STATUS — HeartBeat
 
-**Version:** v1.20 (cross-model refuter + agent benchmark harness, over v1.19)
+**Version:** v1.21 (parity differential-testing oracle + verifiable-reward / model-regression, over v1.20)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.21 — parity differential-testing oracle + verifiable-reward / model-regression
+
+Two more capabilities that cascade from HeartBeat's own primitives — two implementations of one
+spec are each other's oracle, and the event log's gate verdicts are a deterministic label.
+Python port + shared test harness; **plugin templates are unchanged** this release.
+
+- **Parity as a differential-testing oracle** — `tests/parity-fuzz.sh` feeds *seeded, generated*
+  cases (`tests/gen-parity-case.py`, deterministic xorshift32) through *both* runtimes on every
+  shared surface and asserts node ≡ python — so any disagreement on any generated input is a real
+  bug, not just the fixtures you thought of. `--selftest` binds the teeth: it must pass clean on the
+  real runtime *and* catch an injected divergence on a mutant in one run. It immediately caught a
+  **real latent parity bug the fixed fixtures missed** — `report` percent rounding (node
+  `Math.round(100*done/total)` vs Python `int(done/total*100)`: `5/8` → 63 vs 62), fixed in
+  `report.py` (match node's operand order + round half up). Enforced by **T75**; method in
+  `docs/howto/keep-the-runtimes-in-parity.md`.
+- **Verifiable-reward + model-regression** — `hb reward` extracts one labeled record per gate
+  evaluation from the event log (`{gate, phase, passed, actor, ts}`); `passed` is the deterministic
+  log verdict (never a self-report) and `phase` is derived from the dag. `hb bench --baseline <L>`
+  adds a per-candidate regression verdict (fewer gates / fewer phases / more failures than the
+  baseline). Both are pure functions over the log/scorecards — Python-delivered analytical tooling
+  (like `hb bench`; python-only divergence recorded in `parity-notes.md`). Enforced by **T76**;
+  guide `docs/howto/benchmark-agents.md`. Honest scope: the extraction/comparison is deterministic;
+  a real model's run isn't → a signal, not a leaderboard.
+- **Discipline note.** Built through the full plan→refute→build→refute loop; the distinct-actor
+  refuters caught five real defects before commit (the latent rounding bug, a float op-order in the
+  first fix, an LCG low-bit generator that barely varied, missing review-owed/gate-pending fuzz
+  coverage, and a `bench --json` back-compat regression) — the method finding bugs in its own work.
+- **Operational how-to library (same release).** Six Tier-1/Tier-2 guides, dogfooded: run tasks in
+  parallel (+worktree isolation), add HeartBeat to an existing repo, write dependencies that don't
+  over-constrain, review an unsafe gate — each with a runnable proof under **T77** — plus run fully
+  locally and schedule unattended (prose, **T62**). Refutation caught a real overclaim (worktree
+  isolation is conditional on git) before commit; the fully-local path is validated by a live Ollama
+  run. Roadmap gaps in `docs/howto/howto-list.md` flipped to created.
 
 ## v1.20 — cross-model refuter + agent benchmark harness
 

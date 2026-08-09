@@ -6,7 +6,7 @@
 
 Most agent tooling helps you *run* agents. HeartBeat is about the harder half: knowing the work is actually done, not just claimed. Agents are confident and often wrong; HeartBeat assumes nothing and verifies everything at defined checkpoints.
 
-*New in **v1.20** — the adversarial refuter can run on a **different model** than the doer (a model doesn't refute its own blind spots), and **`hb bench`** scores the same DAG across backends behaviorally. (v1.19 added the **MCP server** — Codex, Claude Code, or OpenCode can drive HeartBeat — plus the `codex` and `opencode` backends.) Details below.*
+*New in **v1.21** — **parity as a differential-testing oracle**: a seeded generator fuzzes both runtimes and flags any divergence (it caught a real rounding bug the fixtures missed), and **`hb reward`** / **`hb bench --baseline`** turn the event log's gate verdicts into a verifiable-reward stream and a model-regression signal. (v1.20 let the refuter run on a **different model** than the doer, and added **`hb bench`**; v1.19 added the **MCP server** — Codex, Claude Code, or OpenCode can drive HeartBeat.) Details below.*
 
 ---
 
@@ -67,7 +67,7 @@ Stage B is swappable. A backend implements two functions — `execute → {ok}` 
 
 Adding another is one small adapter (two methods + graceful degrade) — it doesn't touch the core, and it can't break the runtime parity.
 
-Because the same DAG runs under any backend, `hb bench --dir <project> --backend a --backend b` runs it under each and scores them behaviorally from the event log (the gates are the rubric) — a capability probe, not a leaderboard. And the refuter can run on a *different* model than the doer (`HB_REFUTE_BACKEND`/`HB_REFUTE_MODEL`) so a model doesn't grade its own blind spots.
+Because the same DAG runs under any backend, `hb bench --dir <project> --backend a --backend b` runs it under each and scores them behaviorally from the event log (the gates are the rubric) — a capability probe, not a leaderboard. Add `--baseline` for a model-regression signal (did a newer model clear fewer gates?), and `hb reward` extracts the log's gate verdicts as a verifiable-reward stream. And the refuter can run on a *different* model than the doer (`HB_REFUTE_BACKEND`/`HB_REFUTE_MODEL`) so a model doesn't grade its own blind spots.
 
 ## Drive HeartBeat from your agent (MCP)
 

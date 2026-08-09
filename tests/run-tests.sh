@@ -594,8 +594,8 @@ check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
   '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ] && [ -f "$P39/.hb/executors/langgraph_exec.py" ] && [ -f "$P39/.hb/executors/openai_agents_exec.py" ] && [ -f "$P39/.hb/executors/autogen_exec.py" ] && [ -f "$P39/.hb/executors/smolagents_exec.py" ] && [ -f "$P39/.hb/executors/pydanticai_exec.py" ]'
 check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
-check "T39.4 plugin version bumped to 1.20.0" \
-  'grep -q "1.20.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+check "T39.4 plugin version bumped to 1.21.0" \
+  'grep -q "1.21.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 
 grp "T40 — parallel fan-out (v1.8)"
 # In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
@@ -893,8 +893,8 @@ grp "T62 — launch prose guides (integrity + selftest) (docs/howto)"
 if command -v python3 >/dev/null 2>&1; then
   check "T62.1 the prose-check selftest holds (good passes; bad rejected)" \
     'bash "'"$GEX"'/prose-check.sh" --selftest 2>&1 | grep -q "PROSE-CHECK-SELFTEST-OK"'
-  check "T62.2 the five launch prose guides pass integrity (links + real commands)" \
-    'bash "'"$GEX"'/prose-check.sh" "$HB_SRC/docs/howto/size-a-task.md" "$HB_SRC/docs/howto/size-a-phase.md" "$HB_SRC/docs/howto/choose-runtime.md" "$HB_SRC/docs/howto/choose-a-backend.md" "$HB_SRC/docs/howto/when-not-to-use-heartbeat.md" 2>&1 | grep -q "ALL-PROSE-OK:5"'
+  check "T62.2 the seven prose guides pass integrity (links + real commands)" \
+    'bash "'"$GEX"'/prose-check.sh" "$HB_SRC/docs/howto/size-a-task.md" "$HB_SRC/docs/howto/size-a-phase.md" "$HB_SRC/docs/howto/choose-runtime.md" "$HB_SRC/docs/howto/choose-a-backend.md" "$HB_SRC/docs/howto/when-not-to-use-heartbeat.md" "$HB_SRC/docs/howto/run-heartbeat-fully-locally.md" "$HB_SRC/docs/howto/schedule-heartbeat-unattended.md" 2>&1 | grep -q "ALL-PROSE-OK:7"'
 else
   echo "  (python3 absent — T62 skipped)"
 fi
@@ -1073,6 +1073,28 @@ if command -v python3 >/dev/null 2>&1; then
     'cd "'"$HB_SRC"'/py" && PYTHONPATH=src python3 -m heartbeat.cli bench --help 2>&1 | grep -q "baseline"'
 else
   echo "  (python3 absent — T76 skipped)"
+fi
+
+grp "T77 — operational how-to proofs (parallel/worktree, existing-repo, sparse-deps, unsafe-gate), Docker-free"
+if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  check "T77.1 parallel fan-out isolates in worktrees, merges distinct files, cleans up; hb ready gives only the runnable set" \
+    'bash "'"$GEX"'/parallel-fanout.sh" 2>&1 | grep -q "PARALLEL-FANOUT-OK"'
+  check "T77.2 the parallel guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/run-tasks-in-parallel.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+  check "T77.3 hb init is non-destructive in an existing repo (files + history intact)" \
+    'bash "'"$GEX"'/existing-repo.sh" 2>&1 | grep -q "EXISTING-REPO-OK"'
+  check "T77.4 the existing-repo guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/add-heartbeat-to-an-existing-repo.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+  check "T77.5 over-constrained requires serialize the ready set (1 vs 3), both lint clean" \
+    'bash "'"$GEX"'/sparse-deps.sh" 2>&1 | grep -q "SPARSE-DEPS-OK"'
+  check "T77.6 the sparse-dependencies guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/write-sparse-dependencies.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+  check "T77.7 the auditor flags an unsafe gate (side_effecting + nondeterministic) and clears a safe one" \
+    'bash "'"$GEX"'/unsafe-gate.sh" 2>&1 | grep -q "UNSAFE-GATE-OK"'
+  check "T77.8 the unsafe-gate guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/review-an-unsafe-gate.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+else
+  echo "  (python3/node absent — T77 skipped)"
 fi
 
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).

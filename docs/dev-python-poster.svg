@@ -130,7 +130,7 @@
       <rect x="560" y="444" width="504" height="22" fill="#f5f3ff"/>
       <text x="572" y="459" font-weight="700" fill="#6d28d9">mcp_server.py</text><text x="740" y="459" fill="#6d28d9">serve · serve_http · TOOLS  (hb mcp-serve)</text>
       <rect x="560" y="466" width="504" height="22" fill="#f5f3ff"/>
-      <text x="572" y="481" font-weight="700" fill="#6d28d9">bench.py</text><text x="740" y="481" fill="#6d28d9">score · run · render  (hb bench — N backends)</text>
+      <text x="572" y="481" font-weight="700" fill="#6d28d9">bench.py</text><text x="740" y="481" fill="#6d28d9">score · run · render · reward · regress</text>
     </g>
   </g>
   <text x="572" y="500" font-size="10.5" fill="#64748b">Mutation: with_wlock → append_event → reproject → atomic write. Core is stdlib-only.</text>
@@ -177,8 +177,8 @@
     <text x="1108" y="222" fill="#334155">start · done · fail · heartbeat · review</text>
     <text x="1108" y="250" font-weight="700" fill="#0f766e">verify</text>
     <text x="1108" y="268" fill="#334155">gate · lint · audit [--agent] · doctor · diagnose</text>
-    <text x="1108" y="296" font-weight="700" fill="#0f766e">drive · serve · bench</text>
-    <text x="1108" y="314" fill="#334155">exec [run] [--parallel N] · mcp-serve [--http] · bench</text>
+    <text x="1108" y="296" font-weight="700" fill="#0f766e">drive · serve · bench · reward</text>
+    <text x="1108" y="314" fill="#334155">exec [run] · mcp-serve [--http] · bench [--baseline] · reward</text>
     <text x="1108" y="342" font-weight="700" fill="#0f766e">info</text>
     <text x="1108" y="360" fill="#334155">report [--json] · protocol [--md]</text>
   </g>
@@ -204,7 +204,7 @@
   <rect x="1088" y="682" width="488" height="194" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
   <text x="1108" y="710" font-size="17" font-weight="700" fill="#0f172a">Parity contract &amp; invariants</text>
   <g font-size="11">
-    <text x="1108" y="736" fill="#334155"><tspan font-weight="700" fill="#2563eb">parity</tspan> (tests/parity.sh) — node ≡ python on</text>
+    <text x="1108" y="736" fill="#334155"><tspan font-weight="700" fill="#2563eb">parity</tspan> (parity.sh + fuzz oracle) — node ≡ python on</text>
     <text x="1108" y="753" fill="#334155">project · resolve · lint · audit · diagnose · state</text>
     <text x="1108" y="770" fill="#334155">PROTOCOL <tspan font-weight="700">reason keys</tspan> match; action text is runtime-specific</text>
     <line x1="1108" y1="784" x2="1556" y2="784" stroke="#e2e8f0"/>

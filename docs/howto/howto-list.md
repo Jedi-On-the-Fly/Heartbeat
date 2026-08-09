@@ -3,7 +3,7 @@
 The full how-to map, organized by job (families **A–J**, after the original ideas list).
 Each entry is either **created** (linked file, with the suite group that enforces it) or
 **Not available yet**. Created guides are CI-enforced across `tests/run-tests.sh` groups
-**T53–T74**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
+**T53–T76**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
 integrity check (links resolve, no placeholders, only real commands) plus adversarial clarity
 review, and the framework guides (T64) by a Docker-free harness check + backend conformance
 (their live proof is the reproducible pinned Docker in `tests/frameworks/`). See the
@@ -22,7 +22,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Your First HeartBeat Failure | ⬜ Not available yet *(→ diagnose-a-stuck-project.md)* |
 | Stop and Resume a Project | ✅ [stop-and-resume-a-project.md](stop-and-resume-a-project.md) — T59 |
 | Run the Same DAG with Another Worker | ✅ [swap-workers-without-changing-the-dag.md](swap-workers-without-changing-the-dag.md) — T57 |
-| Run HeartBeat Without Claude Code | ⬜ Not available yet |
+| Run HeartBeat Without Claude Code | ✅ [run-heartbeat-fully-locally.md](run-heartbeat-fully-locally.md) — T62 |
 
 ## B. Onboarding — "apply it to my project"
 
@@ -31,8 +31,8 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Turn an Existing Plan into a HeartBeat DAG | ✅ [turn-a-plan-into-a-dag.md](turn-a-plan-into-a-dag.md) — T59 |
 | Break a Large Task into HeartBeat-Sized Units | ✅ [size-a-task.md](size-a-task.md) — T62 |
 | Decide What Belongs in a Phase | ✅ [size-a-phase.md](size-a-phase.md) — T62 |
-| Write Dependencies That Don't Over-Constrain | ⬜ Not available yet |
-| Add HeartBeat to an Existing Repository | ⬜ Not available yet |
+| Write Dependencies That Don't Over-Constrain | ✅ [write-sparse-dependencies.md](write-sparse-dependencies.md) — T77 |
+| Add HeartBeat to an Existing Repository | ✅ [add-heartbeat-to-an-existing-repo.md](add-heartbeat-to-an-existing-repo.md) — T77 |
 | Migrate an Existing Agent Loop to HeartBeat | ⬜ Not available yet |
 | Choose Claude Code vs Python Runtime | ✅ [choose-runtime.md](choose-runtime.md) — T62 |
 | Choose a Stage B Backend | ✅ [choose-a-backend.md](choose-a-backend.md) — T62 |
@@ -67,6 +67,8 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Add Refutation to a Sensitive Gate | ✅ [add-refutation-to-a-sensitive-gate.md](add-refutation-to-a-sensitive-gate.md) — T54 |
 | Cross-model Verification (a different model refutes) | ✅ [cross-model-verification.md](cross-model-verification.md) — T73 |
 | Benchmark Agents on the Same DAG | ✅ [benchmark-agents.md](benchmark-agents.md) — T74 |
+| Extract a Verifiable-Reward Stream (`hb reward`) | ✅ [benchmark-agents.md](benchmark-agents.md) — T76 |
+| Detect Model Regression (`hb bench --baseline`) | ✅ [benchmark-agents.md](benchmark-agents.md) — T76 |
 | Write a Good Refuter Prompt / Profile | ⬜ Not available yet |
 | Decide Which Gates Need Refutation | ⬜ Not available yet |
 | Handle a Successful Refutation | ✅ [handle-a-successful-refutation.md](handle-a-successful-refutation.md) — T61 |
@@ -109,7 +111,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Detect and Repair Gate Rot | ✅ [recover-a-dead-or-corrupted-run.md](recover-a-dead-or-corrupted-run.md) — T55 |
 | Restore a Verified Phase | ✅ [restore-a-verified-phase.md](restore-a-verified-phase.md) — T58 |
 | Understand HeartBeat Escalation | ✅ [keep-stage-b-untrusted.md](keep-stage-b-untrusted.md) — T56 |
-| Keep the Two Runtimes in Parity | ✅ [keep-the-runtimes-in-parity.md](keep-the-runtimes-in-parity.md) — T55 |
+| Keep the Two Runtimes in Parity | ✅ [keep-the-runtimes-in-parity.md](keep-the-runtimes-in-parity.md) — T55, T75 (fuzz oracle) |
 | Build an Operational Runbook | ⬜ Not available yet |
 
 ## G. CI, Automation & Advanced Workflows — "run it unattended"
@@ -117,12 +119,12 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | How-to | Status |
 |---|---|
 | Run HeartBeat in CI | ✅ [run-heartbeat-in-ci.md](run-heartbeat-in-ci.md) — T61 |
-| Schedule HeartBeat with Cron | ⬜ Not available yet |
-| Run Independent Tasks in Parallel | ⬜ Not available yet |
-| Understand Worktree Isolation | ⬜ Not available yet |
+| Schedule HeartBeat with Cron | ✅ [schedule-heartbeat-unattended.md](schedule-heartbeat-unattended.md) — T62 |
+| Run Independent Tasks in Parallel | ✅ [run-tasks-in-parallel.md](run-tasks-in-parallel.md) — T77 |
+| Understand Worktree Isolation | ✅ [run-tasks-in-parallel.md](run-tasks-in-parallel.md) — T77 |
 | Handle Merge Conflicts from Parallel Work | ⬜ Not available yet *(honest proof is timing-dependent — see notes below)* |
 | Embed HeartBeat in a Python Application | ✅ [embed-heartbeat-in-python.md](embed-heartbeat-in-python.md) — T61 |
-| Run HeartBeat Fully Locally | ⬜ Not available yet |
+| Run HeartBeat Fully Locally | ✅ [run-heartbeat-fully-locally.md](run-heartbeat-fully-locally.md) — T62 |
 | Spend the Model Only on Work (tick economics) | ✅ [spend-the-model-only-on-work.md](spend-the-model-only-on-work.md) — T58 |
 
 ## H. Best Practices — "what to consistently do"
@@ -171,7 +173,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Switching Models Changes Project Behavior | ✅ [swap-workers-without-changing-the-dag.md](swap-workers-without-changing-the-dag.md) — T57 |
 | My Refuter Always / Never Finds Anything | ⬜ Not available yet |
 | HeartBeat Is Using More Tokens Than Expected | ⬜ Not available yet |
-| A Gate Command Looks Unsafe | ⬜ Not available yet |
+| A Gate Command Looks Unsafe | ✅ [review-an-unsafe-gate.md](review-an-unsafe-gate.md) — T77 |
 
 ---
 
@@ -181,11 +183,10 @@ The **assurance** spine (families C/D/F — gates, refutation, auditor, parity, 
 liveness, portability, diagnosis, re-verification, restore points) is essentially complete
 and CI-enforced. This maps to **Hero Journey 2 (self-confirmation → evidence): done.**
 
-The gaps are the **adoption** families — **A (Quick Start)**, **B (Onboarding)**, and the
-specific **E backend guides** — plus best-practice/troubleshooting prose. These teach rather
-than harden, so they don't produce new runnable "does-the-alarm-fire" proofs; but the
-strongest of them (quickstart, stop/resume, a live backend) can still end in observable
-evidence.
+The Quick-Start (A), backend (E), and the operational spine of G are largely in place, and the
+Tier-1/Tier-2 gaps are now filled: parallel fan-out + worktree isolation, add-to-an-existing-repo,
+sparse dependencies, reviewing an unsafe gate (all with runnable proofs under T77), plus running
+fully locally and scheduling unattended (prose, T62).
 
 **Deliberately deferred:** *Handle Merge Conflicts / parallel exactly-once* — its honest
 proof is timing-dependent (worktree merge interleaving is nondeterministic), which would make
@@ -193,10 +194,10 @@ a flaky suite test; kept out to preserve the deterministic-proof invariant.
 
 ## Next up (recommended)
 
-To complete the two unfinished hero journeys (Journey 2 is done):
+The remaining gaps are teaching prose (no new "does-the-alarm-fire" proof) or need a live model:
 
-1. **HeartBeat in 5 Minutes** (A) — Journey 1 opener; back it with a runnable end-to-end proof.
-2. **Turn a Plan into a HeartBeat DAG** (B) — Journey 1 core skill; output is lint+audit-checkable.
-3. **Stop and Resume a Project** (A) — Journey 1 close; proves event-sourced state.
-4. **Use HeartBeat with Ollama** (E) — Journey 3; local-model constituency; provable live.
-5. **Use HeartBeat with Claude Code** (E) — Journey 3; the beachhead constituency.
+1. **Migrate an Existing Agent Loop to HeartBeat** (B) — the conversion story for an existing loop.
+2. **How to Write a Good DAG** (H) — the synthesis umbrella over sizing + sparse deps + gates.
+3. **Build an Operational Runbook** (F) — ops synthesis for a scheduled/unattended project.
+4. **Write a Good Refuter Prompt / Profile** (D) — higher-value now that the refuter can be a
+   different model; hard to back with a deterministic proof (needs a live model).
