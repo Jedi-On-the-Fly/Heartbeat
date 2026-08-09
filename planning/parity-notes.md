@@ -41,7 +41,10 @@ Two gotchas it encodes:
   the resolved `cmd` differs (the plugin fills a backend default). So `exec config` is **not** on
   the byte-equal `parity.sh` surface; its *behavioral* parity ("config prints, does not run" in
   both) is enforced by the node suite's `T63` group instead. The executor generally is not a
-  parity surface — backends and their config are runtime-local.
+  parity surface — backends and their config are runtime-local. The **cross-model refuter**
+  config (`refute_backend`/`refute_cmd`/`refute_model`/`refute_provider` ↔ `HB_REFUTE_*`) is part
+  of that shared config surface (both runtimes resolve it and print it via `exec config`, T73);
+  the refute *dispatch* that uses it is runtime-local like the rest of the executor.
 
 - **`hb mcp-serve`** (the MCP server) is **Python-delivered only** and is *not* mirrored in the
   node+bash plugin. Like `pip install`, it's a single host-neutral binary that **both** hosts

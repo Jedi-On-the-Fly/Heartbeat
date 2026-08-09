@@ -167,6 +167,9 @@ Pluggable Stage B. `run` drives the same loop as a manual session but dispatches
 | `attemptCap` | `HB_EXEC_ATTEMPT_CAP` | 3 |
 | `concurrency` | `HB_MAX_CONCURRENCY` | 1 |
 | `heartbeatMs` | `HB_EXEC_HEARTBEAT_MS` | `HEARTBEAT_STALE_S*1000/2` |
+| `refuteBackend` / `refuteCmd` / `refuteModel` / `refuteProvider` | `HB_REFUTE_BACKEND` / `HB_REFUTE_CMD` / `HB_REFUTE_MODEL` / `HB_REFUTE_PROVIDER` | fall back to the doer's |
+
+Cross-model refuter: the `review_pending` refute is dispatched on `refuteCmd` with `HB_REFUTE_MODEL`/`PROVIDER` merged into the spawn env, so a distinct model refutes; each setting falls back to the doer's (backward compatible). See [cross-model-verification.md](../docs/howto/cross-model-verification.md).
 
 Loop: run `tick.sh` → route `data.reason`. `next_task` → `hb start` → dispatch execute (lease heartbeat pumped) → `hb done`/`hb fail` (+attempt cap → escalate). `gate_pending` → strict check (`strictBlock`: non-behavioral or lint-warning → escalate) → `gate.sh`. `review_pending` → dispatch refute → `hb review pass|fail`. `all_done` → report + stop. Any human-needed reason → escalate (`HB-EXEC STOP: <reason>`); escalate-only, never auto-fixes a blocked gate.
 

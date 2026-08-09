@@ -1027,6 +1027,18 @@ else
   echo "  (python3 absent — T72 skipped)"
 fi
 
+grp "T73 — cross-model refuter (distinct model refutes; both runtimes), Docker-free"
+if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  check "T73.1 the refuter runs on a distinct backend/model from the doer (both runtimes; distinct actor; backward-compat control)" \
+    'bash "'"$GEX"'/cross-model-refuter.sh" 2>&1 | grep -q "CROSS-MODEL-REFUTER-OK"'
+  check "T73.2 both runtimes' exec config expose the refute config" \
+    'cd "'"$HB_SRC"'/py" && PYTHONPATH=src python3 -m heartbeat.cli exec config 2>&1 | grep -qi "refute" && node "'"$HB_SRC"'/plugin/templates/hb-exec.js" config 2>&1 | grep -qi "refute"'
+  check "T73.3 the cross-model guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/cross-model-verification.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+else
+  echo "  (python3/node absent — T73 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

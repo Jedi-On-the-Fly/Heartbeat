@@ -66,7 +66,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 
 ## Executor
 
-`config(hbdir)` keys (env > `executor.json` > default): `backend` (`HB_EXEC_BACKEND`, `claude-code`), `cmd` (`HB_EXEC_CMD`), `strict` (`HB_EXEC_STRICT`), `attempt_cap` (`HB_EXEC_ATTEMPT_CAP`, 3), `concurrency` (`HB_MAX_CONCURRENCY`, 1), `heartbeat_s`.
+`config(hbdir)` keys (env > `executor.json` > default): `backend` (`HB_EXEC_BACKEND`, `claude-code`), `cmd` (`HB_EXEC_CMD`), `strict` (`HB_EXEC_STRICT`), `attempt_cap` (`HB_EXEC_ATTEMPT_CAP`, 3), `concurrency` (`HB_MAX_CONCURRENCY`, 1), `heartbeat_s`. **Cross-model refuter:** `refute_backend`/`refute_cmd`/`refute_model`/`refute_provider` (`HB_REFUTE_BACKEND`/`HB_REFUTE_CMD`/`HB_REFUTE_MODEL`/`HB_REFUTE_PROVIDER` or `executor.json refute_*`) each fall back to the doer's, so the `refute` call can run on a distinct backend/model — `dispatch(..., model=, provider=)` sets `HB_EXEC_MODEL`/`PROVIDER` around the call (try/finally). See [cross-model-verification.md](../docs/howto/cross-model-verification.md).
 
 `run(hbdir)` loop mirrors the plugin: tick → route reason. `next_task` → `hb start` → `dispatch(execute)` (lease heartbeat pumped by a `_Pump` thread) → `done`/`fail` (+attempt cap). `gate_pending` → strict check → `gate.run_gate`. `review_pending` → `dispatch(refute)` → `review`. Escalate-only on any human-needed reason (`HB-EXEC STOP: <reason>`). Parallel (`concurrency > 1`) uses `ThreadPoolExecutor`, one git worktree per task (`.hb/wt/<id>`), serialized merge-back, in-place fallback without git. `HB_EXEC_MAX_ITERS` bounds the loop (0 = unbounded).
 

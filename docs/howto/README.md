@@ -11,6 +11,8 @@ families A–J) is in [howto-list.md](howto-list.md).
   holes.
 - [10 rules for a good gate](writing-gates-10-rules.md) — the checklist, each rule linked to
   a runnable proof.
+- [Cross-model verification](cross-model-verification.md) — run the refuter on a *different*
+  model than the doer; a model doesn't refute its own blind spots.
 - [Add refutation to a sensitive gate](add-refutation-to-a-sensitive-gate.md) — add a review
   block; make a pass cite evidence from a different actor.
 - [Write fast, deterministic gates](write-fast-deterministic-gates.md) — same artifact, same

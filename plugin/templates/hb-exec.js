@@ -64,13 +64,25 @@ function config() {
   const backend = process.env.HB_EXEC_BACKEND || file.backend || 'claude-code';
   const heartbeatMs = parseInt(process.env.HB_EXEC_HEARTBEAT_MS ||
     String(Math.floor(parseInt(process.env.HEARTBEAT_STALE_S || '180', 10) * 1000 / 2)), 10);
+  const cmd = process.env.HB_EXEC_CMD || file.cmd || defaultCmd(backend);
+  // Cross-model refuter: run `refute` on a distinct backend/cmd/model from the doer. Each falls
+  // back to the doer's value (backward compatible). refuteCmd falls back to the doer's cmd ONLY
+  // when no distinct refute backend was requested — else use that backend's default command.
+  const refuteBackend = process.env.HB_REFUTE_BACKEND || file.refute_backend || backend;
+  const distinctRefuteBackend = !!(process.env.HB_REFUTE_BACKEND || file.refute_backend);
+  const refuteCmd = process.env.HB_REFUTE_CMD || file.refute_cmd ||
+    (distinctRefuteBackend ? defaultCmd(refuteBackend) : cmd);
   return {
     backend,
-    cmd:         process.env.HB_EXEC_CMD || file.cmd || defaultCmd(backend),
+    cmd,
     strict:      envBool('HB_EXEC_STRICT', file.strict != null ? !!file.strict : false),
     attemptCap:  parseInt(process.env.HB_EXEC_ATTEMPT_CAP || file.attempt_cap || '3', 10),
     concurrency: Math.max(1, parseInt(process.env.HB_MAX_CONCURRENCY || file.concurrency || '1', 10) || 1),
     heartbeatMs,
+    refuteBackend,
+    refuteCmd,
+    refuteModel:    process.env.HB_REFUTE_MODEL || file.refute_model || null,
+    refuteProvider: process.env.HB_REFUTE_PROVIDER || file.refute_provider || null,
   };
 }
 
@@ -153,9 +165,10 @@ function strictBlock(gateId) {
 }
 
 // ── dispatch one backend call, pumping the lease heartbeat while it runs ──────
-function dispatch(cmd, mode, payload, taskId, heartbeatMs, cwd) {
+function dispatch(cmd, mode, payload, taskId, heartbeatMs, cwd, extraEnv) {
   return new Promise((resolve) => {
-    const child = spawn('bash', ['-c', `${cmd} ${mode}`], { cwd: cwd || PROJECT_DIR, stdio: ['pipe', 'pipe', 'inherit'] });
+    const env = extraEnv ? { ...process.env, ...extraEnv } : process.env;   // cross-model: refuter model/provider
+    const child = spawn('bash', ['-c', `${cmd} ${mode}`], { cwd: cwd || PROJECT_DIR, stdio: ['pipe', 'pipe', 'inherit'], env });
     let out = '';
     child.stdout.on('data', d => (out += d));
     let timer = null;
@@ -305,10 +318,18 @@ async function run() {
         const gate = data.next_task && data.next_task.gate;
         const dag  = readJson(DAG, { gates: {} });
         const rv   = ((dag.gates || {})[gate] || {}).review || {};
-        const r = await dispatch(c.cmd, 'refute',
+        // Cross-model: dispatch the refute on the distinct refuter config (falls back to the doer).
+        const refExtra = {};
+        if (c.refuteModel)    refExtra.HB_EXEC_MODEL = c.refuteModel;
+        if (c.refuteProvider) refExtra.HB_EXEC_PROVIDER = c.refuteProvider;
+        let refuterId = (c.refuteCmd !== c.cmd) ? `cmd:${c.refuteCmd}` : c.refuteBackend;
+        if (c.refuteModel) refuterId += ` model=${c.refuteModel}`;
+        if (c.refuteCmd !== c.cmd || c.refuteModel)
+          process.stdout.write(`  ↳ refuting ${gate} with a distinct refuter (${refuterId})\n`);
+        const r = await dispatch(c.refuteCmd, 'refute',
           { mode: 'refute', gate, prompt: rv.prompt || `Refute that ${gate} is truly complete.`,
             project_dir: PROJECT_DIR, context: sh(`git -C "${PROJECT_DIR}" log --oneline -8`).trim() },
-          null, 0);
+          null, 0, undefined, Object.keys(refExtra).length ? refExtra : undefined);
         if (!r.json || typeof r.json.refuted !== 'boolean') {
           escalate('review_error', `${gate}: backend returned no verdict`); return 1;
         }
@@ -325,7 +346,7 @@ async function run() {
           const fdir = path.join(HB_DIR, 'reviews');
           try { fs.mkdirSync(fdir, { recursive: true }); } catch (e) {}
           const fpath = path.join(fdir, `${gate}.attempt.md`);
-          fs.writeFileSync(fpath, `# Refutation attempt for ${gate}\n\nVerdict: could not refute (refuted=false)\n\n${findings}\n`);
+          fs.writeFileSync(fpath, `# Refutation attempt for ${gate}\n\nRefuter: ${refuterId}\nVerdict: could not refute (refuted=false)\n\n${findings}\n`);
           hbAs(refuterActor, 'review', gate, 'pass', '--artifact', fpath);
         }
         break;

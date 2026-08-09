@@ -35,13 +35,24 @@ def config(hbdir):
     except Exception:
         pass
     hb_stale = int(os.environ.get("HEARTBEAT_STALE_S", "180"))
+    backend = os.environ.get("HB_EXEC_BACKEND") or f.get("backend") or "claude-code"
+    cmd = os.environ.get("HB_EXEC_CMD") or f.get("cmd")
     return {
-        "backend": os.environ.get("HB_EXEC_BACKEND") or f.get("backend") or "claude-code",
-        "cmd": os.environ.get("HB_EXEC_CMD") or f.get("cmd"),
+        "backend": backend,
+        "cmd": cmd,
         "strict": _envbool("HB_EXEC_STRICT", bool(f.get("strict", False))),
         "attempt_cap": int(os.environ.get("HB_EXEC_ATTEMPT_CAP") or f.get("attempt_cap") or 3),
         "concurrency": max(1, int(os.environ.get("HB_MAX_CONCURRENCY") or f.get("concurrency") or 1)),
         "heartbeat_s": int(os.environ.get("HB_EXEC_HEARTBEAT_S") or max(1, hb_stale // 2)),
+        # Cross-model refuter: run `refute` on a distinct backend/cmd/model from the doer.
+        # Each falls back to the doer's value, so default behavior is byte-unchanged. The cmd
+        # falls back to the doer's cmd ONLY when no distinct refute backend was requested —
+        # otherwise a distinct backend + the doer's explicit cmd would wrongly route to the doer.
+        "refute_backend": os.environ.get("HB_REFUTE_BACKEND") or f.get("refute_backend") or backend,
+        "refute_cmd": (os.environ.get("HB_REFUTE_CMD") or f.get("refute_cmd")
+                       or (None if (os.environ.get("HB_REFUTE_BACKEND") or f.get("refute_backend")) else cmd)),
+        "refute_model": os.environ.get("HB_REFUTE_MODEL") or f.get("refute_model"),
+        "refute_provider": os.environ.get("HB_REFUTE_PROVIDER") or f.get("refute_provider"),
     }
 
 
@@ -93,21 +104,35 @@ class _Pump:
             self._t.join(timeout=1)
 
 
-def dispatch(cfg, mode, payload, hbdir, task_id, cwd=None):
+def dispatch(cfg, mode, payload, hbdir, task_id, cwd=None, model=None, provider=None):
     cwd = cwd or str(Path(hbdir).parent)
-    with _Pump(hbdir, task_id, cfg["heartbeat_s"]):
-        if cfg["cmd"]:
-            try:
-                r = subprocess.run(["bash", "-c", f"{cfg['cmd']} {mode}"], cwd=cwd,
-                                   input=json.dumps(payload), capture_output=True, text=True, timeout=1800)
-                lines = [ln for ln in r.stdout.strip().splitlines() if ln.strip()]
-                return json.loads(lines[-1]) if lines else {}
-            except Exception:
-                return {}
-        mod = backends.get(cfg["backend"])
-        p = dict(payload)
-        p["cwd"] = cwd
-        return mod.execute(p) if mode == "execute" else mod.refute(p)
+    # Cross-model override: run this call under a distinct model/provider (backends and the
+    # subprocess wire both read HB_EXEC_MODEL/PROVIDER from the env). Restored in finally.
+    saved = {}
+    for k, v in (("HB_EXEC_MODEL", model), ("HB_EXEC_PROVIDER", provider)):
+        if v is not None:
+            saved[k] = os.environ.get(k)
+            os.environ[k] = v
+    try:
+        with _Pump(hbdir, task_id, cfg["heartbeat_s"]):
+            if cfg["cmd"]:
+                try:
+                    r = subprocess.run(["bash", "-c", f"{cfg['cmd']} {mode}"], cwd=cwd,
+                                       input=json.dumps(payload), capture_output=True, text=True, timeout=1800)
+                    lines = [ln for ln in r.stdout.strip().splitlines() if ln.strip()]
+                    return json.loads(lines[-1]) if lines else {}
+                except Exception:
+                    return {}
+            mod = backends.get(cfg["backend"])
+            p = dict(payload)
+            p["cwd"] = cwd
+            return mod.execute(p) if mode == "execute" else mod.refute(p)
+    finally:
+        for k, old in saved.items():
+            if old is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = old
 
 
 def _strict_block(hbdir, gate_id):
@@ -269,10 +294,17 @@ def _run(hbdir):
         elif reason == "review_pending":
             g = data["next_task"].get("gate")
             rv_block = ((st.read_dag(hbdir).get("gates") or {}).get(g, {}).get("review") or {})
-            r = dispatch(cfg, "refute", {"mode": "refute", "gate": g,
-                                         "prompt": rv_block.get("prompt", f"Refute that {g} is truly complete."),
-                                         "context": assemble_context(hbdir, {"id": "?", "phase": data["next_task"].get("phase")})},
-                         hbdir, None)
+            # Cross-model: dispatch the refute on the distinct refuter config (falls back to the doer).
+            refute_cfg = {**cfg, "backend": cfg["refute_backend"], "cmd": cfg["refute_cmd"]}
+            refuter_id = ("cmd:" + cfg["refute_cmd"]) if cfg["refute_cmd"] else cfg["refute_backend"]
+            if cfg["refute_model"]:
+                refuter_id += f" model={cfg['refute_model']}"
+            if (cfg["refute_backend"], cfg["refute_cmd"], cfg["refute_model"]) != (cfg["backend"], cfg["cmd"], None):
+                print(f"  ↳ refuting {g} with a distinct refuter ({refuter_id})")
+            r = dispatch(refute_cfg, "refute", {"mode": "refute", "gate": g,
+                                                "prompt": rv_block.get("prompt", f"Refute that {g} is truly complete."),
+                                                "context": assemble_context(hbdir, {"id": "?", "phase": data["next_task"].get("phase")})},
+                         hbdir, None, model=cfg["refute_model"], provider=cfg["refute_provider"])
             if not isinstance(r.get("refuted"), bool):
                 print(f"HB-EXEC STOP: review_error — {g}")
                 return 1
@@ -289,7 +321,8 @@ def _run(hbdir):
                 fdir = Path(hbdir) / "reviews"
                 fdir.mkdir(parents=True, exist_ok=True)
                 fpath = fdir / f"{g}.attempt.md"
-                fpath.write_text(f"# Refutation attempt for {g}\n\nVerdict: could not refute (refuted=false)\n\n{findings}\n")
+                fpath.write_text(f"# Refutation attempt for {g}\n\nRefuter: {refuter_id}\n"
+                                 f"Verdict: could not refute (refuted=false)\n\n{findings}\n")
                 from . import cli as _cli
                 saved = os.environ.get("HB_ACTOR")
                 os.environ["HB_ACTOR"] = refuter_actor
