@@ -6,6 +6,8 @@
 
 Most agent tooling helps you *run* agents. HeartBeat is about the harder half: knowing the work is actually done, not just claimed. Agents are confident and often wrong; HeartBeat assumes nothing and verifies everything at defined checkpoints.
 
+*New in **v1.19** — HeartBeat now drives, or is driven. It ships an **MCP server** so Codex, Claude Code, or OpenCode can call its tick / gate / state tools mid-session (one server, every client; dual-stacks the 2026-07-28 spec; loopback-hardened), and adds **`codex`** and **`opencode`** Stage-B backends. Details below.*
+
 ---
 
 ## The idea, in three moves
@@ -67,7 +69,7 @@ Adding another is one small adapter (two methods + graceful degrade) — it does
 
 ## Drive HeartBeat from your agent (MCP)
 
-HeartBeat also runs the other way. `hb mcp-serve` exposes its `tick` / `gate` / `state` tools over the [Model Context Protocol](https://modelcontextprotocol.io), so an MCP-capable agent — **Codex, Claude Code, or OpenCode** — can drive HeartBeat mid-session: ask what's next, do the work, call the gate to verify, and act on the deterministic answer. One server, every client.
+HeartBeat also runs the other way. `hb mcp-serve` exposes its `tick` / `gate` / `state` tools over the [Model Context Protocol](https://modelcontextprotocol.io), so an MCP-capable agent — **Codex, Claude Code, or OpenCode** — can drive HeartBeat mid-session: ask what's next, do the work, call the gate to verify, and act on the deterministic answer. One server, every client — and installing the HeartBeat plugin registers it for you on either host, no manual `mcp add` ([install guide](../docs/howto/install-the-heartbeat-plugin.md)).
 
 It's **stdlib-only** (no SDK) and **dual-stacks** the spec — the classic handshake for today's hosts and the 2026-07-28 revision (via `server/discover`) for new ones — verified against the official MCP SDK reference client. The trust model is unchanged: a caller can't fabricate a pass (behavioral gate + distinct-actor review), and the HTTP transport is hardened (loopback default, Origin validation). See [drive HeartBeat over MCP](../docs/howto/drive-heartbeat-over-mcp.md) and the [security note](../docs/howto/secure-the-mcp-server.md).
 
