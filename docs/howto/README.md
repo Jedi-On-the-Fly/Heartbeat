@@ -13,6 +13,8 @@ families A–J) is in [howto-list.md](howto-list.md).
   a runnable proof.
 - [Cross-model verification](cross-model-verification.md) — run the refuter on a *different*
   model than the doer; a model doesn't refute its own blind spots.
+- [Benchmark agents on the same DAG](benchmark-agents.md) — run the same DAG under N backends and
+  score each behaviorally; the gates are the rubric.
 - [Add refutation to a sensitive gate](add-refutation-to-a-sensitive-gate.md) — add a review
   block; make a pass cite evidence from a different actor.
 - [Write fast, deterministic gates](write-fast-deterministic-gates.md) — same artifact, same

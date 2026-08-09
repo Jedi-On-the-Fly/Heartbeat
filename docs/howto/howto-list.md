@@ -3,7 +3,7 @@
 The full how-to map, organized by job (families **A–J**, after the original ideas list).
 Each entry is either **created** (linked file, with the suite group that enforces it) or
 **Not available yet**. Created guides are CI-enforced across `tests/run-tests.sh` groups
-**T53–T73**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
+**T53–T74**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
 integrity check (links resolve, no placeholders, only real commands) plus adversarial clarity
 review, and the framework guides (T64) by a Docker-free harness check + backend conformance
 (their live proof is the reproducible pinned Docker in `tests/frameworks/`). See the
@@ -66,6 +66,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Make Gates Re-Verifiable | ✅ [re-verify-completed-gates.md](re-verify-completed-gates.md) — T58 |
 | Add Refutation to a Sensitive Gate | ✅ [add-refutation-to-a-sensitive-gate.md](add-refutation-to-a-sensitive-gate.md) — T54 |
 | Cross-model Verification (a different model refutes) | ✅ [cross-model-verification.md](cross-model-verification.md) — T73 |
+| Benchmark Agents on the Same DAG | ✅ [benchmark-agents.md](benchmark-agents.md) — T74 |
 | Write a Good Refuter Prompt / Profile | ⬜ Not available yet |
 | Decide Which Gates Need Refutation | ⬜ Not available yet |
 | Handle a Successful Refutation | ✅ [handle-a-successful-refutation.md](handle-a-successful-refutation.md) — T61 |

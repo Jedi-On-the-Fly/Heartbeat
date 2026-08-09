@@ -1039,6 +1039,18 @@ else
   echo "  (python3/node absent — T73 skipped)"
 fi
 
+grp "T74 — agent benchmark harness (hb bench; same DAG, N backends), Docker-free"
+if command -v python3 >/dev/null 2>&1; then
+  check "T74.1 hb bench scores the same DAG across backends from the event log (good/bad/flaky; review-honest; source unmutated; no env leak)" \
+    'bash "'"$GEX"'/agent-bench.sh" 2>&1 | grep -q "AGENT-BENCH-OK"'
+  check "T74.2 hb bench is a real subcommand" \
+    'cd "'"$HB_SRC"'/py" && PYTHONPATH=src python3 -m heartbeat.cli bench --help >/dev/null 2>&1'
+  check "T74.3 the benchmark guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/benchmark-agents.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+else
+  echo "  (python3 absent — T74 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

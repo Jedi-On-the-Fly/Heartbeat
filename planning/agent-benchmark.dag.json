@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "project": "agent-benchmark",
+    "note": "Turn HeartBeat into an agent benchmark/eval harness — the emergent capability that cascades from (the DAG + behavioral gates being backend-agnostic and deterministic) x (the pluggable Stage-B contract). Run the SAME DAG under N backends and score each behaviorally: the gates are the rubric, and completed phases / attempts / escalations are the metric. Reuses what exists — executor.run (returns 0 done/idle, 1 escalate) + the event log (task_done/task_failed/gate_passed/gate_failed) + scaffold.init for isolation. New: heartbeat/bench.py with score(hbdir) — a PURE function over the event log + dag (phases_done/total, tasks_done/total, gate_passed/failed, task_failures, completed, escalated) — plus run(dag, specs) that runs each backend on a FRESH isolated copy of the project (source unmutated) and scores it, and render/build for a comparison scorecard; and an `hb bench --dir <p> --backend <spec>... [--json]` subcommand where a spec is a registered backend NAME or LABEL=COMMAND (a script backend). Python-delivered analytical tooling (like `hb mcp-serve`) — not a byte-parity surface; runtime-local, recorded in parity-notes. HONEST scope: the SCORER is deterministic given a run and is what the suite proves (via stub backends with known behavior — good/bad/flaky); the real-model runs are non-deterministic (an on-demand tier), so `hb bench` is a capability probe, not a leaderboard. This is the tool that MEASURES what cross-model-verification enables."
+  },
+  "phases": [
+    {
+      "id": "BM1", "title": "Benchmark scorer + runner + `hb bench`", "gate_entry": null, "gate_exit": "GATE_BM1",
+      "tasks": [
+        { "id": "BM1T1", "title": "Author the deterministic benchmark proof", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/agent-bench.sh (deterministic — stub backends over the script wire, no model/network). Set up a source project (P0/GATE_P0 with a passing behavioral criterion, e.g. grep ok out.txt). Provide three stub backends: GOOD (execute writes the artifact + {ok:true}); BAD (execute writes nothing + {ok:false}); FLAKY (execute fails once via a per-project marker file, then succeeds). Run `hb bench --dir <src> --backend 'good=bash <good>' --backend 'bad=bash <bad>' --backend 'flaky=bash <flaky>' --json` (capture to a FILE — a heredoc-scripted python can't also read stdin) and assert the scorecard: good → completed=true, phases_done==phases_total, task_failures==0, escalated=false; bad → completed=false, phases_done==0, task_failures==attempt_cap EXACTLY (the cap, not a tick breaker) + outcome mentions attempts_exhausted, escalated=true; flaky → completed=true, task_failures==1. Also assert: (a) the SOURCE project's event log is unmodified (bench ran on isolated copies); (b) a REVIEW-GATED source DAG is represented honestly — a backend that can't refute (a bare execute stub) is scored escalated=true/completed=false with a review_error outcome, NOT silently 'done'; (c) bench.run() does not leak env into its caller (set HB_EXEC_CMD=SENTINEL, run bench.run, assert it's still SENTINEL). Print AGENT-BENCH-OK." },
+        { "id": "BM1T2", "title": "Implement heartbeat/bench.py", "requires": ["BM1T1"],
+          "description": "Add py/src/heartbeat/bench.py: score(hbdir) — a PURE function reading events.jsonl + dag → {phases_done, phases_total, tasks_done, tasks_total, gate_passed, gate_failed, task_failures, completed (phases_done==phases_total), escalated}. run(source_hbdir, specs, attempt_cap=3, max_iters=50) — for each spec (a registered backend NAME, or 'LABEL=COMMAND' for a script backend): scaffold.init a fresh temp project, copy the source dag.json in, rebuild, set the backend env (HB_EXEC_BACKEND=name OR HB_EXEC_CMD=command; HB_NO_GIT=1; bounded HB_EXEC_ATTEMPT_CAP/HB_EXEC_MAX_ITERS), call executor.run(temp), capture the exit code (escalated = code!=0), score the temp project, tear it down, and RESTORE env; return the list of scorecards (source project never mutated). render(cards) → an aligned text table; build(cards) → the JSON-able list." },
+        { "id": "BM1T3", "title": "Wire the `hb bench` subcommand", "requires": ["BM1T2"],
+          "description": "Add a `bench` subparser to cli.py: --dir (the source project), --backend (repeatable, action=append; each a NAME or LABEL=COMMAND), --json. Dispatch to bench.run(...) then print render(cards) (or json.dumps(build(cards)) with --json). No node changes (Python-delivered analytical tooling)." }
+      ]
+    },
+    {
+      "id": "BG1", "title": "Guide + docs + suite", "gate_entry": "GATE_BM1", "gate_exit": "GATE_BG1",
+      "tasks": [
+        { "id": "BG1T1", "title": "Write the benchmark guide", "requires": [],
+          "description": "Write docs/howto/benchmark-agents.md: the idea (run the same DAG under many backends; the gates are the rubric and completed-phases/attempts/escalations are the metric — an apples-to-apples behavioral eval that falls out of backend-agnostic gates), usage (`hb bench --dir <p> --backend ollama --backend codex [--json]`; the LABEL=COMMAND form for a script backend), the metrics each scorecard reports, and an HONEST note: the scorer is deterministic given a run (that is what the suite proves, via stub backends); real-model runs are non-deterministic, so run several and read it as a capability probe, not a leaderboard. Note the caveat that a review-gated DAG requires backends that implement `refute` (the real agent backends do; a bare script backend does not — bench reports such a backend as escalated with a review_error outcome, not complete). Link cross-model-verification.md (this measures what that enables), choose-a-backend.md, swap-workers-without-changing-the-dag.md. Reference gate-examples/agent-bench.sh; only real commands." },
+        { "id": "BG1T2", "title": "Wire docs + parity note + T74 suite group", "requires": ["BG1T1"],
+          "description": "Update docs/dev-python.md (a bench.py module row + the `hb bench` CLI row + a short section), planning/parity-notes.md (hb bench is Python-delivered analytical tooling, not mirrored in the plugin — like hb mcp-serve), and index the guide in docs/howto/README.md + howto-list.md. Add a Docker-free T74 group to tests/run-tests.sh: agent-bench.sh (AGENT-BENCH-OK), `hb bench --help` resolves, and prose-integrity on the guide. Capture-to-file if a script emits multiple markers (avoid the pipefail/SIGPIPE early-close)." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_BM1": {
+      "desc": "hb bench runs the same DAG under N backends on isolated copies and scores each from the event log; the scorer correctly reflects good/bad/flaky; the source project is unmutated.",
+      "review": { "prompt": "Refute that BM1 is done: does agent-bench.sh prove the SCORECARD correctly reflects known stub behavior — good (completed, 0 failures), bad (0 phases, escalated, failures>=cap), flaky (completed, exactly 1 failure) — not merely that bench ran? Is score() a pure function over the event log (not trusting the backend's self-report)? Does run() isolate each backend (fresh temp project) and leave the SOURCE project unmutated (asserted)? Could AGENT-BENCH-OK print if the scorer mis-scored, or if a bad backend were scored as completed? Is env restored after each run (no bleed)?" },
+      "criteria": [
+        { "id": "bm1c1", "desc": "bench module imports and exposes callable score/run/render/build", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"from heartbeat import bench; assert all(callable(getattr(bench,n)) for n in ('score','run','render','build'))\"" },
+        { "id": "bm1c2", "desc": "`hb bench` is a real subcommand", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m heartbeat.cli bench --help >/dev/null 2>&1" },
+        { "id": "bm1c3", "desc": "the deterministic benchmark proof passes (scorecard reflects good/bad/flaky; source unmutated)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/agent-bench.sh\" 2>&1 | grep -q 'AGENT-BENCH-OK'" }
+      ]
+    },
+    "GATE_BG1": {
+      "desc": "The guide is accurate + integrity-checked, docs/parity notes record hb bench, and the suite enforces the benchmark harness Docker-free.",
+      "review": { "prompt": "Refute that BG1 is done: is the guide accurate to the real `hb bench` (flags, spec forms, metrics) and HONEST (scorer deterministic + suite-proven; real runs non-deterministic → capability probe not leaderboard)? Does it reference the proof and pass prose-integrity? Do dev-python + parity-notes record hb bench (Python-delivered, not mirrored)? Is T74 Docker-free and does it actually run agent-bench.sh + hb bench --help + prose? Indexed?" },
+      "criteria": [
+        { "id": "bg1c1", "desc": "the guide references its proof and passes prose-integrity", "cmd": "cd \"$PROJECT_DIR/docs/howto\" && grep -q 'agent-bench' benchmark-agents.md && bash gate-examples/prose-check.sh benchmark-agents.md 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "bg1c2", "desc": "docs + parity note + index record hb bench", "cmd": "grep -q 'bench' \"$PROJECT_DIR/docs/dev-python.md\" && grep -qi 'bench' \"$PROJECT_DIR/planning/parity-notes.md\" && grep -q 'benchmark-agents' \"$PROJECT_DIR/docs/howto/README.md\" && grep -q 'benchmark-agents' \"$PROJECT_DIR/docs/howto/howto-list.md\"" },
+        { "id": "bg1c3", "desc": "the node suite enforces the benchmark harness Docker-free (T74 group PASSED)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T74 '" }
+      ]
+    }
+  }
+}

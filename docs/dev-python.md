@@ -36,6 +36,7 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 | `executor.py` | `run(hbdir)`, `config(hbdir)`, `dispatch(...)`, `assemble_context`, in-process + subprocess dispatch, worktree parallel | pluggable Stage B |
 | `backends/` | in-process backend registry | see below |
 | `mcp_server.py` | `serve(hbdir)`, `TOOLS` | `hb mcp-serve` — minimal stdlib-only MCP server over stdio; see below |
+| `bench.py` | `score(hbdir)`, `run(source, specs)`, `render`, `build` | `hb bench` — run the same DAG under N backends, score each from the event log |
 | `cli.py` | `main(argv=None)` → argparse dispatch | the `hb` entry |
 
 State mutation path (`mutate`): `with_wlock` (`.wlock`) → `append_event` → `reproject` → atomic write. Constants read from env at import: `LOCK_STALE_S`, `HEARTBEAT_STALE_S`, `STUCK_TICKS`, `HB_MAX_CONCURRENCY`, `HB_ROT_CHECK`, `GATE_TIMEOUT_S`.
@@ -63,6 +64,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | `review <gate> pass\|fail [note]` | record adversarial verdict |
 | `exec [run\|config] [--parallel N]` | `run` (default) drives the loop with a backend; `config` prints the resolved executor config |
 | `mcp-serve [--http] [--host H] [--port P]` | run the MCP server so an MCP client drives HeartBeat; stdio by default, `--http` for a streamable-HTTP endpoint; see below |
+| `bench --backend <spec>… [--json]` | run the source DAG under each backend (a registered name, or `label=command`) on isolated copies and print a behavioral scorecard (`bench.py`); Python-delivered analytical tooling |
 
 ## Executor
 

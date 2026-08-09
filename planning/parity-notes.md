@@ -55,6 +55,11 @@ Two gotchas it encodes:
   `hb` command. AGENTS rule 2 governs shared *logic*; the MCP server is a thin adapter over that
   shared logic, not a new shared surface that needs a mirror.
 
+- **`hb bench`** (the agent benchmark harness) is likewise **Python-delivered only** analytical
+  tooling — not mirrored in the plugin. It drives the existing (runtime-local) executor over the
+  shared, backend-agnostic DAG; there's no new shared *logic* to keep byte-equal (its scorer reads
+  the same event log the projection does). Proof: `docs/howto/gate-examples/agent-bench.sh`.
+
 Extend it when a new shared surface lands.
 
 ## Auditor ruleset (identical regexes in both)

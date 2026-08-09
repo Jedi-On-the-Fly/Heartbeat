@@ -51,6 +51,7 @@ def main(argv=None):
     p = sub.add_parser("next"); _add_dir(p)
     p = sub.add_parser("exec"); p.add_argument("action", nargs="?", default="run"); p.add_argument("--parallel", type=int, default=0); _add_dir(p)
     p = sub.add_parser("mcp-serve"); p.add_argument("--http", action="store_true"); p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=0); p.add_argument("--allow-remote", action="store_true"); _add_dir(p)
+    p = sub.add_parser("bench"); p.add_argument("--backend", action="append", default=[]); p.add_argument("--json", action="store_true"); _add_dir(p)
 
     args = ap.parse_args(argv)
     if not args.cmd:
@@ -237,6 +238,13 @@ def main(argv=None):
         if args.http:
             return mcp_server.serve_http(hb, args.host, args.port, args.allow_remote)
         return mcp_server.serve(hb)
+    elif args.cmd == "bench":
+        from . import bench
+        if not args.backend:
+            sys.stderr.write("usage: hb bench --backend <name|label=cmd> [--backend ...] [--dir <project>]\n")
+            return 2
+        cards = bench.run(hb, args.backend)
+        print(json.dumps(bench.build(cards), indent=2) if args.json else bench.render(cards))
     return 0
 
 
