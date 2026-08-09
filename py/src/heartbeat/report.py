@@ -14,7 +14,7 @@ def build(hbdir):
         "project": Path(hbdir).parent.name,
         "tasks_done": done,
         "tasks_total": total,
-        "percent": int(done / total * 100) if total else 0,
+        "percent": int(100 * done / total + 0.5) if total else 0,  # 100*done/total then round-half-up == node Math.round (parity; op order matters for float)
         "current_phase": s["current_phase"],
         "completed_phases": s["completed_phases"],
         "phases": [

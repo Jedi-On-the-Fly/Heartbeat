@@ -51,7 +51,8 @@ def main(argv=None):
     p = sub.add_parser("next"); _add_dir(p)
     p = sub.add_parser("exec"); p.add_argument("action", nargs="?", default="run"); p.add_argument("--parallel", type=int, default=0); _add_dir(p)
     p = sub.add_parser("mcp-serve"); p.add_argument("--http", action="store_true"); p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=0); p.add_argument("--allow-remote", action="store_true"); _add_dir(p)
-    p = sub.add_parser("bench"); p.add_argument("--backend", action="append", default=[]); p.add_argument("--json", action="store_true"); _add_dir(p)
+    p = sub.add_parser("bench"); p.add_argument("--backend", action="append", default=[]); p.add_argument("--baseline"); p.add_argument("--json", action="store_true"); _add_dir(p)
+    p = sub.add_parser("reward"); p.add_argument("--json", action="store_true"); _add_dir(p)
 
     args = ap.parse_args(argv)
     if not args.cmd:
@@ -244,7 +245,30 @@ def main(argv=None):
             sys.stderr.write("usage: hb bench --backend <name|label=cmd> [--backend ...] [--dir <project>]\n")
             return 2
         cards = bench.run(hb, args.backend)
-        print(json.dumps(bench.build(cards), indent=2) if args.json else bench.render(cards))
+        regr = bench.regressions(cards, args.baseline) if args.baseline else None
+        if args.json:
+            if regr is not None:
+                print(json.dumps({"scorecards": bench.build(cards), "regressions": regr}, indent=2))
+            else:
+                print(json.dumps(bench.build(cards), indent=2))   # backward-compatible: a plain list of cards
+        else:
+            print(bench.render(cards))
+            if regr is not None:
+                print()
+                print("regression vs baseline '%s':" % args.baseline)
+                for r in regr:
+                    print("  %-16s %s (gates %+d, phases %+d, fails %+d)" % (
+                        r["candidate"], "REGRESSED" if r["regressed"] else "ok",
+                        r["deltas"]["gate_passed"], r["deltas"]["phases_done"],
+                        r["deltas"]["task_failures"]))
+    elif args.cmd == "reward":
+        from . import bench
+        recs = bench.rewards(hb)
+        if args.json:
+            print(json.dumps(recs, indent=2))
+        else:
+            for r in recs:
+                print(json.dumps(r))
     return 0
 
 

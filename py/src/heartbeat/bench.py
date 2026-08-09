@@ -47,6 +47,69 @@ def score(hbdir):
     }
 
 
+def reward_records(events, dag):
+    """Pure: (event log + dag) -> one verifiable-reward record per gate evaluation.
+
+    Each gate_passed/gate_failed event becomes {gate, phase, passed, actor, ts}. `passed` is
+    the DETERMINISTIC log verdict (gate_passed=True / gate_failed=False), never a backend's
+    self-report. `phase` is NOT carried on the event, so it is derived from the dag via
+    st.phase_by_gate_exit. `actor`/`ts` are taken from the event when present, else None (the
+    gate.sh path records no actor — reported honestly, not fabricated). This is the labeled
+    (attempt -> outcome) stream an eval/reward pipeline can trust because the harness, not the
+    model, produced the label.
+    """
+    out = []
+    for ev in events:
+        e = ev.get("event")
+        if e not in ("gate_passed", "gate_failed"):
+            continue
+        gate = ev.get("gate")
+        out.append({
+            "gate": gate,
+            "phase": st.phase_by_gate_exit(dag, gate),
+            "passed": e == "gate_passed",
+            "actor": ev.get("actor"),
+            "ts": ev.get("ts"),
+        })
+    return out
+
+
+def rewards(hbdir):
+    """The reward records for a project's event log (reads log + dag, calls the pure core)."""
+    return reward_records(st.read_events(hbdir), st.read_dag(hbdir))
+
+
+def regressions(cards, baseline_label):
+    """Pure: bench scorecards -> a regression verdict per non-baseline card vs the baseline.
+
+    A candidate has regressed when it clears fewer gates OR completes fewer phases OR fails
+    more tasks than the baseline. Deterministic over the scorecards (no re-running a backend).
+    """
+    base = next((c for c in cards if c.get("label") == baseline_label), None)
+    if base is None:
+        return []
+    def g(c, k):
+        return c.get(k, 0) or 0
+    out = []
+    for c in cards:
+        if c.get("label") == baseline_label:
+            continue
+        deltas = {
+            "gate_passed": g(c, "gate_passed") - g(base, "gate_passed"),
+            "phases_done": g(c, "phases_done") - g(base, "phases_done"),
+            "task_failures": g(c, "task_failures") - g(base, "task_failures"),
+        }
+        regressed = (deltas["gate_passed"] < 0 or deltas["phases_done"] < 0
+                     or deltas["task_failures"] > 0)
+        out.append({
+            "baseline": baseline_label,
+            "candidate": c.get("label"),
+            "regressed": regressed,
+            "deltas": deltas,
+        })
+    return out
+
+
 def _parse_spec(spec):
     """'NAME' → a registered backend; 'LABEL=COMMAND' → a script backend."""
     if "=" in spec:

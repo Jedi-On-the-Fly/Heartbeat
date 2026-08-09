@@ -1051,6 +1051,30 @@ else
   echo "  (python3 absent — T74 skipped)"
 fi
 
+grp "T75 — parity differential-testing oracle (tests/parity-fuzz.sh; seeded generator, node==python across cases)"
+if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  check "T75.1 node == python across many generated cases (the oracle agrees)" \
+    'bash "'"$HB_SRC"'/tests/parity-fuzz.sh" 12 2>&1 | grep -q "FUZZ-PARITY-OK:"'
+  check "T75.2 the oracle passes clean AND catches an injected node<->python divergence in one run (teeth)" \
+    'o=$(bash "'"$HB_SRC"'/tests/parity-fuzz.sh" --selftest 2>&1); echo "$o" | grep -q "SELFTEST-CLEAN-OK" && echo "$o" | grep -q "SELFTEST-CAUGHT:"'
+  check "T75.3 the case generator is deterministic (same seed -> identical output)" \
+    '[ "$(python3 "'"$HB_SRC"'/tests/gen-parity-case.py" 3 -)" = "$(python3 "'"$HB_SRC"'/tests/gen-parity-case.py" 3 -)" ]'
+else
+  echo "  (python3/node absent — T75 skipped)"
+fi
+
+grp "T76 — verifiable-reward + model-regression (hb reward; hb bench --baseline), Docker-free"
+if command -v python3 >/dev/null 2>&1; then
+  check "T76.1 reward records carry the deterministic log verdict + derived phase; regression flags worse and clears equal" \
+    'bash "'"$GEX"'/reward-regression.sh" 2>&1 | grep -q "REWARD-REGRESSION-OK"'
+  check "T76.2 hb reward is a real subcommand" \
+    'cd "'"$HB_SRC"'/py" && PYTHONPATH=src python3 -m heartbeat.cli reward --help >/dev/null 2>&1'
+  check "T76.3 hb bench exposes --baseline (model-regression)" \
+    'cd "'"$HB_SRC"'/py" && PYTHONPATH=src python3 -m heartbeat.cli bench --help 2>&1 | grep -q "baseline"'
+else
+  echo "  (python3 absent — T76 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

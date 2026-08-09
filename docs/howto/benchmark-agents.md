@@ -46,6 +46,37 @@ One caveat: a **review-gated** DAG only benchmarks cleanly under backends that i
 (the real agent backends do). A bare script backend that can't refute is reported as `escalated`
 with a `review_error` outcome — honestly not-complete, not silently done.
 
+## The reward stream
+
+The event log already records the one thing that matters — the gate's **deterministic verdict**
+per evaluation. `hb reward` extracts it as a labeled stream, one record per gate pass/fail:
+
+```bash
+hb reward --dir <project>            # JSONL: {gate, phase, passed, actor, ts}
+hb reward --dir <project> --json     # a JSON array
+```
+
+`passed` is the log verdict (`gate_passed`/`gate_failed`), never the backend's self-report;
+`phase` is derived from the DAG (it isn't carried on the event); `actor` is honest — null when
+the gate ran via a path that records none. This is a **verifiable-reward** signal an eval or
+training pipeline can trust, precisely because the harness produced the label, not the model.
+
+## Model-regression
+
+Because the same DAG is a fixed behavioral spec, running it under the *same* backend across model
+versions tells you whether an upgrade **broke your workflow**. Mark one run as the baseline and
+`hb bench` reports a per-candidate regression verdict:
+
+```bash
+hb bench --dir <project> --backend 'v1=…' --backend 'v2=…' --baseline v1
+```
+
+A candidate has **regressed** when it clears fewer gates, completes fewer phases, or fails more
+tasks than the baseline. Same honesty as the scorecard: the comparison is deterministic, the run
+isn't — read it as a signal, not a verdict. Both are proven by
+[`gate-examples/reward-regression.sh`](gate-examples/reward-regression.sh) (a known log yields the
+exact labels; a worse candidate is flagged and an equal one cleared).
+
 This is the tool that *measures* what [cross-model-verification.md](cross-model-verification.md)
 enables: run the doer under each candidate and see which actually clears the gates. Pick from
 [choose-a-backend.md](choose-a-backend.md).

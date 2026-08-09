@@ -42,3 +42,35 @@ bash docs/howto/gate-examples/parity-selftest.sh   # -> PARITY-SELFTEST-CAUGHT
 
 If you add a surface to the parity contract, this is the pattern to prove the new case has
 teeth: perturb one side, confirm the alarm goes off.
+
+## Parity as a differential-testing oracle
+
+Fixed fixtures only cover the inputs you thought of. But two implementations of one spec are
+each other's **oracle**: you don't need a known-correct answer — you only need them to
+*agree*, so any disagreement on *any* input is a real bug. `tests/parity-fuzz.sh` exploits
+that. A seeded, deterministic generator (`tests/gen-parity-case.py`) emits many
+structurally-varied, well-formed cases (dag + event log), and the fuzzer runs each through
+both runtimes on every shared surface, asserting node ≡ python:
+
+```bash
+bash tests/parity-fuzz.sh 12     # -> FUZZ-PARITY-OK:12  (node ≡ python across 12 generated cases)
+```
+
+The generator depends **only on its seed** (no time, no randomness), so the run is
+reproducible and ratcheted — the same seed always produces the same case, and a divergence
+prints the seed so it replays. This is not hypothetical: the first fuzz run caught a real
+`report` rounding divergence (`5/8` → node `Math.round` = 63, Python `int()` = 62) that every
+fixed fixture had missed because they used clean ratios.
+
+The oracle has the same teeth requirement as the harness itself — a fuzzer only ever seen to
+pass proves nothing. `--selftest` runs two passes in one invocation: it must be legitimately
+green on the real runtime (`SELFTEST-CLEAN-OK`) *and* then catch an injected divergence on a
+mutant runtime (`SELFTEST-CAUGHT:<surface>`). Requiring both means an unconditional "pass"
+can't satisfy it.
+
+```bash
+bash tests/parity-fuzz.sh --selftest   # -> SELFTEST-CLEAN-OK + SELFTEST-CAUGHT:lint
+```
+
+Ratcheted as node-suite **T75**. The input space is bounded to well-formed DAGs by design
+(malformed-input fuzzing is out of scope); widen the generator when you widen the contract.

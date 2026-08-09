@@ -41,6 +41,8 @@ hb exec run --dir <project-dir>            # drive the loop with a backend
 hb exec run --parallel 4 --dir <dir>       # worktree-isolated fan-out
 hb mcp-serve --dir <project-dir>           # serve as an MCP server (stdio; --http for HTTP)
 hb bench --dir <p> --backend a --backend b # score the same DAG under N backends (behavioral)
+hb bench --dir <p> --backend a --backend b --baseline a   # + model-regression verdict vs baseline
+hb reward --dir <project-dir>              # verifiable-reward stream: {gate,phase,passed,actor,ts} per gate eval
 ```
 
 State is mutated only through the CLI (`hb start|done|fail|review|rebuild`), never by

@@ -25,6 +25,14 @@ coverage** of the shared surfaces — node ≡ python on:
 - **diagnose** (the inferred blocker's first line),
 - **state projection** (fresh / p0-gated / review-owed / two-fails).
 
+**Generative oracle — `tests/parity-fuzz.sh` (T75).** Beyond the fixed fixtures, a seeded
+deterministic generator (`tests/gen-parity-case.py`) produces varied well-formed cases and
+asserts node ≡ python on every shared surface — two implementations of one spec are each
+other's oracle. It caught a real divergence the fixtures missed: **progress percent rounding**
+— node used `Math.round(100*done/total)` (half up), Python used `int(...)` (truncate), so
+`5/8` gave 63 vs 62. Fixed by making `report.py` round half up (`int(x + 0.5)`, x ≥ 0). Keep
+the two `pct`/`percent` computations identical.
+
 Two gotchas it encodes:
 1. Python's `json.dumps` escapes non-ASCII (the `—` in a lint message) → compare with
    `ensure_ascii=False`.
@@ -59,6 +67,11 @@ Two gotchas it encodes:
   tooling — not mirrored in the plugin. It drives the existing (runtime-local) executor over the
   shared, backend-agnostic DAG; there's no new shared *logic* to keep byte-equal (its scorer reads
   the same event log the projection does). Proof: `docs/howto/gate-examples/agent-bench.sh`.
+
+- **`hb reward`** and **`hb bench --baseline`** (verifiable-reward stream + model-regression) are
+  the same case: **Python-delivered only** analytical tooling. `reward_records`/`regressions` are
+  pure over the event log + scorecards (no new shared *logic* to mirror byte-for-byte). Proof:
+  `docs/howto/gate-examples/reward-regression.sh` (node-suite T76).
 
 Extend it when a new shared surface lands.
 

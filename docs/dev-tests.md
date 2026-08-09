@@ -91,6 +91,7 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T72 | opencode backend (stub proof) + opencode.json MCP wiring |
 | T73 | cross-model refuter (refute on a distinct backend/model; distinct actor + provenance; both runtimes) |
 | T74 | agent benchmark harness (`hb bench` — same DAG under N backends, scored from the event log) |
+| T75 | parity differential-testing oracle (`tests/parity-fuzz.sh` — seeded generator, node ≡ python across generated cases; mutation self-test has teeth) |
 
 The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T74; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
 
@@ -131,6 +132,8 @@ Backend tests drive a stub via `HB_EXEC_CMD` (subprocess wire); framework/ollama
 | state | `[completed_tasks, completed_phases, pending_reviews, build_stuck_count, current_phase]` × 4 scenarios |
 
 Normalization: Python comparisons use `ensure_ascii=False` (node emits non-ASCII literally). State/next/ready/report/diagnose build a temp `.hb/`, copying the node tools and reprojecting, then compare against `hb <cmd> --dir`. Details and intentional divergences: [parity-notes.md](../planning/parity-notes.md).
+
+**Generative oracle — `tests/parity-fuzz.sh` (ratcheted as T75).** Where `parity.sh` compares hand-picked fixtures, the fuzzer feeds *seeded, generated* cases (`tests/gen-parity-case.py`) through the same shared surfaces and asserts node ≡ python across many inputs — two implementations of one spec are each other's oracle, so any disagreement is a real bug. The generator is seed-only (deterministic, reproducible); `--selftest` proves teeth by requiring a clean pass *and* a caught injected divergence in one run. It caught a real `report` rounding divergence (`5/8`: node `Math.round`=63 vs Python `int()`=62) the fixtures missed — since fixed via round-half-up in `report.py`.
 
 ## Live — real local model
 
