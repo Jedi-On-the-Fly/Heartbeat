@@ -95,7 +95,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Use HeartBeat with AutoGen | ✅ [use-heartbeat-with-autogen.md](use-heartbeat-with-autogen.md) — T65 |
 | Use HeartBeat with smolagents | ✅ [use-heartbeat-with-smolagents.md](use-heartbeat-with-smolagents.md) — T65 |
 | Use HeartBeat with pydantic-ai | ✅ [use-heartbeat-with-pydantic-ai.md](use-heartbeat-with-pydantic-ai.md) — T65 |
-| Use Different Models for Execute and Refute | ⬜ Not available yet |
+| Use Different Models for Execute and Refute | ✅ [cross-model-verification.md](cross-model-verification.md) — T73 |
 
 ## F. State, Recovery & Operations — "what happens when things break"
 

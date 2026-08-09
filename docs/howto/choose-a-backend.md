@@ -35,5 +35,5 @@ adapter ([build-and-test-a-backend.md](build-and-test-a-backend.md)).
 ## Related
 
 - The two-method backend contract: [build-and-test-a-backend.md](build-and-test-a-backend.md).
-- Use different models for execute vs the refuter — an advanced assurance choice built on the
-  same contract.
+- Run the refuter on a different model than the doer — [cross-model-verification.md](cross-model-verification.md).
+- Torn between backends? Benchmark them on the same DAG — [benchmark-agents.md](benchmark-agents.md).

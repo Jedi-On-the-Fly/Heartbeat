@@ -1,7 +1,26 @@
 # STATUS — HeartBeat
 
-**Version:** v1.19 (MCP server + Codex/OpenCode backends, over v1.18)
+**Version:** v1.20 (cross-model refuter + agent benchmark harness, over v1.19)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.20 — cross-model refuter + agent benchmark harness
+
+Two capabilities that cascade from HeartBeat's own primitives — refute being a separate backend
+method, and the DAG/gates being backend-agnostic and deterministic.
+
+- **Cross-model refuter** — the adversarial `refute` can run on a *different* backend/model than
+  the `execute` doer (`HB_REFUTE_BACKEND` / `HB_REFUTE_MODEL` / `HB_REFUTE_PROVIDER` /
+  `HB_REFUTE_CMD`, or `executor.json refute_*`; each falls back to the doer's, so it's opt-in and
+  backward-compatible). A model doesn't refute its own blind spots. The distinct-actor review
+  guarantee is preserved and the refuter's identity is recorded in the review artifact
+  (provenance). Both runtimes; `hb exec config` prints the settings. Enforced by **T73**; guide
+  `docs/howto/cross-model-verification.md`.
+- **Agent benchmark harness** — `hb bench --dir <p> --backend <spec>…` runs the *same* DAG under N
+  backends on isolated copies and scores each behaviorally from the event log (gates are the
+  rubric; completed phases / attempts / escalations are the metric). The scorer is a pure function
+  over the log — never the backend's self-report. Python-delivered analytical tooling. Enforced by
+  **T74**; guide `docs/howto/benchmark-agents.md`. Honest scope: the scorer is deterministic
+  (suite-proven); real-model runs are non-deterministic → a capability probe, not a leaderboard.
 
 ## v1.19 — MCP server (drives, or is driven) + Codex/OpenCode backends
 

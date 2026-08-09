@@ -6,7 +6,7 @@
 
 Most agent tooling helps you *run* agents. HeartBeat is about the harder half: knowing the work is actually done, not just claimed. Agents are confident and often wrong; HeartBeat assumes nothing and verifies everything at defined checkpoints.
 
-*New in **v1.19** — HeartBeat now drives, or is driven. It ships an **MCP server** so Codex, Claude Code, or OpenCode can call its tick / gate / state tools mid-session (one server, every client; dual-stacks the 2026-07-28 spec; loopback-hardened), and adds **`codex`** and **`opencode`** Stage-B backends. Details below.*
+*New in **v1.20** — the adversarial refuter can run on a **different model** than the doer (a model doesn't refute its own blind spots), and **`hb bench`** scores the same DAG across backends behaviorally. (v1.19 added the **MCP server** — Codex, Claude Code, or OpenCode can drive HeartBeat — plus the `codex` and `opencode` backends.) Details below.*
 
 ---
 
@@ -22,7 +22,7 @@ Most agent tooling helps you *run* agents. HeartBeat is about the harder half: k
 |---|---|
 | **Informed state** | Event-sourced; state is a projection of an append-only log. A session dies, the next tick rebuilds and continues. |
 | **Behavioral gates** | One-line checks that assert behavior; a phase can't advance until they pass. |
-| **Adversarial verification** | A second agent must fail to refute completion — at execution time *and* plan time. |
+| **Adversarial verification** | A second agent must fail to refute completion — at execution time *and* plan time; the refuter can run on a *different model* than the doer. |
 | **Restore points** | Every gate pass commits and tags, so each phase is a `git reset` away. |
 | **Liveness** | The tick detects stuck loops, unanswered reviews, and gates that silently rot, and escalates instead of waiting forever. |
 | **Pluggable workers** | Stage B is a two-method contract; drive it with a local model, a headless CLI agent (Claude Code, Codex, OpenCode), seven agent frameworks (Agno, CrewAI, LangGraph, the OpenAI Agents SDK, AutoGen, smolagents, pydantic-ai), or any command. |
@@ -66,6 +66,8 @@ Stage B is swappable. A backend implements two functions — `execute → {ok}` 
 | `script` | any command, any language |
 
 Adding another is one small adapter (two methods + graceful degrade) — it doesn't touch the core, and it can't break the runtime parity.
+
+Because the same DAG runs under any backend, `hb bench --dir <project> --backend a --backend b` runs it under each and scores them behaviorally from the event log (the gates are the rubric) — a capability probe, not a leaderboard. And the refuter can run on a *different* model than the doer (`HB_REFUTE_BACKEND`/`HB_REFUTE_MODEL`) so a model doesn't grade its own blind spots.
 
 ## Drive HeartBeat from your agent (MCP)
 

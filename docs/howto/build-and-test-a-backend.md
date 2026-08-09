@@ -23,7 +23,9 @@ Two rules make an adapter safe:
   output. The driver treats a failed shape as a failed task and escalates.
 
 The shipped adapters under `plugin/templates/executors/` (and the in-process
-`py/src/heartbeat/backends/`) are the templates; see [dev-python.md](../dev-python.md).
+`py/src/heartbeat/backends/`) are the templates; see [dev-python.md](../dev-python.md). The two
+methods are dispatched independently, so `refute` can be routed to a *different* backend than
+`execute` — [cross-model-verification.md](cross-model-verification.md).
 
 ## Test it for conformance
 

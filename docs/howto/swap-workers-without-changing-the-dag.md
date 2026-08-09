@@ -41,3 +41,4 @@ bash docs/howto/gate-examples/portability-selftest.sh   # -> PORTABILITY-OK
 
 To check your own DAG for coupling, run it under two backends and compare completed phases;
 if they differ, a gate is keying on the worker, not the work.
+[`hb bench`](benchmark-agents.md) does exactly this across N backends and scores each.

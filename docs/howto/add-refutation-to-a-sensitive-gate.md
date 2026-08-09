@@ -40,7 +40,8 @@ hb review GATE_P3 fail "<the hole it found>"           # found a hole -> back to
   is rejected; refutation is only adversarial from an independent actor.
 
 The accepted artifact is stored under `.hb/reviews/` and re-checked later by `doctor` — if
-it vanishes, that is flagged as rot. See [AGENTS.md](../../AGENTS.md) rule 6.
+it vanishes, that is flagged as rot. See [AGENTS.md](../../AGENTS.md) rule 6. For an even stronger
+review, run the refuter on a *different model* than the doer — [cross-model-verification.md](cross-model-verification.md).
 
 ## Proof
 

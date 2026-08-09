@@ -594,8 +594,8 @@ check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
   '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ] && [ -f "$P39/.hb/executors/langgraph_exec.py" ] && [ -f "$P39/.hb/executors/openai_agents_exec.py" ] && [ -f "$P39/.hb/executors/autogen_exec.py" ] && [ -f "$P39/.hb/executors/smolagents_exec.py" ] && [ -f "$P39/.hb/executors/pydanticai_exec.py" ]'
 check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
-check "T39.4 plugin version bumped to 1.19.0" \
-  'grep -q "1.19.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+check "T39.4 plugin version bumped to 1.20.0" \
+  'grep -q "1.20.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 
 grp "T40 — parallel fan-out (v1.8)"
 # In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
