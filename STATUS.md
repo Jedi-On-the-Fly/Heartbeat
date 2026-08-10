@@ -1,7 +1,28 @@
 # STATUS — HeartBeat
 
-**Version:** v1.22 (gated-docs skill + how-to library gated end-to-end + relative-`--dir` fix, over v1.21)
+**Version:** v1.23 (scheduled self-audit — corpus coherence + runtime parity as a standing check, over v1.22)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.23 — scheduled self-audit (corpus coherence + runtime parity)
+
+The drift/overclaim audit we'd been running by hand, made a standing, schedulable capability —
+the compounding step from v1.22's gated docs.
+
+- **Deterministic self-audit** (`docs/howto/gate-examples/self-audit.sh`, **T81**) — one command
+  checking three project-wide invariants: **prose-integrity** (every guide), **referenced-proof
+  integrity** (every `gate-examples/*.sh` a guide names in its body exists AND is wired in the
+  suite — the gap `prose-check` misses because those are code-fence paths, not markdown links, and
+  exactly how a proof can vanish/go dormant), and **runtime parity** (`node ≡ python` via
+  `tests/parity.sh`, failing on divergence). Count-pinned (no vacuous `0/0`); `--selftest` has teeth
+  (catches a missing AND an unwired proof). Guide `docs/howto/run-a-scheduled-self-audit.md` with a
+  cron/`/loop` schedule recipe that escalates on non-zero.
+- **Adversarial tier (on-demand, non-gating)** — the distinct-actor refutation sweep for
+  overclaims, documented as a capability probe (needs a model). Fittingly, the phase refutation
+  caught an overclaim in the self-audit's *own* guide — an invalid cron the deterministic tier
+  structurally can't parse — the exact defect class the adversarial tier exists to find.
+- Built the gated way (plan-refuted: a vacuous-pass hole + a grep-a-filename wiring check, both
+  tightened; phase-refuted: the cron). The parity cross-check was added after review flagged that a
+  "self-audit" omitting node ≡ python isn't auditing the project's core contract.
 
 ## v1.22 — gated-docs skill + a fully-gated how-to library + a bug the method caught
 

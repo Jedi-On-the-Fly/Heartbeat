@@ -3,7 +3,7 @@
 The full how-to map, organized by job (families **A–J**, after the original ideas list).
 Each entry is either **created** (linked file, with the suite group that enforces it) or
 **Not available yet**. Created guides are CI-enforced across `tests/run-tests.sh` groups
-**T53–T80**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
+**T53–T81**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
 integrity check (links resolve, no placeholders, only real commands) plus adversarial clarity
 review, and the framework guides (T64) by a Docker-free harness check + backend conformance
 (their live proof is the reproducible pinned Docker in `tests/frameworks/`). See the
@@ -120,6 +120,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 |---|---|
 | Run HeartBeat in CI | ✅ [run-heartbeat-in-ci.md](run-heartbeat-in-ci.md) — T61 |
 | Schedule HeartBeat with Cron | ✅ [schedule-heartbeat-unattended.md](schedule-heartbeat-unattended.md) — T62 |
+| Run a Scheduled Self-Audit (corpus drift + overclaims) | ✅ [run-a-scheduled-self-audit.md](run-a-scheduled-self-audit.md) — T81 |
 | Run Independent Tasks in Parallel | ✅ [run-tasks-in-parallel.md](run-tasks-in-parallel.md) — T77 |
 | Understand Worktree Isolation | ✅ [run-tasks-in-parallel.md](run-tasks-in-parallel.md) — T77 |
 | Handle Merge Conflicts from Parallel Work | ⬜ Not available yet *(honest proof is timing-dependent — see notes below)* |

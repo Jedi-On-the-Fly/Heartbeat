@@ -594,8 +594,8 @@ check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
   '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ] && [ -f "$P39/.hb/executors/langgraph_exec.py" ] && [ -f "$P39/.hb/executors/openai_agents_exec.py" ] && [ -f "$P39/.hb/executors/autogen_exec.py" ] && [ -f "$P39/.hb/executors/smolagents_exec.py" ] && [ -f "$P39/.hb/executors/pydanticai_exec.py" ]'
 check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
-check "T39.4 plugin version bumped to 1.22.0" \
-  'grep -q "1.22.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+check "T39.4 plugin version bumped to 1.23.0" \
+  'grep -q "1.23.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 
 grp "T40 — parallel fan-out (v1.8)"
 # In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
@@ -1123,6 +1123,18 @@ if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
     'bash "'"$GEX"'/relative-dir.sh" 2>&1 | grep -q "RELATIVE-DIR-OK"'
 else
   echo "  (python3/node absent — T80 skipped)"
+fi
+
+grp "T81 — scheduled self-audit (corpus prose + referenced-proof integrity)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T81.1 the corpus self-audit passes (prose + referenced-proof integrity, count-matched)" \
+    'g=$(ls "'"$HB_SRC"'"/docs/howto/*.md | wc -l); bash "'"$GEX"'/self-audit.sh" 2>&1 | grep -qE "SELF-AUDIT-OK:$g/[1-9][0-9]*"'
+  check "T81.2 the self-audit has teeth (catches a missing AND an unwired proof)" \
+    'bash "'"$GEX"'/self-audit.sh" --selftest 2>&1 | grep -q "SELF-AUDIT-SELFTEST-OK"'
+  check "T81.3 the self-audit guide passes prose-integrity" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/run-a-scheduled-self-audit.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+else
+  echo "  (python3 absent — T81 skipped)"
 fi
 
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).

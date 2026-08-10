@@ -6,7 +6,7 @@
 
 Most agent tooling helps you *run* agents. HeartBeat is about the harder half: knowing the work is actually done, not just claimed. Agents are confident and often wrong; HeartBeat assumes nothing and verifies everything at defined checkpoints.
 
-*New in **v1.22** — HeartBeat now applies "refute, don't confirm" to its **own documentation**: a `gated-docs` skill and a how-to library where **every** guide is backed by a runnable proof or an integrity check (and the audit that gated it caught a real relative-`--dir` bug, now fixed). (v1.21 added the **parity differential-testing oracle** and **`hb reward`** / **`hb bench --baseline`**; v1.20 the **cross-model refuter**; v1.19 the **MCP server**.) Details below.*
+*New in **v1.23** — a **scheduled self-audit**: one command (and a cron recipe) that keeps the whole project honest — every guide prose-clean, every proof wired, and the two runtimes still in parity — escalating on any drift, with an on-demand adversarial sweep for overclaims. (v1.22 made docs verified claims via the `gated-docs` skill; v1.21 added the **parity differential-testing oracle** and **`hb reward`**; v1.20 the **cross-model refuter**; v1.19 the **MCP server**.) Details below.*
 
 ---
 

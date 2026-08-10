@@ -61,6 +61,7 @@ families A–J) is in [howto-list.md](howto-list.md).
 - [Review an unsafe gate command](review-an-unsafe-gate.md) — gate cmds run with your privileges; spot self-produced evidence, non-determinism, and destructive commands.
 - [Run HeartBeat fully locally](run-heartbeat-fully-locally.md) — the pure-Python port + a local model; no cloud, no key, no Claude Code.
 - [Schedule HeartBeat unattended](schedule-heartbeat-unattended.md) — drive ticks on a timer via /loop, a cloud routine, or system cron.
+- [Run a scheduled self-audit](run-a-scheduled-self-audit.md) — a deterministic corpus drift check (prose + referenced-proof integrity) that escalates, plus an on-demand adversarial overclaim sweep.
 - [Read the event log](read-the-event-log.md) — reconstruct a run; why state.json is disposable.
 - [Embed HeartBeat in a Python app](embed-heartbeat-in-python.md) — drive it via the library, no CLI.
 - [Handle a successful refutation](handle-a-successful-refutation.md) — a found hole holds the phase; fix and re-verify.
