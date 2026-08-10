@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "heartbeat-hb"
-version = "0.13.0"
+version = "0.14.0"
 description = "HeartBeat — tick-driven agent orchestration (pure-Python port, zero node/bash)"
 readme = "README.md"
 requires-python = ">=3.9"

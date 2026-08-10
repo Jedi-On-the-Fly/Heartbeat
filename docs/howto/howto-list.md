@@ -3,7 +3,7 @@
 The full how-to map, organized by job (families **A–J**, after the original ideas list).
 Each entry is either **created** (linked file, with the suite group that enforces it) or
 **Not available yet**. Created guides are CI-enforced across `tests/run-tests.sh` groups
-**T53–T81**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
+**T53–T85**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
 integrity check (links resolve, no placeholders, only real commands) plus adversarial clarity
 review, and the framework guides (T64) by a Docker-free harness check + backend conformance
 (their live proof is the reproducible pinned Docker in `tests/frameworks/`). See the

@@ -29,8 +29,8 @@ A pass isn't a rubber stamp: the artifact must be substantive, cite the phase, a
 the phase advance. The stored artifact is re-checked later by `doctor`, so the evidence can't
 silently rot ([AGENTS.md](../../AGENTS.md) rule 6).
 
-If the review never resolves at all, the tick keeps waking on the pending review and `diagnose`
-reports it as `review_stuck` rather than the project hanging
+If the review never resolves at all, the tick escalates it to `review_stuck` past `STUCK_TICKS`
+(both runtimes) — surfaced by `diagnose` — rather than the project hanging
 ([prove-liveness.md](prove-liveness.md)).
 
 ## Prove it worked

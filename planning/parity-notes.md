@@ -50,8 +50,39 @@ Two gotchas it encodes:
   and `_env` use `os.path.abspath`, and the executor's worker `cwd` is absolute). Enforced by
   node-suite **T80** (`docs/howto/gate-examples/relative-dir.sh` drives both runtimes with a
   relative dir) + `py/tests/test_gate.py::test_relative_dir_gate`.
+- **Tick decision (`data.reason`).** Both ticks must emit the same wake reason for the same state —
+  the projector/resolver are byte-equal but the *tick* wraps them, so it's a separate surface.
+  This caught a real bug: `tick.py` lacked the `review_stuck` escalation that `tick.sh` has (a
+  never-resolving review stalled forever in Python instead of escalating). Now mirrored. Enforced
+  by **T82** (`tick-parity.sh` compares node vs python `data.reason` across next_task / gate_pending
+  / all_done / the review-stall frontier) + `py/tests/test_tick.py::test_review_stuck_escalation`.
+- **Gate-runner verdict.** `gate.sh` and `hb gate` must reach the same pass/block on the same
+  criteria (pass, fail, the zero-criteria hollow floor, timeout). Enforced by **T83**
+  (`gate-parity.sh`, compared by exit code).
+- **Doctor / rot detection.** Both must agree on whether a completed phase's gate is still
+  reproducible (the tick keys off this). Enforced by **T84** (`doctor-parity.sh`).
+- **Backends registry.** Both runtimes must offer the same canonical backend set. Enforced by
+  **T85** (`registry-parity.sh`), modulo the python-only `claude` alias (below).
 
 ## Intentional divergences (not on the byte-equal surface)
+
+- **Backend name aliases.** The Python `_KNOWN` registry accepts `claude` as an alias for
+  `claude-code` (both resolve to the same adapter); the node `defaultCmd` has only `claude-code`
+  (bare `claude` falls through to a custom command). T85 normalizes this alias before comparing.
+- **Scaffold default `.hb`.** `bootstrap.sh` copies `templates/dag.json`; `scaffold.py` writes its
+  own inline `DEFAULT_DAG` — the first-run starter DAGs differ by design (both audit-appropriately).
+- **`import` is node-only.** `hb.js import` (legacy `state.json` → event-log migration) has no
+  Python equivalent; the Python port was event-sourced from the start.
+- **Drift detection (`unsanctioned_drift`) is node-only.** `tick.sh` supports optional
+  architecture-drift detection (SHA of `WATCH_PATHS`, `--freeze` to re-baseline); it is **off by
+  default** (`WATCH_PATHS=""`), so it never fires in default operation. `tick.py` does not implement
+  it. Likewise `no_next_task_script` is a node-internal fallback. Both reasons stay in the shared
+  `PROTOCOL` map (so protocol-key parity holds), but only node emits them — the tick-parity proof
+  (T82) compares the reasons both runtimes DO emit (next_task / gate_pending / all_done /
+  review_stuck / build_stuck).
+- **`diagnose` recovery text.** Its *blocker* line is parity-checked, but the *recovery-command*
+  text is runtime-specific (node cites `node .hb/hb.js` / `gate.sh`, python the `hb` console) —
+  same reason `protocol` compares reason keys, not action text.
 
 - **`hb exec config`** is a shared command (both runtimes print the resolved executor config and
   neither runs), but the JSON **key format differs by design**: the plugin emits camelCase

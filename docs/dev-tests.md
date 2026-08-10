@@ -98,8 +98,12 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T79 | whole how-to library prose integrity (every `docs/howto/*.md` guide gated; count-matched) + prose-check selftest |
 | T80 | relative `--dir` resolves to an absolute `PROJECT_DIR`/`HB_DIR` (both runtimes) — gate + worktree paths |
 | T81 | scheduled self-audit (`self-audit.sh`) — corpus prose + referenced-proof integrity + runtime parity; count-pinned, `--selftest` teeth |
+| T82 | tick decision parity (`tick-parity.sh`) — node ≡ python `data.reason` (next_task/gate_pending/all_done/review_stuck/build_stuck) + the Python `review_stuck` escalation |
+| T83 | gate-runner parity (`gate-parity.sh`) — pass/fail/hollow-floor/timeout agree across runtimes (exit codes) |
+| T84 | doctor/rot parity (`doctor-parity.sh`) — both runtimes agree on rot detection |
+| T85 | backends-registry parity (`registry-parity.sh`) — same canonical set (python-only `claude` alias normalized) |
 
-The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T81; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
+The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T85; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
 
 ## Python suite — `py/tests/`
 

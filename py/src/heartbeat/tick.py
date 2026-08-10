@@ -139,7 +139,19 @@ def _body(hbdir):
         return _wake({"reason": "gate_pending", "next_task": nxt})
     if typ == "review_pending":
         _rm(_flag(hbdir, ".deadlock-alerted"))
-        st.append_event(hbdir, {"event": "review_wake", "gate": nxt.get("gate")})
+        gate = nxt.get("gate")
+        # Mirror tick.sh: an adversarial review that never resolves is escalated past STUCK_TICKS
+        # (review_stuck, single-alert) instead of waking review_pending forever — a liveness guard.
+        noreview = _review_wakes_since_verdict(hbdir, gate)
+        if gate and noreview >= STUCK_TICKS:
+            if not _flag(hbdir, ".review-stuck-alerted").exists():
+                _flag(hbdir, ".review-stuck-alerted").touch()
+                st.append_event(hbdir, {"event": "review_stalled", "gate": gate})
+                return _wake({"reason": "review_stuck", "gate": gate, "no_review": noreview,
+                              "hint": "the adversarial review isn't resolving — run the refuter, then: hb review %s pass|fail" % gate})
+            return _sleep({"reason": "review_waiting", "gate": gate})
+        _rm(_flag(hbdir, ".review-stuck-alerted"))
+        st.append_event(hbdir, {"event": "review_wake", "gate": gate})
         return _wake({"reason": "review_pending", "next_task": nxt})
 
     # a real task
@@ -171,5 +183,16 @@ def _wakes_since_progress(hbdir, task_id):
         if ev.get("task") == task_id and ev.get("event") in ("task_started", "task_done", "task_failed"):
             break
         if ev.get("event") == "wake" and ev.get("task") == task_id:
+            n += 1
+    return n
+
+
+def _review_wakes_since_verdict(hbdir, gate):
+    # review_wake events for `gate` since its last verdict (mirrors tick.sh's noreview count).
+    n = 0
+    for ev in reversed(st.read_events(hbdir)):
+        if ev.get("gate") == gate and ev.get("event") in ("review_passed", "review_failed", "gate_passed"):
+            break
+        if ev.get("event") == "review_wake" and ev.get("gate") == gate:
             n += 1
     return n

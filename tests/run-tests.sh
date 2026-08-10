@@ -594,8 +594,8 @@ check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
   '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ] && [ -f "$P39/.hb/executors/langgraph_exec.py" ] && [ -f "$P39/.hb/executors/openai_agents_exec.py" ] && [ -f "$P39/.hb/executors/autogen_exec.py" ] && [ -f "$P39/.hb/executors/smolagents_exec.py" ] && [ -f "$P39/.hb/executors/pydanticai_exec.py" ]'
 check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
-check "T39.4 plugin version bumped to 1.23.0" \
-  'grep -q "1.23.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+check "T39.4 plugin version bumped to 1.24.0" \
+  'grep -q "1.24.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 
 grp "T40 — parallel fan-out (v1.8)"
 # In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
@@ -1135,6 +1135,40 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/run-a-scheduled-self-audit.md" 2>&1 | grep -q "ALL-PROSE-OK"'
 else
   echo "  (python3 absent — T81 skipped)"
+fi
+
+grp "T82 — tick decision parity (both runtimes emit the same data.reason, incl. review_stuck)"
+if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  check "T82.1 node ≡ python on tick data.reason across fixtures (incl. review_stuck escalation)" \
+    'bash "'"$GEX"'/tick-parity.sh" 2>&1 | grep -q "TICK-PARITY-OK"'
+  check "T82.2 the Python review_stuck escalation fires at the threshold" \
+    'cd "'"$HB_SRC"'/py" && PYTHONPATH=src python3 -m pytest -q tests/test_tick.py -k review_stuck 2>&1 | grep -qE "[1-9][0-9]* passed"'
+else
+  echo "  (python3/node absent — T82 skipped)"
+fi
+
+grp "T83 — gate-runner parity (pass/fail/hollow-floor/timeout, both runtimes)"
+if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  check "T83.1 node ≡ python gate-runner verdicts" \
+    'bash "'"$GEX"'/gate-parity.sh" 2>&1 | grep -q "GATE-PARITY-OK"'
+else
+  echo "  (python3/node absent — T83 skipped)"
+fi
+
+grp "T84 — doctor/rot parity (both runtimes agree on rot detection)"
+if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  check "T84.1 node ≡ python rot detection (clean -> none; rotted -> flagged on both)" \
+    'bash "'"$GEX"'/doctor-parity.sh" 2>&1 | grep -q "DOCTOR-PARITY-OK"'
+else
+  echo "  (python3/node absent — T84 skipped)"
+fi
+
+grp "T85 — backends-registry parity (same canonical set, both runtimes)"
+if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  check "T85.1 node ≡ python backend registry (canonical set; python-only claude alias normalized)" \
+    'bash "'"$GEX"'/registry-parity.sh" 2>&1 | grep -q "REGISTRY-PARITY-OK"'
+else
+  echo "  (python3/node absent — T85 skipped)"
 fi
 
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).

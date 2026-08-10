@@ -6,7 +6,7 @@
 
 Most agent tooling helps you *run* agents. HeartBeat is about the harder half: knowing the work is actually done, not just claimed. Agents are confident and often wrong; HeartBeat assumes nothing and verifies everything at defined checkpoints.
 
-*New in **v1.23** — a **scheduled self-audit**: one command (and a cron recipe) that keeps the whole project honest — every guide prose-clean, every proof wired, and the two runtimes still in parity — escalating on any drift, with an on-demand adversarial sweep for overclaims. (v1.22 made docs verified claims via the `gated-docs` skill; v1.21 added the **parity differential-testing oracle** and **`hb reward`**; v1.20 the **cross-model refuter**; v1.19 the **MCP server**.) Details below.*
+*New in **v1.24** — **cross-runtime parity hardening**: new checks that the node and Python runtimes agree on the tick's wake reasons, gate verdicts, rot detection, and backend set — an audit that turned up (and fixed) a real Python liveness bug where a stalled review never escalated. (v1.23 added the **scheduled self-audit**; v1.22 the `gated-docs` skill; v1.21 the **parity differential-testing oracle**; v1.20 the **cross-model refuter**; v1.19 the **MCP server**.) Details below.*
 
 ---
 

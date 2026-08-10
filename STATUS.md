@@ -1,7 +1,29 @@
 # STATUS — HeartBeat
 
-**Version:** v1.23 (scheduled self-audit — corpus coherence + runtime parity as a standing check, over v1.22)
+**Version:** v1.24 (tick/gate/doctor/registry parity + a real Python `review_stuck` liveness fix, over v1.23)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.24 — cross-runtime parity hardening (and the bug it surfaced)
+
+Auditing parity coverage across every feature — prompted by asking "where is the parity
+cross-check?" — turned up a real liveness bug and four uncovered surfaces.
+
+- **Python `review_stuck` fix (HIGH).** `tick.py` lacked node `tick.sh`'s `review_stuck`
+  escalation, so a never-resolving adversarial review stalled **forever** in the Python runtime
+  (a liveness violation) instead of escalating past `STUCK_TICKS`. Now mirrored (count `review_wake`
+  since the last verdict; single-alert flag; `review_stalled` event). It hid because the tick's
+  *decision* was never cross-checked — only the projector/resolver and the protocol reason *keys*.
+- **Four new cross-runtime parity proofs**: the tick's `data.reason` (**T82** — next_task /
+  gate_pending / all_done / review_stuck / build_stuck), the gate-runner verdict (**T83** —
+  pass/fail/hollow-floor/timeout), doctor/rot detection (**T84**), and the backends registry
+  (**T85**, python-only `claude` alias normalized). Each drives both runtimes.
+- **Intentional divergences documented** so they're not future false-positives: node-only
+  `unsanctioned_drift` (opt-in drift detection, off by default) + `no_next_task_script`, the `claude`
+  alias, the scaffold default `.hb`, node-only `import`, and `diagnose` recovery-command text.
+- Built + double-checked the gated way: plan/phase refutations caught a vacuous-pass hole, a
+  grep-a-filename wiring check, an unbuildable registry assertion (the `claude` alias), and an
+  incomplete tick mirror; a pre-commit sweep confirmed 0 consequence-bugs and 0 further missed gaps
+  (all other tick reasons verified identical across runtimes).
 
 ## v1.23 — scheduled self-audit (corpus coherence + runtime parity)
 

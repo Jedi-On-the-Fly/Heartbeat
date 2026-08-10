@@ -14,6 +14,13 @@ and `bash .hb/gate.sh`; python references the `hb` console) — so parity compar
 not messages. The full contract and every intentional divergence live in
 [parity-notes.md](../../planning/parity-notes.md).
 
+Beyond the pure functions, a few **behavioral** surfaces must also match (they wrap the pure
+functions, so they get their own cross-runtime checks): the **tick's `data.reason`** (both ticks
+wake for the same reason on the same state, incl. `review_stuck` — T82), the **gate-runner
+verdict** (pass/fail/hollow-floor/timeout — T83), **doctor / rot detection** (T84), and the
+**backends registry** (same canonical set — T85). Each is proven by a `gate-examples/*-parity.sh`
+script driving both runtimes.
+
 ## The rule when you change shared logic
 
 Change one side's shared logic → mirror it on the other in the same change, and keep
