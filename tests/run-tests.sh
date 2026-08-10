@@ -988,6 +988,8 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/plugin-mcp.sh" 2>&1 | grep -q "PLUGIN-MCP-OK"'
   check "T69.2 the install guide passes prose-integrity" \
     'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/install-the-heartbeat-plugin.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+  check "T69.3 the install guide's structural claims hold (venv fallback, hb console, mcp-serve, manifest)" \
+    'bash "'"$GEX"'/install-guide.sh" 2>&1 | grep -q "INSTALL-GUIDE-OK"'
 else
   echo "  (python3 absent — T69 skipped)"
 fi

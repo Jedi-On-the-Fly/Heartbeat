@@ -17,6 +17,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 
 | How-to | Status |
 |---|---|
+| Install & Update HeartBeat | ✅ [install-the-heartbeat-plugin.md](install-the-heartbeat-plugin.md) — T69 |
 | HeartBeat in 5 Minutes | ✅ [heartbeat-in-5-minutes.md](heartbeat-in-5-minutes.md) — T59 |
 | Your First HeartBeat Project | ✅ [heartbeat-in-5-minutes.md](heartbeat-in-5-minutes.md) — T59 |
 | Your First HeartBeat Failure | ⬜ Not available yet *(→ diagnose-a-stuck-project.md)* |
