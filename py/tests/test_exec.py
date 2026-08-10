@@ -122,6 +122,32 @@ def test_parallel_worktree_isolation(tmp_path, monkeypatch, stub, capsys):
     assert not list((hb / "wt").glob("*")) if (hb / "wt").exists() else True
 
 
+def test_relative_dir_worktree(tmp_path, monkeypatch, stub, capsys):
+    # A relative --dir must not double-nest the git worktree (regression: `git -C proj worktree
+    # add proj/.hb/wt/...` created proj/proj/... and the concurrent run exhausted attempts).
+    dag = {"phases": [{"id": "WP", "gate_entry": None, "gate_exit": "GWP",
+                       "tasks": [{"id": "WA", "title": "WA.out", "requires": []},
+                                 {"id": "WB", "title": "WB.out", "requires": []}]}],
+           "gates": {"GWP": {"criteria": [{"id": "c", "cmd": 'test -f "$PROJECT_DIR/WA.out" && test -f "$PROJECT_DIR/WB.out"'}]}}}
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    subprocess.run(["git", "-C", str(tmp_path), "init", "-q"])
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"])
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", str(tmp_path),
+                    "commit", "-q", "-m", "init"])
+    monkeypatch.setenv("HB_EXEC_CMD", f"bash {stub}")
+    monkeypatch.setenv("HB_EXEC_MAX_ITERS", "15")
+    monkeypatch.setenv("HB_MAX_CONCURRENCY", "2")
+    monkeypatch.setenv("STUB_DISTINCT", "1")
+    monkeypatch.delenv("HB_NO_GIT", raising=False)
+    monkeypatch.chdir(tmp_path.parent)                 # drive with a RELATIVE dir from the parent
+    rc = executor.run(f"{tmp_path.name}/.hb")
+    out = capsys.readouterr().out
+    assert rc == 0 and "worktree-isolated" in out
+    assert (tmp_path / "WA.out").exists() and (tmp_path / "WB.out").exists()
+    assert not (tmp_path.parent / tmp_path.name / tmp_path.name).exists()   # no proj/proj double-nest
+
+
 # ── `hb exec config` prints the resolved config and must NOT run (parity with the plugin) ──
 def test_exec_config_prints_and_does_not_run(tmp_path, monkeypatch, stub, capsys):
     from heartbeat import cli

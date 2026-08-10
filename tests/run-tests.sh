@@ -594,8 +594,8 @@ check "T39.2 bootstrap copies the backend adapters into .hb/executors/" \
   '[ -f "$P39/.hb/executors/agno_exec.py" ] && [ -f "$P39/.hb/executors/crewai_exec.py" ] && [ -f "$P39/.hb/executors/claude-exec.sh" ] && [ -f "$P39/.hb/executors/langgraph_exec.py" ] && [ -f "$P39/.hb/executors/openai_agents_exec.py" ] && [ -f "$P39/.hb/executors/autogen_exec.py" ] && [ -f "$P39/.hb/executors/smolagents_exec.py" ] && [ -f "$P39/.hb/executors/pydanticai_exec.py" ]'
 check "T39.3 SKILL help documents the exec command" \
   'grep -q "heartbeat exec" "$HB_SRC/plugin/skills/heartbeat/SKILL.md"'
-check "T39.4 plugin version bumped to 1.21.0" \
-  'grep -q "1.21.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
+check "T39.4 plugin version bumped to 1.22.0" \
+  'grep -q "1.22.0" "$HB_SRC/plugin/.claude-plugin/plugin.json"'
 
 grp "T40 — parallel fan-out (v1.8)"
 # In-place parallel: one phase, three independent tasks, driven concurrently by the stub.
@@ -1095,6 +1095,34 @@ if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
     'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/docs/howto/review-an-unsafe-gate.md" 2>&1 | grep -q "ALL-PROSE-OK"'
 else
   echo "  (python3/node absent — T77 skipped)"
+fi
+
+grp "T78 — gated-docs skill (docs-as-verified-claims methodology)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T78.1 the gated-docs skill passes prose-integrity (links resolve, real commands)" \
+    'bash "'"$GEX"'/prose-check.sh" "'"$HB_SRC"'/plugin/skills/gated-docs/SKILL.md" 2>&1 | grep -q "ALL-PROSE-OK"'
+  check "T78.2 the skill declares valid frontmatter and points at the real gate machinery" \
+    'grep -q "^name: gated-docs" "'"$HB_SRC"'/plugin/skills/gated-docs/SKILL.md" && grep -q "prose-check.sh" "'"$HB_SRC"'/plugin/skills/gated-docs/SKILL.md" && grep -q "writing-behavioral-gates" "'"$HB_SRC"'/plugin/skills/gated-docs/SKILL.md"'
+else
+  echo "  (python3 absent — T78 skipped)"
+fi
+
+grp "T79 — whole how-to library prose integrity (EVERY guide gated, not just a subset)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T79.1 every docs/howto/*.md guide passes prose-integrity (count == file count)" \
+    'D="'"$HB_SRC"'/docs/howto"; n=$(ls "$D"/*.md | wc -l); bash "'"$GEX"'/prose-check.sh" "$D"/*.md 2>&1 | grep -q "ALL-PROSE-OK:$n"'
+  check "T79.2 the prose-check selftest still holds after the marker-precision fix" \
+    'bash "'"$GEX"'/prose-check.sh" --selftest 2>&1 | grep -q "PROSE-CHECK-SELFTEST-OK"'
+else
+  echo "  (python3 absent — T79 skipped)"
+fi
+
+grp "T80 — relative --dir resolves to an absolute PROJECT_DIR/HB_DIR (both runtimes)"
+if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  check "T80.1 a relative-dir gate (PROJECT_DIR + HB_DIR criteria) passes on both python and node" \
+    'bash "'"$GEX"'/relative-dir.sh" 2>&1 | grep -q "RELATIVE-DIR-OK"'
+else
+  echo "  (python3/node absent — T80 skipped)"
 fi
 
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).

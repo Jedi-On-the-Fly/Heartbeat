@@ -1,7 +1,32 @@
 # STATUS — HeartBeat
 
-**Version:** v1.21 (parity differential-testing oracle + verifiable-reward / model-regression, over v1.20)
+**Version:** v1.22 (gated-docs skill + how-to library gated end-to-end + relative-`--dir` fix, over v1.21)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.22 — gated-docs skill + a fully-gated how-to library + a bug the method caught
+
+Applying HeartBeat's "refute, don't confirm" to the documentation itself — a doc is a claim, so
+gate it, wire it to re-verify, refute it, and bend the doc to the code.
+
+- **`gated-docs` skill** (`plugin/skills/gated-docs/`) — the method as a plugin skill: pick
+  mechanism-proof vs prose-check, write the proof spec-first (must be able to go red), wire it so
+  the suite runs it, refute it; for a batch, orchestrate with `/heartbeat plan`. Enforced by **T78**.
+- **Six Tier-1/Tier-2 operational how-tos** — run tasks in parallel (+worktree isolation), add
+  HeartBeat to an existing repo, write dependencies that don't over-constrain, review an unsafe gate
+  (each a runnable proof, **T77**), plus run fully locally and schedule unattended (prose, **T62**).
+- **Whole-library prose gate (T79)** — `prose-check` now runs over *every* `docs/howto/*.md`
+  (count-matched), closing the coverage gap where ~half the guides were ungated. Its placeholder
+  rule was tightened to marker-based (a false positive on the word "TODO" in prose), with a
+  regression-guard selftest.
+- **Level-3 refutation sweep** of the existing library — 3 of 5 batches came back clean; it caught
+  a **flagship-quickstart bug** (`heartbeat-in-5-minutes.md` didn't run as written — a relative
+  `--dir` the proof never exercised) and two `review_stuck` misattributions, all fixed.
+- **Relative-`--dir` fix (T80)** — the bug the sweep surfaced: the Python runtime resolved a
+  relative `--dir` to a relative `PROJECT_DIR`/`HB_DIR`, so gate criteria and the git worktree
+  double-nested (`<proj>/<proj>/…`) and blocked. `gate.py`/`executor.py` now absolutize (matching
+  the node runtime, already correct). Behavioral parity in `parity-notes.md`; regression tests in
+  `test_gate.py` + `test_exec.py`. Refutation caught two incomplete-fix holes (the `HB_DIR` twin and
+  the worktree path) before it landed.
 
 ## v1.21 — parity differential-testing oracle + verifiable-reward / model-regression
 
@@ -30,12 +55,6 @@ Python port + shared test harness; **plugin templates are unchanged** this relea
   refuters caught five real defects before commit (the latent rounding bug, a float op-order in the
   first fix, an LCG low-bit generator that barely varied, missing review-owed/gate-pending fuzz
   coverage, and a `bench --json` back-compat regression) — the method finding bugs in its own work.
-- **Operational how-to library (same release).** Six Tier-1/Tier-2 guides, dogfooded: run tasks in
-  parallel (+worktree isolation), add HeartBeat to an existing repo, write dependencies that don't
-  over-constrain, review an unsafe gate — each with a runnable proof under **T77** — plus run fully
-  locally and schedule unattended (prose, **T62**). Refutation caught a real overclaim (worktree
-  isolation is conditional on git) before commit; the fully-local path is validated by a live Ollama
-  run. Roadmap gaps in `docs/howto/howto-list.md` flipped to created.
 
 ## v1.20 — cross-model refuter + agent benchmark harness
 

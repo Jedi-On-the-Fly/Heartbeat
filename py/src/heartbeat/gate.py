@@ -14,13 +14,16 @@ GATE_TIMEOUT_S = int(os.environ.get("GATE_TIMEOUT_S", "5"))
 
 
 def _project_dir(hbdir):
-    return str(Path(hbdir).parent)
+    # ABSOLUTE so a relative --dir doesn't double-nest: the gate runs with cwd=PROJECT_DIR,
+    # and a criterion like grep "$PROJECT_DIR/out.txt" must not resolve to <proj>/<proj>/out.txt.
+    # (Matches the node runtime, whose gate.sh absolutizes via `cd && pwd`.)
+    return os.path.abspath(str(Path(hbdir).parent))
 
 
 def _env(hbdir):
     env = dict(os.environ)
     env["PROJECT_DIR"] = _project_dir(hbdir)
-    env["HB_DIR"] = str(hbdir)
+    env["HB_DIR"] = os.path.abspath(str(hbdir))   # absolute for the same reason as PROJECT_DIR
     return env
 
 

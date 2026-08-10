@@ -105,7 +105,7 @@ class _Pump:
 
 
 def dispatch(cfg, mode, payload, hbdir, task_id, cwd=None, model=None, provider=None):
-    cwd = cwd or str(Path(hbdir).parent)
+    cwd = cwd or os.path.abspath(str(Path(hbdir).parent))   # absolute: a relative --dir must not break the worker's cwd
     # Cross-model override: run this call under a distinct model/provider (backends and the
     # subprocess wire both read HB_EXEC_MODEL/PROVIDER from the env). Restored in finally.
     saved = {}
@@ -164,12 +164,12 @@ def _git(pd, *args):
 def _worktree_dispatch(hbdir, cfg, attempts, iso, merge_lock, t):
     st.acquire_lease(hbdir, t["id"])
     st.mutate(hbdir, {"event": "task_started", "task": t["id"]})
-    pd = str(Path(hbdir).parent)
+    pd = os.path.abspath(str(Path(hbdir).parent))       # absolute: git -C pd + a relative wt would double-nest (proj/proj/.hb/wt)
     cwd, wt, branch = pd, None, None
     if iso:
         branch = f"hb-exec/{t['id']}"
-        wt = str(Path(hbdir) / "wt" / t["id"])
-        (Path(hbdir) / "wt").mkdir(parents=True, exist_ok=True)
+        wt = os.path.abspath(str(Path(hbdir) / "wt" / t["id"]))
+        Path(wt).parent.mkdir(parents=True, exist_ok=True)
         if _git(pd, "worktree", "add", "--quiet", "-B", branch, wt, "HEAD").returncode == 0:
             cwd = wt
         else:

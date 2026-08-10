@@ -6,7 +6,7 @@
 
 Most agent tooling helps you *run* agents. HeartBeat is about the harder half: knowing the work is actually done, not just claimed. Agents are confident and often wrong; HeartBeat assumes nothing and verifies everything at defined checkpoints.
 
-*New in **v1.21** — **parity as a differential-testing oracle**: a seeded generator fuzzes both runtimes and flags any divergence (it caught a real rounding bug the fixtures missed), and **`hb reward`** / **`hb bench --baseline`** turn the event log's gate verdicts into a verifiable-reward stream and a model-regression signal. (v1.20 let the refuter run on a **different model** than the doer, and added **`hb bench`**; v1.19 added the **MCP server** — Codex, Claude Code, or OpenCode can drive HeartBeat.) Details below.*
+*New in **v1.22** — HeartBeat now applies "refute, don't confirm" to its **own documentation**: a `gated-docs` skill and a how-to library where **every** guide is backed by a runnable proof or an integrity check (and the audit that gated it caught a real relative-`--dir` bug, now fixed). (v1.21 added the **parity differential-testing oracle** and **`hb reward`** / **`hb bench --baseline`**; v1.20 the **cross-model refuter**; v1.19 the **MCP server**.) Details below.*
 
 ---
 

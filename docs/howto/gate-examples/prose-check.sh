@@ -23,8 +23,9 @@ check_doc(){
   local f="$1" dir; dir="$(cd "$(dirname "$f")" && pwd)"
   [ -f "$f" ] || { echo "  missing: $f"; return 1; }
   [ "$(grep -cvE '^[[:space:]]*$' "$f")" -ge 15 ] || { echo "  too thin: $f"; return 1; }
-  # placeholder in body (whole-word)
-  if grep -qiE '\b(TODO|TBD|FIXME|fill in|lorem ipsum)\b' "$f"; then echo "  placeholder in: $f"; return 1; fi
+  # placeholder MARKERS only — a real "TODO:" / standalone TODO / stock filler, not the word
+  # TODO used as prose or inside `code` (strip inline-code spans first to avoid false alarms).
+  if sed 's/`[^`]*`//g' "$f" | grep -qiE '(TODO|TBD|FIXME):|\b(fill in|lorem ipsum)\b|^[[:space:]]*(TODO|TBD|FIXME)[[:space:]]*$'; then echo "  placeholder in: $f"; return 1; fi
   # relative links resolve
   local t base
   grep -oE '\]\([^)]+\)' "$f" | sed -E 's/^\]\(//; s/\)$//' | while read -r t; do
@@ -47,6 +48,9 @@ if [ "${1:-}" = "--selftest" ]; then
   : > "$d/sibling.md"
   { body; echo "See [sibling](sibling.md). Run \`hb init\`, then \`hb exec\` and \`hb gate\`."; } > "$d/good.md"
   check_doc "$d/good.md" >/dev/null || { echo "SELFTEST FAIL: a good doc was rejected"; exit 1; }
+  # good: TODO used as prose / inside `code` is NOT a placeholder marker (regression guard)
+  { body; echo "A plan is a \`TODO\` list — you mention a TODO, a spec; that is not a placeholder."; } > "$d/good_todo_prose.md"
+  check_doc "$d/good_todo_prose.md" >/dev/null || { echo "SELFTEST FAIL: TODO-as-prose was wrongly rejected"; exit 1; }
   # bad: broken link
   { body; echo "See [missing](does-not-exist.md)."; } > "$d/bad_link.md"
   check_doc "$d/bad_link.md" >/dev/null && { echo "SELFTEST FAIL: a broken link was accepted"; exit 1; }

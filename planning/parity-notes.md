@@ -41,6 +41,16 @@ Two gotchas it encodes:
    not the action strings. (If you ever want the reasons themselves to diverge, that's a
    real bug; the wording differing is not.)
 
+## Behavioral parity (not byte-equal, but must match)
+
+- **A relative `--dir` resolves to an ABSOLUTE `PROJECT_DIR`/`HB_DIR`.** The gate runs with
+  `cwd = PROJECT_DIR`, so if those vars were relative a criterion like `grep "$PROJECT_DIR/out.txt"`
+  would double-nest to `<proj>/<proj>/out.txt` and block. Node's `gate.sh` has always absolutized
+  (`HB_DIR="$(cd "$(dirname "$0")" && pwd)"`); the Python runtime now matches (`gate._project_dir`
+  and `_env` use `os.path.abspath`, and the executor's worker `cwd` is absolute). Enforced by
+  node-suite **T80** (`docs/howto/gate-examples/relative-dir.sh` drives both runtimes with a
+  relative dir) + `py/tests/test_gate.py::test_relative_dir_gate`.
+
 ## Intentional divergences (not on the byte-equal surface)
 
 - **`hb exec config`** is a shared command (both runtimes print the resolved executor config and

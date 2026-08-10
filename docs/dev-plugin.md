@@ -13,6 +13,7 @@ Two stages. **Stage A** (`tick.sh`, bash) reads settled reality and decides whet
 | `plugin/.mcp.json` | Registers the HeartBeat MCP server (`hb mcp-serve`) so installing the plugin wires it (both hosts) |
 | `plugin/bootstrap.sh` | Scaffolds `<project>/.hb/`; git init + hooks |
 | `plugin/skills/heartbeat/SKILL.md` | `/heartbeat` command surface + Tick Protocol |
+| `plugin/skills/gated-docs/SKILL.md` | docs-as-verified-claims method (gate a guide with a proof/prose-check, refute it) |
 | `plugin/hooks/hooks.json` + `heartbeat-detect.sh` | SessionStart pointer when a `.hb/` exists |
 | `plugin/templates/*` | Per-project tooling, copied into `.hb/` at bootstrap |
 
@@ -209,7 +210,7 @@ Copies templates into `.hb/` (incl. `executors/`), lints the seeded DAG, seeds `
 
 ## Skill + hooks
 
-`SKILL.md` commands: `init, plan, status, lint, audit, doctor, viz, tick, run, exec, schedule, help`. `/heartbeat plan` acceptance gate: lint clean + audit clean (0 hollow) + a refutation returning SOUND before proposing. `hooks.json` registers a SessionStart command (`heartbeat-detect.sh`) that prints a pointer when `$CLAUDE_PROJECT_DIR/.hb/hb.js` exists, silent otherwise.
+`SKILL.md` commands: `init, plan, status, lint, audit, doctor, viz, tick, run, exec, schedule, help`. `/heartbeat plan` acceptance gate: lint clean + audit clean (0 hollow) + a refutation returning SOUND before proposing. A second skill, `gated-docs`, captures the docs-as-verified-claims method (gate a guide with a runnable proof or prose-check, wire it, refute it). `hooks.json` registers a SessionStart command (`heartbeat-detect.sh`) that prints a pointer when `$CLAUDE_PROJECT_DIR/.hb/hb.js` exists, silent otherwise.
 
 ## Environment variables
 

@@ -11,11 +11,12 @@ Claude Code required.
 
 ```bash
 hb init myproject
+cd myproject          # run the rest of the walkthrough from inside the project
 ```
 
 ## 2. Describe one unit of work
 
-Edit `myproject/.hb/dag.json` — one phase, one task, one **behavioral** gate (assert the work
+Edit `.hb/dag.json` — one phase, one task, one **behavioral** gate (assert the work
 *happened*, not that a file exists):
 
 ```json
@@ -25,8 +26,8 @@ Edit `myproject/.hb/dag.json` — one phase, one task, one **behavioral** gate (
                           "criteria": [ { "id": "c", "cmd": "grep -q ok \"$PROJECT_DIR/out.txt\"" } ] } } }
 ```
 
-Then `hb rebuild` to project the initial state, and `hb audit .hb/dag.json` to confirm the
-gate is behavioral (see [writing-behavioral-gates.md](writing-behavioral-gates.md)).
+Then `hb rebuild --dir .` to project the initial state, and `hb audit .hb/dag.json` to confirm
+the gate is behavioral (see [writing-behavioral-gates.md](writing-behavioral-gates.md)).
 
 ## 3. Drive it
 
@@ -40,7 +41,7 @@ echo ok > "$(pwd)/out.txt"     # do the work
 echo '{"ok":true,"summary":"done"}'
 EOF
 chmod +x worker.sh
-HB_EXEC_CMD="./worker.sh" hb exec run --dir myproject
+HB_EXEC_CMD="$(pwd)/worker.sh" hb exec run --dir .
 ```
 
 Or point at a real model instead — the DAG doesn't change:
@@ -55,7 +56,7 @@ trusted; the behavior was checked.
 ## 5. Prove it worked
 
 ```bash
-hb state --dir myproject     # completed_phases: ["P0"]
+hb state --dir .     # completed_phases: ["P0"]
 ```
 
 The whole cycle — init → author → drive → gate → done — is proven end to end (with a control

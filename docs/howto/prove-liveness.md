@@ -14,7 +14,7 @@ forever**. This is how to know those alarms actually fire.
   reclaimed — a `lease_expired` event is appended and the task becomes claimable again — so a
   crashed session doesn't freeze a branch forever.
 - **Unresolved review.** A phase whose deterministic gate passed but whose adversarial review
-  never resolved is surfaced as `review_stuck` (by `diagnose`/`doctor`), not silently parked.
+  never resolved is surfaced as `review_stuck` (by `diagnose`), not silently parked.
 
 None of these should fire when the run is healthy — a fresh lease is kept, a progressing
 build is quiet, a project with no pending review reports no `review_stuck`.

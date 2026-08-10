@@ -1,5 +1,27 @@
+import os
+
 from conftest import make_hb, two_phase_dag
 from heartbeat import state, gate
+
+
+def test_relative_dir_gate(tmp_path, monkeypatch):
+    # A relative dir must not double-nest $PROJECT_DIR / $HB_DIR (regression: gate blocked
+    # because both resolved relative and the criteria ran with cwd = the relative project).
+    dag = {
+        "phases": [{"id": "P0", "gate_exit": "GATE_R",
+                    "tasks": [{"id": "P0T1", "title": "produce out.txt", "requires": []}]}],
+        "gates": {"GATE_R": {"desc": "rel", "criteria": [
+            {"id": "pd", "desc": "project dir", "cmd": 'grep -q ok "$PROJECT_DIR/out.txt"'},
+            {"id": "hd", "desc": "hb dir", "cmd": 'test -f "$HB_DIR/dag.json"'}]}},
+    }
+    hb = make_hb(tmp_path, dag)
+    (tmp_path / "out.txt").write_text("ok\n")
+    state.reproject(hb)
+    monkeypatch.chdir(tmp_path.parent)                 # drive with a RELATIVE dir from the parent
+    rel_hb = f"{tmp_path.name}/.hb"
+    assert os.path.isabs(gate._project_dir(rel_hb))    # PROJECT_DIR must be absolute
+    res = gate.run_gate(rel_hb, "GATE_R")
+    assert res["status"] == "passed" and res["failed"] == 0
 
 
 def test_gate_pass_advances_phase(tmp_path):
