@@ -37,10 +37,11 @@ That means the same adapter shape fits non-code work:
 |---|---|
 | Data / analytics | table & column lineage (a dbt graph, SQL lineage) |
 | Infrastructure | a Terraform/IaC resource dependency graph |
-| Writing / research | a "cites / builds-on" graph between sections or claims |
+| Writing / research | a "cites / builds-on" graph between sections or claims — **shipped** (see below) |
 
-These are the **pattern generalizing** — only the code adapter is built today; the others are
-illustrations, not shipped providers.
+**Two shipped domains today — code and docs/research** — proving the pattern with two genuinely
+different providers over the *same* engine. Data/analytics and infrastructure are illustrations of
+where it generalizes next, not shipped providers.
 
 ## The boundary (non-negotiable)
 
@@ -74,6 +75,23 @@ node ≡ python injection mechanism are gated hermetically (node-suite T87–T89
 database read** and the **local-model end-to-end demo** (`tests/real-context.sh`, driven against a
 local ollama model) are **harness-first / on-demand** — they need external tools and are
 non-deterministic, so they are *not* part of the gated suite.
+
+## Docs / research — the second domain
+
+The `heartbeat-docs` adapter ([README](../plugin/adapters/docs/README.md)) is the proof that the
+architecture generalizes: a completely different provider over the **unchanged** engine.
+
+- **Seam 1** — `docs-map.js` parses a markdown corpus's **citation graph** (a section that links to
+  another builds on it) into the same codemap — both `edges` and `tasks` (one authoring task per
+  section). The **same `deplint.js`** then catches drafting a citing section before the one it cites.
+  Proof: [docs-deplint.sh](howto/gate-examples/docs-deplint.sh) (T90); it also confirms `deplint.js`
+  is byte-unchanged.
+- **Seam 2** — `docs-context.js` renders the **text** of the sections a task directly cites, through
+  the same generic context hook. Proof: [docs-context.sh](howto/gate-examples/docs-context.sh) (T91).
+
+Only the provider is new — `deplint.js` and the `context_cmd` hook are reused as-is. The live
+end-to-end demo (`tests/real-docs-context.sh`, ollama) is harness-first, like code's. Guide:
+[plan a docs project with citations](howto/plan-a-docs-project-with-citations.md).
 
 Guides: [build a domain adapter](howto/build-a-domain-adapter.md) ·
 [feed code context to Stage B](howto/feed-code-context-to-stage-b.md) ·

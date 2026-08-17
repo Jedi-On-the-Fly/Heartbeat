@@ -1215,6 +1215,14 @@ else
   echo "  (node absent — T90 skipped)"
 fi
 
+grp "T91 — docs adapter Seam 2: docs-context renders a task's direct-cited section text (not 2-hop/self)"
+if command -v node >/dev/null 2>&1; then
+  check "T91.1 docs context proof passes (docs-context.sh → DOCS-CONTEXT-OK)" \
+    'bash "'"$GEX"'/docs-context.sh" 2>&1 | grep -q "DOCS-CONTEXT-OK"'
+else
+  echo "  (node absent — T91 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

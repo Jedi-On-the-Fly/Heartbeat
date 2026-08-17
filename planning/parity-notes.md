@@ -123,6 +123,12 @@ Two gotchas it encodes:
   mapping, and context provider are gated hermetically (node-suite T87/T88). Proofs:
   `docs/howto/gate-examples/code-deplint.sh`, `code-map.sh`, `code-context.sh`.
 
+- **The docs adapter** (`plugin/adapters/docs/` — `docs-map` + `docs-context`) is the SECOND domain
+  provider and is likewise **node-only** and **not a parity surface**. It reuses the *unchanged*
+  `deplint.js` and the generic context hook — only the provider is new — so it adds no shared logic to
+  keep byte-equal. Gated hermetically (node-suite T90/T91: `docs-deplint.sh`, `docs-context.sh`); the
+  live ollama demo (`tests/real-docs-context.sh`) is harness-first. Same boundary as code.
+
 - **The executor context-injection hook IS a shared behavioral surface** (Seam 2). When a
   `context_cmd` is configured, both executors (`py/src/heartbeat/executor.py::assemble_context` and
   `plugin/templates/hb-exec.js::assembleContext`) run it per task and append its stdout to the task
