@@ -1181,6 +1181,14 @@ else
   echo "  (node/curl absent — T86 skipped)"
 fi
 
+grp "T87 — heartbeat-code dep-lint adapter (Seam 1: missing/redundant/collision, transitive-closure, advisory/strict)"
+if command -v node >/dev/null 2>&1; then
+  check "T87.1 dep-lint proof passes (code-deplint.sh → CODE-DEPLINT-OK)" \
+    'bash "'"$GEX"'/code-deplint.sh" 2>&1 | grep -q "CODE-DEPLINT-OK"'
+else
+  echo "  (node absent — T87 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
