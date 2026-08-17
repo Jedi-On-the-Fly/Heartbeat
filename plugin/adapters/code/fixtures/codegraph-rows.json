@@ -1,0 +1,14 @@
+{
+  "nodes": [
+    { "id": 1, "qualified_name": "auth.go::Login",   "file": "auth.go",   "kind": "function" },
+    { "id": 2, "qualified_name": "db.go::Query",      "file": "db.go",     "kind": "function" },
+    { "id": 3, "qualified_name": "models.go::Base",   "file": "models.go", "kind": "class" },
+    { "id": 4, "qualified_name": "models.go::User",   "file": "models.go", "kind": "class" }
+  ],
+  "edges": [
+    { "from_id": 1, "to_id": 2, "type": "calls" },
+    { "from_id": 4, "to_id": 3, "type": "inheritance" },
+    { "from_id": 1, "to_id": 3, "type": "imports" },
+    { "from_id": 2, "to_id": 4, "type": "contains" }
+  ]
+}

@@ -1185,6 +1185,8 @@ grp "T87 — heartbeat-code dep-lint adapter (Seam 1: missing/redundant/collisio
 if command -v node >/dev/null 2>&1; then
   check "T87.1 dep-lint proof passes (code-deplint.sh → CODE-DEPLINT-OK)" \
     'bash "'"$GEX"'/code-deplint.sh" 2>&1 | grep -q "CODE-DEPLINT-OK"'
+  check "T87.2 codegraph-map proof passes (code-map.sh → CODE-MAP-OK)" \
+    'bash "'"$GEX"'/code-map.sh" 2>&1 | grep -q "CODE-MAP-OK"'
 else
   echo "  (node absent — T87 skipped)"
 fi

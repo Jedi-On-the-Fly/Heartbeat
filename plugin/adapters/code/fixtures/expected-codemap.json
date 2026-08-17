@@ -1,0 +1,1 @@
+{ "edges": [ ["auth.go::Login", "db.go::Query"], ["models.go::User", "models.go::Base"], ["auth.go::Login", "models.go::Base"] ] }

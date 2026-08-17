@@ -114,6 +114,14 @@ Two gotchas it encodes:
   pure over the event log + scorecards (no new shared *logic* to mirror byte-for-byte). Proof:
   `docs/howto/gate-examples/reward-regression.sh` (node-suite T76).
 
+- **The code adapter** (`plugin/adapters/code/` — `deplint` + `codegraph-map`) is **node-only** and
+  intentionally **not a parity surface**, like viz/bench/mcp-serve. It's a *domain adapter* over the
+  general method (Seam 1: plan authoring), delivered by the plugin but **not scaffolded into any
+  `.hb/`** and importing nothing from core; the suites stay green without it (and without CodeGraph).
+  There is no second implementation to keep byte-equal — the live CodeGraph DB read is harness-first;
+  the pure dep-lint engine + row→codemap mapping are gated hermetically (node-suite T87). Proofs:
+  `docs/howto/gate-examples/code-deplint.sh`, `docs/howto/gate-examples/code-map.sh`.
+
 Extend it when a new shared surface lands.
 
 ## Auditor ruleset (identical regexes in both)

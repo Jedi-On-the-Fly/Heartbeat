@@ -33,6 +33,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Break a Large Task into HeartBeat-Sized Units | ✅ [size-a-task.md](size-a-task.md) — T62 |
 | Decide What Belongs in a Phase | ✅ [size-a-phase.md](size-a-phase.md) — T62 |
 | Write Dependencies That Don't Over-Constrain | ✅ [write-sparse-dependencies.md](write-sparse-dependencies.md) — T77 |
+| Plan Code-Aware DAGs (dep-lint `requires` against a code graph) | ✅ [plan-code-aware-dags.md](plan-code-aware-dags.md) — T87 |
 | Add HeartBeat to an Existing Repository | ✅ [add-heartbeat-to-an-existing-repo.md](add-heartbeat-to-an-existing-repo.md) — T77 |
 | Migrate an Existing Agent Loop to HeartBeat | ⬜ Not available yet |
 | Choose Claude Code vs Python Runtime | ✅ [choose-runtime.md](choose-runtime.md) — T62 |
