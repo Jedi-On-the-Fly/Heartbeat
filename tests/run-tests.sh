@@ -1207,6 +1207,14 @@ else
   echo "  (node/python absent — T89 skipped)"
 fi
 
+grp "T90 — docs adapter (2nd domain): citation graph → codemap, UNCHANGED deplint generalizes"
+if command -v node >/dev/null 2>&1; then
+  check "T90.1 docs Seam-1 proof passes (docs-deplint.sh → DOCS-DEPLINT-OK)" \
+    'bash "'"$GEX"'/docs-deplint.sh" 2>&1 | grep -q "DOCS-DEPLINT-OK"'
+else
+  echo "  (node absent — T90 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

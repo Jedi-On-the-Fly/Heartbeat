@@ -1,0 +1,4 @@
+{
+  "edges": [ ["method", "background"], ["results", "method"], ["intro", "background"], ["intro", "method"] ],
+  "tasks": { "background": ["background"], "method": ["method"], "results": ["results"], "intro": ["intro"] }
+}

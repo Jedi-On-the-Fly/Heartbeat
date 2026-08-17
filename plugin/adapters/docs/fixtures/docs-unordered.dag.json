@@ -1,0 +1,6 @@
+{ "phases": [ { "id": "P0", "tasks": [
+  { "id": "background", "requires": [] },
+  { "id": "method", "requires": [] },
+  { "id": "results", "requires": [] },
+  { "id": "intro", "requires": [] }
+] } ] }
