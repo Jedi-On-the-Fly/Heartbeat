@@ -1,7 +1,10 @@
 # HeartBeat — tick-driven agent orchestration
 
-> A cheap, deterministic **Stage A** (bash) runs on a schedule and wakes the
-> expensive **Stage B** (an LLM agent) *only when there is real work to do*.
+> The non-determinism lives *inside* an agent's tasks; the gaps *between* them are
+> deterministic. HeartBeat drops a cheap **Stage A** (bash/Python) observation into
+> that gap — it reads settled reality and wakes the expensive **Stage B** (an LLM)
+> *only when there's real work* — then verifies the result at a gate instead of
+> trusting it.
 
 **Developer docs (source of truth):** [dev-plugin.md](docs/dev-plugin.md) · [dev-python.md](docs/dev-python.md) · [dev-tests.md](docs/dev-tests.md). Concept: [heartbeat.md](docs/heartbeat.md) · [heartbeat-py.md](docs/heartbeat-py.md). How-to guides (runnable): [docs/howto/](docs/howto/).
 
@@ -15,6 +18,15 @@ tick.sh (every 15–30 min)              ← Stage A: pure bash, priority checks
   ├─ wakeAgent: false → nothing to do, sleep
   └─ wakeAgent: true  → the LLM is invoked ← Stage B: only when needed
 ```
+
+Three things keep a multi-hour run honest. **State is computed, not remembered** —
+`events.jsonl` is the append-only source of truth and `state.json` is a projection of
+it, so a crashed session is rebuilt from the log and continues. **Progress is verified,
+not trusted** — a phase advances only when its *behavioral* gate passes (does the thing
+*work*, not does a file *exist*), and sensitive gates add a second agent told to
+*refute* completion rather than confirm it. And **behavior is a contract** — the same
+DAG and tick protocol run on two runtimes (a node+bash plugin and a pure-Python port)
+held to identical results.
 
 
 
