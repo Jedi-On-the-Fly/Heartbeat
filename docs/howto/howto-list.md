@@ -113,6 +113,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Restore a Verified Phase | ✅ [restore-a-verified-phase.md](restore-a-verified-phase.md) — T58 |
 | Understand HeartBeat Escalation | ✅ [keep-stage-b-untrusted.md](keep-stage-b-untrusted.md) — T56 |
 | Keep the Two Runtimes in Parity | ✅ [keep-the-runtimes-in-parity.md](keep-the-runtimes-in-parity.md) — T55, T75 (fuzz oracle) |
+| Watch a Run Live (snapshot + live dashboard) | ✅ [watch-a-run-live.md](watch-a-run-live.md) — T86 |
 | Build an Operational Runbook | ⬜ Not available yet |
 
 ## G. CI, Automation & Advanced Workflows — "run it unattended"

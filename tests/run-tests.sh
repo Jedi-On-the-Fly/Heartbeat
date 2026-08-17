@@ -1173,6 +1173,14 @@ else
   echo "  (python3/node absent — T85 skipped)"
 fi
 
+grp "T86 — hb viz --serve (live dashboard: fresh re-read + Origin-403 + non-loopback refusal + snapshot regression)"
+if command -v node >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+  check "T86.1 live serve proof passes (viz-serve.sh → VIZ-SERVE-OK)" \
+    'bash "'"$GEX"'/viz-serve.sh" 2>&1 | grep -q "VIZ-SERVE-OK"'
+else
+  echo "  (node/curl absent — T86 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

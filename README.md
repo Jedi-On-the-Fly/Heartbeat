@@ -54,7 +54,7 @@ Then `/heartbeat help`.
 /heartbeat init <project-dir>      # scaffold .hb/ (+ git init, restore points)
 /heartbeat plan <project-dir>      # convert a written plan into a lint-clean dag.json
 /heartbeat lint <project-dir>      # validate the DAG
-/heartbeat viz <project-dir>       # dag-view.html
+/heartbeat viz <project-dir>       # dag-view.html (add --serve for a live, always-current view)
 /heartbeat tick <project-dir>      # one manual tick
 /loop 15m /heartbeat tick <dir>    # drive it autonomously
 ```

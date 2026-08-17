@@ -132,9 +132,15 @@ runs the deterministic audit and then dispatches the refutation to a configured 
 
 ### `/heartbeat viz <project-dir>`
 ```bash
-node <project-dir>/.hb/hb-viz.js <project-dir>/.hb
+node <project-dir>/.hb/hb-viz.js <project-dir>/.hb              # snapshot → dag-view.html
+node <project-dir>/.hb/hb-viz.js <project-dir>/.hb --serve [--port N]   # live dashboard
 ```
-Output: `<project-dir>/.hb/dag-view.html` — self-contained, no external deps.
+Two modes. **Snapshot** (default) writes `<project-dir>/.hb/dag-view.html` — self-contained,
+no external deps, but a point-in-time view (regenerate to refresh). **Live** (`--serve`) runs a
+loopback-only HTTP server that re-reads `dag.json`+`state.json` fresh on every request, so the
+view always reflects current execution state with no regenerate — prints the URL (`--port 0`
+for an ephemeral port). It binds `127.0.0.1` only and validates the `Origin` header
+(DNS-rebinding); a non-loopback bind is refused unless you pass `--allow-remote`.
 
 ### `/heartbeat tick <project-dir>`
 Run a manual Stage A tick:
