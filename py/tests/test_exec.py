@@ -176,3 +176,18 @@ def test_exec_config_run_still_drives(tmp_path, monkeypatch, stub, capsys):
     rc = cli.main(["exec", "run", "--dir", str(tmp_path)])
     out = capsys.readouterr().out
     assert rc == 0 and "HB-EXEC DONE" in out               # `exec run` unchanged
+
+
+def test_context_hook_injects_provider_output(tmp_path, monkeypatch):
+    # Seam 2: a configured context_cmd's stdout is appended to the task context, delimited.
+    hb = make_hb(tmp_path, _dag([("P0", ["P0T1"])]))
+    monkeypatch.setenv("HB_EXEC_CONTEXT_CMD", "echo CTX-$HB_TASK_ID")
+    ctx = executor.assemble_context(hb, {"id": "P0T1", "phase": "P0", "title": "t"})
+    assert "<<HB-CONTEXT>>" in ctx and "CTX-P0T1" in ctx
+
+
+def test_context_hook_absent_by_default(tmp_path, monkeypatch):
+    hb = make_hb(tmp_path, _dag([("P0", ["P0T1"])]))
+    monkeypatch.delenv("HB_EXEC_CONTEXT_CMD", raising=False)
+    ctx = executor.assemble_context(hb, {"id": "P0T1", "phase": "P0", "title": "t"})
+    assert "<<HB-CONTEXT>>" not in ctx                      # byte-unchanged when unconfigured

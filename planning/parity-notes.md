@@ -114,13 +114,29 @@ Two gotchas it encodes:
   pure over the event log + scorecards (no new shared *logic* to mirror byte-for-byte). Proof:
   `docs/howto/gate-examples/reward-regression.sh` (node-suite T76).
 
-- **The code adapter** (`plugin/adapters/code/` — `deplint` + `codegraph-map`) is **node-only** and
-  intentionally **not a parity surface**, like viz/bench/mcp-serve. It's a *domain adapter* over the
-  general method (Seam 1: plan authoring), delivered by the plugin but **not scaffolded into any
-  `.hb/`** and importing nothing from core; the suites stay green without it (and without CodeGraph).
-  There is no second implementation to keep byte-equal — the live CodeGraph DB read is harness-first;
-  the pure dep-lint engine + row→codemap mapping are gated hermetically (node-suite T87). Proofs:
-  `docs/howto/gate-examples/code-deplint.sh`, `docs/howto/gate-examples/code-map.sh`.
+- **The code adapter** (`plugin/adapters/code/` — `deplint` + `codegraph-map` + `codegraph-context`)
+  is **node-only** and intentionally **not a parity surface**, like viz/bench/mcp-serve. It's a
+  *domain adapter* over the general method (Seam 1: plan authoring; Seam 2: context assembly),
+  delivered by the plugin but **not scaffolded into any `.hb/`** and importing nothing from core; the
+  suites stay green without it (and without CodeGraph). There is no second implementation to keep
+  byte-equal — the live CodeGraph DB read is harness-first; the pure dep-lint engine, row→codemap
+  mapping, and context provider are gated hermetically (node-suite T87/T88). Proofs:
+  `docs/howto/gate-examples/code-deplint.sh`, `code-map.sh`, `code-context.sh`.
+
+- **The executor context-injection hook IS a shared behavioral surface** (Seam 2). When a
+  `context_cmd` is configured, both executors (`py/src/heartbeat/executor.py::assemble_context` and
+  `plugin/templates/hb-exec.js::assembleContext`) run it per task and append its stdout to the task
+  context, wrapped in the same `<<HB-CONTEXT>>` delimiter — so the **injected block is byte-identical
+  node ≡ python**, including exit-code handling: both inject the captured stdout even when the
+  command exits NONZERO (Python `subprocess.run` without `check`; node captures `e.stdout` from the
+  `execSync` throw), degrading to nothing only when there is no output. Enforced by **T89**
+  (`context-inject-parity.sh` drives both executors with a stub context_cmd + a stub backend and
+  compares the injected block for BOTH an exit-0 and an emit-then-nonzero-exit command) +
+  `py/tests/test_exec.py`. The hook is
+  **domain-neutral** (the executor never inspects what the command emits — a boundary gate forbids it
+  mentioning codegraph/deplint); the code-context provider that plugs into it is the node-only adapter
+  above. The pre-existing node-only divergence in the *rest* of the assembled context (node appends a
+  `git log` block python does not) is why parity compares the injected block, not the whole context.
 
 Extend it when a new shared surface lands.
 

@@ -75,6 +75,9 @@ function config() {
   return {
     backend,
     cmd,
+    // Generic, domain-neutral context hook: a command whose stdout is appended to each task's
+    // context (see assembleContext). The executor knows nothing about what it produces.
+    contextCmd:  process.env.HB_EXEC_CONTEXT_CMD || file.context_cmd || '',
     strict:      envBool('HB_EXEC_STRICT', file.strict != null ? !!file.strict : false),
     attemptCap:  parseInt(process.env.HB_EXEC_ATTEMPT_CAP || file.attempt_cap || '3', 10),
     concurrency: Math.max(1, parseInt(process.env.HB_MAX_CONCURRENCY || file.concurrency || '1', 10) || 1),
@@ -142,7 +145,23 @@ function assembleContext(task) {
   const log = sh(`git -C "${PROJECT_DIR}" log --oneline -8`).trim();
   if (log) L.push(`\nRecent commits:\n${log}`);
   L.push('\nDo exactly this one task, then stop. Work in the project directory. Do not modify .hb/.');
-  return L.join('\n');
+  return L.join('\n') + contextHook(task);
+}
+
+// Generic context hook: if a context_cmd is configured, run it and append its stdout to the task
+// context, delimited. Domain-neutral — the executor never inspects what the command emits.
+function contextHook(task) {
+  const cmd = config().contextCmd;
+  if (!cmd) return '';
+  const env = { ...process.env, HB_TASK_ID: task.id || '', HB_TASK_TITLE: task.title || '', HB_TASK_DESC: task.description || '' };
+  let out = '';
+  // Inject the captured stdout even when the command exits NONZERO (execSync throws but carries
+  // e.stdout) — this mirrors Python's subprocess.run (no check), so the injected block is identical
+  // across runtimes. Degrade to nothing only when there is truly no output (spawn/timeout error).
+  try { out = execSync(cmd, { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'ignore'], timeout: 30000 }); }
+  catch (e) { out = (e && e.stdout) || ''; if (!out) process.stderr.write(`context_cmd failed: ${e.message}\n`); }
+  out = String(out).trim();
+  return out ? `\n\n<<HB-CONTEXT>>\n${out}\n<</HB-CONTEXT>>` : '';
 }
 
 // ── strict mode: in an unattended run, refuse weak gates ─────────────────────

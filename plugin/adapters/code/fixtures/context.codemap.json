@@ -1,0 +1,1 @@
+{ "edges": [ ["symA", "symB"], ["symZ", "symA"], ["symU", "symB"] ], "tasks": { "TA": ["symA"] } }

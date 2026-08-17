@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -40,6 +41,9 @@ def config(hbdir):
     return {
         "backend": backend,
         "cmd": cmd,
+        # Generic, domain-neutral context hook: a command whose stdout is appended to each task's
+        # context (see assemble_context). The executor knows nothing about what it produces.
+        "context_cmd": os.environ.get("HB_EXEC_CONTEXT_CMD") or f.get("context_cmd"),
         "strict": _envbool("HB_EXEC_STRICT", bool(f.get("strict", False))),
         "attempt_cap": int(os.environ.get("HB_EXEC_ATTEMPT_CAP") or f.get("attempt_cap") or 3),
         "concurrency": max(1, int(os.environ.get("HB_MAX_CONCURRENCY") or f.get("concurrency") or 1)),
@@ -74,7 +78,24 @@ def assemble_context(hbdir, task):
         for c in gate["criteria"]:
             L.append(f"  - {c.get('desc', c.get('id'))}: {c.get('cmd')}")
     L.append("\nDo exactly this one task, then stop. Work in the project directory. Do not modify .hb/.")
-    return "\n".join(L)
+    return "\n".join(L) + _context_hook(hbdir, task)
+
+
+def _context_hook(hbdir, task):
+    """Generic context hook: if a context_cmd is configured, run it and append its stdout to the
+    task context, delimited. Domain-neutral — the executor never inspects what the command emits."""
+    cmd = config(hbdir).get("context_cmd")
+    if not cmd:
+        return ""
+    env = dict(os.environ, HB_TASK_ID=str(task.get("id", "")),
+               HB_TASK_TITLE=str(task.get("title", "")), HB_TASK_DESC=str(task.get("description", "")))
+    try:
+        r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, env=env, timeout=30)
+        text = (r.stdout or "").strip()
+    except Exception as e:                       # degrade: a broken provider must not fail the task
+        sys.stderr.write(f"context_cmd failed: {e}\n")
+        return ""
+    return f"\n\n<<HB-CONTEXT>>\n{text}\n<</HB-CONTEXT>>" if text else ""
 
 
 class _Pump:

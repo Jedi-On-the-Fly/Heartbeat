@@ -1191,6 +1191,22 @@ else
   echo "  (node absent — T87 skipped)"
 fi
 
+grp "T88 — heartbeat-code Seam 2: context provider emits a subgraph (touched symbols + neighbors, not an echo)"
+if command -v node >/dev/null 2>&1; then
+  check "T88.1 code-context proof passes (code-context.sh → CODE-CONTEXT-OK)" \
+    'bash "'"$GEX"'/code-context.sh" 2>&1 | grep -q "CODE-CONTEXT-OK"'
+else
+  echo "  (node absent — T88 skipped)"
+fi
+
+grp "T89 — Seam 2 context-injection parity (both executors inject a configured context_cmd identically)"
+if command -v node >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  check "T89.1 node ≡ python inject the context_cmd output into the task payload" \
+    'bash "'"$GEX"'/context-inject-parity.sh" 2>&1 | grep -q "CONTEXT-INJECT-PARITY-OK"'
+else
+  echo "  (node/python absent — T89 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
