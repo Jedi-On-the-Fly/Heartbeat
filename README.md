@@ -6,7 +6,7 @@
 > *only when there's real work* — then verifies the result at a gate instead of
 > trusting it.
 
-**Developer docs (source of truth):** [dev-plugin.md](docs/dev-plugin.md) · [dev-python.md](docs/dev-python.md) · [dev-tests.md](docs/dev-tests.md). Concept: [heartbeat.md](docs/heartbeat.md) · [heartbeat-py.md](docs/heartbeat-py.md). How-to guides (runnable): [docs/howto/](docs/howto/).
+**Developer docs (source of truth):** [dev-plugin.md](docs/dev-plugin.md) · [dev-python.md](docs/dev-python.md) · [dev-tests.md](docs/dev-tests.md). Concept: [heartbeat.md](docs/heartbeat.md) · [heartbeat-py.md](docs/heartbeat-py.md). Architecture: [adapters.md](docs/adapters.md) (making the method code-aware without giving up its generality). How-to guides (runnable): [docs/howto/](docs/howto/).
 
 HeartBeat lets an agent drive a long, multi-phase project autonomously without
 supervision, without losing the thread, and without burning tokens idling. The
