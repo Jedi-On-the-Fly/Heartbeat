@@ -4,8 +4,8 @@
  *
  * Given the corpus + the codemap + a task id, find the sections that task touches, follow their
  * DIRECT citations (edges from them), and render each cited section's text — the "read these before
- * writing" block fed to Stage B through the generic context_cmd hook. Node-only, imports nothing
- * from core.
+ * writing" block fed to Stage B through the generic context_cmd hook. Parity surface: the Python
+ * twin is py/src/heartbeat/adapters/docs/docs_context.py (node ≡ python, T95). Imports nothing from core.
  *
  * Usage: node docs-context.js <corpusDir> <codemap.json> <taskId>
  */

@@ -1,0 +1,58 @@
+{
+  "_meta": {
+    "project": "parity-oracle-reward",
+    "note": "Two emergent capabilities made real. (PO) Parity as a differential-testing oracle: a seeded, deterministic generator produces varied dag.json+events.jsonl and asserts node == python on every shared pure surface across many seeds — two implementations of one spec are each other's oracle, so any disagreement is a real bug. The gate has teeth because a mutation self-test injects a known node<->python divergence (via the existing HB_PY_SRC seam) and asserts the fuzzer CATCHES it. (RR) Verifiable-reward + model-regression: pure functions over the event log turn each gate evaluation into a deterministically-labeled reward record, and turn two bench scorecards into a regression verdict. Reward trusts the log's gate verdict, never the backend's self-report. Python-only analysis tooling, like bench itself (documented divergence, not a parity gap)."
+  },
+  "phases": [
+    {
+      "id": "PO", "title": "Parity as a differential-testing oracle", "gate_entry": null, "gate_exit": "GATE_PO",
+      "tasks": [
+        { "id": "POT1", "title": "Seeded deterministic case generator", "requires": [],
+          "description": "Spec-first: write tests/gen-parity-case.py — given an integer seed and a target dir, it emits a structurally-varied but WELL-FORMED .hb/dag.json + .hb/events.jsonl; given a seed and '-' it prints the same bundle to stdout (for a temp-dir-free determinism check). It uses ONLY the seed (a small local PRNG; no Math.random, no time, no wall-clock ts) so the same seed always yields byte-identical output. Varies: phase count, tasks/phase (<=8), sparse requires edges, gate shapes (behavioral / review-blocked), and a plausible event sequence (initialized, task_started/done/failed, gate_passed/gate_failed, review_passed). This generator IS the spec of the input space the oracle explores; the input space (well-formed DAGs) is documented, not silently capped." },
+        { "id": "POT2", "title": "Fuzz harness over both runtimes", "requires": ["POT1"],
+          "description": "Write tests/parity-fuzz.sh: for N seeds (N = arg, small default), generate a case with tests/gen-parity-case.py, copy the node templates into the temp .hb (as tests/parity.sh does), run the case through BOTH runtimes on every shared pure surface (audit, lint, state, next, ready, report, diagnose), normalize identically to tests/parity.sh, and assert node == python. Print one line per seed and print 'FUZZ-PARITY-OK:<N>' only when every seed agreed on every surface; exit non-zero on the first divergence, printing the seed and the diverging surface so it reproduces." },
+        { "id": "POT3", "title": "Mutation self-test (the oracle has teeth)", "requires": ["POT2"],
+          "description": "Add a --selftest mode to tests/parity-fuzz.sh that runs TWO passes in one invocation and requires BOTH to bind the teeth: (1) the fuzzer on the UN-mutated py/src must agree across the seeds and print 'SELFTEST-CLEAN-OK'; (2) then copy py/src to a temp dir, inject a deliberate divergence into one pure function, point HB_PY_SRC at that mutant, run the SAME seeds, and print 'SELFTEST-CAUGHT:<surface>' only when the fuzzer actually detects the injected node<->python divergence. Requiring a legitimate clean pass AND a caught divergence in the same run means an unconditional echo cannot satisfy it — proving a green fuzzer can go red." },
+        { "id": "POT4", "title": "Wire into the suite + docs", "requires": ["POT3"],
+          "description": "Add node-suite group T75 to tests/run-tests.sh invoking tests/parity-fuzz.sh (agreement marker) and its --selftest (teeth), guarded on node+python3 present. Update docs/howto/keep-the-runtimes-in-parity.md (the generative-oracle method, linking the harness), docs/dev-tests.md (the T75 row + a note in the Parity section), and planning/parity-notes.md. Keep tests/parity.sh green (unchanged)." }
+      ]
+    },
+    {
+      "id": "RR", "title": "Verifiable-reward + model-regression", "gate_entry": "GATE_PO", "gate_exit": "GATE_RR",
+      "tasks": [
+        { "id": "RRT1", "title": "Author the reward+regression proof (spec-first)", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/reward-regression.sh — a self-verifying proof that builds a KNOWN synthetic event log (a gate_passed and a gate_failed) and asserts 'hb reward' yields exactly the matching labeled records (one passed=true, one passed=false — the deterministic log verdict, not a self-report); and builds two KNOWN scorecards (a clearly-worse candidate vs a baseline, and an equal one) and asserts the regression comparator flags regressed=true for the worse and regressed=false for the equal. Prints 'REWARD-REGRESSION-OK' only when every assertion holds. Written before the implementation." },
+        { "id": "RRT2", "title": "Reward extractor (pure) + CLI", "requires": ["RRT1"],
+          "description": "Implement a PURE core reward_records(events, dag) in py/src/heartbeat/bench.py (mirroring how score uses st.project): one reward record per gate_passed/gate_failed event — {gate, phase, passed, actor, ts}. passed is the deterministic log verdict (gate_passed=true / gate_failed=false), NEVER the backend's self-report. phase is NOT on the event, so derive it from the dag via st.phase_by_gate_exit(dag, gate). actor/ts come from the event when present, else null (the gate.sh path adds no actor — record that honestly, do not fabricate). Add rewards(hbdir) that reads the log+dag and calls the pure core, and wire 'hb reward --dir <p> [--json]' in py/src/heartbeat/cli.py to emit the records (JSONL by default, JSON array with --json)." },
+        { "id": "RRT3", "title": "Regression comparator (pure) + CLI", "requires": ["RRT1"],
+          "description": "Implement regressions(cards, baseline_label) in py/src/heartbeat/bench.py: a PURE comparator over bench scorecards returning {baseline, candidate, regressed, deltas} per non-baseline card — regressed=true when a candidate clears fewer gates OR completes fewer phases OR has more task_failures than the baseline. Wire 'hb bench --baseline <label>' in py/src/heartbeat/cli.py so the output includes the regression verdict against that card." },
+        { "id": "RRT4", "title": "Wire into the suite + docs", "requires": ["RRT2", "RRT3"],
+          "description": "Add node-suite group T76 to tests/run-tests.sh invoking docs/howto/gate-examples/reward-regression.sh (marker), 'hb reward --help', and prose-check on the guide. Extend docs/howto/benchmark-agents.md with the reward-stream and model-regression sections (linking the proof), and update docs/heartbeat-py.md + py/README.md (the hb reward / hb bench --baseline commands) and docs/dev-python.md. Record the intentional python-only divergence (reward/regression are analysis tooling, like bench) in planning/parity-notes.md." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_PO": {
+      "desc": "The generative oracle agrees across seeds, is deterministic, and provably catches an injected node<->python divergence.",
+      "review": { "prompt": "Refute that PO is done: does the fuzzer actually COMPARE both runtimes, or can it print FUZZ-PARITY-OK without ever diverging? does the generator produce VARIED inputs per seed, or the same trivial DAG every time? is the generator truly deterministic (same seed -> identical bytes), or does a ts/random leak in? does --selftest really inject a divergence and require the fuzzer to catch it, or is SELFTEST-CAUGHT printed unconditionally?" },
+      "criteria": [
+        { "id": "poc1", "desc": "node == python across generated seeds (agreement marker)", "cmd": "bash \"$PROJECT_DIR/tests/parity-fuzz.sh\" 4 2>&1 | grep -q 'FUZZ-PARITY-OK:'" },
+        { "id": "poc2", "desc": "the oracle passes clean AND catches an injected divergence in one run (teeth bound)", "cmd": "out=$(bash \"$PROJECT_DIR/tests/parity-fuzz.sh\" --selftest 2>&1); echo \"$out\" | grep -q 'SELFTEST-CLEAN-OK' && echo \"$out\" | grep -q 'SELFTEST-CAUGHT:'" },
+        { "id": "poc3", "desc": "the generator is deterministic (same seed -> identical output)", "cmd": "[ \"$(python3 \"$PROJECT_DIR/tests/gen-parity-case.py\" 3 -)\" = \"$(python3 \"$PROJECT_DIR/tests/gen-parity-case.py\" 3 -)\" ]" },
+        { "id": "poc4", "desc": "T75 is wired into the node suite", "cmd": "grep -q 'parity-fuzz.sh' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    },
+    "GATE_RR": {
+      "desc": "Reward records carry the deterministic log verdict (not self-report), and the regression comparator flags a worse candidate while clearing an equal one.",
+      "review": { "prompt": "Refute that RR is done: is 'reward' a trivial gate_passed count, or a per-evaluation labeled record tied to the log's verdict? could reward ever reflect the backend's self-report instead of the gate_passed/gate_failed event? does the regression comparator detect a genuinely-worse candidate AND clear an equal one, or does it vacuously return one answer? are rewards/regressions PURE over the log (no re-running the backend)?" },
+      "criteria": [
+        { "id": "rrc1", "desc": "the reward+regression proof passes (known log -> exact labels; worse -> regressed, equal -> not)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/reward-regression.sh\" 2>&1 | grep -q 'REWARD-REGRESSION-OK'" },
+        { "id": "rrc2", "desc": "hb reward is a real subcommand", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m heartbeat.cli reward --help 2>&1 | grep -qi 'usage'" },
+        { "id": "rrc3", "desc": "reward_records is pure over (events,dag): correct passed labels AND phase DERIVED from the dag (not the event)", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"from heartbeat import bench; dag={'phases':[{'id':'P0','gate_exit':'G0','tasks':[]}],'gates':{'G0':{}}}; evs=[{'event':'gate_passed','gate':'G0'},{'event':'gate_failed','gate':'G0'}]; r=bench.reward_records(evs,dag); assert [x['passed'] for x in r]==[True,False], r; assert all(x['phase']=='P0' for x in r), r\"" },
+        { "id": "rrc4", "desc": "the regression comparator flags a worse candidate as regressed", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"from heartbeat import bench; base={'label':'base','gate_passed':2,'phases_done':2,'task_failures':0}; worse={'label':'cand','gate_passed':0,'phases_done':0,'task_failures':3}; r=bench.regressions([base,worse],'base'); assert any(x['candidate']=='cand' and x['regressed'] for x in r), r\"" },
+        { "id": "rrc5", "desc": "the regression comparator CLEARS an equal candidate (regressed=false — both directions)", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -c \"from heartbeat import bench; base={'label':'base','gate_passed':2,'phases_done':2,'task_failures':0}; same={'label':'cand','gate_passed':2,'phases_done':2,'task_failures':0}; r=bench.regressions([base,same],'base'); assert all(not x['regressed'] for x in r if x['candidate']=='cand'), r\"" },
+        { "id": "rrc6", "desc": "T76 is wired into the node suite", "cmd": "grep -q 'reward-regression.sh' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    }
+  }
+}

@@ -37,5 +37,7 @@ reference definitions.
 
 ## Boundary
 
-Node-only, **not scaffolded into any `.hb/`**, **not core**, **not a parity surface**; imports
-nothing from core. Proof: [docs-deplint.sh](../../../docs/howto/gate-examples/docs-deplint.sh) (T90).
+**Not scaffolded into any `.hb/`**, **not core**, but **a parity surface** — shipped in both
+runtimes (node here, Python under `py/src/heartbeat/adapters/docs/`) and cross-checked node ≡
+python (T95); imports nothing from core. Proof:
+[docs-deplint.sh](../../../docs/howto/gate-examples/docs-deplint.sh) (T90).

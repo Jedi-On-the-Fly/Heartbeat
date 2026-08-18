@@ -5,7 +5,8 @@
  * Given the codemap contract (see README.md) and a task id, emit a readable block naming the
  * symbols the task touches and their DIRECT neighbors (what each depends on, and what uses it) —
  * the subgraph an agent needs to do the task, not the whole graph. Fed to Stage B via the
- * executor's generic `context_cmd` hook (HB_EXEC_CONTEXT_CMD). Node-only, imports nothing from core.
+ * executor's generic `context_cmd` hook (HB_EXEC_CONTEXT_CMD). Parity surface: the Python twin is
+ * py/src/heartbeat/adapters/code/codegraph_context.py (node ≡ python, T94). Imports nothing from core.
  *
  * Usage: node codegraph-context.js <codemap.json> <TASKID>
  */

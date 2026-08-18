@@ -9,8 +9,9 @@ plan for a codebase gets correct **sparse** dependencies — the hardest authori
 
 - Lives in `plugin/adapters/code/` — delivered by the plugin but **not scaffolded into any
   `.hb/`** (a fresh `bootstrap.sh` never copies it).
-- **Not core, not a parity surface** — single-runtime Node, like `viz` / `bench` / `mcp-serve`.
-  It imports nothing from HeartBeat core; the suites stay green without it.
+- **Not core, but a parity surface** — shipped in **both runtimes** (node here, Python under
+  `py/src/heartbeat/adapters/code/`) and cross-checked node ≡ python (T94). It imports nothing
+  from HeartBeat core; the suites stay green without it.
 - **Advisory** — it reports; it never rewrites your DAG. A wrong auto-edge is worse than none.
 
 ## The contract (`codemap.json`)

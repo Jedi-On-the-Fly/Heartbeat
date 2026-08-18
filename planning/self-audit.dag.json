@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "project": "scheduled-self-audit",
+    "note": "Make the corpus drift/overclaim audit — which we've been running by hand — a standing, schedulable capability. Two tiers, mirroring HeartBeat's own design. DETERMINISTIC (gating, no model): a self-audit runner that checks whole-library prose-integrity + referenced-proof integrity (every gate-examples/*.sh a guide names in its body EXISTS and is wired+run in tests/run-tests.sh — the gap prose-check misses on code-fence paths, which is exactly how the relative-dir bug hid). ADVERSARIAL (on-demand, model-driven): the distinct-actor refutation sweep for overclaims — documented as a non-deterministic, non-gating tier like the Docker/mcp-interop tiers. Plus a schedule recipe (system cron / /loop) that runs the deterministic battery and escalates on non-zero. Built the gated way: the self-audit itself ships a proof with teeth (--selftest catches a missing/unwired proof via temp fixtures)."
+  },
+  "phases": [
+    {
+      "id": "SA", "title": "Scheduled self-audit of the doc/code corpus", "gate_entry": null, "gate_exit": "GATE_SA",
+      "tasks": [
+        { "id": "SAT1", "title": "Author the self-audit runner + its teeth (spec-first)", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/self-audit.sh — a deterministic corpus audit with a core function that takes (guides_dir, gate_examples_dir, run_tests_file) so it can run on the repo OR on temp fixtures. It asserts: (a) whole-library prose-integrity — every guide passes prose-check (count-matched); (b) referenced-proof integrity — every gate-examples/*.sh named in a guide body EXISTS and appears (invoked) in tests/run-tests.sh (catches a vanished or dormant proof, which prose-check misses because those are code-fence paths, not markdown links). It must COUNT what it checked and hard-fail (non-zero, no OK marker) on a zero guide-count or zero referenced-proof-count, so a bad regex or empty glob can't yield a vacuous pass; resolve wired-ness against the gate_examples_dir it was handed (note run.sh exists in both gate-examples/ and frameworks/). Prints SELF-AUDIT-OK:<guides>/<proofs> with the real counts only when both hold; otherwise a finding line + non-zero. A --selftest builds TEMP fixtures (no real-tree mutation) with a guide referencing a MISSING proof and one referencing an existing-but-UNWIRED proof (via a temp run_tests_file that omits it), asserts BOTH are flagged, and prints SELF-AUDIT-SELFTEST-OK. It must be able to go red." },
+        { "id": "SAT2", "title": "Write the guide + schedule recipe + adversarial tier", "requires": ["SAT1"],
+          "description": "Write docs/howto/run-a-scheduled-self-audit.md: run self-audit.sh; what deterministic drift it catches (broken links, non-existent hb commands, vanished/dormant proofs); a SCHEDULE recipe for the full deterministic battery (system cron or /loop running `bash tests/run-tests.sh && bash docs/howto/gate-examples/self-audit.sh`, escalating on non-zero via HB_NOTIFY_CMD or a mail/exit hook); and the ON-DEMAND adversarial sweep tier — a distinct-actor refutation pass over the guides for overclaims (needs a live model, non-deterministic, so it never gates the suite, like the Docker/mcp-interop tiers). Honest scope: deterministic tier gates + schedules; adversarial tier is a capability probe. Real commands only; prose-check clean; link the gated-docs skill." },
+        { "id": "SAT3", "title": "Wire T81 + index", "requires": ["SAT2"],
+          "description": "Add node-suite group T81 to tests/run-tests.sh running docs/howto/gate-examples/self-audit.sh (SELF-AUDIT-OK marker) and its --selftest (SELF-AUDIT-SELFTEST-OK teeth), plus prose-check on the guide. Add a row for docs/howto/run-a-scheduled-self-audit.md in docs/howto/howto-list.md and docs/howto/README.md. Keep the node, Python, and parity suites green (whole-library prose stays count-matched — the new guide is +1)." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_SA": {
+      "desc": "The self-audit deterministically verifies corpus coherence (prose + referenced-proof integrity), provably catches a missing/unwired proof, is documented with a schedule recipe, and is wired into the suite.",
+      "review": { "prompt": "Refute that SA is done: does self-audit.sh actually check referenced-proof integrity (code-fence gate-examples/*.sh paths that prose-check misses), or does it just re-run prose-check? Does --selftest genuinely inject a MISSING proof AND an UNWIRED proof and require BOTH be flagged, via temp fixtures (no real-tree mutation), and does it fail if the audit misses either? Could SELF-AUDIT-OK print with a dormant/vanished proof present? Does the guide document a real escalate-on-non-zero schedule, and is the adversarial tier honestly marked non-gating (not claimed as deterministic)? Is the marker printed unconditionally?" },
+      "criteria": [
+        { "id": "sac1", "desc": "the self-audit passes with NONZERO count-matched totals (no vacuous 0/0)", "cmd": "g=$(ls \"$PROJECT_DIR\"/docs/howto/*.md | wc -l); bash \"$PROJECT_DIR/docs/howto/gate-examples/self-audit.sh\" 2>&1 | grep -qE \"SELF-AUDIT-OK:$g/[1-9][0-9]*\"" },
+        { "id": "sac2", "desc": "the self-audit provably catches a missing AND an unwired proof (teeth)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/self-audit.sh\" --selftest 2>&1 | grep -q 'SELF-AUDIT-SELFTEST-OK'" },
+        { "id": "sac3", "desc": "the guide passes prose-integrity", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/run-a-scheduled-self-audit.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "sac4", "desc": "the T81 group actually RUNS and PASSES in the suite (not just a filename mention)", "cmd": "bash \"$PROJECT_DIR/tests/run-tests.sh\" 2>&1 | grep -q 'GROUPS-PASSED:.* T81 '" }
+      ]
+    }
+  }
+}

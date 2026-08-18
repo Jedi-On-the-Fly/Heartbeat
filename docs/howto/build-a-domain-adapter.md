@@ -31,15 +31,29 @@ You do **not** write new validation or context logic — you feed the existing o
 - Context assembly: point the executor's generic `context_cmd` hook at a provider that renders the
   relevant slice of your graph (see [feed code context to Stage B](feed-code-context-to-stage-b.md)).
 
-## 3. Respect the boundary
+## 3. Ship it in both runtimes (a parity surface)
+
+An adapter is a **parity surface**: implement the provider in **both** runtimes — node under
+`plugin/adapters/<domain>/` and Python under `py/src/heartbeat/adapters/<domain>/` — and cross-check
+them node ≡ python (byte-equal for deterministic outputs like the dep-lint findings and the context
+text; set-equal for the maps, where order can differ). That keeps the capability **native to the
+Python/framework path** (a `context_cmd='python3 -m heartbeat.adapters.<domain>…'` runs with **zero
+Node** — proof [`gate-examples/adapters-nodefree.sh`](gate-examples/adapters-nodefree.sh)), not just
+the node plugin. The code/docs adapters are the template (parity proofs T94/T95). One deliberate
+divergence is allowed: an implementation detail that produces the *same output* (e.g. node shells to
+the `sqlite3` CLI, Python uses the stdlib `sqlite3` module) — record it in
+[parity-notes.md](../../planning/parity-notes.md).
+
+## 4. Respect the boundary
 
 Keep the adapter honest:
 
-- Put it under `plugin/adapters/` — it must **not** be scaffolded into a project's `.hb/`.
+- Put it under `plugin/adapters/` (+ `py/src/heartbeat/adapters/`) — it must **not** be scaffolded
+  into a project's `.hb/`.
 - Import nothing from core; the test suites must stay green without your adapter installed.
 - Keep it advisory — report, never rewrite the user's DAG.
 
-## 4. Gate it like everything else
+## 5. Gate it like everything else
 
 An adapter is a claim, so back it with a runnable proof. The code adapter's proofs are the template:
 [`gate-examples/code-deplint.sh`](gate-examples/code-deplint.sh) exercises the dep-lint engine over
@@ -52,7 +66,7 @@ bash docs/howto/gate-examples/code-deplint.sh   # -> CODE-DEPLINT-OK
 bash docs/howto/gate-examples/code-map.sh        # -> CODE-MAP-OK
 ```
 
-## 5. Ship a skill
+## 6. Ship a skill
 
 An adapter isn't done until it's **frictionless**: every adapter must **ship a skill** under
 `plugin/skills/<domain>-…/` so a user never touches the raw `node plugin/adapters/…` commands — the

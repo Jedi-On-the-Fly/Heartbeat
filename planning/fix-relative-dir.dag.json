@@ -1,0 +1,30 @@
+{
+  "_meta": {
+    "project": "fix-relative-dir",
+    "note": "Bug (found by the Level-3 how-to sweep): the Python runtime resolves a RELATIVE --dir to a relative PROJECT_DIR, so a gate criterion like grep \"$PROJECT_DIR/out.txt\" — run with cwd=<relative project> AND PROJECT_DIR=<relative project> — double-nests to <project>/<project>/out.txt and silently blocks. gate.py:_project_dir returns str(Path(hbdir).parent) and executor.py dispatch cwd is the same, both un-absolutized. The NODE runtime is already correct (gate.sh derives HB_DIR via `cd \"$(dirname \"$0\")\" && pwd`, always absolute). Fix = make Python absolutize, matching node — a behavioral-parity fix. Spec-first: the failing proof/test reproduces the bug before the fix lands."
+  },
+  "phases": [
+    {
+      "id": "FIX", "title": "Relative --dir resolves to an absolute PROJECT_DIR (both runtimes)", "gate_entry": null, "gate_exit": "GATE_FIX",
+      "tasks": [
+        { "id": "FIXT1", "title": "Author the failing proof + unit test (spec-first)", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/relative-dir.sh — a deterministic proof that, from a PARENT working directory, a gate PASSES when driven with a RELATIVE dir on BOTH runtimes: Python via `python3 -m heartbeat.cli gate GATE --dir <relative>`, and node via `bash <relative>/.hb/gate.sh GATE` (node has no --dir flag; it self-absolutizes, so its leg is the parity control). The gate must have TWO criteria — one referencing $PROJECT_DIR/out.txt AND one referencing $HB_DIR/dag.json — with out.txt present at <project>/out.txt, so it catches BOTH the PROJECT_DIR and the HB_DIR double-nest. Prints RELATIVE-DIR-OK only when both runtimes pass. Also add a regression test to py/tests/test_gate.py named test_relative_dir_gate asserting run_gate on a RELATIVE hbdir passes both a $PROJECT_DIR- and a $HB_DIR-referencing criterion, and that _project_dir is absolute. Both the proof and the test MUST fail on the current Python code (they reproduce the bug) before FIXT2." },
+        { "id": "FIXT2", "title": "Absolutize PROJECT_DIR, HB_DIR, and worker cwd in the Python runtime", "requires": ["FIXT1"],
+          "description": "Fix py/src/heartbeat/gate.py: _project_dir(hbdir) returns an ABSOLUTE path (os.path.abspath of Path(hbdir).parent), AND _env sets HB_DIR to an ABSOLUTE path (os.path.abspath(str(hbdir))) — both are exported to the gate shell whose cwd is now the absolute project dir, so a criterion using either var no longer double-nests. Fix py/src/heartbeat/executor.py dispatch: cwd = cwd or the ABSOLUTE project dir, so the worker runs in the absolute project dir. This mirrors the node runtime (gate.sh already absolutizes HB_DIR and PROJECT_DIR via cd&&pwd); an already-absolute --dir and the worktree-isolated path (which passes an explicit cwd) are unchanged." },
+        { "id": "FIXT3", "title": "Wire the proof + record parity", "requires": ["FIXT2"],
+          "description": "Add node-suite group T80 to tests/run-tests.sh running docs/howto/gate-examples/relative-dir.sh and asserting its RELATIVE-DIR-OK marker. Record the behavioral parity (both runtimes resolve --dir to an absolute PROJECT_DIR) in planning/parity-notes.md. Keep the node suite, the Python suite (pytest), and tests/parity.sh all green." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_FIX": {
+      "desc": "A relative --dir no longer double-nests $PROJECT_DIR: the gate passes on both runtimes, the Python regression test passes, and the proof is wired into the suite.",
+      "review": { "prompt": "Refute that FIX is done: does relative-dir.sh actually drive with a RELATIVE --dir (not absolute), and does it FAIL on the pre-fix code (reproduces the bug) rather than passing vacuously? does it exercise BOTH runtimes, or silently skip one? is the fix a real absolutize that also leaves an ABSOLUTE --dir working (no regression), or does it break the normal path? could RELATIVE-DIR-OK print without the python gate actually passing?" },
+      "criteria": [
+        { "id": "fc1", "desc": "a relative --dir gate passes on both runtimes (proof marker)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/relative-dir.sh\" 2>&1 | grep -q 'RELATIVE-DIR-OK'" },
+        { "id": "fc2", "desc": "the Python relative-dir regression tests (gate + worktree) actually RAN and passed (not vacuously deselected)", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q -k relative_dir 2>&1 | grep -qE '[2-9] passed|[1-9][0-9]+ passed'" },
+        { "id": "fc3", "desc": "the proof is wired into the node suite (runs it + asserts its marker)", "cmd": "grep -qE 'relative-dir.sh.*RELATIVE-DIR-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    }
+  }
+}

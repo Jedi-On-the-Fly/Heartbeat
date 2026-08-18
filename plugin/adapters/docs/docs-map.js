@@ -7,7 +7,8 @@
  *   - edges: [citerId, citedId]  — a section that links to another "builds on" it (depends on it)
  *   - tasks: { sectionId: [sectionId] } — the docs convention that one authoring task = one section
  * Unit id = the .md basename. Only relative links to another .md IN the corpus count; http(s)/
- * mailto/#anchors and links outside the corpus are ignored. Node-only, imports nothing from core.
+ * mailto/#anchors and links outside the corpus are ignored. Parity surface: the Python twin is
+ * py/src/heartbeat/adapters/docs/docs_map.py (set-equal node ≡ python, T95). Imports nothing from core.
  *
  * Usage: node docs-map.js <corpusDir>
  */

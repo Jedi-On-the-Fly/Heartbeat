@@ -1,0 +1,82 @@
+{
+  "_meta": {
+    "project": "parity-gaps",
+    "note": "Close the parity/cross-runtime coverage gaps the audit found. The HIGH one is a real bug: the Python tick has no review_stuck escalation (node tick.sh emits it past STUCK_TICKS; tick.py wakes review_pending forever), so a stalled adversarial review is a silent infinite stall in Python — a liveness violation — and it hid because the tick's DECISION is never cross-checked (parity compares projector/lint/audit/resolve/report/diagnose-first-line/protocol-KEYS, never the two ticks' data.reason). Each phase adds a cross-runtime proof for a shared surface that was only tested per-runtime; spec-first, the tick proof goes red on the unfixed tick.py. Intentional single-runtime surfaces (exec loop, MCP, bench) are out of scope and stay documented in parity-notes."
+  },
+  "phases": [
+    {
+      "id": "PTICK", "title": "Tick decision parity + review_stuck fix (HIGH)", "gate_entry": null, "gate_exit": "GATE_TICK",
+      "tasks": [
+        { "id": "PTICKT1", "title": "Author the tick-parity proof (spec-first, red on the bug)", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/tick-parity.sh — for a set of controlled fixtures (each a fresh .hb: a next_task state, a gate_pending state, an all_done state, and crucially a REVIEW-STALL state — a review-owed gate with >= STUCK_TICKS review_wake events and no later verdict), run BOTH runtimes' Stage-A tick on separate fresh copies (node bash .hb/tick.sh; python hb tick --dir) with STUCK_TICKS=3, and assert the two data.reason values are IDENTICAL per fixture. The review-stall fixture is the discriminator: node emits review_stuck, so python must too. Prints TICK-PARITY-OK only when every fixture agrees. On the CURRENT (unfixed) tick.py it MUST go red (node review_stuck vs python review_pending)." },
+        { "id": "PTICKT2", "title": "Mirror the review_stuck escalation into tick.py", "requires": ["PTICKT1"],
+          "description": "Fix py/src/heartbeat/tick.py review_pending branch to mirror plugin/templates/tick.sh: count review_wake events for the review-owed gate since its last review_passed/review_failed/gate_passed (a helper like _review_wakes_since_verdict); if that count >= STUCK_TICKS, emit a review_stalled event once (guarded by a .review-stuck-alerted flag, matching the .noprogress-alerted / .deadlock-alerted pattern) and wake review_stuck (with gate + no_review + the run-the-refuter hint), else _sleep review_waiting; otherwise clear the flag, append review_wake, and wake review_pending. Do NOT append a review_wake in the stalled branch (match node). Add a py/tests/test_tick.py case (test_review_stuck_escalation) asserting the escalation fires at the threshold." },
+        { "id": "PTICKT3", "title": "Wire T82 + parity note", "requires": ["PTICKT2"],
+          "description": "Add node-suite group T82 to tests/run-tests.sh running docs/howto/gate-examples/tick-parity.sh (TICK-PARITY-OK marker). Record in planning/parity-notes.md that the tick's data.reason is a shared behavioral surface (both runtimes emit the same wake reason, including review_stuck) enforced by T82. Keep node + python + parity suites green." }
+      ]
+    },
+    {
+      "id": "PGATE", "title": "Gate-runner behavior parity (MED)", "gate_entry": "GATE_TICK", "gate_exit": "GATE_GATE",
+      "tasks": [
+        { "id": "PGATET1", "title": "Author the gate-parity proof", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/gate-parity.sh — one DAG with gates covering pass (criteria true), fail (criteria false), the zero-criteria hollow floor (no criteria -> both runtimes must BLOCK), and a timeout (a criterion that sleeps past GATE_TIMEOUT_S with GATE_TIMEOUT_S=1 -> both BLOCK). Run each gate through BOTH runtimes (node bash .hb/gate.sh <G>; python hb gate <G> --dir) and assert identical pass/block outcomes per gate by comparing EXIT CODES (0=pass, non-0=block — the reliable cross-runtime signal, since the text output differs). Prints GATE-PARITY-OK only when every gate agrees across runtimes." },
+        { "id": "PGATET2", "title": "Wire T83", "requires": ["PGATET1"],
+          "description": "Add node-suite group T83 to tests/run-tests.sh running docs/howto/gate-examples/gate-parity.sh (GATE-PARITY-OK). Note the gate-runner behavioral-parity surface in planning/parity-notes.md. Keep suites green." }
+      ]
+    },
+    {
+      "id": "PDOCTOR", "title": "Doctor / rot detection parity (MED)", "gate_entry": "GATE_GATE", "gate_exit": "GATE_DOCTOR",
+      "tasks": [
+        { "id": "PDOCTORT1", "title": "Author the doctor-parity proof", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/doctor-parity.sh — a project with a COMPLETED phase whose gate criterion references a file that is then deleted (rot). Run doctor on BOTH runtimes (node node .hb/hb.js doctor; python hb doctor --dir) and assert both detect the rot — the rotted project's rot count must be > 0 on BOTH (not merely equal, so a both-zero bug can't pass vacuously) — and that a CLEAN project reports no rot on both. Prints DOCTOR-PARITY-OK only when the runtimes agree on rot detection. The tick keys off doctor's rot output, so a divergence here would wake the two runtimes differently." },
+        { "id": "PDOCTORT2", "title": "Wire T84", "requires": ["PDOCTORT1"],
+          "description": "Add node-suite group T84 to tests/run-tests.sh running docs/howto/gate-examples/doctor-parity.sh (DOCTOR-PARITY-OK). Note the doctor/rot parity surface in planning/parity-notes.md. Keep suites green." }
+      ]
+    },
+    {
+      "id": "PMISC", "title": "Backends-registry parity + document intentional divergences (MED+LOW)", "gate_entry": "GATE_DOCTOR", "gate_exit": "GATE_MISC",
+      "tasks": [
+        { "id": "PMISCT1", "title": "Author the backends-registry parity proof", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/registry-parity.sh — derive the backend name set from BOTH runtimes (python: backends _KNOWN; node: the backend cases in plugin/templates/hb-exec.js defaultCmd). NORMALIZE the one documented python-only alias: python _KNOWN lists both `claude` and `claude-code` (both resolve to the claude adapter — `claude` is an alias), while node has only `claude-code`; drop `claude` from the python set before comparing. Then assert the two CANONICAL sorted sets are IDENTICAL (adding a REAL backend to one runtime only must fail). Prints REGISTRY-PARITY-OK only when the canonical sets match." },
+        { "id": "PMISCT2", "title": "Wire T85 + document intentional divergences", "requires": ["PMISCT1"],
+          "description": "Add node-suite group T85 to tests/run-tests.sh running docs/howto/gate-examples/registry-parity.sh (REGISTRY-PARITY-OK). Then document in planning/parity-notes.md the LOW intentional divergences so they are not mistaken for gaps: the backends registry is parity-checked (T85) modulo the python-only `claude` alias for `claude-code`; the scaffold-vs-bootstrap default .hb differs; the node-only `import` subcommand (legacy state.json -> event log; no Python equivalent); and diagnose's recovery-command TEXT is runtime-specific (like protocol action text) while its blocker line is parity-checked. Keep suites green." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_TICK": {
+      "desc": "Both runtimes' ticks emit the same data.reason (incl. review_stuck at the stall threshold); the Python review_stuck escalation is implemented; enforced by T82.",
+      "review": { "prompt": "Refute that PTICK is done: does tick-parity.sh actually include a REVIEW-STALL fixture (review-owed gate with >= STUCK_TICKS review_wakes) that discriminates the runtimes, and did it go RED on the unfixed tick.py? Is the tick.py fix a real mirror of tick.sh (counts review_wakes since the last verdict; single-alert via a flag; no review_wake appended in the stalled branch), or a hack that only passes this fixture? Could TICK-PARITY-OK print if a fixture were skipped or both runtimes trivially agreed on an easy reason? Does the fix regress the normal review_pending path (a review that hasn't stalled still wakes review_pending)?" },
+      "criteria": [
+        { "id": "tpc1", "desc": "both ticks emit identical data.reason across fixtures incl. the review-stall case", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/tick-parity.sh\" 2>&1 | grep -q 'TICK-PARITY-OK'" },
+        { "id": "tpc2", "desc": "the Python review_stuck regression test passes (escalation fires at threshold)", "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src python3 -m pytest -q tests/test_tick.py -k review_stuck 2>&1 | grep -qE '[1-9][0-9]* passed'" },
+        { "id": "tpc3", "desc": "the tick-parity proof is wired + asserted in the suite (T82)", "cmd": "grep -qE 'tick-parity.sh.*TICK-PARITY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    },
+    "GATE_GATE": {
+      "desc": "The gate runner behaves identically across runtimes on pass/fail/hollow/timeout; enforced by T83.",
+      "review": { "prompt": "Refute that PGATE is done: does gate-parity.sh actually run each gate through BOTH runtimes and compare outcomes, or only one? Does it cover the hollow-floor (zero-criteria -> block on both) and the timeout (both block), not just pass/fail? Could GATE-PARITY-OK print if a case were skipped or the runtimes disagreed?" },
+      "criteria": [
+        { "id": "gpc1", "desc": "gate runner pass/fail/hollow/timeout agree across runtimes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/gate-parity.sh\" 2>&1 | grep -q 'GATE-PARITY-OK'" },
+        { "id": "gpc2", "desc": "wired + asserted in the suite (T83)", "cmd": "grep -qE 'gate-parity.sh.*GATE-PARITY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    },
+    "GATE_DOCTOR": {
+      "desc": "Both runtimes agree on rot detection (present on a rotted project, absent on a clean one); enforced by T84.",
+      "review": { "prompt": "Refute that PDOCTOR is done: does doctor-parity.sh actually create real rot (a completed phase whose gate file is deleted) and run BOTH runtimes' doctor, asserting they AGREE (both flag rot) AND agree on a clean project (both no-rot)? Could DOCTOR-PARITY-OK print if only one runtime were run, or if 'agreement' were trivially both-empty?" },
+      "criteria": [
+        { "id": "dpc1", "desc": "rot detection agrees across runtimes (rotted -> both flag; clean -> both clear)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/doctor-parity.sh\" 2>&1 | grep -q 'DOCTOR-PARITY-OK'" },
+        { "id": "dpc2", "desc": "wired + asserted in the suite (T84)", "cmd": "grep -qE 'doctor-parity.sh.*DOCTOR-PARITY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    },
+    "GATE_MISC": {
+      "desc": "The two backend registries are the same set; the LOW intentional divergences are documented; enforced by T85.",
+      "review": { "prompt": "Refute that PMISC is done: does registry-parity.sh derive names from BOTH runtimes and require the sorted sets to be EQUAL (would it fail if a backend were added to one runtime only)? Or does it compare a hardcoded list? Are the intentional divergences (scaffold default .hb, node-only import, diagnose command text) actually recorded in parity-notes so they are not future false-positives?" },
+      "criteria": [
+        { "id": "mpc1", "desc": "the two backend registries are the identical sorted set", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/registry-parity.sh\" 2>&1 | grep -q 'REGISTRY-PARITY-OK'" },
+        { "id": "mpc2", "desc": "wired + asserted in the suite (T85)", "cmd": "grep -qE 'registry-parity.sh.*REGISTRY-PARITY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "mpc3", "desc": "the intentional divergences are documented in parity-notes", "cmd": "grep -q 'node-only' \"$PROJECT_DIR/planning/parity-notes.md\" && grep -qi 'registry' \"$PROJECT_DIR/planning/parity-notes.md\"" }
+      ]
+    }
+  }
+}

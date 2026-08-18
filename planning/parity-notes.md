@@ -140,8 +140,8 @@ Two gotchas it encodes:
   compares the injected block for BOTH an exit-0 and an emit-then-nonzero-exit command) +
   `py/tests/test_exec.py`. The hook is
   **domain-neutral** (the executor never inspects what the command emits — a boundary gate forbids it
-  mentioning codegraph/deplint); the code-context provider that plugs into it is the node-only adapter
-  above. The pre-existing node-only divergence in the *rest* of the assembled context (node appends a
+  mentioning codegraph/deplint); the code-context provider that plugs into it is the parity-surface
+  adapter above (node ≡ python). The pre-existing node-only divergence in the *rest* of the assembled context (node appends a
   `git log` block python does not) is why parity compares the injected block, not the whole context.
 
 Extend it when a new shared surface lands.

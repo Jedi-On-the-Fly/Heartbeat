@@ -1,0 +1,114 @@
+{
+  "_meta": {
+    "project": "tier12-howtos",
+    "note": "Write the Tier-1 + Tier-2 missing how-tos, dogfooded. Each mechanism guide ships a runnable, self-verifying proof under docs/howto/gate-examples/ (deterministic, marker-emitting) bundled into a new node-suite group T77; the two prose guides are integrity-checked by prose-check.sh and folded into T62. The parallel and fully-local guides are additionally validated by a real Ollama run (non-gating live tier, like tests/real-backend.sh). Spec-first: each phase's first task authors the proof/contract before the guide. Flips 6 roadmap gaps from Not-available to created in howto-list.md + docs/howto/README.md."
+  },
+  "phases": [
+    {
+      "id": "PAR", "title": "Run tasks in parallel (+ worktree isolation)", "gate_entry": null, "gate_exit": "GATE_PAR",
+      "tasks": [
+        { "id": "PART1", "title": "Author the parallel-fanout proof", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/parallel-fanout.sh — a self-contained deterministic proof (own tiny stub backend, git-enabled temp project) that (a) hb ready returns the independent runnable set and excludes a requires-dependent task, (b) a worktree-isolated concurrent fan-out (HB_MAX_CONCURRENCY>1) runs two independent tasks writing DISTINCT files and merges both into the main tree, (c) worktrees/temp branches are cleaned up after. Prints PARALLEL-FANOUT-OK only when all hold. Deterministic (stub worker, no model)." },
+        { "id": "PART2", "title": "Write the guide + wire it", "requires": ["PART1"],
+          "description": "Write docs/howto/run-tasks-in-parallel.md (hb ready N, exec run --parallel N, HB_MAX_CONCURRENCY, worktree isolation, the same-files conflict rule, when to fan out). Add node-suite group T77 to tests/run-tests.sh running docs/howto/gate-examples/parallel-fanout.sh (marker) + prose-check on the guide. Flip the roadmap rows in docs/howto/howto-list.md (Run Independent Tasks in Parallel; Understand Worktree Isolation) and add an index row in docs/howto/README.md. Validate live: a real Ollama-backed parallel run (recorded, non-gating)." }
+      ]
+    },
+    {
+      "id": "REPO", "title": "Add HeartBeat to an existing repository", "gate_entry": "GATE_PAR", "gate_exit": "GATE_REPO",
+      "tasks": [
+        { "id": "REPOT1", "title": "Author the existing-repo proof", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/existing-repo.sh — a deterministic proof that in a pre-existing git repo (an existing tracked file + commit), hb init / bootstrap adds .hb WITHOUT clobbering existing files or history: the existing file's contents are unchanged, the pre-existing commit still reachable, and a subsequent gate pass (committed with git --no-verify so the rot hook can't flake the assertion) records new work without altering the pre-existing file. Prints EXISTING-REPO-OK only when all hold." },
+        { "id": "REPOT2", "title": "Write the guide + wire it", "requires": ["REPOT1"],
+          "description": "Write docs/howto/add-heartbeat-to-an-existing-repo.md (hb init into a live repo, what .hb adds, .gitignore guidance, HB_NO_GIT / HB_GIT_AUTOCOMMIT for existing CI, coexistence with existing history). Add the existing-repo.sh proof + prose-check on the guide to node-suite group T77. Flip the howto-list.md row (Add HeartBeat to an Existing Repository) and add a docs/howto/README.md index row." }
+      ]
+    },
+    {
+      "id": "DEPS", "title": "Write dependencies that don't over-constrain", "gate_entry": "GATE_REPO", "gate_exit": "GATE_DEPS",
+      "tasks": [
+        { "id": "DEPST1", "title": "Author the sparse-deps proof", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/sparse-deps.sh — a deterministic proof over two lint-clean DAGs with the same three tasks: an OVER-CONSTRAINED one (A->B->C serial requires) where hb ready returns exactly 1, and a SPARSE one (only real deps) where hb ready returns 3 — showing over-constraint needlessly serializes work. Prints SPARSE-DEPS-OK only when both ready-set sizes match." },
+        { "id": "DEPST2", "title": "Write the guide + wire it", "requires": ["DEPST1"],
+          "description": "Write docs/howto/write-sparse-dependencies.md (requires models REAL data/order deps only; over-constraint kills parallelism; how to spot it via the hb ready set size; the same-files caveat that argues for a real edge). Add sparse-deps.sh + prose-check to node-suite group T77. Flip the howto-list.md row (Write Dependencies That Don't Over-Constrain) and add a docs/howto/README.md index row." }
+      ]
+    },
+    {
+      "id": "SAFE", "title": "Review an unsafe gate command", "gate_entry": "GATE_DEPS", "gate_exit": "GATE_SAFE",
+      "tasks": [
+        { "id": "SAFET1", "title": "Author the unsafe-gate proof", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/unsafe-gate.sh — a deterministic proof that hb audit FLAGS the risky gate patterns a reviewer must catch: a side_effecting gate (writes/creates files, can fabricate its own evidence) and a nondeterministic gate (network/time), while a clean behavioral gate audits with no such finding. Prints UNSAFE-GATE-OK only when the auditor reports side_effecting AND nondeterministic on the bad DAG and neither on the good one." },
+        { "id": "SAFET2", "title": "Write the guide + wire it", "requires": ["SAFET1"],
+          "description": "Write docs/howto/review-an-unsafe-gate.md (gate cmds are arbitrary shell run with your privileges; what to look for; how hb audit flags side_effecting / nondeterministic; observe-don't-produce; run untrusted DAGs with least privilege). Link the auditor guide rather than restating its rules. Add unsafe-gate.sh + prose-check to node-suite group T77. Flip the howto-list.md row (A Gate Command Looks Unsafe) and add a docs/howto/README.md index row." }
+      ]
+    },
+    {
+      "id": "LOCAL", "title": "Run HeartBeat fully locally", "gate_entry": "GATE_SAFE", "gate_exit": "GATE_LOCAL",
+      "tasks": [
+        { "id": "LOCALT1", "title": "Draft the fully-local guide contract", "requires": [],
+          "description": "Author docs/howto/run-heartbeat-fully-locally.md: the end-to-end no-cloud story — pip install the Python port, the ollama backend (no API key, stdlib only), Python gates, no node, no Claude Code. Real hb commands only (hb init / audit / exec / gate); link use-heartbeat-with-ollama.md and choose-runtime.md rather than duplicating them; substantive (>=15 non-blank lines), no placeholders — must pass prose-check.sh." },
+        { "id": "LOCALT2", "title": "Wire + live-validate", "requires": ["LOCALT1"],
+          "description": "Add docs/howto/run-heartbeat-fully-locally.md to the T62 prose bundle in tests/run-tests.sh (bump the ALL-PROSE-OK count). Flip the howto-list.md rows (Run HeartBeat Fully Locally; Run HeartBeat Without Claude Code) and add a docs/howto/README.md index row. Validate live: a real Ollama-backed end-to-end run via py/real-backend.py (recorded, non-gating)." }
+      ]
+    },
+    {
+      "id": "CRON", "title": "Schedule HeartBeat unattended", "gate_entry": "GATE_LOCAL", "gate_exit": "GATE_CRON",
+      "tasks": [
+        { "id": "CRONT1", "title": "Draft the scheduling guide contract", "requires": [],
+          "description": "Author docs/howto/schedule-heartbeat-unattended.md: driving ticks unattended — the /schedule cron routine (Claude Code, cloud caveat: clones a git repo), system cron calling headless claude -p or hb tick for local-only projects, and /loop for in-session. Real hb commands only (hb tick); link the SKILL/relevant guides; substantive, no placeholders — must pass prose-check.sh." },
+        { "id": "CRONT2", "title": "Wire it", "requires": ["CRONT1"],
+          "description": "Add docs/howto/schedule-heartbeat-unattended.md to the T62 prose bundle in tests/run-tests.sh (bump the ALL-PROSE-OK count). Flip the howto-list.md row (Schedule HeartBeat with Cron) and add a docs/howto/README.md index row." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_PAR": {
+      "desc": "The parallel/worktree guide ships a real, deterministic proof (fan-out isolates + merges + cleans up), passes prose-integrity, and is wired into the suite.",
+      "review": { "prompt": "Refute that PAR is done: does parallel-fanout.sh actually run tasks CONCURRENTLY in ISOLATED worktrees and assert BOTH distinct files merged, or could PARALLEL-FANOUT-OK print on a trivial serial run? does it prove hb ready excludes a requires-dependent task? are worktrees really cleaned up? does the guide claim behavior the proof doesn't show? is the marker printed unconditionally?" },
+      "criteria": [
+        { "id": "parc1", "desc": "the parallel fan-out proof passes (isolate + merge + cleanup)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/parallel-fanout.sh\" 2>&1 | grep -q 'PARALLEL-FANOUT-OK'" },
+        { "id": "parc2", "desc": "the guide passes prose-integrity (links + real commands)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/run-tasks-in-parallel.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "parc3", "desc": "the suite actually runs the proof AND asserts its marker (not mere file existence)", "cmd": "grep -qE 'parallel-fanout.sh.*PARALLEL-FANOUT-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    },
+    "GATE_REPO": {
+      "desc": "The existing-repo guide ships a deterministic proof that hb init is non-destructive in a live repo, passes prose-integrity, and is wired.",
+      "review": { "prompt": "Refute that REPO is done: does existing-repo.sh actually start from a repo with a pre-existing tracked file AND commit, and assert the file is byte-unchanged and the old commit still reachable after hb init? or could EXISTING-REPO-OK print without any pre-existing content to clobber? does the guide over-promise?" },
+      "criteria": [
+        { "id": "repoc1", "desc": "the existing-repo proof passes (init is non-destructive)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/existing-repo.sh\" 2>&1 | grep -q 'EXISTING-REPO-OK'" },
+        { "id": "repoc2", "desc": "the guide passes prose-integrity", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/add-heartbeat-to-an-existing-repo.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "repoc3", "desc": "the suite actually runs the proof AND asserts its marker", "cmd": "grep -qE 'existing-repo.sh.*EXISTING-REPO-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    },
+    "GATE_DEPS": {
+      "desc": "The sparse-deps guide ships a deterministic proof that over-constraint serializes the ready set, passes prose-integrity, and is wired.",
+      "review": { "prompt": "Refute that DEPS is done: does sparse-deps.sh really compare ready-set sizes for an over-constrained vs a sparse DAG (1 vs 3), or does it assert something trivial? are both DAGs lint-clean (so the difference is the requires edges, not a structural error)? could SPARSE-DEPS-OK print if hb ready returned the same for both?" },
+      "criteria": [
+        { "id": "depsc1", "desc": "the sparse-deps proof passes (over-constraint serializes)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/sparse-deps.sh\" 2>&1 | grep -q 'SPARSE-DEPS-OK'" },
+        { "id": "depsc2", "desc": "the guide passes prose-integrity", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/write-sparse-dependencies.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "depsc3", "desc": "the suite actually runs the proof AND asserts its marker", "cmd": "grep -qE 'sparse-deps.sh.*SPARSE-DEPS-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    },
+    "GATE_SAFE": {
+      "desc": "The unsafe-gate guide ships a deterministic proof that the auditor flags side_effecting + nondeterministic gates, passes prose-integrity, and is wired.",
+      "review": { "prompt": "Refute that SAFE is done: does unsafe-gate.sh assert the auditor reports BOTH side_effecting AND nondeterministic on the bad DAG AND neither on the good one, or does it accept a partial/empty result? could UNSAFE-GATE-OK print if audit found nothing? does the guide restate the auditor rules (drift risk) instead of linking them?" },
+      "criteria": [
+        { "id": "safec1", "desc": "the unsafe-gate proof passes (auditor flags side_effecting + nondeterministic)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/unsafe-gate.sh\" 2>&1 | grep -q 'UNSAFE-GATE-OK'" },
+        { "id": "safec2", "desc": "the guide passes prose-integrity", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/review-an-unsafe-gate.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "safec3", "desc": "the suite actually runs the proof AND asserts its marker", "cmd": "grep -qE 'unsafe-gate.sh.*UNSAFE-GATE-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    },
+    "GATE_LOCAL": {
+      "desc": "The fully-local guide passes prose-integrity and is folded into the T62 prose bundle.",
+      "criteria": [
+        { "id": "localc1", "desc": "the guide passes prose-integrity (links + real commands)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/run-heartbeat-fully-locally.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "localc2", "desc": "the guide is wired into a real prose-check invocation (T62 bundle), not just mentioned", "cmd": "grep -qE 'prose-check.*run-heartbeat-fully-locally' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    },
+    "GATE_CRON": {
+      "desc": "The scheduling guide passes prose-integrity and is folded into the T62 prose bundle.",
+      "criteria": [
+        { "id": "cronc1", "desc": "the guide passes prose-integrity (links + real commands)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/schedule-heartbeat-unattended.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "cronc2", "desc": "the guide is wired into a real prose-check invocation (T62 bundle), not just mentioned", "cmd": "grep -qE 'prose-check.*schedule-heartbeat-unattended' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    }
+  }
+}

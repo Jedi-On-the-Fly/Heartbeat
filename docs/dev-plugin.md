@@ -15,6 +15,8 @@ Two stages. **Stage A** (`tick.sh`, bash) reads settled reality and decides whet
 | `plugin/skills/heartbeat/SKILL.md` | `/heartbeat` command surface + Tick Protocol |
 | `plugin/skills/gated-docs/SKILL.md` | docs-as-verified-claims method (gate a guide with a proof/prose-check, refute it) |
 | `plugin/hooks/hooks.json` + `heartbeat-detect.sh` | SessionStart pointer when a `.hb/` exists |
+| `plugin/adapters/code/` + `plugin/adapters/docs/` | **Domain adapters** (dep-lint + context providers) — a **parity surface** with `py/src/heartbeat/adapters/` (node ≡ python, T94/T95). NOT scaffolded into `.hb/`, imports nothing from core. See [adapters.md](adapters.md) |
+| `plugin/skills/code-aware-planning/` + `docs-authoring/` | the per-adapter skills (enforced by skill-integrity, T92) |
 | `plugin/templates/*` | Per-project tooling, copied into `.hb/` at bootstrap |
 
 Every project owns copies of the templates under `.hb/`. `HB_DIR` = the `.hb/` dir; `PROJECT_DIR` = its parent.
