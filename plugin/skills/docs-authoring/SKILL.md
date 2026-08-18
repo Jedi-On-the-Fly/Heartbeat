@@ -40,6 +40,9 @@ provider is different. It is **advisory**: it reports; you decide.
    task's worker sees the sections it cites before writing:
    ```bash
    export HB_EXEC_CONTEXT_CMD='node plugin/adapters/docs/docs-context.js my-doc/ codemap.json "$HB_TASK_ID"'
+   # — or node-free (Python package / a framework backend), same output (node ≡ python):
+   export HB_EXEC_CONTEXT_CMD='python3 -m heartbeat.adapters.docs.docs_context my-doc/ codemap.json "$HB_TASK_ID"'
+   # get the codemap node-free too:  python3 -m heartbeat.adapters.docs.docs_map my-doc/ > codemap.json
    ```
 4. **Adjust the DAG yourself.** Findings are advice; the adapter never rewrites your DAG.
 

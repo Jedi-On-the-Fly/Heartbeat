@@ -27,6 +27,8 @@ direct neighbors (what each depends on, and what uses it):
 
 ```bash
 node plugin/adapters/code/codegraph-context.js codemap.json TASK_ID
+# — or node-free, same output (the adapters are a parity surface, node ≡ python):
+python3 -m heartbeat.adapters.code.codegraph_context codemap.json TASK_ID
 ```
 
 Wrap it in a small `context_cmd` that passes `HB_TASK_ID` through, and point the executor at it. The

@@ -40,6 +40,9 @@ symbols the task touches plus their direct neighbors — instead of rediscoverin
 
 ```bash
 export HB_EXEC_CONTEXT_CMD='node plugin/adapters/code/codegraph-context.js codemap.json "$HB_TASK_ID"'
+# — or node-free (Python package / a framework backend like Agno), same output (node ≡ python):
+export HB_EXEC_CONTEXT_CMD='python3 -m heartbeat.adapters.code.codegraph_context codemap.json "$HB_TASK_ID"'
+# dep-lint node-free too:  python3 -m heartbeat.adapters.code.deplint your.dag.json codemap.json
 ```
 
 The executor runs it per task and appends its output to the task context (byte-identical node ≡

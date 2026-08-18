@@ -18,8 +18,15 @@ Beyond the pure functions, a few **behavioral** surfaces must also match (they w
 functions, so they get their own cross-runtime checks): the **tick's `data.reason`** (both ticks
 wake for the same reason on the same state, incl. `review_stuck` — T82), the **gate-runner
 verdict** (pass/fail/hollow-floor/timeout — T83), **doctor / rot detection** (T84), and the
-**backends registry** (same canonical set — T85). Each is proven by a `gate-examples/*-parity.sh`
-script driving both runtimes.
+**backends registry** (same canonical set — T85), the **Seam-2 context-injection hook** (both
+executors inject a configured `context_cmd` identically, incl. nonzero-exit — T89), and the
+**domain adapters** (node ≡ python: [`gate-examples/deplint-parity.sh`](gate-examples/deplint-parity.sh),
+[`gate-examples/codegraph-map-parity.sh`](gate-examples/codegraph-map-parity.sh),
+[`gate-examples/codegraph-context-parity.sh`](gate-examples/codegraph-context-parity.sh) — T94; and
+[`gate-examples/docs-map-parity.sh`](gate-examples/docs-map-parity.sh),
+[`gate-examples/docs-context-parity.sh`](gate-examples/docs-context-parity.sh) — T95; the capability
+runs node-free per [`gate-examples/adapters-nodefree.sh`](gate-examples/adapters-nodefree.sh) — T96).
+Each is proven by a `gate-examples/*-parity.sh` script driving both runtimes.
 
 ## The rule when you change shared logic
 

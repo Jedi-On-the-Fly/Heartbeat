@@ -114,20 +114,20 @@ Two gotchas it encodes:
   pure over the event log + scorecards (no new shared *logic* to mirror byte-for-byte). Proof:
   `docs/howto/gate-examples/reward-regression.sh` (node-suite T76).
 
-- **The code adapter** (`plugin/adapters/code/` — `deplint` + `codegraph-map` + `codegraph-context`)
-  is **node-only** and intentionally **not a parity surface**, like viz/bench/mcp-serve. It's a
-  *domain adapter* over the general method (Seam 1: plan authoring; Seam 2: context assembly),
-  delivered by the plugin but **not scaffolded into any `.hb/`** and importing nothing from core; the
-  suites stay green without it (and without CodeGraph). There is no second implementation to keep
-  byte-equal — the live CodeGraph DB read is harness-first; the pure dep-lint engine, row→codemap
-  mapping, and context provider are gated hermetically (node-suite T87/T88). Proofs:
-  `docs/howto/gate-examples/code-deplint.sh`, `code-map.sh`, `code-context.sh`.
-
-- **The docs adapter** (`plugin/adapters/docs/` — `docs-map` + `docs-context`) is the SECOND domain
-  provider and is likewise **node-only** and **not a parity surface**. It reuses the *unchanged*
-  `deplint.js` and the generic context hook — only the provider is new — so it adds no shared logic to
-  keep byte-equal. Gated hermetically (node-suite T90/T91: `docs-deplint.sh`, `docs-context.sh`); the
-  live ollama demo (`tests/real-docs-context.sh`) is harness-first. Same boundary as code.
+- **The domain adapters ARE a parity surface — node ≡ python.** Both the code adapter
+  (`plugin/adapters/code/` — `deplint` + `codegraph-map` + `codegraph-context`; node `*.js` and
+  `py/src/heartbeat/adapters/code/*.py`) and the docs adapter (`plugin/adapters/docs/` — `docs-map` +
+  `docs-context`; `py/src/heartbeat/adapters/docs/*.py`) ship in **both runtimes** and are cross-checked:
+  **byte-identical** for the deterministic outputs (deplint findings+messages incl. the em-dash;
+  context renderers — the Python side matches JS `.trim()` exactly via `js_trim`) and **set-equal** for
+  the maps (edge/row order can differ). This makes the capability native to the Python/framework path —
+  a `context_cmd='python3 -m heartbeat.adapters.docs.docs_context …'` works with **zero Node**
+  (proof `docs/howto/gate-examples/adapters-nodefree.sh`). Enforced by **T94** (`deplint-parity.sh`,
+  `codegraph-map-parity.sh`, `codegraph-context-parity.sh`) and **T95** (`docs-map-parity.sh`,
+  `docs-context-parity.sh`), plus `py/tests/test_adapters_{code,docs}.py`. Boundary unchanged: not
+  scaffolded into any `.hb/`, imports nothing from core; the live CodeGraph DB read stays harness-first
+  (node uses the sqlite3 CLI, Python the stdlib `sqlite3` module — an intentional impl divergence, not
+  an output divergence). The original node-suite proofs (T87/T88, T90/T91) still hold.
 
 - **The executor context-injection hook IS a shared behavioral surface** (Seam 2). When a
   `context_cmd` is configured, both executors (`py/src/heartbeat/executor.py::assemble_context` and

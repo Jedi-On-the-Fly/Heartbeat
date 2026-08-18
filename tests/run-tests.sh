@@ -1255,6 +1255,14 @@ else
   echo "  (node/python absent — T95 skipped)"
 fi
 
+grp "T96 — the adapter capability is available NODE-FREE (Python adapters + python context_cmd, no Node)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T96.1 adapters run with node provably off PATH (adapters-nodefree.sh → ADAPTERS-NODEFREE-OK)" \
+    'bash "'"$GEX"'/adapters-nodefree.sh" 2>&1 | grep -q "ADAPTERS-NODEFREE-OK"'
+else
+  echo "  (python3 absent — T96 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

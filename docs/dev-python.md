@@ -35,6 +35,8 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 | `protocol.py` | `PROTOCOL`, `render_md()` | reason keys = plugin; action text cites `hb` console |
 | `executor.py` | `run(hbdir)`, `config(hbdir)`, `dispatch(...)`, `assemble_context`, in-process + subprocess dispatch, worktree parallel | pluggable Stage B |
 | `backends/` | in-process backend registry | see below |
+| `adapters/code/` | `deplint`, `codegraph_map`, `codegraph_context` | domain adapter — a parity surface with `plugin/adapters/code/*.js` (node ≡ python; T94). `python3 -m heartbeat.adapters.code.deplint …` |
+| `adapters/docs/` | `docs_map`, `docs_context` (`js_trim`) | docs domain adapter — parity with `plugin/adapters/docs/*.js` (T95). Node-free; usable as a `context_cmd` with zero Node (T96) |
 | `mcp_server.py` | `serve(hbdir)`, `TOOLS` | `hb mcp-serve` — minimal stdlib-only MCP server over stdio; see below |
 | `bench.py` | `score(hbdir)`, `run(source, specs)`, `reward_records(events, dag)`, `rewards(hbdir)`, `regressions(cards, baseline)`, `render`, `build` | `hb bench` (+`--baseline` regression verdict), `hb reward` — score N backends, extract the verifiable-reward stream, flag model-regression; all pure over the event log |
 | `cli.py` | `main(argv=None)` → argparse dispatch | the `hb` entry |

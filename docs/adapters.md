@@ -49,17 +49,21 @@ An adapter:
 
 - lives under `plugin/adapters/` — delivered by the plugin but **never scaffolded into a project's
   `.hb/`**;
-- is **not core** and **not a parity surface** — it imports nothing from core, and the test suites
-  stay green whether or not it (or its backing tool) is installed;
+- is **not core** — it imports nothing from core, and the suites stay green whether or not it (or its
+  backing tool) is installed;
+- **ships in both runtimes (a parity surface)** — each adapter has a node impl (`plugin/adapters/`)
+  and a Python impl (`py/src/heartbeat/adapters/`), cross-checked node ≡ python (byte-equal for
+  deplint + the context renderers, set-equal for the maps; T94/T95). So the capability is native to
+  the Python/framework path — a `context_cmd='python3 -m heartbeat.adapters.docs.docs_context …'`
+  works with **zero Node** (proof `gate-examples/adapters-nodefree.sh`);
 - is **advisory / optional** — the DAG format, the gates, and the tick are unchanged.
 - **ships a skill** — every adapter comes with its own Claude Code skill (`plugin/skills/<domain>-…`)
   that auto-triggers on that domain and runs the whole workflow, so usage has zero friction. This is
   enforced: `gate-examples/skill-integrity.sh` (T92) fails unless each adapter is declared by a skill
   naming real, wired proofs.
 
-The one thing that *is* shared across runtimes is the generic `context_cmd` hook itself (it lives in
-both executors and must behave identically) — so it carries a cross-runtime parity proof, while the
-code-specific provider stays single-runtime. See [AGENTS.md](../AGENTS.md) and
+The generic `context_cmd` hook that carries adapter context lives in **both** executors and behaves
+identically (its own cross-runtime parity proof, T89). See [AGENTS.md](../AGENTS.md) and
 [parity-notes.md](../planning/parity-notes.md).
 
 ## Code — the first domain
