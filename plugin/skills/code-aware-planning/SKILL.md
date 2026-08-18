@@ -5,6 +5,8 @@ description: Make HeartBeat plan authoring code-aware — validate a dag.json's 
 
 # Code-Aware Planning Skill (Claude Code)
 
+<!-- HB-ADAPTER: code -->
+
 The HeartBeat method (DAG + gates + tick) is domain-agnostic. This skill applies the **first
 domain adapter** — `heartbeat-code` (`plugin/adapters/code/`) — so that when the work is **code**,
 the plan's `requires` edges are checked against the real call/dependency graph instead of guessed.
@@ -30,11 +32,27 @@ into a project's `.hb/`.
 4. **Adjust the DAG yourself.** Treat every finding as advice — a wrong auto-edge is worse than a
    missing one. The adapter never rewrites the DAG.
 
+## Feed code context to Stage B (Seam 2)
+
+The same adapter also makes *execution* cheaper. Wire `codegraph-context.js` as the executor's
+generic **`context_cmd`** hook so each task's worker (Stage B) receives the subgraph it needs — the
+symbols the task touches plus their direct neighbors — instead of rediscovering them:
+
+```bash
+export HB_EXEC_CONTEXT_CMD='node plugin/adapters/code/codegraph-context.js codemap.json "$HB_TASK_ID"'
+```
+
+The executor runs it per task and appends its output to the task context (byte-identical node ≡
+python); the executor itself stays code-agnostic. Proof:
+`docs/howto/gate-examples/code-context.sh`.
+
 ## Boundary (hold this)
 
-`deplint`/`codegraph-map` are **node-only, not core, not a parity surface**, and import nothing
-from HeartBeat core. The live CodeGraph database read is harness-first (unproven without CodeGraph
-installed); the pure mapping and the dep-lint engine are gated hermetically (node-suite T87).
+`deplint`/`codegraph-map`/`codegraph-context` are **node-only, not core, not a parity surface**, and
+import nothing from HeartBeat core. The live CodeGraph database read is harness-first (unproven
+without CodeGraph installed); the mapping, engine, and context provider are gated hermetically —
+proofs: `docs/howto/gate-examples/code-deplint.sh`, `docs/howto/gate-examples/code-map.sh`,
+`docs/howto/gate-examples/code-context.sh` (node-suite T87/T88).
 
 Method detail and the contract: `plugin/adapters/code/README.md`. Workflow guide:
 `docs/howto/plan-code-aware-dags.md`.

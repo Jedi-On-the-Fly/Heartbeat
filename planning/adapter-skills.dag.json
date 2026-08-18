@@ -1,0 +1,53 @@
+{
+  "_meta": {
+    "project": "adapter-skills",
+    "note": "Kill usage friction: every domain adapter ships its OWN skill (auto-triggers on that domain, runs the whole workflow: map -> deplint -> context). Today the code adapter has code-aware-planning (Seam-1-only) and the docs adapter has NO skill. This adds the docs skill, rounds out the code skill to cover Seam 2, and — the HeartBeat way — makes 'ship a skill' an ENFORCED convention via a skill-integrity gate: every plugin/adapters/<domain>/ must have a skill that references it AND names real, WIRED gate-examples proofs (so a skill can't rot or cite a vanished command). Then the convention is codified in the adapter recipe (build-a-domain-adapter.md) and adapters.md. Node-only tooling; not a parity surface. Spec-first (the integrity proof fails now because docs has no skill); adversarial review on both gates."
+  },
+  "phases": [
+    {
+      "id": "SK", "title": "Adapter skills + skill-integrity gate", "gate_entry": null, "gate_exit": "GATE_SK",
+      "tasks": [
+        { "id": "SK1", "title": "Author the skill-integrity proof (spec-first)", "requires": [],
+          "description": "Spec-first: write docs/howto/gate-examples/skill-integrity.sh (parameterizable like self-audit.sh: accept optional <adaptersDir> <skillsDir> <runTests> args, defaulting to the repo, so it can run against a fixture). For EACH domain dir under the adapters dir, it asserts PER ADAPTER: (a) at least one SKILL.md under the skills dir references that adapter (contains 'adapters/<domain>') — else the finding 'no skill for adapter <domain>'; (b) among the skills that reference it, they name at least one gate-examples/<name>.sh proof (a proofless adapter skill is a finding), and EVERY named proof both EXISTS and is WIRED (its basename appears in run-tests.sh) — else the finding 'proof not wired' / 'proof missing'. Proofs are counted PER ADAPTER (one adapter's proofs must not 'cover' another). Print SKILL-INTEGRITY-OK only when domains>=1 and findings==0 (no vacuous 0/0). Add a `--selftest` with REAL TEETH modelled on self-audit.sh --selftest: build a temp fixture tree and assert, by DISTINCT finding strings and rc!=0 PER CASE, that (i) an adapter with NO skill is caught (grep the 'no skill' message), and (ii) a skill that names an UNWIRED (or missing) proof is caught (grep the 'not wired' message); and that a good adapter+skill+wired-proof PASSES; only then print SKILL-INTEGRITY-SELFTEST-OK. set -euo pipefail + explicit exits. On the CURRENT repo the real run MUST fail (the docs adapter has no skill AND the code skill names no proof) — the spec-first reproduction." },
+        { "id": "SK2", "title": "Write the docs skill + round out the code skill", "requires": ["SK1"],
+          "description": "Create plugin/skills/docs-authoring/SKILL.md — YAML frontmatter (name: docs-authoring; a NARROW trigger description: use when planning a multi-section documentation/research WRITING project as a HeartBeat DAG and you want citation-aware task dependencies + cited-section context — NOT for general doc edits). Body: the zero-friction workflow — run plugin/adapters/docs/docs-map.js on the corpus to get the codemap, dep-lint the authoring DAG with the UNCHANGED plugin/adapters/code/deplint.js, wire plugin/adapters/docs/docs-context.js as the context_cmd; reference its proofs by name: docs/howto/gate-examples/docs-deplint.sh and docs/howto/gate-examples/docs-context.sh; note the boundary (node-only, advisory). Update plugin/skills/code-aware-planning/SKILL.md: (1) it must reference 'adapters/code'; (2) it MUST name its proofs by path — docs/howto/gate-examples/code-deplint.sh, code-map.sh, AND code-context.sh (required — else the skill-integrity gate keeps the code adapter red); (3) it must now TEACH Seam 2 (a real workflow paragraph: wire plugin/adapters/code/codegraph-context.js as the executor's context_cmd so the touched symbols' subgraph is fed to Stage B), not just mention the words — so both adapter skills are symmetric (plan + context). Do NOT touch deplint.js or the executors." },
+        { "id": "SK3", "title": "Wire the skill-integrity proof (T92)", "requires": ["SK2"],
+          "description": "Add node-suite group T92 to tests/run-tests.sh (after T91): check T92.1 runs docs/howto/gate-examples/skill-integrity.sh asserting SKILL-INTEGRITY-OK, and T92.2 runs its --selftest asserting SKILL-INTEGRITY-SELFTEST-OK. Guard appropriately (bash-only, no node needed if pure bash — but the check reads files, so it just needs a shell). Keep the whole node suite green." }
+      ]
+    },
+    {
+      "id": "SD", "title": "Codify 'ship a skill' in the adapter recipe (docs-gated)", "gate_entry": "GATE_SK", "gate_exit": "GATE_SD",
+      "tasks": [
+        { "id": "SD1", "title": "Add the ship-a-skill step to the recipe + adapters.md", "requires": [],
+          "description": "Update docs/howto/build-a-domain-adapter.md: add a numbered step 'Ship a skill' — every adapter ships its own skill (auto-triggers on that domain, runs map -> deplint -> context), and the skill-integrity gate (T92) enforces that each adapter has a skill naming its real, wired proofs; use the exact phrase 'ship a skill'. Update docs/adapters.md: state that each adapter ships a skill so usage is frictionless (the skills are the last-mile of a self-contained adapter); use the exact phrase 'ships a skill'. Keep both prose-clean (links resolve, no fake hb commands)." },
+        { "id": "SD2", "title": "Verify the convention docs are gated", "requires": ["SD1"],
+          "description": "Confirm docs/howto/gate-examples/prose-check.sh passes on docs/howto/build-a-domain-adapter.md, the count-pinned whole-corpus sweep (ALL-PROSE-OK:<file count>) still passes, and self-audit (SELF-AUDIT-OK, referenced proofs exist+wired, parity ok) passes. Do not weaken a check to make a doc pass — fix the doc." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_SK": {
+      "desc": "Every domain adapter ships a skill that references it and names real, WIRED proofs (skill-integrity gate, with a teeth-bearing selftest); the docs skill exists and the code skill now covers Seam 2 as well. Enforced deterministically and wired into the suite.",
+      "review": { "prompt": "Refute that SK is done. Does skill-integrity.sh genuinely check that EACH plugin/adapters/<domain>/ has a skill referencing it AND that the skill names proofs which both EXIST and are WIRED (grep run-tests.sh)? Could SKILL-INTEGRITY-OK print vacuously (0 domains, or a skill that cites no proof slipping through — is 'at least one wired proof per adapter' actually required)? Does the --selftest have real TEETH — does it catch (i) an adapter with no skill and (ii) a skill naming a missing/unwired proof, and would SKILL-INTEGRITY-SELFTEST-OK fail if the checker were hollow? Did the proof FAIL on the pre-work repo (docs adapter had no skill)? Is the docs skill's trigger description NARROW (won't fire on every doc edit)? Does the code skill now actually cover Seam 2 (context_cmd + codegraph-context), and does it name its proofs? Were deplint.js / the executors left untouched?" },
+      "criteria": [
+        { "id": "ska", "desc": "skill-integrity passes: every adapter has a skill naming real, wired proofs (non-vacuous)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/skill-integrity.sh\" 2>&1 | grep -q 'SKILL-INTEGRITY-OK'" },
+        { "id": "skb", "desc": "the integrity checker has teeth (selftest catches a missing skill AND an unwired/missing proof)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/skill-integrity.sh\" --selftest 2>&1 | grep -q 'SKILL-INTEGRITY-SELFTEST-OK'" },
+        { "id": "skc", "desc": "the integrity proof is wired into the node suite", "cmd": "grep -qE 'skill-integrity\\.sh.*SKILL-INTEGRITY' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "skd", "desc": "the code skill now covers Seam 2 (the context hook / provider), not just plan authoring", "cmd": "grep -qiE 'context_cmd|codegraph-context' \"$PROJECT_DIR/plugin/skills/code-aware-planning/SKILL.md\"" },
+        { "id": "ske", "desc": "the docs adapter now has a skill that references it", "cmd": "grep -rlq 'adapters/docs' \"$PROJECT_DIR/plugin/skills\"" },
+        { "id": "skf", "desc": "the integrity checker reports BOTH findings independently (missing-skill AND unwired-proof), not just an OK marker", "cmd": "grep -qiE 'no skill' \"$PROJECT_DIR/docs/howto/gate-examples/skill-integrity.sh\" && grep -qiE 'not wired|unwired' \"$PROJECT_DIR/docs/howto/gate-examples/skill-integrity.sh\"" },
+        { "id": "skg", "desc": "the code skill names its real proofs (so the code adapter is enforced, and a red ska is disambiguated)", "cmd": "grep -qE 'gate-examples/(code-deplint|code-map|code-context)\\.sh' \"$PROJECT_DIR/plugin/skills/code-aware-planning/SKILL.md\"" }
+      ]
+    },
+    "GATE_SD": {
+      "desc": "'Ship a skill' is a documented step of the adapter recipe and adapters.md presents skills as the friction-killer; the docs stay prose-clean, the corpus sweep is unbroken, and referenced proofs are wired (self-audit).",
+      "review": { "prompt": "Refute that SD is done. Does build-a-domain-adapter.md actually add a 'ship a skill' STEP (not a passing mention) that points at the skill-integrity enforcement, and does adapters.md present per-adapter skills as the last-mile friction-killer — without overclaiming? Do the docs pass prose-check (links resolve, no fake hb commands) and NOT break the count-pinned corpus sweep? Does self-audit still pass (referenced proofs exist+wired, parity ok)?" },
+      "criteria": [
+        { "id": "sda", "desc": "the recipe documents the ship-a-skill step", "cmd": "grep -qiE 'ship a skill' \"$PROJECT_DIR/docs/howto/build-a-domain-adapter.md\"" },
+        { "id": "sdb", "desc": "adapters.md presents per-adapter skills", "cmd": "grep -qiE 'ships a skill|each adapter.*skill|a skill per adapter' \"$PROJECT_DIR/docs/adapters.md\"" },
+        { "id": "sdc", "desc": "the recipe how-to stays prose-clean and the count-pinned corpus sweep is unbroken", "cmd": "D=\"$PROJECT_DIR/docs/howto\"; n=$(ls \"$D\"/*.md | wc -l); bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$D\"/*.md 2>&1 | grep -q \"ALL-PROSE-OK:$n\"" },
+        { "id": "sdd", "desc": "self-audit passes (referenced proofs exist AND wired; parity ok)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/self-audit.sh\" 2>&1 | grep -qE 'SELF-AUDIT-OK:[1-9][0-9]*/[1-9][0-9]*'" }
+      ]
+    }
+  }
+}

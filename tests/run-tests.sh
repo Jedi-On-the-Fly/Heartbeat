@@ -1223,6 +1223,12 @@ else
   echo "  (node absent — T91 skipped)"
 fi
 
+grp "T92 — adapter skill-integrity (every adapter ships a skill naming real, wired proofs)"
+check "T92.1 skill-integrity passes (skill-integrity.sh → SKILL-INTEGRITY-OK)" \
+  'bash "'"$GEX"'/skill-integrity.sh" 2>&1 | grep -q "SKILL-INTEGRITY-OK"'
+check "T92.2 the integrity checker has teeth (selftest catches missing-skill + unwired-proof)" \
+  'bash "'"$GEX"'/skill-integrity.sh" --selftest 2>&1 | grep -q "SKILL-INTEGRITY-SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
