@@ -1,7 +1,44 @@
 # STATUS — HeartBeat
 
-**Version:** v1.24 (tick/gate/doctor/registry parity + a real Python `review_stuck` liveness fix, over v1.23)
+**Version:** v1.25 (domain-adapter architecture — code + docs, both runtimes — a live viz dashboard, and MCP adapter tools, over v1.24)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.25 — domain adapters (the method, made domain-aware without leaving the method)
+
+The method stays domain-agnostic; a **domain adapter** plugs in at two seams — plan authoring
+(dep-lint a DAG's `requires` against a real dependency graph) and context assembly (feed Stage B
+the slice a task needs) — over one small `codemap` contract (`docs/adapters.md`). Two adapters ship,
+in **both runtimes**, so the capability is native to the Python/framework path, not just the node plugin.
+
+- **Two shipped adapters, both seams.** **code** (a CodeGraph symbol graph) and **docs/research**
+  (a markdown citation graph) each provide Seam 1 (`deplint`) + Seam 2 (a `context_cmd` provider).
+  Proofs: `code-deplint.sh` / `code-map.sh` / `code-context.sh` (T87/T88) and `docs-deplint.sh` /
+  `docs-map.sh` / `docs-context.sh` (T90/T91). Boundary is enforced: adapters live under
+  `plugin/adapters/` (+ `py/src/heartbeat/adapters/`), are **not** scaffolded into any `.hb/`, and
+  import nothing from core — the suites stay green without them.
+- **Adapters are a PARITY SURFACE — node ≡ python.** Both adapters are ported to Python and
+  cross-checked: **byte-equal** for the deterministic outputs (dep-lint findings incl. the em-dash;
+  context renderers — Python matches JS `.trim()` exactly via `js_trim`) and **set-equal** for the
+  maps (**T94**/**T95**). The capability runs with **zero Node** (**T96**, `adapters-nodefree.sh`
+  drives a `python3 -m heartbeat.adapters…` `context_cmd` with node off `PATH`). One deliberate impl
+  divergence (node shells to the `sqlite3` CLI, Python uses the stdlib module) — same output — is
+  recorded in `planning/parity-notes.md`.
+- **Frictionless + enforced.** Each adapter ships a skill (`code-aware-planning`, `docs-authoring`)
+  so a user never touches the raw `node plugin/adapters/…` commands; **skill-integrity** (**T92**)
+  fails the suite unless every adapter is declared by a skill that names real, **wired** proofs.
+  Guide: `docs/howto/build-a-domain-adapter.md`.
+- **MCP adapter tools.** The Python MCP server exposes the now-native adapters as tools — `deplint`
+  and `code_context` — so a framework/MCP client gets the code-aware capability in-session, node-free
+  (**T97**, `mcp-adapters.sh` drives real `mcp-serve` and compares each tool result to the adapter).
+- **Live viz dashboard.** `hb viz --serve` runs a loopback-only HTTP server that re-reads
+  `dag.json`+`state.json` fresh per request (no regenerate), refusing a non-loopback bind and
+  validating `Origin` (DNS-rebinding) — alongside the point-in-time snapshot (**T86**,
+  `viz-serve.sh`). Guide: `docs/howto/watch-a-run-live.md`.
+- **Docs held to the code's bar.** Whole-`docs/` prose gating (**T93**) extends prose-integrity to
+  every guide, and the `T55.2` executor test was de-flaked (deterministic, no timing race). Built the
+  gated way throughout: plan/phase refutations caught real defects each phase (a cross-adapter context
+  leak, a BOM/NEL `trim` divergence, a nonzero-exit `context_cmd` divergence, stale "node-only" adapter
+  docs) before they shipped.
 
 ## v1.24 — cross-runtime parity hardening (and the bug it surfaced)
 

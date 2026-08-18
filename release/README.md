@@ -6,7 +6,7 @@
 
 Most agent tooling helps you *run* agents. HeartBeat is about the harder half: knowing the work is actually done, not just claimed. Agents are confident and often wrong; HeartBeat assumes nothing and verifies everything at defined checkpoints.
 
-*New in **v1.24** — **cross-runtime parity hardening**: new checks that the node and Python runtimes agree on the tick's wake reasons, gate verdicts, rot detection, and backend set — an audit that turned up (and fixed) a real Python liveness bug where a stalled review never escalated. (v1.23 added the **scheduled self-audit**; v1.22 the `gated-docs` skill; v1.21 the **parity differential-testing oracle**; v1.20 the **cross-model refuter**; v1.19 the **MCP server**.) Details below.*
+*New in **v1.25** — the **domain-adapter architecture**: the domain-agnostic method plugs into two seams (plan authoring + context assembly) over one small `codemap` contract, with **two shipped adapters** — code (a CodeGraph symbol graph) and docs/research (a citation graph) — in **both runtimes**, node ≡ python (byte-equal dep-lint + context, set-equal maps), usable with **zero Node**. Each adapter ships a skill (enforced by a skill-integrity gate) and is exposed over **MCP** (`deplint` + `code_context`); plus a live `hb viz --serve` dashboard. (v1.24 added **cross-runtime parity hardening**; v1.23 the **scheduled self-audit**; v1.22 the `gated-docs` skill; v1.21 the **parity differential-testing oracle**; v1.20 the **cross-model refuter**; v1.19 the **MCP server**.) Details below.*
 
 ---
 
