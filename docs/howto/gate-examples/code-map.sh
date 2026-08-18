@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Proof: codegraph-map turns CodeGraph's nodes/edges rows into the codemap contract — it
 # resolves node id -> qualified_name AND keeps only dependency-bearing edge types
-# (calls/imports/inheritance), dropping the rest (here a "contains" edge must NOT survive).
+# (every resolved edge except structural "contains" — here a "contains" edge must NOT survive).
 # Prints CODE-MAP-OK. Fails before codegraph-map.js exists (spec-first).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"

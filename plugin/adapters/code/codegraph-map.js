@@ -5,11 +5,12 @@
  * Turns CodeGraph's graph rows into the codemap `edges` the dep-lint engine consumes:
  * resolves node id -> qualified_name and keeps only DEPENDENCY-BEARING edge types.
  *
- * NOTE on fidelity: CodeGraph is not vendored in this repo, so the row shape below
- * (nodes: {id, qualified_name, file, kind}; edges: {from_id, to_id, type}) and the
- * dependency-type allowlist are our documented, best-effort model of its schema — NOT
- * confirmed against a live database. The live DB read (readCodegraphDb) is harness-first
- * and unproven in-repo; the pure mapping (mapCodegraph) is what the suite gates.
+ * NOTE on fidelity: CodeGraph is not vendored in this repo, so the internal row shape below
+ * (nodes: {id, qualified_name, file, kind}; edges: {from_id, to_id, type}) is our own stable
+ * contract that the pure mapping (mapCodegraph) and the suite fixtures gate. The live DB read
+ * (readCodegraphDb) maps CodeGraph's ACTUAL columns onto it — confirmed against CodeGraph 1.5.0
+ * (nodes.file_path, edges.source/target/kind; a dependency is any resolved edge except structural
+ * `contains`) and proved harness-first by tests/real-codegraph-map.sh. The pure mapping is gated.
  *
  * Usage: node codegraph-map.js <rows.json>          # rows JSON -> codemap JSON (gated)
  *        node codegraph-map.js <db-path> --db        # read a CodeGraph .db (harness-first)
@@ -17,15 +18,20 @@
 'use strict';
 const fs = require('fs');
 
-// Dependency-bearing edge types (allowlist). A structural/containment edge is not a dependency.
-const DEP_TYPES = new Set(['calls', 'imports', 'inheritance']);
+// Structural containment is NOT a dependency; every other resolved edge is. A DENYLIST (not an
+// allowlist) so a new CodeGraph dependency kind is never silently dropped — the failure mode that
+// hid 1.5.0's `extends`/`instantiates` behind a stale `{calls,imports,inheritance}` allowlist.
+// This mirrors CodeGraph's OWN dependency rule (`WHERE e.kind != 'contains'`). 1.5.0 edge kinds:
+// calls, imports, exports, extends, implements, references, type_of, returns, instantiates,
+// overrides, decorates (all dependency-bearing) + contains (structural — the sole exclusion).
+const NON_DEP_TYPES = new Set(['contains']);
 
 function mapCodegraph(rows) {
   const id2qn = {};
   for (const n of (rows.nodes || [])) id2qn[n.id] = n.qualified_name;
   const edges = [];
   for (const e of (rows.edges || [])) {
-    if (!DEP_TYPES.has(e.type)) continue;                 // drop non-dependency edges
+    if (NON_DEP_TYPES.has(e.type)) continue;              // drop structural containment
     const from = id2qn[e.from_id], to = id2qn[e.to_id];
     if (from == null || to == null) continue;             // skip edges to unknown nodes
     edges.push([from, to]);
@@ -42,9 +48,10 @@ function readCodegraphDb(dbPath) {
     catch (e) { throw new Error(`codegraph-map: cannot read ${dbPath} via sqlite3 (${e.message}). ` +
       `This path is harness-first — it needs CodeGraph's database and the sqlite3 CLI.`); }
   };
+  // CodeGraph 1.5.0 schema, aliased onto our internal row keys (see NOTE above).
   return {
-    nodes: JSON.parse(q('SELECT id, qualified_name, file, kind FROM nodes') || '[]'),
-    edges: JSON.parse(q('SELECT from_id, to_id, type FROM edges') || '[]'),
+    nodes: JSON.parse(q('SELECT id, qualified_name, file_path AS file, kind FROM nodes') || '[]'),
+    edges: JSON.parse(q('SELECT source AS from_id, target AS to_id, kind AS type FROM edges') || '[]'),
   };
 }
 

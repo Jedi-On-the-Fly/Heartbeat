@@ -7,7 +7,7 @@
   ],
   "edges": [
     { "from_id": 1, "to_id": 2, "type": "calls" },
-    { "from_id": 4, "to_id": 3, "type": "inheritance" },
+    { "from_id": 4, "to_id": 3, "type": "extends" },
     { "from_id": 1, "to_id": 3, "type": "imports" },
     { "from_id": 2, "to_id": 4, "type": "contains" }
   ]

@@ -18,7 +18,8 @@ The adapter consumes a small, provider-neutral **codemap**:
 { "edges": [["symA", "symB"]], "tasks": { "P0T1": ["symA"], "P0T2": ["symB"] } }
 ```
 
-`edges` are `from depends on to` (calls / imports / inheritance); `tasks` maps each task to the
+`edges` are `from depends on to` (any code dependency — calls, imports, inheritance, instantiation,
+… — i.e. every resolved edge except structural containment); `tasks` maps each task to the
 symbols it creates or touches. Any tool can produce it — CodeGraph is the first provider.
 
 ## The workflow

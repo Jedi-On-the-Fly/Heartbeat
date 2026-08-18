@@ -9,7 +9,12 @@ Usage: python3 -m heartbeat.adapters.code.codegraph_map <rows.json>  |  <db-path
 import json
 import sys
 
-DEP_TYPES = {"calls", "imports", "inheritance"}
+# Structural containment is NOT a dependency; every other resolved edge is. A DENYLIST (not an
+# allowlist) so a new CodeGraph dependency kind is never silently dropped — the failure mode that hid
+# 1.5.0's extends/instantiates behind a stale allowlist. Mirrors CodeGraph's own rule (kind != 'contains').
+# 1.5.0 edge kinds: calls, imports, exports, extends, implements, references, type_of, returns,
+# instantiates, overrides, decorates (deps) + contains (structural — the sole exclusion).
+NON_DEP_TYPES = {"contains"}
 
 
 def map_codegraph(rows):
@@ -18,7 +23,7 @@ def map_codegraph(rows):
         id2qn[n["id"]] = n["qualified_name"]
     edges = []
     for e in (rows.get("edges") or []):
-        if e["type"] not in DEP_TYPES:                       # drop non-dependency edges
+        if e["type"] in NON_DEP_TYPES:                       # drop structural containment
             continue
         frm, to = id2qn.get(e["from_id"]), id2qn.get(e["to_id"])
         if frm is None or to is None:                        # skip edges to unknown nodes
@@ -33,10 +38,12 @@ def read_codegraph_db(db_path):
     import sqlite3
     con = sqlite3.connect(db_path)
     try:
+        # CodeGraph 1.5.0 schema (nodes.file_path, edges.source/target/kind), mapped onto our
+        # internal row keys so map_codegraph and the fixtures stay stable across CodeGraph versions.
         nodes = [{"id": r[0], "qualified_name": r[1], "file": r[2], "kind": r[3]}
-                 for r in con.execute("SELECT id, qualified_name, file, kind FROM nodes")]
+                 for r in con.execute("SELECT id, qualified_name, file_path, kind FROM nodes")]
         edges = [{"from_id": r[0], "to_id": r[1], "type": r[2]}
-                 for r in con.execute("SELECT from_id, to_id, type FROM edges")]
+                 for r in con.execute("SELECT source, target, kind FROM edges")]
     finally:
         con.close()
     return {"nodes": nodes, "edges": edges}
