@@ -1245,6 +1245,16 @@ else
   echo "  (node/python absent — T94 skipped)"
 fi
 
+grp "T95 — docs adapter parity (node ≡ python: docs-map set-equal, docs-context byte-equal)"
+if command -v node >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  check "T95.1 docs-map node ≡ python (edges + tasks, set-equal)" \
+    'bash "'"$GEX"'/docs-map-parity.sh" 2>&1 | grep -q "DOCS-MAP-PARITY-OK"'
+  check "T95.2 docs-context node ≡ python (byte-identical, incl. a task citing 2 sections)" \
+    'bash "'"$GEX"'/docs-context-parity.sh" 2>&1 | grep -q "DOCS-CONTEXT-PARITY-OK"'
+else
+  echo "  (node/python absent — T95 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
