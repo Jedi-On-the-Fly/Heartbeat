@@ -1,0 +1,9 @@
+{
+  "edges": [ ["symA", "symB"], ["symA", "symC"] ],
+  "tasks": {
+    "TA": ["symA", "shared1"],
+    "TB": ["symB", "shared2"],
+    "TC": ["symC", "shared2"],
+    "TD": ["symD", "shared1"]
+  }
+}

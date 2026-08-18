@@ -1233,6 +1233,18 @@ grp "T93 — EVERY markdown file under docs/ is prose-gated (top-level + concept
 check "T93.1 all docs/**/*.md pass prose-integrity (count == file count)" \
   'D="'"$HB_SRC"'/docs"; n=$(find "$D" -name "*.md" | wc -l); bash "'"$GEX"'/prose-check.sh" $(find "$D" -name "*.md" | sort) 2>&1 | grep -q "ALL-PROSE-OK:$n"'
 
+grp "T94 — code adapter parity (node ≡ python: deplint byte-identical, map set-equal, context byte-equal)"
+if command -v node >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  check "T94.1 deplint node ≡ python (byte-identical stdout + identical --strict exit, incl. multi-finding order)" \
+    'bash "'"$GEX"'/deplint-parity.sh" 2>&1 | grep -q "DEPLINT-PARITY-OK"'
+  check "T94.2 codegraph-map node ≡ python (same edges, set-equal)" \
+    'bash "'"$GEX"'/codegraph-map-parity.sh" 2>&1 | grep -q "CODEGRAPH-MAP-PARITY-OK"'
+  check "T94.3 codegraph-context node ≡ python (byte-identical)" \
+    'bash "'"$GEX"'/codegraph-context-parity.sh" 2>&1 | grep -q "CODEGRAPH-CONTEXT-PARITY-OK"'
+else
+  echo "  (node/python absent — T94 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
