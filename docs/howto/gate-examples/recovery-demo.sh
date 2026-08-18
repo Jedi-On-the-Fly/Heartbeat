@@ -33,10 +33,14 @@ completed_A0 || { echo "FAIL: setup — phase A0 did not complete"; exit 1; }
 
 # 3. REBUILD writes a faithful, idempotent projection to the state.json FILE. (Assert on the
 #    on-disk file rebuild produces — not `hb state`, which always reprojects from the log and
-#    would be identical regardless of whether the write worked.)
-hb rebuild --dir "$proj" >/dev/null 2>&1; f1="$(cat "$proj/.hb/state.json")"
-hb rebuild --dir "$proj" >/dev/null 2>&1; f2="$(cat "$proj/.hb/state.json")"
-[ "$f1" = "$f2" ] || { echo "FAIL: rebuild's on-disk projection is not idempotent"; exit 1; }
+#    would be identical regardless of whether the write worked.) `last_updated` is a wall-clock
+#    stamp of WHEN the projection was written (the projection is deterministic *except* that field),
+#    so normalize it out before comparing — otherwise two rebuilds straddling a 1-second boundary
+#    spuriously differ.
+norm(){ python3 -c "import sys,json; d=json.load(sys.stdin); d.pop('last_updated',None); print(json.dumps(d,sort_keys=True))"; }
+hb rebuild --dir "$proj" >/dev/null 2>&1; f1="$(norm < "$proj/.hb/state.json")"
+hb rebuild --dir "$proj" >/dev/null 2>&1; f2="$(norm < "$proj/.hb/state.json")"
+[ "$f1" = "$f2" ] || { echo "FAIL: rebuild's on-disk projection is not idempotent (excluding last_updated)"; exit 1; }
 printf '%s' "$f1" | python3 -c "import sys,json; sys.exit(0 if 'A0' in json.load(sys.stdin).get('completed_phases',[]) else 1)" \
   || { echo "FAIL: rebuild wrote a projection missing the completed phase"; exit 1; }
 
