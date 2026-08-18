@@ -87,7 +87,9 @@ The inverse of a backend: instead of HeartBeat driving an agent, an MCP-capable 
 HeartBeat. `mcp_server.serve(hbdir)` runs a minimal, **stdlib-only** JSON-RPC 2.0 server over the
 MCP stdio transport (newline-delimited JSON) — no MCP SDK, so the core stays dependency-free.
 `TOOLS` maps each tool to the same library function the CLI calls: read (`tick`, `next`, `ready`,
-`state`, `report`, `diagnose`, `doctor`, `lint`, `audit`) and act (`gate`, `start`, `done`, `fail`,
+`state`, `report`, `diagnose`, `doctor`, `lint`, `audit`, plus the node-free domain-adapter tools
+`deplint` and `code_context` — they call `heartbeat.adapters.code.*`, proven `== ` the adapters by
+T97) and act (`gate`, `start`, `done`, `fail`,
 `review`). Act tools route every state change through `state.mutate` / the validated review path —
 the mutate-only-through-the-log invariant holds exactly as in the CLI. Proof:
 `docs/howto/gate-examples/mcp-server.sh`; guide: `docs/howto/drive-heartbeat-over-mcp.md`.

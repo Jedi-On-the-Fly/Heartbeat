@@ -1263,6 +1263,14 @@ else
   echo "  (python3 absent — T96 skipped)"
 fi
 
+grp "T97 — MCP adapter tools (deplint + code_context on the real mcp-serve server, == the Python adapter)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T97.1 MCP deplint/code_context tools match the Python adapters (mcp-adapters.sh → MCP-ADAPTERS-OK)" \
+    'bash "'"$GEX"'/mcp-adapters.sh" 2>&1 | grep -q "MCP-ADAPTERS-OK"'
+else
+  echo "  (python3 absent — T97 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

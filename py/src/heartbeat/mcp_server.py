@@ -81,6 +81,34 @@ TOOLS = {
 }
 
 
+# ── domain-adapter read tools — code-aware planning + context, node-free (the adapters are a
+#    parity surface: these reuse the same functions node uses; see docs/adapters.md). Pure over the
+#    args, read-only (no state mutation).
+def _deplint(hb, a):
+    from heartbeat.adapters.code.deplint import deplint as _dl
+    return _dl(a["dag"], a["codemap"])
+
+
+def _code_context(hb, a):
+    from heartbeat.adapters.code.codegraph_context import context_for
+    return context_for(a["codemap"], a["task"])
+
+
+TOOLS.update({
+    "deplint": (_deplint,
+                "Code-aware dep-lint: validate a dag's `requires` against a codemap "
+                "(edges = symA depends on symB; tasks = task -> symbols); returns "
+                "{missing, redundant, collision}. Advisory.",
+                {"type": "object", "properties": {"dag": {"type": "object"}, "codemap": {"type": "object"}},
+                 "required": ["dag", "codemap"]}),
+    "code_context": (_code_context,
+                     "Render a task's code subgraph as context text (the symbols it touches + their "
+                     "direct neighbors), for feeding Stage B.",
+                     {"type": "object", "properties": {"codemap": {"type": "object"}, "task": {"type": "string"}},
+                      "required": ["codemap", "task"]}),
+})
+
+
 # ── act tools — every state change routes through the same library path the CLI
 #    uses (state.mutate / the validated review path). No direct state.json writes.
 def _gate(hb, a):

@@ -18,7 +18,13 @@ instead of a bespoke plugin per host.
 Every tool calls the same library function the CLI calls, so a tool answer equals the matching
 `hb` command:
 
-- **Read:** `tick`, `next`, `ready`, `state`, `report`, `diagnose`, `doctor`, `lint`, `audit`.
+- **Read:** `tick`, `next`, `ready`, `state`, `report`, `diagnose`, `doctor`, `lint`, `audit`, and the
+  domain-adapter tools `deplint` (code-aware dep-lint of a dag against a codemap → missing / redundant
+  / collision) and `code_context` (render a task's code subgraph as context). The adapter tools are
+  **node-free** — they call the Python adapters (a parity surface; see [adapters.md](../adapters.md)),
+  so an MCP client gets code-aware planning + context with zero Node. Proven by
+  [gate-examples/mcp-adapters.sh](gate-examples/mcp-adapters.sh) (they return exactly what the Python
+  adapter returns).
 - **Act:** `gate` (runs the behavioral gate; a pass records `gate_passed` and advances the phase),
   `start` / `done` / `fail` (lease + event), `review` (the artifact-backed adversarial verdict).
 
