@@ -51,3 +51,19 @@ Write your provider's proof spec-first (it must fail before the provider exists)
 bash docs/howto/gate-examples/code-deplint.sh   # -> CODE-DEPLINT-OK
 bash docs/howto/gate-examples/code-map.sh        # -> CODE-MAP-OK
 ```
+
+## 5. Ship a skill
+
+An adapter isn't done until it's **frictionless**: every adapter must **ship a skill** under
+`plugin/skills/<domain>-…/` so a user never touches the raw `node plugin/adapters/…` commands — the
+skill auto-triggers on that domain and runs the whole workflow (map → dep-lint → context). Give it a
+**narrow** trigger description (so it fires on the right domain, not every task), declare which
+adapter it's for with an `HB-ADAPTER: <domain>` marker, and have it **name its proofs** by path.
+
+This is enforced, not optional: [`gate-examples/skill-integrity.sh`](gate-examples/skill-integrity.sh)
+(node-suite T92) fails unless every `plugin/adapters/<domain>/` is declared by a skill that names
+real, **wired** proofs. So a new domain that forgets its skill turns the suite red.
+
+```bash
+bash docs/howto/gate-examples/skill-integrity.sh   # -> SKILL-INTEGRITY-OK
+```

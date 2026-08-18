@@ -52,6 +52,10 @@ An adapter:
 - is **not core** and **not a parity surface** — it imports nothing from core, and the test suites
   stay green whether or not it (or its backing tool) is installed;
 - is **advisory / optional** — the DAG format, the gates, and the tick are unchanged.
+- **ships a skill** — every adapter comes with its own Claude Code skill (`plugin/skills/<domain>-…`)
+  that auto-triggers on that domain and runs the whole workflow, so usage has zero friction. This is
+  enforced: `gate-examples/skill-integrity.sh` (T92) fails unless each adapter is declared by a skill
+  naming real, wired proofs.
 
 The one thing that *is* shared across runtimes is the generic `context_cmd` hook itself (it lives in
 both executors and must behave identically) — so it carries a cross-runtime parity proof, while the
