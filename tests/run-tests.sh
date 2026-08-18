@@ -1229,6 +1229,10 @@ check "T92.1 skill-integrity passes (skill-integrity.sh → SKILL-INTEGRITY-OK)"
 check "T92.2 the integrity checker has teeth (selftest catches missing-skill + unwired-proof)" \
   'bash "'"$GEX"'/skill-integrity.sh" --selftest 2>&1 | grep -q "SKILL-INTEGRITY-SELFTEST-OK"'
 
+grp "T93 — EVERY markdown file under docs/ is prose-gated (top-level + concept + dev docs, not just how-tos)"
+check "T93.1 all docs/**/*.md pass prose-integrity (count == file count)" \
+  'D="'"$HB_SRC"'/docs"; n=$(find "$D" -name "*.md" | wc -l); bash "'"$GEX"'/prose-check.sh" $(find "$D" -name "*.md" | sort) 2>&1 | grep -q "ALL-PROSE-OK:$n"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
