@@ -291,12 +291,37 @@ Disable auto-commit with `HB_GIT_AUTOCOMMIT=0`.
 
 
 
+## Domain adapters
+
+The method is domain-agnostic; a **domain adapter** makes it smart about *your* domain
+without changing the core. An adapter plugs into two **seams** over one small `codemap`
+contract (`{ edges, tasks }`): **plan authoring** — dep-lint a DAG's `requires` against a
+real dependency graph (the hardest authoring problem) — and **context assembly** — feed
+Stage B the exact slice a task needs, through the executor's generic `context_cmd` hook.
+
+Two adapters ship, in **both runtimes** (node ≡ python: byte-equal dep-lint + context,
+set-equal maps — so the capability is native to the Python/framework path and runs with
+**zero Node**):
+
+- **code** — a CodeGraph symbol graph → correct sparse `requires`, and a task's code subgraph as context.
+- **docs/research** — a markdown citation graph → the same, for a docs-authoring DAG.
+
+Adapters are **advisory** (report, never rewrite your DAG), live under `plugin/adapters/`
+(+ `py/src/heartbeat/adapters/`), are **not** scaffolded into any `.hb/`, and import nothing
+from core — the suites stay green without them. Each ships a skill so you never touch the raw
+commands, enforced by a skill-integrity gate. Build one:
+[build-a-domain-adapter.md](docs/howto/build-a-domain-adapter.md); architecture:
+[adapters.md](docs/adapters.md).
+
+
+
 ## Drive HeartBeat over MCP
 
 Besides driving agents, HeartBeat *is* an MCP server: `hb mcp-serve` (Python port)
-exposes its tick / gate / state tools over the Model Context Protocol, so an
-MCP client — **Codex, Claude Code, or OpenCode** — can drive HeartBeat mid-session
-(ask what's next, do the work, call the gate to verify). It is stdlib-only and
+exposes its tick / gate / state tools over the Model Context Protocol — plus the code
+adapter's `deplint` and `code_context` — so an MCP client — **Codex, Claude Code, or
+OpenCode** — can drive HeartBeat mid-session (ask what's next, do the work, call the gate
+to verify) and get code-aware planning/context in-session, node-free. It is stdlib-only and
 dual-stacks the classic handshake and the 2026-07-28 revision. See
 [drive-heartbeat-over-mcp.md](docs/howto/drive-heartbeat-over-mcp.md) and the
 [security note](docs/howto/secure-the-mcp-server.md).
