@@ -1,4 +1,4 @@
-# heartbeat-code — a domain adapter (Seam 1: plan authoring)
+# heartbeat-code — a domain adapter (plan authoring + context + discovery)
 
 The HeartBeat *method* (DAG + gates + tick) is domain-agnostic. This is the first **domain
 adapter**: it makes plan authoring *code-aware* without pulling code-specific machinery into
@@ -46,5 +46,27 @@ finding. Exit 0 by default (advisory); with `--strict`, exit 1 iff `missing>0` o
 `collision>0` (`REDUNDANT` never fails `--strict` — a logical, non-code dependency is legit).
 
 Proof: [`docs/howto/gate-examples/code-deplint.sh`](../../../docs/howto/gate-examples/code-deplint.sh)
-(node-suite T87). Method + workflow: the `code-aware-planning` skill and
-[`plan-code-aware-dags.md`](../../../docs/howto/plan-code-aware-dags.md).
+(node-suite T87). `deplint` also **suppresses `REDUNDANT` for a task with no resolved symbols** (a
+spec-first / not-yet-existing file — the graph has no basis to judge; T101). Method + workflow: the
+`code-aware-planning` skill and [`plan-code-aware-dags.md`](../../../docs/howto/plan-code-aware-dags.md).
+
+## Other providers
+
+All node ≡ python (`python3 -m heartbeat.adapters.code.<module>`), advisory, none scaffolded into `.hb/`;
+`deplint` / `code_context` / `code_discover` are also exposed over MCP:
+
+- **`codegraph-context.js`** — Seam 2: render a task's subgraph (touched symbols + direct neighbors) as
+  context for Stage B via the executor's `context_cmd` hook. Proof:
+  [`code-context.sh`](../../../docs/howto/gate-examples/code-context.sh) (T88).
+- **`codegraph-discover.js`** — discovery: from entry symbols, the transitively-affected set
+  (`dependents` = change impact / `dependencies` / `both`) + induced subgraph, to scope a change before
+  authoring the DAG. Proof: [`code-discover.sh`](../../../docs/howto/gate-examples/code-discover.sh) (T98).
+- **`deplint-accept.js`** — plan-acceptance wrapper: resolves the codemap (`--codemap` →
+  `<dir>/codemap.json` → provisional build from `.codegraph/codegraph.db` → skip) then runs deplint
+  (advisory; `--strict` blocks). Proof:
+  [`deplint-accept.sh`](../../../docs/howto/gate-examples/deplint-accept.sh) (T100).
+- **`codegraph-exclude-hb.js`** — idempotently excludes `.hb/` from the project's `codegraph.json` so
+  CodeGraph indexes the app, not the scaffold; run before `codegraph init`. Proof:
+  [`codegraph-exclude-hb.sh`](../../../docs/howto/gate-examples/codegraph-exclude-hb.sh) (T102).
+
+`codegraph-map.js` also exposes `resolveTaskSymbols` (fuzzy task→symbol; node ≡ python).

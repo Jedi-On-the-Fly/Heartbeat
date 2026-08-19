@@ -78,6 +78,20 @@ The `heartbeat-code` adapter ([README](../plugin/adapters/code/README.md)) uses
   [code-context.sh](howto/gate-examples/code-context.sh); the node ≡ python injection is proven by
   [context-inject-parity.sh](howto/gate-examples/context-inject-parity.sh).
 
+Beyond the two seams, the code adapter adds (all node ≡ python, and `deplint`/`code_context`/`code_discover`
+are exposed over MCP):
+
+- **Discovery** — `codegraph-discover.js`: from entry symbols, the transitively-affected set in a
+  direction (`dependents` = change impact, `dependencies`, `both`) + the induced subgraph, to scope a
+  change *before* authoring the DAG. Proof: [code-discover.sh](howto/gate-examples/code-discover.sh) (T98).
+- **Plan-acceptance wrapper** — `deplint-accept.js`: resolves the codemap (explicit → `<dir>/codemap.json`
+  → provisional build from `.codegraph/codegraph.db` → skip) and runs dep-lint automatically at plan
+  acceptance (advisory; `--strict` blocks). Proof: [deplint-accept.sh](howto/gate-examples/deplint-accept.sh) (T100).
+- **Graph hygiene** — `codegraph-exclude-hb.js` idempotently excludes `.hb/` from the project's
+  `codegraph.json` so CodeGraph indexes the app, not HeartBeat's scaffold. Proof:
+  [codegraph-exclude-hb.sh](howto/gate-examples/codegraph-exclude-hb.sh) (T102). deplint also suppresses
+  REDUNDANT for a task with no resolved symbols (spec-first / not-yet-existing files) — T101.
+
 **Honesty about maturity:** the pure engine, the row→codemap mapping, the context provider, and the
 node ≡ python injection mechanism are gated hermetically (node-suite T87–T89). The **live CodeGraph
 database read** and the **local-model end-to-end demo** (`tests/real-context.sh`, driven against a

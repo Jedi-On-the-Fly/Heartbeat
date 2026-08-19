@@ -15,7 +15,7 @@ Two stages. **Stage A** (`tick.sh`, bash) reads settled reality and decides whet
 | `plugin/skills/heartbeat/SKILL.md` | `/heartbeat` command surface + Tick Protocol |
 | `plugin/skills/gated-docs/SKILL.md` | docs-as-verified-claims method (gate a guide with a proof/prose-check, refute it) |
 | `plugin/hooks/hooks.json` + `heartbeat-detect.sh` | SessionStart pointer when a `.hb/` exists |
-| `plugin/adapters/code/` + `plugin/adapters/docs/` | **Domain adapters** (dep-lint + context providers) — a **parity surface** with `py/src/heartbeat/adapters/` (node ≡ python, T94/T95). NOT scaffolded into `.hb/`, imports nothing from core. See [adapters.md](adapters.md) |
+| `plugin/adapters/code/` + `plugin/adapters/docs/` | **Domain adapters** — dep-lint + context + **discovery** (change-impact) + **deplint-accept** (plan-acceptance wrapper) + **exclude-hb** (graph hygiene) — a **parity surface** with `py/src/heartbeat/adapters/` (node ≡ python, T94/T95/T98/T100). Exposed over MCP as `deplint`/`code_context`/`code_discover`. NOT scaffolded into `.hb/`, imports nothing from core. See [adapters.md](adapters.md) |
 | `plugin/skills/code-aware-planning/` + `docs-authoring/` | the per-adapter skills (enforced by skill-integrity, T92) |
 | `plugin/templates/*` | Per-project tooling, copied into `.hb/` at bootstrap |
 

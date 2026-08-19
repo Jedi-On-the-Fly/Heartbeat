@@ -27,9 +27,17 @@ in **both runtimes**, so the capability is native to the Python/framework path, 
   so a user never touches the raw `node plugin/adapters/…` commands; **skill-integrity** (**T92**)
   fails the suite unless every adapter is declared by a skill that names real, **wired** proofs.
   Guide: `docs/howto/build-a-domain-adapter.md`.
-- **MCP adapter tools.** The Python MCP server exposes the now-native adapters as tools — `deplint`
-  and `code_context` — so a framework/MCP client gets the code-aware capability in-session, node-free
-  (**T97**, `mcp-adapters.sh` drives real `mcp-serve` and compares each tool result to the adapter).
+- **Code adapter, beyond the two seams** (all node ≡ python): **discovery** — `codegraph-discover`
+  gives the transitively-affected set from entry symbols (`dependents` = change impact) to scope a
+  change before authoring the DAG (**T98**); **deplint-accept** auto-surfaces dep-lint at plan
+  acceptance, resolving the codemap (explicit → `codemap.json` → `.codegraph` db-build → skip),
+  advisory / `--strict` (**T100**); **exclude-hb** keeps CodeGraph off HeartBeat's own `.hb/` scaffold
+  (**T102**); dep-lint no longer false-flags REDUNDANT for a task with no resolved symbols (**T101**);
+  and `resolve_task_symbols` is ported to Python (parity gap closed).
+- **MCP adapter tools.** The Python MCP server exposes the now-native adapters as tools — `deplint`,
+  `code_context`, and `code_discover` — so a framework/MCP client gets the code-aware capability
+  in-session, node-free (**T97**/**T99**, `mcp-adapters.sh` / `code-discover-mcp.sh` drive real
+  `mcp-serve` and compare each tool result to the adapter).
 - **Live viz dashboard.** `hb viz --serve` runs a loopback-only HTTP server that re-reads
   `dag.json`+`state.json` fresh per request (no regenerate), refusing a non-loopback bind and
   validating `Origin` (DNS-rebinding) — alongside the point-in-time snapshot (**T86**,

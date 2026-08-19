@@ -35,7 +35,7 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 | `protocol.py` | `PROTOCOL`, `render_md()` | reason keys = plugin; action text cites `hb` console |
 | `executor.py` | `run(hbdir)`, `config(hbdir)`, `dispatch(...)`, `assemble_context`, in-process + subprocess dispatch, worktree parallel | pluggable Stage B |
 | `backends/` | in-process backend registry | see below |
-| `adapters/code/` | `deplint`, `codegraph_map`, `codegraph_context` | domain adapter — a parity surface with `plugin/adapters/code/*.js` (node ≡ python; T94). `python3 -m heartbeat.adapters.code.deplint …` |
+| `adapters/code/` | `deplint`, `codegraph_map` (+ `resolve_task_symbols`), `codegraph_context`, `codegraph_discover`, `deplint_accept`, `codegraph_exclude_hb` | domain adapter — a parity surface with `plugin/adapters/code/*.js` (node ≡ python; T94/T98/T100). `python3 -m heartbeat.adapters.code.deplint …` |
 | `adapters/docs/` | `docs_map`, `docs_context` (`js_trim`) | docs domain adapter — parity with `plugin/adapters/docs/*.js` (T95). Node-free; usable as a `context_cmd` with zero Node (T96) |
 | `mcp_server.py` | `serve(hbdir)`, `TOOLS` | `hb mcp-serve` — minimal stdlib-only MCP server over stdio; see below |
 | `bench.py` | `score(hbdir)`, `run(source, specs)`, `reward_records(events, dag)`, `rewards(hbdir)`, `regressions(cards, baseline)`, `render`, `build` | `hb bench` (+`--baseline` regression verdict), `hb reward` — score N backends, extract the verifiable-reward stream, flag model-regression; all pure over the event log |
@@ -88,8 +88,8 @@ HeartBeat. `mcp_server.serve(hbdir)` runs a minimal, **stdlib-only** JSON-RPC 2.
 MCP stdio transport (newline-delimited JSON) — no MCP SDK, so the core stays dependency-free.
 `TOOLS` maps each tool to the same library function the CLI calls: read (`tick`, `next`, `ready`,
 `state`, `report`, `diagnose`, `doctor`, `lint`, `audit`, plus the node-free domain-adapter tools
-`deplint` and `code_context` — they call `heartbeat.adapters.code.*`, proven `== ` the adapters by
-T97) and act (`gate`, `start`, `done`, `fail`,
+`deplint`, `code_context`, and `code_discover` — they call `heartbeat.adapters.code.*`, proven `== ` the adapters by
+T97/T99) and act (`gate`, `start`, `done`, `fail`,
 `review`). Act tools route every state change through `state.mutate` / the validated review path —
 the mutate-only-through-the-log invariant holds exactly as in the CLI. Proof:
 `docs/howto/gate-examples/mcp-server.sh`; guide: `docs/howto/drive-heartbeat-over-mcp.md`.

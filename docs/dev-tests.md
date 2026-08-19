@@ -102,8 +102,25 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T83 | gate-runner parity (`gate-parity.sh`) — pass/fail/hollow-floor/timeout agree across runtimes (exit codes) |
 | T84 | doctor/rot parity (`doctor-parity.sh`) — both runtimes agree on rot detection |
 | T85 | backends-registry parity (`registry-parity.sh`) — same canonical set (python-only `claude` alias normalized) |
+| T86 | live viz `--serve` (`viz-serve.sh`) — fresh re-read + `Origin` 403 + non-loopback refusal + snapshot regression |
+| T87 | heartbeat-code dep-lint (`code-deplint.sh`) — missing/redundant/collision, transitive-closure, advisory/strict |
+| T88 | code adapter Seam 2 (`code-context.sh`) — context provider emits a subgraph (touched symbols + neighbors), not an echo |
+| T89 | Seam-2 context-injection parity (`context-inject-parity.sh`) — both executors inject a `context_cmd` identically |
+| T90 | docs adapter (`docs-deplint.sh` / `docs-map.sh`) — citation graph → codemap, the **unchanged** deplint generalizes |
+| T91 | docs adapter Seam 2 (`docs-context.sh`) — renders a task's direct-cited section text (not 2-hop/self) |
+| T92 | adapter skill-integrity (`skill-integrity.sh`) — every adapter ships a skill naming real, wired proofs |
+| T93 | whole-`docs/` prose gate — every markdown under `docs/` prose-integrity-checked (not just how-tos) |
+| T94 | code adapter parity (`deplint-parity.sh` / `codegraph-map-parity.sh` / `codegraph-context-parity.sh`) — node ≡ python |
+| T95 | docs adapter parity (`docs-map-parity.sh` / `docs-context-parity.sh`) — node ≡ python |
+| T96 | adapters node-free (`adapters-nodefree.sh`) — Python adapters + a python `context_cmd` with no Node on `PATH` |
+| T97 | MCP adapter tools (`mcp-adapters.sh`) — `deplint` + `code_context` on real `mcp-serve` == the Python adapter |
+| T98 | code adapter discovery (`code-discover.sh`) — transitive reachability (dependents/dependencies/both), node ≡ python |
+| T99 | MCP `code_discover` (`code-discover-mcp.sh`) — on real `mcp-serve` == the discovery function |
+| T100 | deplint-accept (`deplint-accept.sh`) — plan-acceptance wrapper: codemap resolution + clean skip, node ≡ python |
+| T101 | deplint precision (`deplint-redundant-empty.sh`) — no REDUNDANT for a task with no resolved symbols (spec-first / new files) |
+| T102 | codegraph-exclude-hb (`codegraph-exclude-hb.sh`) — keep CodeGraph off `.hb/`, idempotent, node ≡ python |
 
-The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T85; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
+The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T102; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
 
 ## Python suite — `py/tests/`
 

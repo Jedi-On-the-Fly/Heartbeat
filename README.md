@@ -319,7 +319,7 @@ commands, enforced by a skill-integrity gate. Build one:
 
 Besides driving agents, HeartBeat *is* an MCP server: `hb mcp-serve` (Python port)
 exposes its tick / gate / state tools over the Model Context Protocol — plus the code
-adapter's `deplint` and `code_context` — so an MCP client — **Codex, Claude Code, or
+adapter's `deplint`, `code_context`, and `code_discover` (change-impact) — so an MCP client — **Codex, Claude Code, or
 OpenCode** — can drive HeartBeat mid-session (ask what's next, do the work, call the gate
 to verify) and get code-aware planning/context in-session, node-free. It is stdlib-only and
 dual-stacks the classic handshake and the 2026-07-28 revision. See
