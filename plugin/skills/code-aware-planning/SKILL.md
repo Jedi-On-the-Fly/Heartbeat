@@ -71,6 +71,21 @@ non-code or un-indexed project). It is **advisory** by default (exit 0 — surfa
 sign-off); pass **`--strict`** to make MISSING/COLLISION block (exit 1). Proof:
 `docs/howto/gate-examples/deplint-accept.sh`.
 
+## Coverage — know the graph's blind spots
+
+Don't trust all context equally. Before you rely on the dep-lint findings, check which tasks the graph
+can actually *see*:
+
+```bash
+node plugin/adapters/code/codegraph-coverage.js <codemap.json> <dag.json>
+# node-free twin:  python3 -m heartbeat.adapters.code.codegraph_coverage <codemap.json> <dag.json>
+```
+
+It reports each task's symbol count and lists the **`GRAPH-BLIND`** tasks — those with **zero resolved
+symbols**. A blind task is one the static graph can't model: a not-yet-existing file, or a
+dynamic/framework binding (Alpine object methods, template bindings). For those, dep-lint has no basis —
+**read the code manually**. Proof: `docs/howto/gate-examples/code-coverage.sh`.
+
 ## Feed code context to Stage B (Seam 2)
 
 The same adapter also makes *execution* cheaper. Wire `codegraph-context.js` as the executor's

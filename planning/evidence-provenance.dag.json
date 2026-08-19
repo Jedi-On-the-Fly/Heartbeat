@@ -97,7 +97,7 @@
       },
       "criteria": [
         { "id": "cva", "desc": "coverage proof: blind tasks listed, covered tasks not, node ≡ python", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/code-coverage.sh\" 2>&1 | grep -q 'CODE-COVERAGE-OK'" },
-        { "id": "cvb", "desc": "behavioral: a zero-symbol task is reported GRAPH-BLIND, a covered one is not", "cmd": "cd \"$PROJECT_DIR\" && out=$(node plugin/adapters/code/codegraph-coverage.js <(printf '%s' '{\"edges\":[],\"tasks\":{\"TX\":[\"symA\"],\"TY\":[]}}') <(printf '%s' '{\"phases\":[{\"tasks\":[{\"id\":\"TX\"},{\"id\":\"TY\"}]}]}')) && printf '%s' \"$out\" | grep -qE 'GRAPH-BLIND[^A-Za-z]*TY' && ! printf '%s' \"$out\" | grep -qE 'GRAPH-BLIND[^A-Za-z]*TX'" },
+        { "id": "cvb", "desc": "behavioral: a zero-symbol task is reported GRAPH-BLIND, a covered one is not", "cmd": "cd \"$PROJECT_DIR\" && out=$(node plugin/adapters/code/codegraph-coverage.js <(printf '%s' '{\"edges\":[],\"tasks\":{\"TX\":[\"symA\"],\"TY\":[]}}') <(printf '%s' '{\"phases\":[{\"tasks\":[{\"id\":\"TX\"},{\"id\":\"TY\"}]}]}')) && printf '%s' \"$out\" | grep -E 'GRAPH-BLIND' | grep -q 'TY' && ! { printf '%s' \"$out\" | grep -E 'GRAPH-BLIND' | grep -q 'TX'; }" },
         { "id": "cvc", "desc": "proof wired into the suite (marker on the same line)", "cmd": "grep -qE 'code-coverage\\.sh.*CODE-COVERAGE-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
         { "id": "cvd", "desc": "python twin callable + the skill documents coverage / blind spots", "cmd": "cd \"$PROJECT_DIR\" && PYTHONPATH=py/src python3 -c \"import heartbeat.adapters.code.codegraph_coverage as c; assert callable(c.coverage)\" && grep -qiE 'coverage|graph-blind|blind' plugin/skills/code-aware-planning/SKILL.md" }
       ]

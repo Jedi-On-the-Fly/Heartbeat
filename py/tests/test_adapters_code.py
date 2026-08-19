@@ -2,6 +2,7 @@
 from heartbeat.adapters.code import deplint as dl, codegraph_map as cm, codegraph_context as cc
 from heartbeat.adapters.code import codegraph_discover as cd
 from heartbeat.adapters.code import deplint_accept as da
+from heartbeat.adapters.code import codegraph_coverage as cov
 
 
 def test_deplint_detects_directed_missing():
@@ -81,3 +82,12 @@ def test_resolve_task_symbols_fuzzy_leaf_match():
     dag = {"phases": [{"tasks": [{"id": "T1", "title": "Add Login flow", "description": ""}]}]}
     nodes = [{"qualified_name": "auth.go::Login"}, {"qualified_name": "db.go::Query"}]
     assert cm.resolve_task_symbols(dag, nodes) == {"T1": ["auth.go::Login"]}   # leaf-name substring
+
+
+def test_coverage_lists_graph_blind_tasks():
+    codemap = {"edges": [], "tasks": {"TA": ["symA", "symB"], "TB": []}}
+    dag = {"phases": [{"tasks": [{"id": "TA"}, {"id": "TB"}, {"id": "TC"}]}]}
+    out = cov.coverage(codemap, dag)
+    assert "TA: 2 symbols" in out
+    blind = [ln for ln in out.splitlines() if "GRAPH-BLIND" in ln][0]
+    assert "TB" in blind and "TC" in blind and "TA" not in blind   # TB empty, TC absent → blind; TA covered

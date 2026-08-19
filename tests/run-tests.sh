@@ -1327,6 +1327,14 @@ grp "T105 — gate evidence provenance: gate_passed records {criteria,commit,run
 check "T105.1 gate pass records provenance + hb evidence surfaces it (evidence-provenance.sh → EVIDENCE-PROVENANCE-OK)" \
   'bash "'"$GEX"'/evidence-provenance.sh" 2>&1 | grep -q "EVIDENCE-PROVENANCE-OK"'
 
+grp "T106 — codegraph-coverage: per-task symbol coverage + GRAPH-BLIND list (node ≡ python)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T106.1 coverage lists graph-blind tasks, not covered ones, node ≡ python (code-coverage.sh → CODE-COVERAGE-OK)" \
+    'bash "'"$GEX"'/code-coverage.sh" 2>&1 | grep -q "CODE-COVERAGE-OK"'
+else
+  echo "  (python3 absent — T106 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
