@@ -20,7 +20,18 @@ into a project's `.hb/`.
 
 ## The method
 
-1. **Index the repo with CodeGraph** (the provider) so a code graph exists locally.
+1. **Index the repo with CodeGraph** (the provider) so a code graph exists locally. **First, keep
+   CodeGraph off HeartBeat's own scaffold** — index the *app*, not the orchestrator — by excluding
+   `.hb/` before you index:
+
+   ```bash
+   node plugin/adapters/code/codegraph-exclude-hb.js <project>
+   # node-free twin:  python3 -m heartbeat.adapters.code.codegraph_exclude_hb <project>
+   ```
+
+   It idempotently adds `.hb/` to the project's `codegraph.json` `exclude` (preserving any existing
+   config), so `codegraph init` skips the scaffold. Proof:
+   [`gate-examples/codegraph-exclude-hb.sh`](../../../docs/howto/gate-examples/codegraph-exclude-hb.sh).
 2. **Produce a codemap** — the narrow contract the adapter consumes:
    `{ "edges": [[symA, symB], …], "tasks": { "TASKID": [sym, …] } }` (symA depends on symB;
    each task maps to the symbols it touches). `codegraph-map.js` turns CodeGraph's rows into the

@@ -1303,6 +1303,14 @@ grp "T101 — deplint: no REDUNDANT for a task with no resolved symbols (spec-fi
 check "T101.1 empty-symbol REDUNDANT suppressed, genuine kept, node ≡ python (deplint-redundant-empty.sh → REDUNDANT-EMPTY-OK)" \
   'bash "'"$GEX"'/deplint-redundant-empty.sh" 2>&1 | grep -q "REDUNDANT-EMPTY-OK"'
 
+grp "T102 — codegraph-exclude-hb: keep CodeGraph off HeartBeat's .hb/ scaffold (idempotent, node ≡ python)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T102.1 helper excludes .hb/ in codegraph.json, idempotent, preserves config (codegraph-exclude-hb.sh → EXCLUDE-HB-OK)" \
+    'bash "'"$GEX"'/codegraph-exclude-hb.sh" 2>&1 | grep -q "EXCLUDE-HB-OK"'
+else
+  echo "  (python3 absent — T102 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
