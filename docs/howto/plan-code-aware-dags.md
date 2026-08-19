@@ -62,6 +62,23 @@ symbols it creates or touches. Any tool can produce it — CodeGraph is the firs
    by hand — the adapter never rewrites it. Pair this with
    [writing sparse dependencies](write-sparse-dependencies.md).
 
+## Run it automatically at acceptance
+
+So you never have to *remember* to dep-lint, run the acceptance wrapper as part of the plan's
+acceptance (after `hb-lint` / `hb-audit`):
+
+```bash
+node plugin/adapters/code/deplint-accept.js --dir <project> --dag <project>/.hb/dag.json
+# node-free twin:  python3 -m heartbeat.adapters.code.deplint_accept --dir <project> --dag <project>/.hb/dag.json
+```
+
+`deplint-accept` resolves the codemap for you — explicit `--codemap`, else `<project>/codemap.json`,
+else a **provisional** codemap auto-built from `<project>/.codegraph/codegraph.db` (CodeGraph edges +
+the fuzzy task→symbol match, flagged `NOTE: provisional … — confirm`), else it **skips cleanly** on a
+non-code or un-indexed project. Advisory by default (exit 0 — surface findings before sign-off);
+`--strict` makes MISSING/COLLISION block. Proof:
+[`gate-examples/deplint-accept.sh`](gate-examples/deplint-accept.sh).
+
 ## Proof
 
 The engine and the provider mapping are each backed by a runnable proof, wired into the suite as

@@ -58,7 +58,7 @@
           "id": "WI3",
           "title": "Wire the harness proof + full green",
           "requires": ["WI1", "WI2"],
-          "description": "Add group T101 to tests/run-tests.sh running tests/real-deplint-accept.sh and asserting it prints REAL-DEPLINT-ACCEPT-OK OR a clean skip (harness-first — deterministic regardless of CodeGraph presence). Confirm ALL suites green: node (RESULT 0 failed, T100+T101 in GROUPS-PASSED), python pytest, tests/parity.sh, whole-docs prose (T93), self-audit (SELF-AUDIT-OK), and skill-integrity (T92). Do not weaken any check."
+          "description": "Keep tests/real-deplint-accept.sh ON-DEMAND (harness-first, like real-codegraph-map.sh — NOT wired into run-tests.sh, which must stay green without CodeGraph); reference it from the deplint-accept.js header so it doesn't rot silently. GATE_WI's wia runs it directly (REAL-DEPLINT-ACCEPT-OK or clean skip). Confirm ALL suites green: node (RESULT 0 failed, T100 in GROUPS-PASSED), python pytest, tests/parity.sh, whole-docs prose (T93), self-audit (SELF-AUDIT-OK), and skill-integrity (T92). Do not weaken any check."
         }
       ]
     }

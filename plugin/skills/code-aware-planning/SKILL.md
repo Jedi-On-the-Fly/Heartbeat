@@ -35,12 +35,30 @@ into a project's `.hb/`.
    the graph models resolved static edges only — dynamic/framework bindings (Alpine methods, template
    bindings) and not-yet-existing symbols still need reading code. Proof:
    `docs/howto/gate-examples/code-discover.sh`.
-4. **Dep-lint the DAG**: run `deplint.js <dag.json> <codemap.json>`. It reports:
+4. **Dep-lint the DAG.** It reports:
    - **MISSING** — a code dependency crosses two tasks with no `requires` ordering → add the edge.
    - **REDUNDANT** — a `requires` with no direct code dependency → maybe over-constrained.
    - **COLLISION** — unordered tasks touching the same symbol → isolate (worktree) or add an edge.
 5. **Adjust the DAG yourself.** Treat every finding as advice — a wrong auto-edge is worse than a
    missing one. The adapter never rewrites the DAG.
+
+## Acceptance — run dep-lint automatically
+
+Don't leave dep-lint as a step to remember. When planning a **code** project, make it part of the
+plan's acceptance (right after `hb-lint` / `hb-audit`), via the acceptance wrapper:
+
+```bash
+node plugin/adapters/code/deplint-accept.js --dir <project> --dag <project>/.hb/dag.json
+# node-free twin (Python package / a framework backend):
+python3 -m heartbeat.adapters.code.deplint_accept --dir <project> --dag <project>/.hb/dag.json
+```
+
+`deplint-accept` **resolves the codemap for you**: an explicit `--codemap`, else `<project>/codemap.json`,
+else a **provisional** one auto-built from `<project>/.codegraph/codegraph.db` (CodeGraph edges + the
+fuzzy task→symbol match — flagged `NOTE: provisional … — confirm`), else it **skips cleanly** (a
+non-code or un-indexed project). It is **advisory** by default (exit 0 — surface the findings before
+sign-off); pass **`--strict`** to make MISSING/COLLISION block (exit 1). Proof:
+`docs/howto/gate-examples/deplint-accept.sh`.
 
 ## Feed code context to Stage B (Seam 2)
 

@@ -10,6 +10,7 @@
  *   else                              SKIP cleanly (non-code / un-indexed project)
  *
  * Advisory by default (exit 0); --strict exits 1 iff missing or collision. It never rewrites the DAG.
+ * The db-build path is harness-first — proved by tests/real-deplint-accept.sh (skips without CodeGraph).
  *
  * Usage: node deplint-accept.js --dir <proj> --dag <dag.json> [--codemap <f>] [--strict]
  */
