@@ -59,6 +59,10 @@ def deplint(dag, codemap):
                 missing.append({"from": a, "to": b, "via": via})
     for a in tasks:
         for b in (reqs.get(a) or []):
+            # A task with no resolved symbols (e.g. a not-yet-existing file) gives the graph no basis
+            # to judge — that is not "redundant", so skip it. Only flag when BOTH sides have symbols.
+            if not (task_syms.get(a) or []) or not (task_syms.get(b) or []):
+                continue
             if not depends_between(a, b) and not depends_between(b, a):
                 redundant.append({"from": a, "to": b})
     for i in range(len(tasks)):

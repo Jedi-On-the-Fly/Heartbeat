@@ -12,6 +12,15 @@ def test_deplint_detects_directed_missing():
     assert not r["redundant"] and not r["collision"]
 
 
+def test_deplint_no_redundant_when_task_has_no_symbols():
+    dag = {"phases": [{"tasks": [{"id": "TA", "requires": ["TB"]}, {"id": "TB", "requires": []},
+                                 {"id": "TC", "requires": ["TD"]}, {"id": "TD", "requires": []}]}]}
+    codemap = {"edges": [], "tasks": {"TA": ["symA"], "TB": [], "TC": ["symC"], "TD": ["symD"]}}
+    r = dl.deplint(dag, codemap)
+    # TC->TD genuinely redundant (both have symbols, no edge); TA->TB suppressed (TB has no symbols)
+    assert [(m["from"], m["to"]) for m in r["redundant"]] == [("TC", "TD")]
+
+
 def test_deplint_transitive_not_flagged():
     dag = {"phases": [{"tasks": [{"id": "TA", "requires": ["TB"]}, {"id": "TB", "requires": ["TC"]},
                                  {"id": "TC", "requires": []}]}]}

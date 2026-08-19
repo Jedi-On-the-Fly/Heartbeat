@@ -1,0 +1,6 @@
+{ "phases": [ { "id": "P0", "tasks": [
+  { "id": "TA", "requires": ["TB"] },
+  { "id": "TB", "requires": [] },
+  { "id": "TC", "requires": ["TD"] },
+  { "id": "TD", "requires": [] }
+] } ] }

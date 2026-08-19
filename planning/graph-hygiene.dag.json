@@ -1,0 +1,89 @@
+{
+  "_meta": {
+    "project": "graph-hygiene",
+    "note": "Two dogfooding fixes surfaced by a real HeartBeat+CodeGraph run. (RD) deplint over-reports REDUNDANT for spec-first edges whose task maps to NO symbols (a not-yet-existing test file): an empty symbol set means 'no basis to judge', not 'no dependency'. Fix: deplint suppresses REDUNDANT when EITHER endpoint task has zero resolved symbols — both runtimes, byte-identical, gated. (EX) CodeGraph indexes HeartBeat's own `.hb/` scaffold, polluting the graph the code adapter reads (empirically 53→70 files, spurious edges). Fix: a code-adapter helper that idempotently ensures the project's `codegraph.json` excludes `.hb/` (confirmed empirically to drop .hb/ nodes to 0), documented in the code-aware-planning skill as a pre-index step; a harness proof shows the real effect. Core stays domain-neutral (both live in the code adapter + its skill, not the base plan flow / bootstrap). Proof-driven: spec-first, parity, gated + refuted."
+  },
+  "phases": [
+    {
+      "id": "RD",
+      "title": "deplint: no REDUNDANT for tasks the graph can't see (empty symbol set)",
+      "gate_entry": null,
+      "gate_exit": "GATE_RD",
+      "tasks": [
+        {
+          "id": "RD1",
+          "title": "Spec-first: fixture + proof for the empty-symbol suppression",
+          "requires": [],
+          "description": "Author RED-first. Fixtures: plugin/adapters/code/fixtures/redundant-empty.dag.json (TA requires TB; TC requires TD) + redundant-empty.codemap.json ({edges:[], tasks:{TA:[\"symA\"], TB:[], TC:[\"symC\"], TD:[\"symD\"]}}). Proof docs/howto/gate-examples/deplint-redundant-empty.sh (prints REDUNDANT-EMPTY-OK): run deplint over the fixture and assert the GENUINE redundant edge TC→TD (both endpoints have symbols, no code edge) is STILL reported, while TA→TB is NOT reported (TB has no symbols — the graph has no basis, so it must not be called redundant); and assert node ≡ python byte-identical on the fixture. Must FAIL now (current deplint flags BOTH TA→TB and TC→TD) — confirm red."
+        },
+        {
+          "id": "RD2",
+          "title": "Implement the suppression in both runtimes",
+          "requires": ["RD1"],
+          "description": "In plugin/adapters/code/deplint.js and py/src/heartbeat/adapters/code/deplint.py, in the REDUNDANT loop, SKIP the finding when the task's symbol set is empty on either side (task_syms[a] empty OR task_syms[b] empty) — no symbols ⇒ no basis to judge ⇒ not redundant. Do not touch MISSING or COLLISION. Keep the two runtimes byte-identical. Add a py/tests case. Make deplint-redundant-empty.sh pass and keep deplint-parity.sh green."
+        },
+        {
+          "id": "RD3",
+          "title": "Wire the proof + confirm no regression",
+          "requires": ["RD2"],
+          "description": "Add group T101 to tests/run-tests.sh running deplint-redundant-empty.sh and grepping REDUNDANT-EMPTY-OK on the same check line. Confirm node suite green (RESULT 0 failed, T101 in GROUPS-PASSED) AND the pre-existing T87 (code-deplint.sh — whose REDUNDANT case has real symbols) still green (baseline REDUNDANT unbroken); python pytest green; tests/parity.sh green."
+        }
+      ]
+    },
+    {
+      "id": "EX",
+      "title": "Keep CodeGraph off HeartBeat's own scaffold (.hb/)",
+      "gate_entry": "GATE_RD",
+      "gate_exit": "GATE_EX",
+      "tasks": [
+        {
+          "id": "EX1",
+          "title": "Spec-first: proofs for the codegraph.json exclude helper",
+          "requires": [],
+          "description": "Author RED-first. Gated proof docs/howto/gate-examples/codegraph-exclude-hb.sh (prints EXCLUDE-HB-OK): running the helper on a temp root creates/updates <root>/codegraph.json so its `exclude` array contains \".hb/\"; it is IDEMPOTENT (run twice → exactly one \".hb/\", no dup); it PRESERVES an existing config (pre-seed {\"include\":[\"src/\"]} → include still present AND exclude has .hb/); and node ≡ python (same resulting codegraph.json). Harness proof tests/real-codegraph-exclude-hb.sh (prints REAL-EXCLUDE-HB-OK; harness-first — skips without codegraph/sqlite3): on a sample with a .hb/ file + app code, run the helper then `codegraph init`, and assert the index has ZERO nodes whose file_path is under .hb/ (the real effect) — vs a nonzero baseline without the helper. Both must FAIL/skip appropriately now (no helper yet)."
+        },
+        {
+          "id": "EX2",
+          "title": "Implement the exclude helper in both runtimes",
+          "requires": ["EX1"],
+          "description": "plugin/adapters/code/codegraph-exclude-hb.js (export ensureHbExcluded(root)) + py/src/heartbeat/adapters/code/codegraph_exclude_hb.py (ensure_hb_excluded(root)): read <root>/codegraph.json if present (else {}), ensure `.hb/` is in the `exclude` array (create the array if missing; no duplicate), preserve all other keys, write it back with stable formatting. CLI: `<cmd> <root>` (default root '.'). Imports nothing from core. Idempotent. Make codegraph-exclude-hb.sh pass; run real-codegraph-exclude-hb.sh green locally (codegraph present)."
+        },
+        {
+          "id": "EX3",
+          "title": "Wire the gated proof + document it in the skill",
+          "requires": ["EX2"],
+          "description": "Add group T102 to tests/run-tests.sh running codegraph-exclude-hb.sh (EXCLUDE-HB-OK, marker on the same line). Update plugin/skills/code-aware-planning/SKILL.md: a pre-index step — before indexing with CodeGraph, exclude HeartBeat's scaffold so the graph reflects the APP not the orchestrator, via `node plugin/adapters/code/codegraph-exclude-hb.js <project>` (node-free twin: python3 -m heartbeat.adapters.code.codegraph_exclude_hb <project>) which adds `.hb/` to the project's codegraph.json `exclude`. Keep real-codegraph-exclude-hb.sh on-demand (referenced from the helper header, like real-codegraph-map.sh). Confirm ALL suites green: node (T101+T102 in GROUPS-PASSED), python, parity, whole-docs prose (T93), self-audit, skill-integrity (T92)."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_RD": {
+      "desc": "deplint no longer reports REDUNDANT for a requires edge whose task has no resolved symbols (spec-first / not-yet-existing files), while genuine REDUNDANT (both endpoints have symbols, no code edge) is unchanged; node ≡ python; no regression to T87.",
+      "review": {
+        "prompt": "Refute that RD is done. Does deplint still report a GENUINE redundant edge (both tasks have symbols, no code dependency) — i.e. the suppression didn't gut REDUNDANT entirely? Does it now SUPPRESS the edge where a task maps to zero symbols (the spec-first / new-file case), on BOTH sides (empty from-task AND empty to-task)? Are MISSING and COLLISION untouched? Is node byte-identical to python? Did T87 (code-deplint.sh — real-symbol REDUNDANT) stay green (no regression)? Does the proof have TEETH (would it go red if the suppression over-fired and dropped the genuine TC→TD, or under-fired and kept TA→TB)?"
+      },
+      "criteria": [
+        { "id": "rda", "desc": "empty-symbol suppression proof (genuine kept, empty suppressed, node ≡ python)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/deplint-redundant-empty.sh\" 2>&1 | grep -q 'REDUNDANT-EMPTY-OK'" },
+        { "id": "rdb", "desc": "behavioral (node): genuine TC→TD kept, empty-symbol TA→TB suppressed", "cmd": "cd \"$PROJECT_DIR\" && out=$(node plugin/adapters/code/deplint.js plugin/adapters/code/fixtures/redundant-empty.dag.json plugin/adapters/code/fixtures/redundant-empty.codemap.json) && printf '%s' \"$out\" | grep -q 'REDUNDANT: TC requires TD' && ! printf '%s' \"$out\" | grep -q 'REDUNDANT: TA requires TB'" },
+        { "id": "rdc", "desc": "behavioral (python) mirrors node — parity of the new behavior", "cmd": "cd \"$PROJECT_DIR\" && out=$(PYTHONPATH=py/src python3 -m heartbeat.adapters.code.deplint plugin/adapters/code/fixtures/redundant-empty.dag.json plugin/adapters/code/fixtures/redundant-empty.codemap.json) && printf '%s' \"$out\" | grep -q 'REDUNDANT: TC requires TD' && ! printf '%s' \"$out\" | grep -q 'REDUNDANT: TA requires TB'" },
+        { "id": "rdd", "desc": "no regression: baseline REDUNDANT with real symbols still fires (T87 proof green)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/code-deplint.sh\" 2>&1 | grep -q 'CODE-DEPLINT-OK'" },
+        { "id": "rde", "desc": "the proof is wired into the suite (marker on the same line)", "cmd": "grep -qE 'deplint-redundant-empty\\.sh.*REDUNDANT-EMPTY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" }
+      ]
+    },
+    "GATE_EX": {
+      "desc": "A code-adapter helper idempotently excludes `.hb/` from a project's codegraph.json (preserving existing config), node ≡ python, with the REAL CodeGraph effect proven harness-first and the step documented in the code-aware-planning skill; suites green.",
+      "review": {
+        "prompt": "Refute that EX is done. Does the helper REALLY add `.hb/` to codegraph.json `exclude` and is it IDEMPOTENT (no duplicate on re-run) and NON-DESTRUCTIVE (preserves an existing include/other keys)? Is it node ≡ python (same resulting file)? Does tests/real-codegraph-exclude-hb.sh prove the ACTUAL effect — that after the helper, a real `codegraph init` indexes ZERO nodes under .hb/ (not just that the json changed) — and skip cleanly without codegraph? Does the code-aware-planning skill actually document running it as a pre-index step (not a hollow mention)? Is core kept domain-neutral (bootstrap / base plan flow untouched — this is code-adapter only)? node/python/parity/prose/self-audit/skill-integrity green?"
+      },
+      "criteria": [
+        { "id": "exa", "desc": "exclude-helper proof: creates/merges codegraph.json exclude .hb/, idempotent, preserves config, node ≡ python", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/codegraph-exclude-hb.sh\" 2>&1 | grep -q 'EXCLUDE-HB-OK'" },
+        { "id": "exb", "desc": "python twin callable (parity surface, not node-only)", "cmd": "cd \"$PROJECT_DIR\" && PYTHONPATH=py/src python3 -c \"import heartbeat.adapters.code.codegraph_exclude_hb as e; assert callable(e.ensure_hb_excluded)\"" },
+        { "id": "exc", "desc": "gated proof wired into the suite (marker on the same line)", "cmd": "grep -qE 'codegraph-exclude-hb\\.sh.*EXCLUDE-HB-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "exd", "desc": "the real-CodeGraph harness proof runs (zero .hb nodes after exclude) or skips cleanly", "cmd": "bash \"$PROJECT_DIR/tests/real-codegraph-exclude-hb.sh\" 2>&1 | grep -qE 'REAL-EXCLUDE-HB-OK|SKIP'" },
+        { "id": "exe", "desc": "the code-aware-planning skill documents excluding .hb/ from CodeGraph (codegraph.json)", "cmd": "grep -qiE 'codegraph-exclude-hb|codegraph\\.json' \"$PROJECT_DIR/plugin/skills/code-aware-planning/SKILL.md\"" },
+        { "id": "exf", "desc": "docs + proofs integrity green (self-audit) and skill-integrity green after the change", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/self-audit.sh\" 2>&1 | grep -qE 'SELF-AUDIT-OK:[1-9][0-9]*/[1-9][0-9]*' && bash \"$PROJECT_DIR/docs/howto/gate-examples/skill-integrity.sh\" 2>&1 | grep -q 'SKILL-INTEGRITY-OK'" }
+      ]
+    }
+  }
+}

@@ -1299,6 +1299,10 @@ else
   echo "  (python3 absent — T100.2 skipped)"
 fi
 
+grp "T101 — deplint: no REDUNDANT for a task with no resolved symbols (spec-first / new files)"
+check "T101.1 empty-symbol REDUNDANT suppressed, genuine kept, node ≡ python (deplint-redundant-empty.sh → REDUNDANT-EMPTY-OK)" \
+  'bash "'"$GEX"'/deplint-redundant-empty.sh" 2>&1 | grep -q "REDUNDANT-EMPTY-OK"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
