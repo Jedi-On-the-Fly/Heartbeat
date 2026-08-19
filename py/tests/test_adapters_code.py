@@ -1,6 +1,7 @@
 """The Python code adapter (a parity surface with plugin/adapters/code/*.js — proofs T94)."""
 from heartbeat.adapters.code import deplint as dl, codegraph_map as cm, codegraph_context as cc
 from heartbeat.adapters.code import codegraph_discover as cd
+from heartbeat.adapters.code import deplint_accept as da
 
 
 def test_deplint_detects_directed_missing():
@@ -49,3 +50,25 @@ def test_discover_dependencies_is_forward_reachability():
 def test_discover_both_is_union_and_cycle_terminates():
     assert cd.discover(_DISCO, ["repo"], "both")["affected"] == ["api", "db", "main", "repo", "service"]
     assert cd.discover(_DISCO, ["a"], "dependents")["affected"] == ["a", "b"]   # cycle terminates, entry included
+
+
+_ADAG = {"phases": [{"tasks": [{"id": "TA", "requires": []}, {"id": "TB", "requires": []}]}]}
+_ACM = {"edges": [["symA", "symB"]], "tasks": {"TA": ["symA"], "TB": ["symB"]}}
+
+
+def test_accept_delegates_advisory_and_strict(tmp_path):
+    import json as _json
+    (tmp_path / "codemap.json").write_text(_json.dumps(_ACM))
+    text, code = da.accept(str(tmp_path), _ADAG, strict=False)        # codemap.json -> delegates
+    assert "MISSING: TA should require TB" in text and code == 0      # advisory: real report, exit 0
+    _, code_strict = da.accept(str(tmp_path), _ADAG, strict=True)
+    assert code_strict == 1                                           # --strict blocks on a MISSING
+    empty = tmp_path / "empty"; empty.mkdir()
+    stext, scode = da.accept(str(empty), _ADAG, strict=False)         # neither codemap nor .codegraph
+    assert "DEPLINT-ACCEPT-SKIP" in stext and scode == 0
+
+
+def test_resolve_task_symbols_fuzzy_leaf_match():
+    dag = {"phases": [{"tasks": [{"id": "T1", "title": "Add Login flow", "description": ""}]}]}
+    nodes = [{"qualified_name": "auth.go::Login"}, {"qualified_name": "db.go::Query"}]
+    assert cm.resolve_task_symbols(dag, nodes) == {"T1": ["auth.go::Login"]}   # leaf-name substring

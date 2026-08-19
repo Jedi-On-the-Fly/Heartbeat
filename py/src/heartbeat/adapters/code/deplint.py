@@ -72,6 +72,21 @@ def deplint(dag, codemap):
     return {"missing": missing, "redundant": redundant, "collision": collision}
 
 
+def format_report(r):
+    """Render the findings as the report string (shared with deplint_accept — never drift)."""
+    lines = ["HB-CODE-DEPLINT: missing=%d redundant=%d collision=%d"
+             % (len(r["missing"]), len(r["redundant"]), len(r["collision"]))]
+    for m in r["missing"]:
+        lines.append("MISSING: %s should require %s  (%s -> %s)" % (m["from"], m["to"], m["via"][0], m["via"][1]))
+    for m in r["redundant"]:
+        lines.append("REDUNDANT: %s requires %s but no direct code dependency between their symbols"
+                     % (m["from"], m["to"]))
+    for c in r["collision"]:
+        lines.append("COLLISION: %s and %s share %s (unordered — isolate or add a requires edge)"
+                     % (c["a"], c["b"], ",".join(c["shared"])))
+    return "\n".join(lines)
+
+
 def _main(argv):
     strict = "--strict" in argv
     pos = [a for a in argv if not a.startswith("--")]
@@ -83,16 +98,7 @@ def _main(argv):
     with open(pos[1]) as f:
         codemap = json.load(f)
     r = deplint(dag, codemap)
-    print("HB-CODE-DEPLINT: missing=%d redundant=%d collision=%d"
-          % (len(r["missing"]), len(r["redundant"]), len(r["collision"])))
-    for m in r["missing"]:
-        print("MISSING: %s should require %s  (%s -> %s)" % (m["from"], m["to"], m["via"][0], m["via"][1]))
-    for m in r["redundant"]:
-        print("REDUNDANT: %s requires %s but no direct code dependency between their symbols"
-              % (m["from"], m["to"]))
-    for c in r["collision"]:
-        print("COLLISION: %s and %s share %s (unordered — isolate or add a requires edge)"
-              % (c["a"], c["b"], ",".join(c["shared"])))
+    print(format_report(r))
     return 1 if strict and (r["missing"] or r["collision"]) else 0
 
 

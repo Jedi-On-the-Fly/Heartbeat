@@ -1,0 +1,95 @@
+{
+  "_meta": {
+    "project": "deplint-acceptance",
+    "note": "Auto-surface dep-lint at plan acceptance for CODE projects, so a user never has to remember to run it. Add a thin acceptance wrapper `deplint-accept` (node + python, a parity surface) that RESOLVES the codemap conditionally — explicit --codemap > <dir>/codemap.json > build a provisional one from <dir>/.codegraph/codegraph.db (edges via codegraph-map + fuzzy task->symbol via resolveTaskSymbols) > SKIP cleanly (non-code/un-indexed project) — then delegates to the existing `deplint` (advisory by default; --strict blocks). It stays advisory (report, never rewrites the DAG) and honest (an auto-built codemap uses the fuzzy matcher — 'confirm'). Wire it into the code-aware-planning skill's acceptance + the how-to so it runs automatically. Also closes a real parity gap: resolveTaskSymbols is node-only today — port it to python so the node-free path can auto-build too. Proof-driven: gated proofs for the codemap-present + skip cases and node ≡ python; a harness proof for the real CodeGraph db-build (skips without CodeGraph). Core stays domain-neutral — this lives in the code adapter + its skill, not in the base plan flow."
+  },
+  "phases": [
+    {
+      "id": "DA",
+      "title": "deplint-accept wrapper — conditional codemap resolution + delegate (parity)",
+      "gate_entry": null,
+      "gate_exit": "GATE_DA",
+      "tasks": [
+        {
+          "id": "DA1",
+          "title": "Spec-first: author the acceptance proofs (before impl)",
+          "requires": [],
+          "description": "Write the gated proofs RED first. (a) docs/howto/gate-examples/deplint-accept.sh (prints CODE-DEPLINT-ACCEPT-OK): in a temp dir with a codemap.json (copy plugin/adapters/code/fixtures/missing.codemap.json) + the fixture dag (missing.dag.json), `node plugin/adapters/code/deplint-accept.js --dir <d> --dag <dag>` prints the SAME deplint report (HB-CODE-DEPLINT + the MISSING line) and exits 0 (advisory); with --strict on that missing finding it exits nonzero; and in an EMPTY temp dir (no codemap.json, no .codegraph) it prints a DEPLINT-ACCEPT-SKIP line and exits 0. (b) docs/howto/gate-examples/deplint-accept-parity.sh (prints DEPLINT-ACCEPT-PARITY-OK): node ≡ python BYTE-identical for the codemap-present report AND the skip message; and resolveTaskSymbols/resolve_task_symbols agree on a fixture dag+nodes (pins the ported helper). Both proofs must FAIL now (no deplint-accept yet) — confirm red."
+        },
+        {
+          "id": "DA2",
+          "title": "Implement the node wrapper + export deplint/formatReport",
+          "requires": ["DA1"],
+          "description": "Refactor plugin/adapters/code/deplint.js to EXPORT `deplint` and a new `formatReport(r)` that returns the exact report string it already prints (extract the console.log lines; main prints formatReport(r) — output must stay byte-identical so T87/deplint-parity stay green). Write plugin/adapters/code/deplint-accept.js: CLI `--dir <d> --dag <dag> [--codemap <f>] [--strict]`. Resolve the codemap: explicit --codemap > <d>/codemap.json > (if <d>/.codegraph/codegraph.db exists) build a provisional codemap via readCodegraphDb+mapCodegraph (edges) and resolveTaskSymbols(dag,nodes) (tasks), prefixed with a one-line 'NOTE: provisional codemap (CodeGraph edges + fuzzy task→symbol) — confirm' > else print 'DEPLINT-ACCEPT-SKIP: no codemap or CodeGraph index in <d> (deplint skipped)' and exit 0. When a codemap is resolved, call deplint(dag,codemap), print formatReport(r), and exit (advisory 0; --strict → 1 iff missing or collision). Imports nothing from core. Make deplint-accept.sh pass."
+        },
+        {
+          "id": "DA3",
+          "title": "Implement the python twin + port resolve_task_symbols",
+          "requires": ["DA1", "DA2"],
+          "description": "Add `format_report(r)` to py/src/heartbeat/adapters/code/deplint.py (same string; main prints it — byte-identical). Port `resolve_task_symbols(dag, nodes)` into py/src/heartbeat/adapters/code/codegraph_map.py mirroring the node fuzzy matcher EXACTLY (leaf-name substring of task title+description, lowercased) — closes the node-only parity gap. Write py/src/heartbeat/adapters/code/deplint_accept.py: same CLI + same resolution (explicit > <dir>/codemap.json > db-build > skip), same NOTE + SKIP strings, byte-identical report. Add py/tests cases (accept hit, skip, resolve_task_symbols). Make deplint-accept-parity.sh (node ≡ python) and tests/parity.sh green."
+        },
+        {
+          "id": "DA4",
+          "title": "Wire the proofs into the suite",
+          "requires": ["DA2", "DA3"],
+          "description": "Add group T100 to tests/run-tests.sh that RUNS deplint-accept.sh and deplint-accept-parity.sh and greps their markers on the same check line. Confirm the node suite is green (RESULT 0 failed) with T100 in GROUPS-PASSED and the pre-existing T87 (code-deplint) + deplint parity still green after the deplint.js refactor; python pytest green; tests/parity.sh green."
+        }
+      ]
+    },
+    {
+      "id": "WI",
+      "title": "Auto-surface at plan acceptance — skill + docs + real-CodeGraph harness",
+      "gate_entry": "GATE_DA",
+      "gate_exit": "GATE_WI",
+      "tasks": [
+        {
+          "id": "WI1",
+          "title": "Spec-first: author the real-CodeGraph db-build harness proof",
+          "requires": [],
+          "description": "Write tests/real-deplint-accept.sh (harness-first; skips cleanly when codegraph/sqlite3 absent). It builds a REAL CodeGraph index on a tiny sample, writes a small dag.json whose task text mentions a symbol, runs `node plugin/adapters/code/deplint-accept.js --dir <sample> --dag <dag>` with NO codemap.json present, and asserts the wrapper AUTO-BUILT the codemap from .codegraph/codegraph.db (prints the provisional NOTE + a HB-CODE-DEPLINT report line, not DEPLINT-ACCEPT-SKIP) and that node ≡ python. Prints REAL-DEPLINT-ACCEPT-OK. Must FAIL/So-far be unproven now if run against the current tree without the db-build path — confirm it exercises the new path."
+        },
+        {
+          "id": "WI2",
+          "title": "Wire deplint-accept into the code-aware acceptance + docs",
+          "requires": [],
+          "description": "Update plugin/skills/code-aware-planning/SKILL.md: add deplint-accept to the skill's acceptance so that when planning a code project, after hb-lint/hb-audit, `node plugin/adapters/code/deplint-accept.js --dir <proj> --dag <dag>` (node-free twin: python3 -m heartbeat.adapters.code.deplint_accept …) runs AUTOMATICALLY and its findings are surfaced before sign-off — advisory by default, --strict to block, skips cleanly on a non-code/un-indexed project. Be honest: an auto-built codemap is provisional (fuzzy task→symbol) — confirm findings. Update docs/howto/plan-code-aware-dags.md with the same auto-surface step. Keep every doc prose-clean and self-audit green."
+        },
+        {
+          "id": "WI3",
+          "title": "Wire the harness proof + full green",
+          "requires": ["WI1", "WI2"],
+          "description": "Add group T101 to tests/run-tests.sh running tests/real-deplint-accept.sh and asserting it prints REAL-DEPLINT-ACCEPT-OK OR a clean skip (harness-first — deterministic regardless of CodeGraph presence). Confirm ALL suites green: node (RESULT 0 failed, T100+T101 in GROUPS-PASSED), python pytest, tests/parity.sh, whole-docs prose (T93), self-audit (SELF-AUDIT-OK), and skill-integrity (T92). Do not weaken any check."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_DA": {
+      "desc": "deplint-accept resolves the codemap conditionally (explicit > dir/codemap.json > db-build > skip), delegates to deplint with correct advisory/strict exit codes, skips cleanly with no codemap, and is node ≡ python; the resolveTaskSymbols parity gap is closed.",
+      "review": {
+        "prompt": "Refute that DA is done. Does deplint-accept actually DELEGATE to the real deplint (same report, not a reimplementation that could drift)? Does it SKIP cleanly (exit 0, DEPLINT-ACCEPT-SKIP) on a dir with no codemap and no .codegraph — not error? Does --strict propagate deplint's blocking exit (1 iff missing or collision)? Is the report + NOTE + SKIP text BYTE-identical node ≡ python (deterministic)? Did the deplint.js/​deplint.py refactor (formatReport) keep T87/deplint-parity output byte-identical (regression)? Is resolve_task_symbols now in BOTH runtimes and do they agree (the parity gap is really closed, not just node)? Do the proofs have TEETH (would deplint-accept.sh go red if skip returned nonzero, or if --strict didn't block)? node/python/parity green with T100 wired (marker on same line)?"
+      },
+      "criteria": [
+        { "id": "daa", "desc": "acceptance proof: codemap-present → real deplint report; --strict blocks; empty dir → clean skip", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/deplint-accept.sh\" 2>&1 | grep -q 'CODE-DEPLINT-ACCEPT-OK'" },
+        { "id": "dab", "desc": "node ≡ python for the report, the skip message, and resolveTaskSymbols", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/deplint-accept-parity.sh\" 2>&1 | grep -q 'DEPLINT-ACCEPT-PARITY-OK'" },
+        { "id": "dac", "desc": "both proofs wired into the suite (marker on the same line)", "cmd": "grep -qE 'deplint-accept\\.sh.*CODE-DEPLINT-ACCEPT-OK' \"$PROJECT_DIR/tests/run-tests.sh\" && grep -qE 'deplint-accept-parity\\.sh.*DEPLINT-ACCEPT-PARITY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "dad", "desc": "behavioral: a dir with no codemap.json + no .codegraph → clean SKIP (exit 0), independent of the proof", "cmd": "cd \"$PROJECT_DIR\" && node plugin/adapters/code/deplint-accept.js --dir plugin/adapters/code/fixtures --dag plugin/adapters/code/fixtures/missing.dag.json | grep -q 'DEPLINT-ACCEPT-SKIP'" },
+        { "id": "dae", "desc": "behavioral: --strict blocks (nonzero exit) when there is a MISSING finding (explicit --codemap); a non-strict run of the same exits 0", "cmd": "cd \"$PROJECT_DIR\" && node plugin/adapters/code/deplint-accept.js --dir plugin/adapters/code/fixtures --dag plugin/adapters/code/fixtures/missing.dag.json --codemap plugin/adapters/code/fixtures/missing.codemap.json && ! node plugin/adapters/code/deplint-accept.js --dir plugin/adapters/code/fixtures --dag plugin/adapters/code/fixtures/missing.dag.json --codemap plugin/adapters/code/fixtures/missing.codemap.json --strict" },
+        { "id": "daf", "desc": "python twin callable AND resolve_task_symbols ported (parity gap closed)", "cmd": "cd \"$PROJECT_DIR\" && PYTHONPATH=py/src python3 -c \"import heartbeat.adapters.code.deplint_accept as a, heartbeat.adapters.code.codegraph_map as m; assert callable(a.accept) and callable(m.resolve_task_symbols)\"" }
+      ]
+    },
+    "GATE_WI": {
+      "desc": "deplint-accept runs AUTOMATICALLY as part of the code-aware planning acceptance (documented in the skill + how-to), the real-CodeGraph db-build path is proven harness-first, and every suite stays green.",
+      "review": {
+        "prompt": "Refute that WI is done. Does the code-aware-planning skill's ACCEPTANCE actually run deplint-accept automatically (not just mention the word) — so a user planning a code project gets deplint surfaced without asking? Is it honest (advisory default; --strict optional; auto-built codemap is provisional/fuzzy; skips on non-code)? Does tests/real-deplint-accept.sh REALLY build a codemap from a live CodeGraph .db (proving the db-build resolution path) and compare node ≡ python — or could it pass trivially/on skip only? Is core kept domain-neutral (this lives in the code adapter/skill, not the base plan flow)? Are node (T100+T101 in GROUPS-PASSED), python, parity, prose (T93), self-audit, and skill-integrity (T92) all green?"
+      },
+      "criteria": [
+        { "id": "wia", "desc": "the real-CodeGraph db-build harness proof runs (auto-builds the codemap from .codegraph, or skips cleanly)", "cmd": "bash \"$PROJECT_DIR/tests/real-deplint-accept.sh\" 2>&1 | grep -qE 'REAL-DEPLINT-ACCEPT-OK|SKIP'" },
+        { "id": "wib", "desc": "deplint-accept is wired into the code-aware-planning skill acceptance", "cmd": "grep -q 'deplint-accept' \"$PROJECT_DIR/plugin/skills/code-aware-planning/SKILL.md\"" },
+        { "id": "wic", "desc": "the how-to documents the auto-surface step", "cmd": "grep -qi 'deplint-accept' \"$PROJECT_DIR/docs/howto/plan-code-aware-dags.md\"" },
+        { "id": "wid", "desc": "self-audit green (guides prose-clean; referenced proofs exist AND wired; node ≡ python)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/self-audit.sh\" 2>&1 | grep -qE 'SELF-AUDIT-OK:[1-9][0-9]*/[1-9][0-9]*'" },
+        { "id": "wie", "desc": "skill-integrity still green after the skill change (T92)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/skill-integrity.sh\" 2>&1 | grep -q 'SKILL-INTEGRITY-OK'" }
+      ]
+    }
+  }
+}

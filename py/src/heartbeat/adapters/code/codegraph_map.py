@@ -32,6 +32,23 @@ def map_codegraph(rows):
     return {"edges": edges}
 
 
+def resolve_task_symbols(dag, nodes):
+    """FUZZY (advisory): map each task to the qualified_names its title/description mentions by
+    leaf-name substring — mirrors codegraph-map.js resolveTaskSymbols exactly (node ≡ python)."""
+    qns = [n["qualified_name"] for n in (nodes or []) if n.get("qualified_name")]
+    tasks = {}
+    for p in (dag.get("phases") or []):
+        for t in (p.get("tasks") or []):
+            hay = ((t.get("title") or "") + " " + (t.get("description") or "")).lower()
+            sel = []
+            for qn in qns:
+                leaf = qn.split("::")[-1].lower()
+                if leaf and leaf in hay:
+                    sel.append(qn)
+            tasks[t["id"]] = sel
+    return tasks
+
+
 def read_codegraph_db(db_path):
     """HARNESS-FIRST: read a CodeGraph .codegraph/codegraph.db via the stdlib sqlite3 module (no
     shell-out — node uses the sqlite3 CLI; here it is native). NOT wired into the suite."""

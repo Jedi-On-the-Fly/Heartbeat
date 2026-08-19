@@ -1289,6 +1289,16 @@ else
   echo "  (python3 absent — T99 skipped)"
 fi
 
+grp "T100 — deplint-accept: plan-acceptance wrapper (codemap resolution + skip; node ≡ python)"
+check "T100.1 acceptance wrapper delegates/skips correctly (deplint-accept.sh → CODE-DEPLINT-ACCEPT-OK)" \
+  'bash "'"$GEX"'/deplint-accept.sh" 2>&1 | grep -q "CODE-DEPLINT-ACCEPT-OK"'
+if command -v python3 >/dev/null 2>&1; then
+  check "T100.2 deplint-accept is node ≡ python (deplint-accept-parity.sh → DEPLINT-ACCEPT-PARITY-OK)" \
+    'bash "'"$GEX"'/deplint-accept-parity.sh" 2>&1 | grep -q "DEPLINT-ACCEPT-PARITY-OK"'
+else
+  echo "  (python3 absent — T100.2 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
