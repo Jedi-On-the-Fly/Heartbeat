@@ -480,6 +480,19 @@ switch (cmd) {
     process.stdout.write(`review pass ${gate} (backed by reviews/${gate}.md, ${body.trim().length} chars, cites: ${cited.slice(0, 3).join(', ')})\n`);
     break;
   }
+  case 'evidence': {
+    // The provenance of a gate's acceptance: what was proven, how, on which commit.
+    const gate = arg1;
+    if (!gate) die('usage: hb evidence <gate>');
+    const evs = readEvents();
+    const gp = [...evs].reverse().find(e => e.event === 'gate_passed' && e.gate === gate);
+    if (!gp) { process.stdout.write(`no recorded gate pass for ${gate}\n`); break; }
+    process.stdout.write(`evidence for ${gate} — runtime: ${gp.runtime || '?'}, commit: ${gp.commit || 'none'}\n`);
+    for (const c of (gp.criteria || [])) process.stdout.write(`  [exit ${c.exit}] ${c.id}: ${c.cmd}\n`);
+    const rp = [...evs].reverse().find(e => e.event === 'review_passed' && e.gate === gate);
+    if (rp) process.stdout.write(`  reviewed by ${rp.reviewer || '?'} → ${rp.artifact}\n`);
+    break;
+  }
 
   case 'doctor': {
     const { problems, notes } = doctor();

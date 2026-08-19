@@ -34,7 +34,7 @@ run_criterion() {
 
 # eval_gate <GATE> — run the criteria, print ✓/✗, set PASS/FAIL globals. No side effects.
 eval_gate() {
-  local G="$1"; PASS=0; FAIL=0
+  local G="$1"; PASS=0; FAIL=0; CRIT_EXITS=""   # CRIT_EXITS: per-criterion exit codes in dag order (provenance)
   echo "=== Gate: $G ==="
   echo ""
   # Hollow-gate floor: a gate with zero criteria proves nothing. The auditor warns
@@ -51,9 +51,9 @@ eval_gate() {
   fi
   while IFS=$'\x1f' read -r ID DESC CMD; do
     if run_criterion "$CMD" >/dev/null 2>&1; then
-      echo "  ✓ [$ID] $DESC"; PASS=$((PASS + 1))
+      echo "  ✓ [$ID] $DESC"; PASS=$((PASS + 1)); CRIT_EXITS="$CRIT_EXITS 0"
     else
-      echo "  ✗ [$ID] $DESC"; echo "      cmd: $CMD"; FAIL=$((FAIL + 1))
+      echo "  ✗ [$ID] $DESC"; echo "      cmd: $CMD"; FAIL=$((FAIL + 1)); CRIT_EXITS="$CRIT_EXITS 1"
     fi
   done < <(node -e "
     const dag = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
@@ -134,7 +134,18 @@ fi
 # ── normal run: side effects (log → reproject → snapshot → review/advance) ─────
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if [ "$FAIL" -eq 0 ]; then
-  echo "{\"ts\":\"$TS\",\"event\":\"gate_passed\",\"gate\":\"$GATE\",\"pass\":$PASS,\"fail\":0}" >> "$EVENTS_FILE"
+  # Evidence provenance: record what was proven and how — per-criterion {id,cmd,exit}, the commit
+  # tested, and the runtime. Built via node so command strings are correctly JSON-escaped.
+  COMMIT=$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || true)
+  node -e '
+    const fs=require("fs");
+    const dag=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+    const gate=process.argv[2];
+    const exits=process.argv[3].trim().split(/\s+/).filter(x=>x!=="").map(Number);
+    const crits=((dag.gates[gate]||{}).criteria||[]).map((c,i)=>({id:c.id,cmd:c.cmd,exit:exits[i]===undefined?0:exits[i]}));
+    const ev={ts:process.argv[4],event:"gate_passed",gate,pass:Number(process.argv[5]),fail:0,criteria:crits,commit:process.argv[6]||null,runtime:"node"};
+    fs.appendFileSync(process.argv[7],JSON.stringify(ev)+"\n");
+  ' "$DAG_FILE" "$GATE" "$CRIT_EXITS" "$TS" "$PASS" "$COMMIT" "$EVENTS_FILE"
   reproject
   echo ""
   if node -e "process.exit((JSON.parse(require('fs').readFileSync('$DAG_FILE','utf8')).gates['$GATE']||{}).review?0:1)" 2>/dev/null; then

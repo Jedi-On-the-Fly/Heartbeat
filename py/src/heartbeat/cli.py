@@ -47,6 +47,7 @@ def main(argv=None):
     for name in ("start", "done", "fail", "heartbeat"):
         p = sub.add_parser(name); p.add_argument("task"); p.add_argument("reason", nargs="*"); _add_dir(p)
     p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail"]); p.add_argument("note", nargs="*"); p.add_argument("--artifact"); _add_dir(p)
+    p = sub.add_parser("evidence"); p.add_argument("gate"); _add_dir(p)
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
     p = sub.add_parser("exec"); p.add_argument("action", nargs="?", default="run"); p.add_argument("--parallel", type=int, default=0); _add_dir(p)
@@ -223,6 +224,20 @@ def main(argv=None):
         from . import gate as _gate
         _gate._git_snapshot(hb, gate)
         print(f"review pass {gate} (backed by reviews/{gate}.md, {len(body.strip())} chars, cites: {', '.join(cited[:3])})")
+        return 0
+    elif args.cmd == "evidence":
+        # The provenance of a gate's acceptance: what was proven, how, on which commit.
+        evs = st.read_events(hb)
+        gp = next((e for e in reversed(evs) if e.get("event") == "gate_passed" and e.get("gate") == args.gate), None)
+        if not gp:
+            print(f"no recorded gate pass for {args.gate}")
+            return 0
+        print(f"evidence for {args.gate} — runtime: {gp.get('runtime', '?')}, commit: {gp.get('commit') or 'none'}")
+        for c in (gp.get("criteria") or []):
+            print(f"  [exit {c.get('exit')}] {c.get('id')}: {c.get('cmd')}")
+        rp = next((e for e in reversed(evs) if e.get("event") == "review_passed" and e.get("gate") == args.gate), None)
+        if rp:
+            print(f"  reviewed by {rp.get('reviewer', '?')} → {rp.get('artifact')}")
         return 0
     elif args.cmd == "ready":
         s = st.project(st.read_events(hb), st.read_dag(hb))

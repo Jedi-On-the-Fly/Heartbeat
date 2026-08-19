@@ -1,0 +1,119 @@
+{
+  "_meta": {
+    "project": "evidence-provenance",
+    "note": "Two more improvements from the external (Codex) retrospective + a v1.26 bump. (EP) Evidence provenance — the 'evidence lifecycle' framing implies the evidence should be first-class, not implicit. On a gate pass, record structured provenance in the gate_passed event: per-criterion {id, cmd, exit} (built via node so command strings are JSON-escaped), the git commit tested, and the runtime that verified — and surface it with `hb evidence <gate>`. Core, both runtimes, parity of the recorded SHAPE. (CV) Graph coverage / blind spots — don't present all code context as equally trustworthy: a `codegraph-coverage` provider reports each task's symbol coverage and explicitly LISTS the graph-blind tasks (zero resolved symbols — dynamic/framework/not-yet-existing code the graph can't model → read manually). Code adapter, both runtimes, parity; wired into the code-aware-planning skill. (VB) Bump to v1.26 and add the proof-driven framing to the top of the README main page. Proof-driven throughout: spec-first, gated, refuted."
+  },
+  "phases": [
+    {
+      "id": "EP",
+      "title": "Evidence provenance — record what was proven, and how",
+      "gate_entry": null,
+      "gate_exit": "GATE_EP",
+      "tasks": [
+        {
+          "id": "EP1",
+          "title": "Spec-first: proof for gate provenance + the evidence reader",
+          "requires": [],
+          "description": "Author RED-first. docs/howto/gate-examples/evidence-provenance.sh (prints EVIDENCE-PROVENANCE-OK): in a throwaway project bootstrapped with plugin/bootstrap.sh (git enabled — unset HB_NO_GIT), write a dag with a gate that has two criteria (one passing, and to keep it a PASS both pass); run `.hb/gate.sh <gate>`; assert the latest `gate_passed` event in .hb/events.jsonl now carries provenance: a `criteria` array of {id, cmd, exit} (exit 0 for each), a `commit` field = the git HEAD sha, and a `runtime` field. Then run `node .hb/hb.js evidence <gate>` and assert it prints each criterion's cmd + exit, the commit, and the runtime. Repeat the record+read via the PYTHON runtime (`python3 -m heartbeat.cli gate` + `hb evidence`) and assert the recorded event has the SAME keys (criteria/commit/runtime) — node ≡ python in shape. Must FAIL now (gate_passed carries only pass/fail; no `evidence` command) — confirm red."
+        },
+        {
+          "id": "EP2",
+          "title": "Record provenance in the gate_passed event (both runtimes)",
+          "requires": ["EP1"],
+          "description": "plugin/templates/gate.sh: have eval_gate collect each criterion's exit; when the gate passes, build the `gate_passed` event via node -e (so cmd strings are correctly JSON-escaped) carrying `criteria`:[{id, cmd, exit}], `commit`: the git HEAD sha (`git rev-parse HEAD`, null if not a repo), and `runtime`:\"node\" — in addition to the existing pass/fail. py/src/heartbeat/gate.py: eval_gate already loops criteria — collect {id, cmd, exit}; in run_gate record the same `criteria`/`commit`/`runtime`:\"python\" on the gate_passed event. Keep the event SHAPE identical node ≡ python (same keys). Do not change the projector's behavior (extra keys are ignored). Make the provenance-recording half of evidence-provenance.sh pass; keep the existing suite green."
+        },
+        {
+          "id": "EP3",
+          "title": "Add the `hb evidence <gate>` reader (both runtimes)",
+          "requires": ["EP1"],
+          "description": "plugin/templates/hb.js: add an `evidence <gate>` command that reads events.jsonl, finds the latest gate_passed for that gate, and prints its provenance — each criterion's `[exit] id: cmd`, the `commit` tested, the `runtime`, and (if a review_passed exists for the gate) the backing artifact path. py/src/heartbeat/cli.py: add the same `hb evidence <gate>` subcommand (a shared reader). Make the reader half of evidence-provenance.sh pass."
+        },
+        {
+          "id": "EP4",
+          "title": "Wire the proof + confirm no regression",
+          "requires": ["EP2", "EP3"],
+          "description": "Add group T105 to tests/run-tests.sh running evidence-provenance.sh (marker EVIDENCE-PROVENANCE-OK on the same check line). Confirm the full node suite is green (RESULT 0 failed, T105 in GROUPS-PASSED) — especially the projector/report/doctor groups (the enriched gate_passed event must not break them) — plus python pytest and tests/parity.sh."
+        }
+      ]
+    },
+    {
+      "id": "CV",
+      "title": "Graph coverage — surface the blind spots, don't trust all context equally",
+      "gate_entry": "GATE_EP",
+      "gate_exit": "GATE_CV",
+      "tasks": [
+        {
+          "id": "CV1",
+          "title": "Spec-first: proof + fixture for coverage reporting",
+          "requires": [],
+          "description": "Author RED-first. Fixture plugin/adapters/code/fixtures/coverage.codemap.json + coverage.dag.json — a dag with some tasks that map to symbols and some that map to NONE (the graph-blind case: a not-yet-existing / dynamic-framework file). Proof docs/howto/gate-examples/code-coverage.sh (prints CODE-COVERAGE-OK): `node plugin/adapters/code/codegraph-coverage.js <codemap.json> <dag.json>` reports each task's symbol count and explicitly LISTS the graph-blind tasks (zero resolved symbols) under a clear marker (e.g. 'GRAPH-BLIND (read manually):'), and does NOT list covered tasks as blind; assert node ≡ python byte-identical. Must FAIL now (no codegraph-coverage yet) — confirm red."
+        },
+        {
+          "id": "CV2",
+          "title": "Implement the coverage provider (both runtimes)",
+          "requires": ["CV1"],
+          "description": "plugin/adapters/code/codegraph-coverage.js (export coverage(codemap, dag)) + py/src/heartbeat/adapters/code/codegraph_coverage.py (coverage(codemap, dag)): for each task in the dag, count its resolved symbols from codemap.tasks; classify a task with zero symbols as GRAPH-BLIND. Emit a deterministic report: a per-task line (task → N symbols) and a final 'GRAPH-BLIND (read manually): <sorted task ids>' line (or 'GRAPH-BLIND: none'). CLI: `<cmd> <codemap.json> <dag.json>`. Advisory; imports nothing from core; node ≡ python byte-identical. Add a py/tests case. Make code-coverage.sh + tests/parity.sh green."
+        },
+        {
+          "id": "CV3",
+          "title": "Wire the proof + document blind-spots in the skill",
+          "requires": ["CV2"],
+          "description": "Add group T106 to tests/run-tests.sh running code-coverage.sh (marker CODE-COVERAGE-OK on the same check line). Update plugin/skills/code-aware-planning/SKILL.md: a step to check coverage (`node plugin/adapters/code/codegraph-coverage.js <codemap> <dag>` / python twin) and READ the graph-blind tasks manually — the graph models resolved static edges only, so blind tasks (dynamic/framework bindings, not-yet-existing files) need source inspection. Confirm all suites green (node T105+T106 in GROUPS-PASSED, python, parity, whole-docs prose T93, self-audit, skill-integrity T92)."
+        }
+      ]
+    },
+    {
+      "id": "VB",
+      "title": "Bump to v1.26 + proof-driven framing on the README main page",
+      "gate_entry": "GATE_CV",
+      "gate_exit": "GATE_VB",
+      "tasks": [
+        {
+          "id": "VB1",
+          "title": "Bump versions, add the README framing, write STATUS v1.26",
+          "requires": [],
+          "description": "Bump the single-sourced version: plugin/.claude-plugin/plugin.json and .claude-plugin/marketplace.json 1.25.0 -> 1.26.0; py/pyproject.toml 0.15.0 -> 0.16.0. Add the proof-driven framing to the TOP of README.md (the GitHub main page), right under the title, as a lead definition: 'HeartBeat is a proof-driven development method: work is accepted only when its claims are backed by executable evidence and survive an adversarial attempt to refute them. Lifecycle: claim -> implementation -> executable proof -> adversarial refutation -> acceptance.' Refresh release/README.md's 'New in v1.25' -> v1.26. Write the STATUS.md v1.26 section (update the top Version line to v1.26 and add a '## v1.26' entry) summarizing this branch since v1.25: the evidence-lifecycle work — checkpoint-tag-only-on-review (T103), falsification-question generator (T104), gate evidence provenance + `hb evidence` (T105), and graph coverage / blind-spots (T106). Keep the T39.4 version test consistency-based (no hardcoded literal). Keep node+python+parity+prose+self-audit green."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_EP": {
+      "desc": "A gate pass records structured evidence provenance (per-criterion {id,cmd,exit} + the commit tested + the runtime) on the gate_passed event, surfaced by `hb evidence <gate>` — node ≡ python in shape — with no regression to the projector/report/doctor.",
+      "review": {
+        "prompt": "Refute that EP is done. Does the gate_passed event now carry `criteria`:[{id,cmd,exit}] with the ACTUAL per-criterion exits, the real git `commit` tested, and the `runtime`? Are command strings correctly JSON-escaped (a cmd with quotes/backslashes must not corrupt the event log)? Does `hb evidence <gate>` read and print it in both runtimes, and is the recorded SHAPE identical node ≡ python? Did the enriched event break the projector / report / doctor / any parity check (extra keys must be ignored, not mis-projected)? Does it degrade cleanly when not a git repo (commit null, no crash)? Does the proof have TEETH (would it go red if provenance were not recorded or the reader omitted the cmd/commit)?"
+      },
+      "criteria": [
+        { "id": "epa", "desc": "provenance recorded + `hb evidence` reads it; node ≡ python shape", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/evidence-provenance.sh\" 2>&1 | grep -q 'EVIDENCE-PROVENANCE-OK'" },
+        { "id": "epb", "desc": "proof wired into the suite (marker on the same line)", "cmd": "grep -qE 'evidence-provenance\\.sh.*EVIDENCE-PROVENANCE-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "epc", "desc": "the `evidence` reader exists in BOTH runtimes (new command)", "cmd": "cd \"$PROJECT_DIR\" && grep -qE \"'evidence'\" plugin/templates/hb.js && grep -qE 'evidence' py/src/heartbeat/cli.py" },
+        { "id": "epd", "desc": "the gate_passed event records the provenance keys (both runtimes emit criteria + commit + runtime)", "cmd": "cd \"$PROJECT_DIR\" && grep -qE 'criteria|commit|runtime' plugin/templates/gate.sh && grep -qE 'criteria|commit|runtime' py/src/heartbeat/gate.py" }
+      ]
+    },
+    "GATE_CV": {
+      "desc": "A code-adapter coverage provider reports per-task symbol coverage and explicitly lists the GRAPH-BLIND tasks (zero resolved symbols) — node ≡ python — documented in the code-aware-planning skill; suites green.",
+      "review": {
+        "prompt": "Refute that CV is done. Does codegraph-coverage report the correct symbol count per task and list EXACTLY the zero-symbol tasks as GRAPH-BLIND (not covered tasks, not missing tasks)? Is the output deterministic and node ≡ python byte-identical? Is it advisory + honest (blind = the graph can't see it, read manually — not 'no dependency')? Does the code-aware-planning skill actually document checking coverage and reading blind tasks? Does the proof have teeth (would it go red if a covered task were mislabeled blind, or a blind task omitted)? node/python/parity/prose/self-audit/skill-integrity green with T106 wired?"
+      },
+      "criteria": [
+        { "id": "cva", "desc": "coverage proof: blind tasks listed, covered tasks not, node ≡ python", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/code-coverage.sh\" 2>&1 | grep -q 'CODE-COVERAGE-OK'" },
+        { "id": "cvb", "desc": "behavioral: a zero-symbol task is reported GRAPH-BLIND, a covered one is not", "cmd": "cd \"$PROJECT_DIR\" && out=$(node plugin/adapters/code/codegraph-coverage.js <(printf '%s' '{\"edges\":[],\"tasks\":{\"TX\":[\"symA\"],\"TY\":[]}}') <(printf '%s' '{\"phases\":[{\"tasks\":[{\"id\":\"TX\"},{\"id\":\"TY\"}]}]}')) && printf '%s' \"$out\" | grep -qE 'GRAPH-BLIND[^A-Za-z]*TY' && ! printf '%s' \"$out\" | grep -qE 'GRAPH-BLIND[^A-Za-z]*TX'" },
+        { "id": "cvc", "desc": "proof wired into the suite (marker on the same line)", "cmd": "grep -qE 'code-coverage\\.sh.*CODE-COVERAGE-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "cvd", "desc": "python twin callable + the skill documents coverage / blind spots", "cmd": "cd \"$PROJECT_DIR\" && PYTHONPATH=py/src python3 -c \"import heartbeat.adapters.code.codegraph_coverage as c; assert callable(c.coverage)\" && grep -qiE 'coverage|graph-blind|blind' plugin/skills/code-aware-planning/SKILL.md" }
+      ]
+    },
+    "GATE_VB": {
+      "desc": "The version is bumped to v1.26 consistently (plugin == marketplace == 1.26.0; pyproject == 0.16.0); the README main page leads with the proof-driven framing; STATUS leads with v1.26; suites stay green.",
+      "review": {
+        "prompt": "Refute that VB is done. Are ALL version files bumped and CONSISTENT (plugin.json == marketplace heartbeat entry == 1.26.0; pyproject == 0.16.0), with the T39.4 test still a consistency check (no stale literal)? Does the README main page LEAD (near the top) with the proof-driven framing (claim -> implementation -> executable proof -> adversarial refutation -> acceptance)? Does STATUS.md lead with v1.26 and honestly summarize the branch (LC/RQ/EP/CV) without overclaiming? release/README updated? node/python/parity/prose/self-audit green with the bump?"
+      },
+      "criteria": [
+        { "id": "vba", "desc": "versions bumped + consistent", "cmd": "grep -q '\"1.26.0\"' \"$PROJECT_DIR/plugin/.claude-plugin/plugin.json\" && grep -q '\"1.26.0\"' \"$PROJECT_DIR/.claude-plugin/marketplace.json\" && grep -q '0.16.0' \"$PROJECT_DIR/py/pyproject.toml\"" },
+        { "id": "vbb", "desc": "the README main page leads with the proof-driven framing (method + lifecycle)", "cmd": "cd \"$PROJECT_DIR\" && head -20 README.md | grep -qiE 'proof-driven' && head -20 README.md | grep -qiE 'adversarial refutation|refute' && head -20 README.md | grep -qiE 'acceptance'" },
+        { "id": "vbc", "desc": "STATUS leads with v1.26 + summarizes the evidence-lifecycle branch", "cmd": "grep -qE 'v1\\.26' \"$PROJECT_DIR/STATUS.md\" && grep -qiE 'provenance|evidence|blind|falsification|checkpoint' \"$PROJECT_DIR/STATUS.md\"" },
+        { "id": "vbd", "desc": "plugin == marketplace == 1.26.0 (derived consistency, no literal in the test)", "cmd": "cd \"$PROJECT_DIR\" && python3 -c \"import json; p=json.load(open('plugin/.claude-plugin/plugin.json'))['version']; mk=json.load(open('.claude-plugin/marketplace.json')); m=[x['version'] for x in mk['plugins'] if x['name']=='heartbeat'][0]; assert p==m=='1.26.0', (p,m)\" && ! grep -qE '1\\.2[56]\\.0' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "vbe", "desc": "release note refreshed to v1.26", "cmd": "grep -qE '1\\.26' \"$PROJECT_DIR/release/README.md\"" }
+      ]
+    }
+  }
+}

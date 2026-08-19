@@ -49,12 +49,14 @@ def eval_gate(hbdir, gate_id, timeout=None):
                 "lines": [f"  ✗ [--] gate {gate_id} has NO criteria — a gate must assert something"]}
     passed = failed = 0
     lines = []
+    results = []
     for c in criteria:
         ok = _run_cmd(c.get("cmd", ""), hbdir, timeout)
         lines.append(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')}")
+        results.append({"id": c.get("id"), "cmd": c.get("cmd", ""), "exit": 0 if ok else 1})
         passed += 1 if ok else 0
         failed += 0 if ok else 1
-    return {"passed": passed, "failed": failed, "lines": lines}
+    return {"passed": passed, "failed": failed, "lines": lines, "results": results}
 
 
 def run_gate(hbdir, gate_id, check=False):
@@ -65,7 +67,11 @@ def run_gate(hbdir, gate_id, check=False):
         res.update(status="would_pass" if res["failed"] == 0 else "would_block", gate=gate_id)
         return res
     if res["failed"] == 0:
-        st.mutate(hbdir, {"event": "gate_passed", "gate": gate_id, "pass": res["passed"], "fail": 0})
+        # Evidence provenance: per-criterion {id,cmd,exit}, the commit tested, the runtime.
+        commit = subprocess.run(["git", "-C", _project_dir(hbdir), "rev-parse", "HEAD"],
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode().strip() or None
+        st.mutate(hbdir, {"event": "gate_passed", "gate": gate_id, "pass": res["passed"], "fail": 0,
+                          "criteria": res.get("results", []), "commit": commit, "runtime": "python"})
         review = bool((st.read_dag(hbdir).get("gates") or {}).get(gate_id, {}).get("review"))
         # A review-gated phase's restore point (commit+tag) is created at review acceptance
         # (cli.py review pass), NOT here — the tag must never certify an un-reviewed state.

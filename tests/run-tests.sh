@@ -1323,6 +1323,10 @@ else
   echo "  (python3 absent — T104 skipped)"
 fi
 
+grp "T105 — gate evidence provenance: gate_passed records {criteria,commit,runtime}, hb evidence reads it (node ≡ python)"
+check "T105.1 gate pass records provenance + hb evidence surfaces it (evidence-provenance.sh → EVIDENCE-PROVENANCE-OK)" \
+  'bash "'"$GEX"'/evidence-provenance.sh" 2>&1 | grep -q "EVIDENCE-PROVENANCE-OK"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
