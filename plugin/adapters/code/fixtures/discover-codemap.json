@@ -1,0 +1,12 @@
+{
+  "edges": [
+    ["main", "service"],
+    ["service", "repo"],
+    ["repo", "db"],
+    ["api", "service"],
+    ["service", "auth"],
+    ["util", "helper"],
+    ["a", "b"],
+    ["b", "a"]
+  ]
+}

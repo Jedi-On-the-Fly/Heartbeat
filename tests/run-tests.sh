@@ -1271,6 +1271,16 @@ else
   echo "  (python3 absent — T97 skipped)"
 fi
 
+grp "T98 — code adapter DISCOVERY mode (transitive reachability, node ≡ python)"
+check "T98.1 discovery reachability correct in all directions (code-discover.sh → CODE-DISCOVER-OK)" \
+  'bash "'"$GEX"'/code-discover.sh" 2>&1 | grep -q "CODE-DISCOVER-OK"'
+if command -v python3 >/dev/null 2>&1; then
+  check "T98.2 discovery is node ≡ python (code-discover-parity.sh → CODE-DISCOVER-PARITY-OK)" \
+    'bash "'"$GEX"'/code-discover-parity.sh" 2>&1 | grep -q "CODE-DISCOVER-PARITY-OK"'
+else
+  echo "  (python3 absent — T98.2 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

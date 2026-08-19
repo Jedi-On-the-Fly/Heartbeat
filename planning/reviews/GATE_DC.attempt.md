@@ -1,26 +1,10 @@
-# GATE_DC review — docs adapter Seam 2 (context) + docs
+# GATE_DC — code adapter discovery core (reachability, both runtimes, parity)
 
-Adversarial review of the shipped DC work, distinct actor from the implementer.
+**Distinct actor:** reviewer agent (not the doer). **Verdict: SOUND.**
 
-## Round 1 — SOUND (no holes)
-Tried to break it on six axes; all held:
-- **Provider**: docs-context renders only DIRECT-cited sections' text — 2-hop (background) and the
-  task's own body excluded; multi-cite (intro→background+method) renders both; cites-nothing and
-  missing-file degrade gracefully. Mutation refutation: forcing it to dump the whole corpus makes the
-  proof FAIL ("2-hop section leaked").
-- **Proof integrity**: set -euo pipefail + explicit exits; fails before docs-context.js exists;
-  DOCS-CONTEXT-OK can't print with a sub-check skipped.
-- **Honesty (rule 7)**: adapters.md presents docs as a shipped second domain without claiming the
-  ollama demo is gated; the how-to passes prose-check, links resolve, uses node forms (no fake `hb`);
-  real-docs-context.sh confirmed NOT in the suite.
-- **Boundary**: docs-context.js imports only fs/path; deplint.js UNCHANGED; the context hook
-  (executor.py/hb-exec.js) UNCHANGED — docs Seam 2 reuses them, doesn't edit them.
-- **Consistency**: parity-notes accurately marks the docs adapter node-only / not-a-parity-surface,
-  reusing the unchanged engine + hook.
-- **Suites**: node 303/0 (incl T90/T91), python 77, parity OK.
-
-Non-blocking note: the adapter how-tos aren't individually wired into a prose-check group, but the
-whole-corpus sweep (T79) + self-audit cover them, and it matches the sibling adapter-how-to
-convention — not a regression.
-
-**VERDICT: SOUND**
+Refutation attempts, all failed:
+- Semantics correct (not swapped): `dependents`=reverse reachability (change impact), `dependencies`=forward, `both`=union; entry always included; induced edges = codemap edges with both endpoints affected. Verified on a fresh a→b→c codemap.
+- Cycles terminate (visited-set guard) — a↔b returns {a,b}.
+- Deterministic sorted output → real byte-equality; node ≡ python on an independent diamond+cycle+disconnected codemap across all directions.
+- Proof teeth: code-discover.sh goes RED on a swapped direction and on a leaked symbol; oracle is impl-independent (literal expected sets).
+- Suites: node 315/0 (T98 in GROUPS-PASSED), parity OK, python 88.

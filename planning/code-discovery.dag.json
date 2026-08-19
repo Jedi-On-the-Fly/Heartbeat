@@ -1,0 +1,102 @@
+{
+  "_meta": {
+    "project": "code-discovery",
+    "note": "Add a DISCOVERY MODE to the code adapter: a pure function over a codemap ({edges:[[A,B]]}, A depends on B) that, given entry-point symbols + a direction, returns the transitively-reachable affected symbols + the induced subgraph. Directions: `dependents` (reverse reachability = change-impact: who depends on the entry), `dependencies` (forward: what it needs), `both`. This is Seam 1 used FORWARD (discover scope before authoring the DAG) instead of only validating a written DAG — the affected set is then mapped (by human/LLM judgment) to tasks, and deplint checks the ordering. It is a NEW shared surface => a PARITY surface (node `codegraph-discover.js` + python `codegraph_discover.py`, byte-equal deterministic sorted output) with its own parity case, and an MCP tool `code_discover` so an MCP client (Codex/Claude Code/OpenCode) gets it host-neutral. Stays ADVISORY (report, never rewrite the DAG); docs stay honest that the graph models resolved static edges, NOT dynamic/framework bindings (Alpine methods, templates) or not-yet-existing symbols. Built proof-driven: spec-first proofs, both runtimes at parity, gated + refuted; suites (node/python/parity/prose/self-audit) stay green."
+  },
+  "phases": [
+    {
+      "id": "DC",
+      "title": "Discovery core — pure reachability, both runtimes, gated + parity",
+      "gate_entry": null,
+      "gate_exit": "GATE_DC",
+      "tasks": [
+        {
+          "id": "DC1",
+          "title": "Spec-first: author the discovery proofs + fixture (before any impl)",
+          "requires": [],
+          "description": "Write the gated proofs BEFORE the implementation (they must go RED first). (a) plugin/adapters/code/fixtures/discover-codemap.json: a small codemap {edges:[[A,B]]} exercising a chain, a branch, an unrelated pair, and a cycle — e.g. edges main->service, service->repo, repo->db, api->service, service->auth, util->helper, and a<->b (cycle). (b) docs/howto/gate-examples/code-discover.sh (prints CODE-DISCOVER-OK): runs `node plugin/adapters/code/codegraph-discover.js <fixture> <entry> --dependents|--dependencies|--both` and asserts, from the fixture, that `--dependents repo` = {main,service,api,repo} (transitive callers — change impact) and EXCLUDES db/auth/util/helper; `--dependencies repo` = {repo,db} and excludes main/api; `--both repo` = the union; the entry itself is always included; a cycle entry (a) terminates and yields {a,b}; and the emitted `edges` are the induced subgraph among affected (both endpoints in affected). Compute expected sets in the proof independently of the implementation (enumerate them literally), so the proof is a true oracle. (c) docs/howto/gate-examples/code-discover-parity.sh (prints CODE-DISCOVER-PARITY-OK): runs node and `python3 -m heartbeat.adapters.code.codegraph_discover` on the fixture for EACH direction and asserts byte-identical stdout. Both proofs must FAIL now (no codegraph-discover.js yet) — confirm red."
+        },
+        {
+          "id": "DC2",
+          "title": "Implement the node discovery provider",
+          "requires": ["DC1"],
+          "description": "Write plugin/adapters/code/codegraph-discover.js: a PURE function discover(codemap, entries, direction) over codemap.edges ([[A,B]] = A depends on B). `dependents` = transitive reverse-reachability (all X with X ->* entry — change impact); `dependencies` = transitive forward-reachability (all Y with entry ->* Y); `both` = union. BFS/DFS with a visited set (cycle-safe, terminates). Always include the entries in `affected`. Output DETERMINISTIC JSON with SORTED arrays: {\"entry\":[...sorted],\"direction\":\"...\",\"affected\":[...sorted],\"edges\":[[...]] sorted} where `edges` is the induced subgraph (both endpoints in affected). CLI: `node codegraph-discover.js <codemap.json> <e1,e2,...> [--dependents|--dependencies|--both]` (default --both); imports nothing from core. Make code-discover.sh (node assertions) pass."
+        },
+        {
+          "id": "DC3",
+          "title": "Implement the python twin (parity)",
+          "requires": ["DC1", "DC2"],
+          "description": "Write py/src/heartbeat/adapters/code/codegraph_discover.py mirroring the node provider exactly — same reachability semantics, same sorted deterministic output, same CLI (`python3 -m heartbeat.adapters.code.codegraph_discover <codemap.json> <entries> [--flag]`). Match node's JSON serialization so stdout is BYTE-identical (separators, key order, sorting). Add py/tests/test_adapters_code.py cases for discover (dependents/dependencies/both, cycle, entry-included). Make code-discover-parity.sh (node == python) pass and keep tests/parity.sh green."
+        },
+        {
+          "id": "DC4",
+          "title": "Wire the proofs into the suite",
+          "requires": ["DC2", "DC3"],
+          "description": "Add a new group T98 to tests/run-tests.sh that RUNS code-discover.sh and code-discover-parity.sh and greps their markers on the same check line (CODE-DISCOVER-OK / CODE-DISCOVER-PARITY-OK) — not a bare filename mention. Confirm the node suite is green (RESULT: N passed, 0 failed) with T98 in GROUPS-PASSED, python pytest green, and tests/parity.sh green."
+        }
+      ]
+    },
+    {
+      "id": "MX",
+      "title": "Make discovery usable — MCP tool + docs + skill",
+      "gate_entry": "GATE_DC",
+      "gate_exit": "GATE_MX",
+      "tasks": [
+        {
+          "id": "MX1",
+          "title": "Spec-first: author the MCP discovery proof",
+          "requires": [],
+          "description": "Write docs/howto/gate-examples/code-discover-mcp.sh (prints MCP-DISCOVER-OK): drive the REAL Python MCP server (`hb mcp-serve` / heartbeat.mcp_server) over its JSON-RPC stdio, call the `code_discover` tool with a codemap + entries + direction, and assert the tool result equals the in-process discovery function's output (derive expected by importing heartbeat.adapters.code.codegraph_discover — an independent oracle, not a hardcoded blob). Must FAIL now (tool not registered). Skips cleanly if python3 absent."
+        },
+        {
+          "id": "MX2",
+          "title": "Register the code_discover MCP tool",
+          "requires": ["MX1"],
+          "description": "In py/src/heartbeat/mcp_server.py add a `code_discover` tool to TOOLS (handler imports heartbeat.adapters.code.codegraph_discover and returns discover(codemap, entries, direction); inputSchema: object {codemap:object, entries:array<string>, direction:enum[dependents,dependencies,both] default both}, required [codemap, entries]). Mirror the existing deplint/code_context registration idiom. Make code-discover-mcp.sh pass."
+        },
+        {
+          "id": "MX3",
+          "title": "Document discovery-first + wire it into the skill",
+          "requires": ["MX2"],
+          "description": "Update docs/howto/plan-code-aware-dags.md with a 'discovery-first' section: from entry points, use discovery (dependents = change impact, dependencies = what it needs) to find the affected symbol set BEFORE authoring the DAG, map that set (human/LLM judgment — the graph informs, does not decompose) to tasks, then let deplint verify ordering. Be HONEST about limits: the graph models resolved static edges only — dynamic/framework bindings (Alpine methods, templates) and not-yet-existing symbols still need reading code; discovery is advisory, never rewrites the DAG. Update plugin/skills/code-aware-planning/SKILL.md to include discovery in the workflow (discover -> map -> dep-lint -> context) and name code-discover.sh as a proof. ALSO fix the now-stale boundary claim in that skill: it still says deplint/codegraph-map/codegraph-context are 'node-only, not a parity surface' — that is FALSE since the parity port (and discovery adds a third parity surface). Rewrite it to state the adapters ARE a parity surface (node == python), boundary otherwise unchanged (not scaffolded, imports nothing from core). Keep every doc prose-clean and self-audit green."
+        },
+        {
+          "id": "MX4",
+          "title": "Wire the MCP proof + full green",
+          "requires": ["MX2", "MX3"],
+          "description": "Add group T99 to tests/run-tests.sh running code-discover-mcp.sh and grepping MCP-DISCOVER-OK on the same check line. Confirm all suites green: node (RESULT 0 failed, T98+T99 in GROUPS-PASSED), python pytest, tests/parity.sh, the whole-docs prose sweep (T93), and self-audit (SELF-AUDIT-OK, referenced proofs wired). Do not weaken any check to make a doc pass."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_DC": {
+      "desc": "Discovery is a pure, cycle-safe, deterministic reachability function correct in all three directions (dependents=change-impact, dependencies, both), shipped in BOTH runtimes byte-equal (a parity surface), and wired into the suite.",
+      "review": {
+        "prompt": "Refute that DC is done. Does `dependents` compute REVERSE reachability (transitive callers = change impact) and not accidentally forward? Does `dependencies` compute forward? Is the entry always included; do CYCLES terminate (visited set) rather than loop; are unrelated symbols excluded? Is the output truly DETERMINISTIC (sorted affected AND edges) so the parity byte-equality is real, not luck — and is node ACTUALLY byte-identical to python (not both wrong the same way)? Do code-discover.sh / code-discover-parity.sh have TEETH (would they go red if the direction were flipped or a symbol leaked)? Is the fixture-proof oracle independent of the implementation (expected sets enumerated literally, not read back from the code)? Are node/python/parity suites green with T98 wired (marker asserted on the same line, not a bare filename)?"
+      },
+      "criteria": [
+        { "id": "dca", "desc": "the discovery fixture proof passes (reachability correct in all directions, cycle-safe, unrelated excluded)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/code-discover.sh\" 2>&1 | grep -q 'CODE-DISCOVER-OK'" },
+        { "id": "dcb", "desc": "node == python on the fixture for every direction (byte-equal)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/code-discover-parity.sh\" 2>&1 | grep -q 'CODE-DISCOVER-PARITY-OK'" },
+        { "id": "dcc", "desc": "both proofs are wired into the suite (marker asserted on the same line, not a bare filename)", "cmd": "grep -qE 'code-discover\\.sh.*CODE-DISCOVER-OK' \"$PROJECT_DIR/tests/run-tests.sh\" && grep -qE 'code-discover-parity\\.sh.*CODE-DISCOVER-PARITY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "dcd", "desc": "behavioral: dependents = transitive reverse reachability (change impact), unrelated excluded — checked at the gate, independent of the proof", "cmd": "cd \"$PROJECT_DIR\" && out=$(node plugin/adapters/code/codegraph-discover.js <(printf '%s' '{\"edges\":[[\"a\",\"b\"],[\"b\",\"c\"],[\"x\",\"y\"]]}') c --dependents) && printf '%s' \"$out\" | grep -q '\"a\"' && printf '%s' \"$out\" | grep -q '\"b\"' && ! printf '%s' \"$out\" | grep -q '\"x\"'" },
+        { "id": "dce", "desc": "the python twin exists and is importable/callable (parity module present, not node-only)", "cmd": "cd \"$PROJECT_DIR\" && PYTHONPATH=py/src python3 -c \"import heartbeat.adapters.code.codegraph_discover as d; assert hasattr(d,'discover') and callable(d.discover)\"" },
+        { "id": "dcf", "desc": "behavioral: dependencies = transitive FORWARD reachability (what the entry needs) — pins the other direction at the gate, would fail if flipped", "cmd": "cd \"$PROJECT_DIR\" && out=$(node plugin/adapters/code/codegraph-discover.js <(printf '%s' '{\"edges\":[[\"a\",\"b\"],[\"b\",\"c\"],[\"x\",\"y\"]]}') a --dependencies) && printf '%s' \"$out\" | grep -q '\"b\"' && printf '%s' \"$out\" | grep -q '\"c\"' && ! printf '%s' \"$out\" | grep -q '\"x\"'" }
+      ]
+    },
+    "GATE_MX": {
+      "desc": "Discovery is reachable host-neutrally as the MCP tool code_discover (proven against the real server), documented discovery-first with honest graph-limits, wired into the code-aware-planning skill, with every suite (node/python/parity/prose/self-audit) green.",
+      "review": {
+        "prompt": "Refute that MX is done. Does code-discover-mcp.sh drive the REAL mcp-serve (JSON-RPC over stdio) and compare the tool result to the discovery FUNCTION (independent oracle) — or is it a mock/hardcode? Is the code_discover tool schema correct (codemap/entries/direction)? Do the docs present discovery HONESTLY — advisory, change-impact via reverse edges, and explicit that the graph misses dynamic/framework bindings and not-yet-existing symbols (no overclaim that it finds 'every' affected symbol)? Does the code-aware-planning skill actually include discovery in its workflow AND still pass skill-integrity (T92)? Are node (T98+T99 in GROUPS-PASSED), python, parity, whole-docs prose (T93), and self-audit all green?"
+      },
+      "criteria": [
+        { "id": "mxa", "desc": "the MCP discovery proof passes (code_discover over real mcp-serve == the discovery function)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/code-discover-mcp.sh\" 2>&1 | grep -q 'MCP-DISCOVER-OK'" },
+        { "id": "mxb", "desc": "the MCP proof is wired into the suite (marker on the same line)", "cmd": "grep -qE 'code-discover-mcp\\.sh.*MCP-DISCOVER-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "mxc", "desc": "code_discover is registered as an MCP tool", "cmd": "cd \"$PROJECT_DIR\" && PYTHONPATH=py/src python3 -c \"import heartbeat.mcp_server as m; assert 'code_discover' in m.TOOLS\"" },
+        { "id": "mxd", "desc": "discovery is documented (plan-code-aware-dags) and wired into the code-aware-planning skill", "cmd": "grep -qiE 'discover' \"$PROJECT_DIR/docs/howto/plan-code-aware-dags.md\" && grep -qiE 'discover' \"$PROJECT_DIR/plugin/skills/code-aware-planning/SKILL.md\"" },
+        { "id": "mxe", "desc": "self-audit green (referenced proofs exist AND wired; node == python; every guide prose-clean)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/self-audit.sh\" 2>&1 | grep -qE 'SELF-AUDIT-OK:[1-9][0-9]*/[1-9][0-9]*'" },
+        { "id": "mxf", "desc": "the stale 'node-only / not a parity surface' claim is gone from the code-aware-planning skill (docs honest: the adapters ARE a parity surface)", "cmd": "! grep -qiE 'not a parity surface|node-only' \"$PROJECT_DIR/plugin/skills/code-aware-planning/SKILL.md\"" }
+      ]
+    }
+  }
+}
