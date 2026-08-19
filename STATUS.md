@@ -1,7 +1,32 @@
 # STATUS — HeartBeat
 
-**Version:** v1.25 (domain-adapter architecture — code + docs, both runtimes — a live viz dashboard, and MCP adapter tools, over v1.24)
+**Version:** v1.26 (the evidence lifecycle made first-class — reviewed-only checkpoints, generated falsification questions, gate provenance, and graph blind-spots, over v1.25)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.26 — the evidence lifecycle, made first-class
+
+HeartBeat's differentiator, stated plainly (now the README lead): **a proof-driven development method —
+work is accepted only when its claims are backed by executable evidence and survive an adversarial
+attempt to refute them.** This release makes the *lifecycle* first-class rather than implicit.
+
+- **A checkpoint only certifies a REVIEWED state.** A review-gated phase's commit+tag `GATE_x` is now
+  created only at **review acceptance** (`hb review pass`), not at the deterministic pass — so the tag
+  never marks an un-reviewed / later-refuted state, and a refute→fix cycle no longer churns the tag or
+  doubles the checkpoint. `git reset --hard GATE_x` always restores a state that passed BOTH the gate
+  and the review. Both runtimes (**T103**).
+- **Falsification questions, generated from the gate's own claims.** `hb-audit --questions <gate>`
+  (node) / `hb audit --questions` (python) derives, from each criterion's class, a targeted "how could
+  this FALSELY pass?" question + a general phase question — seeding the adversarial review
+  deterministically instead of relying on prompt craft. Node ≡ python (**T104**); referenced from the
+  `review_pending` guidance.
+- **Evidence provenance on every gate pass.** The `gate_passed` event records per-criterion
+  `{id, cmd, exit}`, the git **commit** tested, and the **runtime** — and `hb evidence <gate>` reads it
+  back (with the review artifact when present). The evidence is now auditable/reproducible, not implicit
+  (**T105**).
+- **Graph blind-spots surfaced.** `codegraph-coverage` reports each task's resolved-symbol count and
+  lists the **GRAPH-BLIND** tasks (zero symbols — dynamic/framework bindings or not-yet-existing files
+  the static graph can't model → read manually), so code context isn't trusted equally (**T106**). Both
+  runtimes; in the code-aware-planning skill.
 
 ## v1.25 — domain adapters (the method, made domain-aware without leaving the method)
 

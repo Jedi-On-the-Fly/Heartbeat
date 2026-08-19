@@ -1,5 +1,9 @@
 # HeartBeat — tick-driven agent orchestration
 
+**HeartBeat is a proof-driven development method: work is accepted only when its claims are backed by
+executable evidence and survive an adversarial attempt to refute them.** Lifecycle: **claim →
+implementation → executable proof → adversarial refutation → acceptance.**
+
 > The non-determinism lives *inside* an agent's tasks; the gaps *between* them are
 > deterministic. HeartBeat drops a cheap **Stage A** (bash/Python) observation into
 > that gap — it reads settled reality and wakes the expensive **Stage B** (an LLM)
