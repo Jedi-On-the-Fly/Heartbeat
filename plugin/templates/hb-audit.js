@@ -33,6 +33,37 @@ function classify(cmd) {
 const isNondet = (cmd) => NONDET.test(cmd || '');
 const isSideEffecting = (cmd) => SIDE_EFFECT.test(cmd || '');
 
+// A `grep` that keys on a test-suite marker (a coverage gate) vs a grep of a source string.
+const COVERAGE = /\bgrep\b[^|]*(GROUPS-PASSED|\bT[0-9]+\b|[A-Z][A-Z0-9-]*-OK)/;
+
+// --questions: derive, from each criterion's CLASS, a "how could this FALSELY pass?" question — the
+// deterministic seed for the adversarial review (turns the audit taxonomy into a falsification checklist).
+function criterionQuestion(c) {
+  const cmd = (c.cmd || '').trim(), id = c.id || '?', cls = classify(cmd);
+  if (cls === 'vacuous')
+    return `${id}: looks trivially true — does it assert anything about the phase's real work, or would it pass on ANY code?`;
+  if (cls === 'existence')
+    return `${id}: checks a path's PRESENCE — does existence prove the behaviour, or could an empty / placeholder / wrong file pass it?`;
+  if (isSideEffecting(cmd))
+    return `${id}: WRITES/creates files — could it fabricate its own evidence? A gate must OBSERVE reality, not produce it.`;
+  if (COVERAGE.test(cmd))
+    return `${id}: keys on a suite marker — does it assert the group actually PASSED (zero failures), or could it match a header printed before a RED RUN failed?`;
+  if (/\bgrep\b/.test(cmd))
+    return `${id}: greps for a string in source — could it pass on a hollow STUB that merely contains the string? Verify the code is EXECUTED, not just matched.`;
+  if (isNondet(cmd))
+    return `${id}: touches time/network/randomness — could it pass or fail by luck rather than by the behaviour?`;
+  return `${id}: runs code — does the assertion pin the REAL required behaviour, or a weak PROXY that a TRIVIAL stub could satisfy?`;
+}
+
+function reviewQuestions(dag, gate) {
+  const g = ((dag || {}).gates || {})[gate];
+  if (!g) return `no gate '${gate}' in this DAG\n`;
+  const lines = [`Falsification checklist for ${gate} — for each criterion, how could it FALSELY pass?`];
+  for (const c of (g.criteria || [])) lines.push(`  - ${criterionQuestion(c)}`);
+  lines.push(`  - PHASE CLAIM: "${g.desc || gate}". Could every criterion above pass while this is still broken? Is any criterion testing the WRONG behaviour? Is the REAL runtime exercised (not mocked/stubbed)?`);
+  return lines.join('\n') + '\n';
+}
+
 function audit(dag) {
   const findings = [];
   const phases = dag.phases || [];
@@ -96,6 +127,8 @@ if (require.main === module) {
   let dag;
   try { dag = JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch (e) { console.error(`✗ dag.json unreadable: ${e.message}`); process.exit(1); }
+  const qi = process.argv.indexOf('--questions');
+  if (qi !== -1) { process.stdout.write(reviewQuestions(dag, process.argv[qi + 1])); process.exit(0); }
   const r = audit(dag);
   if (asJson) { console.log(JSON.stringify(r)); process.exit(r.errors ? 1 : 0); }
   const icon = { error: '✗', warn: '⚠', info: '·' };
@@ -106,4 +139,4 @@ if (require.main === module) {
   process.exit(r.errors ? 1 : 0);
 }
 
-module.exports = { audit, classify, isNondet };
+module.exports = { audit, classify, isNondet, reviewQuestions };

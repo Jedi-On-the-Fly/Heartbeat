@@ -33,6 +33,42 @@ def is_side_effecting(cmd):
     return bool(SIDE_EFFECT.search(cmd or ""))
 
 
+# A `grep` that keys on a test-suite marker (a coverage gate) vs a grep of a source string.
+COVERAGE = re.compile(r"\bgrep\b[^|]*(GROUPS-PASSED|\bT[0-9]+\b|[A-Z][A-Z0-9-]*-OK)")
+
+
+def criterion_question(c):
+    """From a criterion's CLASS, a 'how could this FALSELY pass?' question (byte-identical to node)."""
+    cmd = (c.get("cmd") or "").strip()
+    cid = c.get("id") or "?"
+    cls = classify(cmd)
+    if cls == "vacuous":
+        return f"{cid}: looks trivially true — does it assert anything about the phase's real work, or would it pass on ANY code?"
+    if cls == "existence":
+        return f"{cid}: checks a path's PRESENCE — does existence prove the behaviour, or could an empty / placeholder / wrong file pass it?"
+    if is_side_effecting(cmd):
+        return f"{cid}: WRITES/creates files — could it fabricate its own evidence? A gate must OBSERVE reality, not produce it."
+    if COVERAGE.search(cmd):
+        return f"{cid}: keys on a suite marker — does it assert the group actually PASSED (zero failures), or could it match a header printed before a RED RUN failed?"
+    if re.search(r"\bgrep\b", cmd):
+        return f"{cid}: greps for a string in source — could it pass on a hollow STUB that merely contains the string? Verify the code is EXECUTED, not just matched."
+    if is_nondet(cmd):
+        return f"{cid}: touches time/network/randomness — could it pass or fail by luck rather than by the behaviour?"
+    return f"{cid}: runs code — does the assertion pin the REAL required behaviour, or a weak PROXY that a TRIVIAL stub could satisfy?"
+
+
+def review_questions(dag, gate):
+    """The falsification checklist for a gate — the deterministic seed for the adversarial review."""
+    g = ((dag or {}).get("gates") or {}).get(gate)
+    if not g:
+        return f"no gate '{gate}' in this DAG\n"
+    lines = [f"Falsification checklist for {gate} — for each criterion, how could it FALSELY pass?"]
+    for c in (g.get("criteria") or []):
+        lines.append(f"  - {criterion_question(c)}")
+    lines.append(f'  - PHASE CLAIM: "{g.get("desc") or gate}". Could every criterion above pass while this is still broken? Is any criterion testing the WRONG behaviour? Is the REAL runtime exercised (not mocked/stubbed)?')
+    return "\n".join(lines) + "\n"
+
+
 def audit(dag):
     findings = []
     phases = dag.get("phases") or []

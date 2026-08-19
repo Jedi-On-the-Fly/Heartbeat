@@ -8,7 +8,7 @@ implementations stay reason-compatible.
 PROTOCOL = {
     "next_task":          "hb start <id> -> do the work -> hb done <id> (or hb fail <id> if you could not complete it). Never hand-edit state.json.",
     "gate_pending":       "hb gate <gate> — a pass advances the phase, UNLESS the gate has a review block (then a review is owed next).",
-    "review_pending":     "Spawn a skeptical reviewer to REFUTE that the phase is done (hollow tests? faked output?). Write its full attempt to a findings file, then: hb review <gate> fail \"<holes>\"  OR  hb review <gate> pass --artifact <findings-file> (a pass MUST cite the refuter's written attempt — no rubber-stamps).",
+    "review_pending":     "Spawn a skeptical reviewer to REFUTE that the phase is done (hollow tests? faked output?) — seed it with `hb audit --questions <gate>` (a falsification question per criterion). Write its full attempt to a findings file, then: hb review <gate> fail \"<holes>\"  OR  hb review <gate> pass --artifact <findings-file> (a pass MUST cite the refuter's written attempt — no rubber-stamps).",
     "gate_blocked":       "Run: hb diagnose — fix the ROOT cause (do NOT weaken the gate), then re-run hb gate <gate>.",
     "at_capacity":        "Nothing to do — max tasks already in flight. No action.",
     "state_corrupted":    "hb rebuild (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable.",

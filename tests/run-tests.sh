@@ -1315,6 +1315,14 @@ grp "T103 — checkpoint lifecycle: a review-gated GATE_x is tagged only at revi
 check "T103.1 review-gated tag deferred to review pass; non-review tags at deterministic pass (gate-review-checkpoint.sh → CHECKPOINT-LIFECYCLE-OK)" \
   'bash "'"$GEX"'/gate-review-checkpoint.sh" 2>&1 | grep -q "CHECKPOINT-LIFECYCLE-OK"'
 
+grp "T104 — hb-audit --questions: falsification questions derived per criterion class (node ≡ python)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T104.1 per-class review questions + general phase question, node ≡ python (review-questions.sh → REVIEW-QUESTIONS-OK)" \
+    'bash "'"$GEX"'/review-questions.sh" 2>&1 | grep -q "REVIEW-QUESTIONS-OK"'
+else
+  echo "  (python3 absent — T104 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

@@ -1,0 +1,17 @@
+{
+  "phases": [
+    { "id": "P0", "title": "the rename feature works end to end", "gate_entry": null, "gate_exit": "GATE_P0",
+      "tasks": [ { "id": "T1", "requires": [] } ] }
+  ],
+  "gates": {
+    "GATE_P0": {
+      "desc": "the rename feature works end to end",
+      "criteria": [
+        { "id": "c_exist", "desc": "output file", "cmd": "test -f out.txt" },
+        { "id": "c_grep",  "desc": "has method",  "cmd": "grep -q 'commitRename' src.js" },
+        { "id": "c_cov",   "desc": "suite green", "cmd": "bash tests/run-tests.sh 2>&1 | grep -q 'GROUPS-PASSED:.* T50 '" },
+        { "id": "c_behav", "desc": "renames",     "cmd": "node -e \"const m=require('./m'); if(m.rename()!==true) process.exit(1)\"" }
+      ]
+    }
+  }
+}

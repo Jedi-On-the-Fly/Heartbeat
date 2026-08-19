@@ -37,7 +37,7 @@ def main(argv=None):
     p = sub.add_parser("tick"); _add_dir(p)
     p = sub.add_parser("gate"); p.add_argument("gate", nargs="?"); p.add_argument("--check", action="store_true"); p.add_argument("--all", action="store_true"); _add_dir(p)
     p = sub.add_parser("lint"); p.add_argument("dagfile", nargs="?"); p.add_argument("--json", action="store_true"); _add_dir(p)
-    p = sub.add_parser("audit"); p.add_argument("dagfile", nargs="?"); p.add_argument("--json", action="store_true"); p.add_argument("--agent", action="store_true"); _add_dir(p)
+    p = sub.add_parser("audit"); p.add_argument("dagfile", nargs="?"); p.add_argument("--json", action="store_true"); p.add_argument("--agent", action="store_true"); p.add_argument("--questions"); _add_dir(p)
     p = sub.add_parser("report"); p.add_argument("--json", action="store_true"); _add_dir(p)
     p = sub.add_parser("doctor"); _add_dir(p)
     p = sub.add_parser("diagnose"); p.add_argument("reason", nargs="?"); _add_dir(p)
@@ -109,6 +109,9 @@ def main(argv=None):
     elif args.cmd == "audit":
         from . import audit as auditmod
         dag = json.loads(Path(args.dagfile).read_text()) if args.dagfile else st.read_dag(hb)
+        if args.questions:
+            sys.stdout.write(auditmod.review_questions(dag, args.questions))
+            return 0
         r = auditmod.audit(dag)
         if args.json and not args.agent:
             print(json.dumps(r))
