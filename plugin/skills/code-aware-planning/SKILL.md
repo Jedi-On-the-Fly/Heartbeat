@@ -25,11 +25,21 @@ into a project's `.hb/`.
    `{ "edges": [[symA, symB], …], "tasks": { "TASKID": [sym, …] } }` (symA depends on symB;
    each task maps to the symbols it touches). `codegraph-map.js` turns CodeGraph's rows into the
    `edges`; the `tasks` mapping is yours (best-effort — the fuzzy step; confirm it).
-3. **Dep-lint the DAG**: run `deplint.js <dag.json> <codemap.json>`. It reports:
+3. **Discover the affected set first (discovery-first).** Before finalizing tasks, start from the
+   feature's entry-point symbols and trace the graph to scope the change:
+   `node plugin/adapters/code/codegraph-discover.js <codemap.json> <entry1,entry2,…> [--dependents|--dependencies|--both]`
+   (node-free twin: `python3 -m heartbeat.adapters.code.codegraph_discover …`). `dependents` = who
+   transitively depends on the entry (**change impact** — surfaces indirect consumers, e.g. hidden
+   authorization callers); `dependencies` = what it needs; `both` = the neighborhood. Map the affected
+   symbols to tasks — the graph *informs* the decomposition; you still carve the tasks. Honest limit:
+   the graph models resolved static edges only — dynamic/framework bindings (Alpine methods, template
+   bindings) and not-yet-existing symbols still need reading code. Proof:
+   `docs/howto/gate-examples/code-discover.sh`.
+4. **Dep-lint the DAG**: run `deplint.js <dag.json> <codemap.json>`. It reports:
    - **MISSING** — a code dependency crosses two tasks with no `requires` ordering → add the edge.
    - **REDUNDANT** — a `requires` with no direct code dependency → maybe over-constrained.
    - **COLLISION** — unordered tasks touching the same symbol → isolate (worktree) or add an edge.
-4. **Adjust the DAG yourself.** Treat every finding as advice — a wrong auto-edge is worse than a
+5. **Adjust the DAG yourself.** Treat every finding as advice — a wrong auto-edge is worse than a
    missing one. The adapter never rewrites the DAG.
 
 ## Feed code context to Stage B (Seam 2)
@@ -51,11 +61,12 @@ python); the executor itself stays code-agnostic. Proof:
 
 ## Boundary (hold this)
 
-`deplint`/`codegraph-map`/`codegraph-context` are **node-only, not core, not a parity surface**, and
-import nothing from HeartBeat core. The live CodeGraph database read is harness-first (unproven
-without CodeGraph installed); the mapping, engine, and context provider are gated hermetically —
-proofs: `docs/howto/gate-examples/code-deplint.sh`, `docs/howto/gate-examples/code-map.sh`,
-`docs/howto/gate-examples/code-context.sh` (node-suite T87/T88).
+`deplint`/`codegraph-map`/`codegraph-context`/`codegraph-discover` are a **parity surface** (node ≡
+python — proofs T94/T98), **not core**, and import nothing from HeartBeat core. The live CodeGraph
+database read is harness-first (unproven without CodeGraph installed); the mapping, engine, context,
+and discovery providers are gated hermetically — proofs: `docs/howto/gate-examples/code-deplint.sh`,
+`docs/howto/gate-examples/code-map.sh`, `docs/howto/gate-examples/code-context.sh`,
+`docs/howto/gate-examples/code-discover.sh` (node-suite T87/T88/T98).
 
 Method detail and the contract: `plugin/adapters/code/README.md`. Workflow guide:
 `docs/howto/plan-code-aware-dags.md`.

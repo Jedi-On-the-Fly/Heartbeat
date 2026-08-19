@@ -1281,6 +1281,14 @@ else
   echo "  (python3 absent — T98.2 skipped)"
 fi
 
+grp "T99 — MCP code_discover tool (on the real mcp-serve server, == the discovery function)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T99.1 MCP code_discover matches the discovery function (code-discover-mcp.sh → MCP-DISCOVER-OK)" \
+    'bash "'"$GEX"'/code-discover-mcp.sh" 2>&1 | grep -q "MCP-DISCOVER-OK"'
+else
+  echo "  (python3 absent — T99 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

@@ -7,8 +7,8 @@ graph does. The `heartbeat-code` adapter closes that gap by validating a `dag.js
 against a real code dependency graph. It is **advisory**: it reports; you adjust the DAG.
 
 This is a *domain adapter*, not a core feature: it lives in `plugin/adapters/code/`, is never
-scaffolded into a project's `.hb/`, imports nothing from core, and is node-only (not a parity
-surface). See the adapter's [contract and finding types](../../plugin/adapters/code/README.md).
+scaffolded into a project's `.hb/`, imports nothing from core, and is a **parity surface** (node ≡
+python — proofs T94/T98). See the adapter's [contract and finding types](../../plugin/adapters/code/README.md).
 
 ## The contract
 
@@ -36,9 +36,22 @@ symbols it creates or touches. Any tool can produce it — CodeGraph is the firs
    harness-first (needs CodeGraph and `sqlite3`); the pure row-to-codemap mapping is what the test
    suite gates.
 
-3. Add the `tasks` mapping (which symbols each task touches). This is the fuzzy step — a best-effort
+3. **Discovery-first** — before fixing the tasks, scope the change from its entry points:
+
+   ```bash
+   node plugin/adapters/code/codegraph-discover.js codemap.json main,api --dependents
+   # node-free twin: python3 -m heartbeat.adapters.code.codegraph_discover codemap.json main,api --dependents
+   ```
+
+   `dependents` = who transitively depends on the entry (**change impact** — surfaces indirect
+   consumers and hidden concerns like authorization callers); `dependencies` = what the entry needs;
+   `both` = the neighborhood. It returns the affected symbols + the induced subgraph, so you decide
+   which tasks exist and what each touches — the graph *informs* the decomposition, it doesn't carve
+   it. Honest limit: the graph models resolved static edges only; dynamic/framework bindings (Alpine
+   methods, template bindings) and not-yet-existing symbols still need reading the code.
+4. Add the `tasks` mapping (which symbols each task touches). This is the fuzzy step — a best-effort
    helper matches task text to symbol names, but **confirm it yourself**.
-4. Dep-lint your DAG:
+5. Dep-lint your DAG:
 
    ```bash
    node plugin/adapters/code/deplint.js your.dag.json codemap.json
@@ -60,4 +73,11 @@ qualified names and filters non-dependency edges. Run them:
 ```bash
 bash docs/howto/gate-examples/code-deplint.sh   # -> CODE-DEPLINT-OK
 bash docs/howto/gate-examples/code-map.sh       # -> CODE-MAP-OK
+```
+
+Discovery mode has its own proof (T98), asserting reachability is correct in each direction
+(dependents/dependencies/both), cycle-safe, and node ≡ python:
+
+```bash
+bash docs/howto/gate-examples/code-discover.sh  # -> CODE-DISCOVER-OK
 ```

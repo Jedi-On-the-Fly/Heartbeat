@@ -94,6 +94,11 @@ def _code_context(hb, a):
     return context_for(a["codemap"], a["task"])
 
 
+def _code_discover(hb, a):
+    from heartbeat.adapters.code.codegraph_discover import discover
+    return discover(a["codemap"], a["entries"], a.get("direction", "both"))
+
+
 TOOLS.update({
     "deplint": (_deplint,
                 "Code-aware dep-lint: validate a dag's `requires` against a codemap "
@@ -106,6 +111,17 @@ TOOLS.update({
                      "direct neighbors), for feeding Stage B.",
                      {"type": "object", "properties": {"codemap": {"type": "object"}, "task": {"type": "string"}},
                       "required": ["codemap", "task"]}),
+    "code_discover": (_code_discover,
+                      "Discovery: from entry symbols, transitively reach the affected set over a codemap "
+                      "(edges = A depends on B). direction=dependents (who depends on the entry = change "
+                      "impact), dependencies (what it needs), or both. Returns {entry, direction, affected, "
+                      "edges}. Advisory — scope a change before authoring the DAG.",
+                      {"type": "object",
+                       "properties": {"codemap": {"type": "object"},
+                                      "entries": {"type": "array", "items": {"type": "string"}},
+                                      "direction": {"type": "string",
+                                                    "enum": ["dependents", "dependencies", "both"]}},
+                       "required": ["codemap", "entries"]}),
 })
 
 
