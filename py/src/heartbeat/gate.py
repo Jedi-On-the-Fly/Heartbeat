@@ -66,8 +66,11 @@ def run_gate(hbdir, gate_id, check=False):
         return res
     if res["failed"] == 0:
         st.mutate(hbdir, {"event": "gate_passed", "gate": gate_id, "pass": res["passed"], "fail": 0})
-        _git_snapshot(hbdir, gate_id)
         review = bool((st.read_dag(hbdir).get("gates") or {}).get(gate_id, {}).get("review"))
+        # A review-gated phase's restore point (commit+tag) is created at review acceptance
+        # (cli.py review pass), NOT here — the tag must never certify an un-reviewed state.
+        if not review:
+            _git_snapshot(hbdir, gate_id)
         res.update(status="review_pending" if review else "passed", gate=gate_id)
     else:
         st.mutate(hbdir, {"event": "gate_failed", "gate": gate_id, "pass": res["passed"], "fail": res["failed"]})

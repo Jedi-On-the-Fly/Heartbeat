@@ -463,6 +463,20 @@ switch (cmd) {
     try { fs.mkdirSync(revDir, { recursive: true }); } catch (e) {}
     fs.writeFileSync(path.join(revDir, `${gate}.md`), body);
     mutate({ event: 'review_passed', gate, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, ...(note ? { note } : {}) });
+    // Reviewed acceptance creates the phase's restore point (commit+tag) — deferred from the
+    // deterministic pass so the tag only ever certifies a reviewed-good state.
+    if (!process.env.HB_NO_GIT && process.env.HB_GIT_AUTOCOMMIT !== '0') {
+      const cp = require('child_process');
+      let inRepo = false;
+      try { cp.execFileSync('git', ['-C', PROJECT_DIR, 'rev-parse', '--is-inside-work-tree'], { stdio: 'ignore' }); inRepo = true; } catch (e) {}
+      if (inRepo) {
+        const p = (dag.phases || []).find(x => x.gate_exit === gate);
+        const msg = p ? `heartbeat(${p.id}): ${p.title} [${gate}]` : `heartbeat: ${gate} accepted`;
+        try { cp.execFileSync('git', ['-C', PROJECT_DIR, 'add', '-A'], { stdio: 'ignore' }); } catch (e) {}
+        try { cp.execFileSync('git', ['-c', 'user.name=HeartBeat', '-c', 'user.email=heartbeat@local', '-C', PROJECT_DIR, 'commit', '-q', '--no-verify', '-m', msg], { stdio: 'ignore' }); } catch (e) {}
+        try { cp.execFileSync('git', ['-C', PROJECT_DIR, 'tag', '-f', gate], { stdio: 'ignore' }); } catch (e) {}
+      }
+    }
     process.stdout.write(`review pass ${gate} (backed by reviews/${gate}.md, ${body.trim().length} chars, cites: ${cited.slice(0, 3).join(', ')})\n`);
     break;
   }

@@ -215,6 +215,10 @@ def main(argv=None):
         if args.note:
             ev["note"] = " ".join(args.note)
         st.mutate(hb, ev)
+        # Reviewed acceptance is what creates the phase's restore point (commit+tag) — the
+        # deterministic pass deferred it so the tag only ever certifies a reviewed-good state.
+        from . import gate as _gate
+        _gate._git_snapshot(hb, gate)
         print(f"review pass {gate} (backed by reviews/{gate}.md, {len(body.strip())} chars, cites: {', '.join(cited[:3])})")
         return 0
     elif args.cmd == "ready":

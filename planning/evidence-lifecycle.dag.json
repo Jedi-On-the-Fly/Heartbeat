@@ -1,0 +1,86 @@
+{
+  "_meta": {
+    "project": "evidence-lifecycle",
+    "note": "Two improvements from an external (Codex) retrospective, both deepening HeartBeat's real differentiator — an EVIDENCE LIFECYCLE (a task result is provisional until executable evidence AND an attempted refutation agree). (LC) Today the gate-pass snapshot commits+TAGS GATE_x on the DETERMINISTIC pass (gate.sh:139 / gate.py:69), before the adversarial review — so for a review-gated phase the tag briefly certifies an un-reviewed / later-refuted state, and a refute→fix cycle churns the tag and doubles the checkpoint. Fix: for a gate WITH a `review` block, defer the commit+tag to REVIEW ACCEPTANCE (`hb review <gate> pass`); non-review gates snapshot at the deterministic pass, unchanged. Invariant: `git reset --hard GATE_x` always restores a state that passed BOTH the deterministic gate and the review. (RQ) Method quality depends on the reviewer prompt. Generate falsification questions from the gate's own claims: extend hb-audit with a `--questions <gate>` mode that, per criterion, classifies it (reusing the existing vacuous/existence/behavioral taxonomy + grep-of-source / coverage-grep / side-effect detection) and emits a targeted 'how could this FALSELY pass?' question, plus a general phase question — seeding the refuter deterministically. Both are CORE (domain-agnostic) + a PARITY surface (node ≡ python). Proof-driven: spec-first, gated, refuted."
+  },
+  "phases": [
+    {
+      "id": "LC",
+      "title": "Checkpoint lifecycle — tag only on reviewed acceptance",
+      "gate_entry": null,
+      "gate_exit": "GATE_LC",
+      "tasks": [
+        {
+          "id": "LC1",
+          "title": "Spec-first: proof for the deferred-tag lifecycle",
+          "requires": [],
+          "description": "Author RED-first. docs/howto/gate-examples/gate-review-checkpoint.sh (prints CHECKPOINT-LIFECYCLE-OK): in a throwaway git project bootstrapped with `plugin/bootstrap.sh`, write a dag.json with (a) a REVIEW-GATED gate and (b) a NON-review gate, each with one trivially-passing criterion. Assert: running `.hb/gate.sh <review-gate>` reports review_pending and creates NO `<review-gate>` git tag yet; then `node .hb/hb.js review <review-gate> pass --artifact <file>` (artifact >40 chars, HB_ACTOR distinct) creates the tag on HEAD. Assert the NON-review gate DOES get its tag at deterministic pass (unchanged). Then repeat the review-gate scenario via the PYTHON runtime (`python3 -m heartbeat.cli init` + `hb gate` + `hb review … pass`) and assert the SAME tag-timing (node ≡ python). Must FAIL now (current code tags at the deterministic pass) — confirm red."
+        },
+        {
+          "id": "LC2",
+          "title": "Defer the snapshot to review acceptance (both runtimes)",
+          "requires": ["LC1"],
+          "description": "plugin/templates/gate.sh: when the passing gate HAS a `review` block, do NOT call git_snapshot at the deterministic pass (skip commit+tag); a gate with no review snapshots as today. py/src/heartbeat/gate.py: same guard around `_git_snapshot` (skip when the gate has a review). Then create the snapshot at REVIEW ACCEPTANCE: in plugin/templates/hb.js's review command (case 'review' → verdict pass), after recording `review_passed`, commit the working tree and force-tag the gate (a git-snapshot mirroring gate.sh's git_snapshot, honoring HB_NO_GIT / HB_GIT_AUTOCOMMIT); in py/src/heartbeat/cli.py's review-pass path (after the review_passed event) call `gate._git_snapshot(hb, gate)`. Keep node ≡ python behavior. Make gate-review-checkpoint.sh pass."
+        },
+        {
+          "id": "LC3",
+          "title": "Wire the proof + fix any lifecycle regression",
+          "requires": ["LC2"],
+          "description": "Add group T103 to tests/run-tests.sh running gate-review-checkpoint.sh (marker CHECKPOINT-LIFECYCLE-OK on the same check line). Run the FULL node suite + python pytest + tests/parity.sh; if any existing test asserted the old behavior (a review-gated gate tagging at the deterministic pass), update it to the new lifecycle (tag at review acceptance) — do NOT weaken it. Confirm all green (RESULT 0 failed, T103 in GROUPS-PASSED)."
+        }
+      ]
+    },
+    {
+      "id": "RQ",
+      "title": "Generate adversarial review questions from the gate's claims",
+      "gate_entry": "GATE_LC",
+      "gate_exit": "GATE_RQ",
+      "tasks": [
+        {
+          "id": "RQ1",
+          "title": "Spec-first: proof + fixture for the question generator",
+          "requires": [],
+          "description": "Author RED-first. Fixture plugin/templates/fixtures/questions.dag.json (this exact path — the gate criteria pin it) with a gate named exactly GATE_P0 whose criteria span classes: an existence check (`test -f …`), a grep-of-source (`grep -q 'def foo' src.py`), a coverage-grep (`… | grep -q Tnn`), and a real behavioral (`python3 -c 'import m; assert m.foo()==2'`). Proof docs/howto/gate-examples/review-questions.sh (prints REVIEW-QUESTIONS-OK): `node plugin/templates/hb-audit.js <fixture> --questions <gate>` emits, PER criterion, a falsification question keyed to its class (existence → 'presence ≠ behavior'; grep-source → 'could pass on a hollow stub — is the code executed?'; coverage-grep → 'does it assert the group PASSED, not just a printed header?'; behavioral → 'does it pin the REAL required behavior or a weak proxy?') PLUS one general phase question referencing the gate `desc` ('how could every criterion pass while the feature is still broken?'). Assert each class's question is present and node ≡ python byte-identical (`python3 -m heartbeat.cli audit --questions <gate> --dir <proj>` or the audit module). Must FAIL now (no --questions mode) — confirm red."
+        },
+        {
+          "id": "RQ2",
+          "title": "Implement the --questions mode (both runtimes)",
+          "requires": ["RQ1"],
+          "description": "Extend plugin/templates/hb-audit.js with a `--questions <gate>` mode: read the dag, and for each criterion of that gate classify it (reuse the existing `classify` + `isSideEffecting`, plus detect grep-of-source and coverage-grep patterns) and print a targeted 'how could this FALSELY pass?' question; then print one general phase-level question that quotes the gate `desc`. Mirror it in py/src/heartbeat/audit.py (a `review_questions(dag, gate)` function) exposed via the CLI (`hb audit --questions <gate>`), BYTE-IDENTICAL output to node. Make review-questions.sh pass and keep the existing audit behavior (no flag) unchanged."
+        },
+        {
+          "id": "RQ3",
+          "title": "Wire the proof + surface it in the review flow",
+          "requires": ["RQ2"],
+          "description": "Add group T104 to tests/run-tests.sh running review-questions.sh (marker REVIEW-QUESTIONS-OK, same line). Reference the generator from the `review_pending` guidance so a refuter is seeded by it: update the protocol text in plugin/templates/hb.js and py/src/heartbeat/protocol.py (the `review_pending` reason) to mention `hb-audit --questions <gate>` / `hb audit --questions <gate>`. Confirm all suites green (node RESULT 0 failed with T103+T104 in GROUPS-PASSED, python pytest, tests/parity.sh, whole-docs prose T93, self-audit)."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_LC": {
+      "desc": "For a review-gated phase the GATE_x commit+tag is created ONLY at review acceptance (not at the deterministic pass); non-review gates are unchanged; node ≡ python. `git reset --hard GATE_x` therefore always restores a reviewed-good state.",
+      "review": {
+        "prompt": "Refute that LC is done. Does a REVIEW-gated gate now create NO GATE_x tag at the deterministic pass (only review_pending), and DOES the tag appear exactly when `hb review <gate> pass` is recorded — on the reviewed HEAD? Is a NON-review gate STILL tagged at the deterministic pass (no regression)? Is the behavior identical node ≡ python (both defer, both tag on review pass)? Does the review-pass snapshot honor HB_NO_GIT / HB_GIT_AUTOCOMMIT? Could a refute→fix→re-pass cycle still churn or mis-place the tag? Does the proof have TEETH (would it go red if the tag were still created at the deterministic pass, or never created on review pass)? Are node/python/parity suites green with T103 wired, and was any old-behavior test correctly updated (not weakened)?"
+      },
+      "criteria": [
+        { "id": "lca", "desc": "lifecycle proof: review-gated tag deferred to review pass; non-review tags at deterministic pass; node ≡ python", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/gate-review-checkpoint.sh\" 2>&1 | grep -q 'CHECKPOINT-LIFECYCLE-OK'" },
+        { "id": "lcb", "desc": "proof wired into the suite (marker on the same line)", "cmd": "grep -qE 'gate-review-checkpoint\\.sh.*CHECKPOINT-LIFECYCLE-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "lcc", "desc": "the python review-PASS path now snapshots (new code — `_git_snapshot` was absent from cli.py before; node is covered behaviorally by lca)", "cmd": "cd \"$PROJECT_DIR\" && grep -qE '_git_snapshot' py/src/heartbeat/cli.py" }
+      ]
+    },
+    "GATE_RQ": {
+      "desc": "hb-audit exposes a `--questions <gate>` mode that derives, from each criterion's class, a targeted falsification question + a general phase question — node ≡ python — and the review_pending guidance points to it.",
+      "review": {
+        "prompt": "Refute that RQ is done. Does `--questions <gate>` emit a DIFFERENT, criterion-appropriate falsification question for each class (existence vs grep-of-source vs coverage-grep vs behavioral vs side-effecting), not a single generic line? Does it also emit a general phase question quoting the gate `desc`? Is the output node ≡ python BYTE-identical? Did adding the flag leave the existing audit (no flag) behavior unchanged? Does the review_pending guidance (hb.js + protocol.py) actually point a refuter at the generator? Does the proof have teeth (would it go red if a class's question were missing or generic)? node/python/parity/prose/self-audit green with T104 wired?"
+      },
+      "criteria": [
+        { "id": "rqa", "desc": "question-generator proof: per-class falsification questions + general phase question; node ≡ python", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/review-questions.sh\" 2>&1 | grep -q 'REVIEW-QUESTIONS-OK'" },
+        { "id": "rqb", "desc": "behavioral: a grep-of-source criterion yields a 'could pass on a stub / is the code executed' question", "cmd": "cd \"$PROJECT_DIR\" && node plugin/templates/hb-audit.js plugin/templates/fixtures/questions.dag.json --questions GATE_P0 2>&1 | grep -qiE 'stub|hollow|executed|execute'" },
+        { "id": "rqc", "desc": "proof wired into the suite (marker on the same line)", "cmd": "grep -qE 'review-questions\\.sh.*REVIEW-QUESTIONS-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "rqd", "desc": "existing audit (no flag) still runs + classifies gates (unchanged) — regression guard", "cmd": "cd \"$PROJECT_DIR\" && node plugin/templates/hb-audit.js plugin/templates/fixtures/questions.dag.json 2>&1 | grep -qiE 'gate|warning|behaviou'" },
+        { "id": "rqe", "desc": "review_pending guidance points a refuter at the generator (both runtimes)", "cmd": "cd \"$PROJECT_DIR\" && grep -qE 'questions' plugin/templates/hb.js && grep -qE 'questions' py/src/heartbeat/protocol.py" }
+      ]
+    }
+  }
+}

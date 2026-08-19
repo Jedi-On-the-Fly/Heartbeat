@@ -136,15 +136,18 @@ TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if [ "$FAIL" -eq 0 ]; then
   echo "{\"ts\":\"$TS\",\"event\":\"gate_passed\",\"gate\":\"$GATE\",\"pass\":$PASS,\"fail\":0}" >> "$EVENTS_FILE"
   reproject
-  git_snapshot "$GATE"
   echo ""
   if node -e "process.exit((JSON.parse(require('fs').readFileSync('$DAG_FILE','utf8')).gates['$GATE']||{}).review?0:1)" 2>/dev/null; then
-    echo "🧪 DETERMINISTIC GATE PASSED — adversarial review required."
+    # A review-gated phase is ACCEPTED only after the adversarial review passes, so its restore
+    # point (commit+tag) is created at review acceptance (hb.js review pass), NOT here — the tag
+    # must never certify an un-reviewed / later-refuted state.
+    echo "🧪 DETERMINISTIC GATE PASSED — adversarial review required (no checkpoint yet)."
     echo "   Spawn a skeptical reviewer to REFUTE completion, then run:"
-    echo "     node $HB_DIR/hb.js review $GATE pass    (could not refute)"
+    echo "     node $HB_DIR/hb.js review $GATE pass    (could not refute → commits+tags $GATE)"
     echo "     node $HB_DIR/hb.js review $GATE fail \"<findings>\"   (found holes)"
     exit 0
   fi
+  git_snapshot "$GATE"
   echo "✅ GATE PASSED — proceed to next phase."
   exit 0
 else

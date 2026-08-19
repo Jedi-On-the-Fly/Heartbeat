@@ -1311,6 +1311,10 @@ else
   echo "  (python3 absent — T102 skipped)"
 fi
 
+grp "T103 — checkpoint lifecycle: a review-gated GATE_x is tagged only at review acceptance (node ≡ python)"
+check "T103.1 review-gated tag deferred to review pass; non-review tags at deterministic pass (gate-review-checkpoint.sh → CHECKPOINT-LIFECYCLE-OK)" \
+  'bash "'"$GEX"'/gate-review-checkpoint.sh" 2>&1 | grep -q "CHECKPOINT-LIFECYCLE-OK"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
