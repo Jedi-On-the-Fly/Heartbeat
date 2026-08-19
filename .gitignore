@@ -1,6 +1,7 @@
 # HeartBeat runtime artifacts (created at bootstrap / by ticks — never source)
 # NOTE: templates state.json / dag.json under plugin/templates/ ARE source and
 # are intentionally NOT ignored.
+/.hb/
 **/.hb/events.jsonl
 **/.hb/architecture.hash
 **/.hb/dag-view.html
