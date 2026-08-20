@@ -2,8 +2,9 @@
 """docs_map — docs/research provider (Python port; node ≡ python with docs-map.js).
 
 Turns a markdown corpus's citation graph into the codemap: edges [citer, cited] from relative .md
-links (external/anchor/outside-corpus/self excluded) + one authoring task per section. Inline links
-only (same limitation as node). Node-free.
+links (external/anchor/outside-corpus/self excluded) + one authoring task per section. Recognizes
+inline `[text](x.md)` AND reference-style `[text][ref]` / collapsed `[text][]` with `[ref]: x.md`
+definitions (node ≡ python, set-equal). Node-free.
 
 Usage: python3 -m heartbeat.adapters.docs.docs_map <corpusDir>
 """
@@ -14,7 +15,9 @@ import sys
 
 from .docs_context import js_trim   # exact-JS-.trim() so link-target trimming matches node byte-for-byte
 
-_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+_INLINE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")                 # [text](target)
+_REF_USE = re.compile(r"\[([^\]]*)\]\[([^\]]*)\]")            # [text][label] or [text][] (collapsed)
+_REF_DEF = re.compile(r"^[ \t]*\[([^\]]+)\]:[ \t]*(\S+)", re.M)   # [label]: target  (definition line)
 _EXTERNAL = re.compile(r"(?i)^(https?:|mailto:|#)")
 
 
@@ -26,8 +29,14 @@ def citation_map(corpus_dir):
         cid = f[:-3]
         with open(os.path.join(corpus_dir, f), encoding="utf-8") as fh:
             text = fh.read()
-        for m in _LINK.finditer(text):
-            target = js_trim(m.group(1))
+        defs = {m.group(1).strip().lower(): m.group(2) for m in _REF_DEF.finditer(text)}
+        targets = [m.group(1) for m in _INLINE.finditer(text)]
+        for m in _REF_USE.finditer(text):
+            label = (m.group(2).strip() or m.group(1).strip()).lower()   # collapsed [text][] -> label = text
+            if label in defs:
+                targets.append(defs[label])
+        for target in targets:
+            target = js_trim(target)
             if _EXTERNAL.match(target):                      # external / anchor
                 continue
             target = target.split("#")[0].split("?")[0]      # strip fragment/query

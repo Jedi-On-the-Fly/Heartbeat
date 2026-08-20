@@ -20,13 +20,22 @@ function citationMap(corpusDir) {
   const files = fs.readdirSync(corpusDir).filter(f => f.endsWith('.md'));
   const ids = new Set(files.map(f => f.replace(/\.md$/, '')));
   const edges = [], seen = new Set();
-  const link = /\[[^\]]*\]\(([^)]+)\)/g;
+  const inline = /\[[^\]]*\]\(([^)]+)\)/g;                          // [text](target)
+  const refUse = /\[([^\]]*)\]\[([^\]]*)\]/g;                       // [text][label] or [text][] (collapsed)
+  const refDef = /^[ \t]*\[([^\]]+)\]:[ \t]*(\S+)/gm;               // [label]: target  (definition line)
   for (const f of files) {
     const id = f.replace(/\.md$/, '');
     const text = fs.readFileSync(path.join(corpusDir, f), 'utf8');
-    let m;
-    while ((m = link.exec(text))) {
-      let target = m[1].trim();
+    const defs = {};                                               // label(lower) -> target
+    let d; while ((d = refDef.exec(text))) defs[d[1].trim().toLowerCase()] = d[2];
+    const targets = [];                                            // raw link targets (inline + resolved refs)
+    let m; while ((m = inline.exec(text))) targets.push(m[1]);
+    let r; while ((r = refUse.exec(text))) {
+      const label = (r[2].trim() || r[1].trim()).toLowerCase();    // collapsed [text][] -> label = text
+      if (Object.prototype.hasOwnProperty.call(defs, label)) targets.push(defs[label]);
+    }
+    for (let target of targets) {
+      target = target.trim();
       if (/^(https?:|mailto:|#)/i.test(target)) continue;          // external / anchor
       target = target.split('#')[0].split('?')[0];                 // strip fragment/query
       if (!target.endsWith('.md')) continue;

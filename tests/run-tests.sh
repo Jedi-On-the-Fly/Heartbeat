@@ -1335,6 +1335,26 @@ else
   echo "  (python3 absent — T106 skipped)"
 fi
 
+grp "T107 — docs adapter: docs-map recognizes reference-style links, not just inline (node ≡ python)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T107.1 reference-style + collapsed citations captured; inline still works (docs-map-reflinks.sh → DOCS-REFLINKS-OK)" \
+    'bash "'"$GEX"'/docs-map-reflinks.sh" 2>&1 | grep -q "DOCS-REFLINKS-OK"'
+else
+  echo "  (python3 absent — T107 skipped)"
+fi
+
+grp "T108 — docs adapter: docs-map over the repo's OWN docs is a non-empty graph (real-corpus regression guard, node ≡ python)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T108.1 docs-map over docs/howto/ → non-empty, node ≡ python (real-docs-map.sh → REAL-DOCS-MAP-OK)" \
+    'bash "'"$GEX"'/real-docs-map.sh" 2>&1 | grep -q "REAL-DOCS-MAP-OK"'
+else
+  echo "  (python3 absent — T108 skipped)"
+fi
+
+grp "T109 — docs change-impact reuses the neutral discover engine (reverse-citation reachability)"
+check "T109.1 discover over the docs citation codemap = who transitively cites a section (docs-discover.sh → DOCS-DISCOVER-OK)" \
+  'bash "'"$GEX"'/docs-discover.sh" 2>&1 | grep -q "DOCS-DISCOVER-OK"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

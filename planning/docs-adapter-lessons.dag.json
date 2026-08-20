@@ -1,0 +1,75 @@
+{
+  "_meta": {
+    "project": "docs-adapter-lessons",
+    "note": "Apply the hard-won lessons from the code-adapter corrections to the docs/research adapter and the build-a-domain-adapter how-to. Grounded findings: (1) docs-map recognizes ONLY inline `[](x.md)` links — an allowlist of citation FORMS that SILENTLY DROPS reference-style links (`[text][ref]` + `[ref]: x.md`), the same class as the code adapter's dropped `extends`/`instantiates` edge kinds → broaden it (both runtimes, parity). (2) No proof runs docs-map over REAL markdown — add a deterministic real-corpus harness (the repo's own docs/howto/) that catches parser drift, the analog of real-codegraph-map.sh. (3) The neutral codemap engines are REUSABLE across domains: `discover` works on the docs CITATION graph (reverse edges = which sections build on this one = change impact) — demonstrate + wire it into the docs-authoring skill. Honest scoping: `coverage` does NOT transfer (docs tasks map section→itself, so every task has 1 symbol, no blind spots) — the how-to must say so. (HT) Update build-a-domain-adapter.md: sharpen 'reuse the engines' (deplint + discover are domain-neutral codemap engines; the provider is the domain-specific part; coverage/exclude-hb are code-specific) + add a 'Hard-won lessons' section (prove against real input; denylist > allowlist; absence != negative; exclude the orchestrator's own artifacts; port every helper for parity; gate the adapter's own docs). Proof-driven: spec-first, gated, refuted."
+  },
+  "phases": [
+    {
+      "id": "DA",
+      "title": "Docs adapter — lessons applied (reference-style links, real-corpus harness, discover reuse)",
+      "gate_entry": null,
+      "gate_exit": "GATE_DA",
+      "tasks": [
+        {
+          "id": "DA1",
+          "title": "Spec-first: proofs + fixtures for reflinks / real-corpus / discover-reuse",
+          "requires": [],
+          "description": "Author the proofs BEFORE impl. (a) Fixture plugin/adapters/docs/fixtures/refcorpus/ — a small markdown corpus that cites via REFERENCE-STYLE links only: e.g. a.md contains 'see [the method][m] and [background][]' with definitions '[m]: b.md' and '[background]: c.md', AND one INLINE link '[results](d.md)' (regression: inline must still work); b.md, c.md, d.md exist. Expected citation edges a→b, a→c, a→d. Proof docs/howto/gate-examples/docs-map-reflinks.sh (prints DOCS-REFLINKS-OK): `node plugin/adapters/docs/docs-map.js <refcorpus>` captures those reference-style edges (currently DROPPED), and node ≡ python (set-equal). Must FAIL now (docs-map is inline-only). (b) Proof docs/howto/gate-examples/real-docs-map.sh (prints REAL-DOCS-MAP-OK): run docs-map over the repo's OWN corpus (docs/howto/ — real cross-linked markdown), assert a NON-EMPTY citation edge set and node ≡ python (set-equal) — a deterministic real-input regression guard. (c) Proof docs/howto/gate-examples/docs-discover.sh (prints DOCS-DISCOVER-OK): reuse the neutral discover engine on the docs citation codemap fixture — `node plugin/adapters/code/codegraph-discover.js plugin/adapters/docs/fixtures/docs.codemap.json method --dependents` yields the sections that transitively CITE method (results, intro) and NOT one it cites (background) — change-impact for docs. (b) and (c) pass immediately (docs-map/discover already exist); (a) is red until DA2."
+        },
+        {
+          "id": "DA2",
+          "title": "Broaden docs-map to reference-style links (both runtimes, parity)",
+          "requires": ["DA1"],
+          "description": "Update plugin/adapters/docs/docs-map.js and py/src/heartbeat/adapters/docs/docs_map.py to ALSO capture reference-style links, in addition to inline: collect link-definition lines `^\\s*\\[label\\]:\\s*<target>` into a label→target map (labels case-insensitive), and resolve reference usages `[text][label]` and collapsed `[text][]` (label = the text) to their target; apply the SAME corpus filtering (relative .md in corpus, not http/mailto/#/self). Keep inline-link behavior unchanged. Preserve node ≡ python (set-equal — order may differ). Make docs-map-reflinks.sh pass and keep tests/parity.sh + the existing docs proofs (T90/T91/T95) green."
+        },
+        {
+          "id": "DA3",
+          "title": "Wire the proofs + document change-impact + reflinks in the skill",
+          "requires": ["DA2"],
+          "description": "Add groups T107 (docs-map-reflinks.sh → DOCS-REFLINKS-OK), T108 (real-docs-map.sh → REAL-DOCS-MAP-OK), T109 (docs-discover.sh → DOCS-DISCOVER-OK) to tests/run-tests.sh, each running the proof and grepping its marker on the same check line. Update plugin/skills/docs-authoring/SKILL.md: (i) note docs-map now recognizes reference-style links too; (ii) add a 'change-impact' step — `node plugin/adapters/code/codegraph-discover.js <docs-codemap> <section> --dependents` gives which sections transitively build on a given one (the neutral discover engine over the citation graph), for scoping a revision. Confirm all suites green (node T107+T108+T109 in GROUPS-PASSED, python pytest, tests/parity.sh, whole-docs prose T93, self-audit, skill-integrity T92)."
+        }
+      ]
+    },
+    {
+      "id": "HT",
+      "title": "How-to — engine-vs-provider split + hard-won lessons",
+      "gate_entry": "GATE_DA",
+      "gate_exit": "GATE_HT",
+      "tasks": [
+        {
+          "id": "HT1",
+          "title": "Update build-a-domain-adapter.md with the split + pitfalls",
+          "requires": [],
+          "description": "Update docs/howto/build-a-domain-adapter.md. (1) Sharpen the 'Reuse the engines' section: name the DOMAIN-NEUTRAL codemap engines you get for free — `deplint` (validate requires) AND `codegraph-discover` (change-impact / scope from entry units) both operate on the `{edges, tasks}` codemap, so any adapter reuses them; contrast with what you MUST write (the provider that emits the codemap + the domain-specific glue). Be honest that some code tools are NOT neutral: `codegraph-coverage` is code-shaped (task→symbols; a docs task maps to itself so it yields no signal) and `codegraph-exclude-hb` is CodeGraph-specific. (2) Add a '## Hard-won lessons' section, each a one-liner grounded in the code-adapter corrections: PROVE against the real provider (schemas/formats drift — a harness that runs the real thing catches it); prefer a DENYLIST over an allowlist (an allowlist silently drops the unmodeled — renamed edge kinds, reference-style links); absence of data is NOT a negative signal (an unmapped unit is BLIND, not 'no dependency'); EXCLUDE the orchestrator's own artifacts from the domain graph; port EVERY helper (parity is per-function, not per-entrypoint); GATE the adapter's own docs (claims drift as the surface grows). Keep it prose-clean (T93/prose-check) and self-audit green; do not break the section numbering or links."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_DA": {
+      "desc": "docs-map recognizes reference-style links (node ≡ python), a real-corpus harness guards it, the neutral discover engine is demonstrated + wired for docs change-impact, and the docs-authoring skill documents both — suites green, existing docs proofs unbroken.",
+      "review": {
+        "prompt": "Refute that DA is done. Does docs-map now capture reference-style citations (`[text][ref]` and collapsed `[text][]` with `[ref]: x.md` definitions) AND still capture inline links, applying the same corpus/self/external filtering — without double-counting or false edges? Is it node ≡ python (set-equal)? Does the real-corpus harness actually run docs-map over real repo markdown and assert a non-empty, node≡python graph (a genuine regression guard, not vacuous)? Does docs-discover PROVE reverse-citation change-impact (dependents of a section = who transitively cites it, excluding what it cites)? Do the existing docs proofs (T90 deplint, T91 context, T95 parity) still pass (inline behavior unbroken)? Does the docs-authoring skill document change-impact via discover AND the reflink support? Do the proofs have TEETH (reflinks red before DA2; would real-docs-map catch docs-map returning empty)?"
+      },
+      "criteria": [
+        { "id": "daa", "desc": "docs-map captures reference-style citation edges (node ≡ python)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/docs-map-reflinks.sh\" 2>&1 | grep -q 'DOCS-REFLINKS-OK'" },
+        { "id": "dab", "desc": "real-corpus harness: docs-map over the repo's own docs → non-empty graph, node ≡ python", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/real-docs-map.sh\" 2>&1 | grep -q 'REAL-DOCS-MAP-OK'" },
+        { "id": "dac", "desc": "the neutral discover engine gives docs change-impact (reverse-citation reachability)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/docs-discover.sh\" 2>&1 | grep -q 'DOCS-DISCOVER-OK'" },
+        { "id": "dad", "desc": "the three proofs are wired into the suite (markers on the same line)", "cmd": "grep -qE 'docs-map-reflinks\\.sh.*DOCS-REFLINKS-OK' \"$PROJECT_DIR/tests/run-tests.sh\" && grep -qE 'real-docs-map\\.sh.*REAL-DOCS-MAP-OK' \"$PROJECT_DIR/tests/run-tests.sh\" && grep -qE 'docs-discover\\.sh.*DOCS-DISCOVER-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "dae", "desc": "docs-authoring skill documents change-impact (discover) + reference-style links", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'discover|change.?impact' plugin/skills/docs-authoring/SKILL.md && grep -qiE 'reference-style|reference link' plugin/skills/docs-authoring/SKILL.md" }
+      ]
+    },
+    "GATE_HT": {
+      "desc": "build-a-domain-adapter.md distinguishes the domain-neutral codemap engines (deplint, discover) from the domain-specific provider, and carries a hard-won-lessons section — prose-clean and self-audit green.",
+      "review": {
+        "prompt": "Refute that HT is done. Does the how-to now name deplint AND discover as domain-neutral codemap engines a new adapter reuses (not just deplint), and is it HONEST that coverage is code-shaped / exclude-hb is CodeGraph-specific (doesn't overclaim universal reuse)? Does the 'Hard-won lessons' section capture the real corrections — prove-against-real-input, denylist>allowlist, absence≠negative, exclude-orchestrator-artifacts, port-every-helper, gate-the-docs — accurately and concisely (not padded)? Does the doc still prose-check clean (links resolve, no fake commands), keep coherent section numbering, and self-audit green? Is anything claimed that the codebase doesn't actually do?"
+      },
+      "criteria": [
+        { "id": "hta", "desc": "the how-to is prose-clean (links resolve, real commands)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/build-a-domain-adapter.md\" 2>&1 | grep -qE 'PROSE-OK|ALL-PROSE-OK'" },
+        { "id": "htb", "desc": "the reuse section names discover as a neutral codemap engine (beyond deplint)", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'discover' docs/howto/build-a-domain-adapter.md && grep -qiE 'codemap' docs/howto/build-a-domain-adapter.md && grep -qiE 'coverage|exclude' docs/howto/build-a-domain-adapter.md" },
+        { "id": "htc", "desc": "a hard-won-lessons section grounded in the real corrections (denylist, real input, blind)", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'lesson|pitfall' docs/howto/build-a-domain-adapter.md && grep -qiE 'denylist|allowlist' docs/howto/build-a-domain-adapter.md && grep -qiE 'blind|absence|no basis' docs/howto/build-a-domain-adapter.md" },
+        { "id": "htd", "desc": "self-audit green (the how-to's referenced proofs still exist and are wired; node ≡ python)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/self-audit.sh\" 2>&1 | grep -qE 'SELF-AUDIT-OK:[1-9][0-9]*/[1-9][0-9]*'" }
+      ]
+    }
+  }
+}
