@@ -33,25 +33,44 @@ a judge of truth: it verifies that the stored source **says** the quote, not tha
 ```
 
 The extracted text of each source is stored at `<dir>/<source>.txt`; the `sha256` pins exactly what was
-fetched. The **fetch is on-demand** (non-deterministic) — but from the stored snapshot on, the check is
+fetched. The **fetch is on-demand** (non-deterministic) — but from the stored snapshot on, everything is
 **offline and reproducible**, which is what lets it gate.
 
-## The method
+## The loop (source → stamp → ground → refute → write)
 
-1. **Ground-check the evidence map** (deterministic, no network):
+The full research lifecycle. Only the first step is non-deterministic; each later step is a deterministic
+bridge or an adversarial review. Worked end-to-end: [run-a-grounded-research-project.md](../../../docs/howto/run-a-grounded-research-project.md).
+
+1. **Source** (on-demand, *not* gated). Search with the `deep-research` skill / `WebSearch` / an MCP
+   server, and for each source you keep, drop its extracted text into `<dir>/<source>.txt` and record the
+   url in `evidence.json`. This is your judgment step — nothing downstream trusts it.
+2. **Stamp** the honest hashes so an agent-supplied `sha256` can't lie:
    ```bash
-   node plugin/adapters/research/ground-check.js evidence.json sources/
-   # node-free twin:  python3 -m heartbeat.adapters.research.ground_check evidence.json sources/
+   node plugin/adapters/research/stamp-evidence.js evidence.json sources/ > stamped.json
+   # node-free twin:  python3 -m heartbeat.adapters.research.stamp_evidence evidence.json sources/
+   ```
+   It recomputes each source's sha from the **stored bytes** (a one-time, at-store-time record). Proof:
+   [`gate-examples/stamp-evidence.sh`](../../../docs/howto/gate-examples/stamp-evidence.sh) (node-suite T113).
+3. **Ground-check** the evidence map (deterministic, no network) — the gate:
+   ```bash
+   node plugin/adapters/research/ground-check.js stamped.json sources/ --strict
+   # node-free twin:  python3 -m heartbeat.adapters.research.ground_check stamped.json sources/ --strict
    ```
    For each claim it reports `GROUNDED` or an issue — **FABRICATED-QUOTE** (excerpt not in the stored
    source), **UNGROUNDED** (undeclared source / no excerpt), **MISSING-SOURCE**, **STALE** (source edited
    since fetch, sha mismatch). Advisory by default; `--strict` blocks (exit 1 on any issue). Proof:
    [`gate-examples/ground-check.sh`](../../../docs/howto/gate-examples/ground-check.sh) (node-suite T110).
-2. **Refute the grounding** (the adversarial half). The gate proves the quote is *real*; a distinct-actor
+4. **Refute** the grounding (the adversarial half). The gate proves the quote is *real*; a distinct-actor
    refuter proves it *means what you say*: is the excerpt in context? is the source primary? is a
    contradicting source ignored? Seed it with `node .hb/hb-audit.js .hb/dag.json --questions <gate>`.
-3. **Hand off** grounded claims to `docs-authoring` (order + write with the sources as context) and
-   `gated-docs` (verify the finished prose).
+5. **Write.** Feed each section's grounded evidence to the writer, then hand off to `docs-authoring`
+   (ordering/context) and `gated-docs` (verify the finished prose):
+   ```bash
+   node plugin/adapters/research/research-context.js stamped.json <section>
+   # node-free twin:  python3 -m heartbeat.adapters.research.research_context stamped.json <section>
+   ```
+   It renders **only that section's** grounded claims. Proof:
+   [`gate-examples/research-context.sh`](../../../docs/howto/gate-examples/research-context.sh) (node-suite T112).
 
 ## Boundary (hold this)
 

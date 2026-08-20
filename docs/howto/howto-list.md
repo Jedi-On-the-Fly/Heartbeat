@@ -37,6 +37,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Build a Domain Adapter (make the method smart about a domain) | ✅ [build-a-domain-adapter.md](build-a-domain-adapter.md) — T87/T88 |
 | Ground Research Claims (verify quotes against stored sources) | ✅ [ground-research-claims.md](ground-research-claims.md) — T110/T111 |
 | Source and Ground Research (on-demand fetch → stamp → ground → context) | ✅ [source-and-ground-research.md](source-and-ground-research.md) — T112/T113 |
+| Run a Grounded Research Project (worked end-to-end: source→stamp→ground→refute→write) | ✅ [run-a-grounded-research-project.md](run-a-grounded-research-project.md) — T112/T113 |
 | Feed Code Context to Stage B (Seam 2 context hook) | ✅ [feed-code-context-to-stage-b.md](feed-code-context-to-stage-b.md) — T88/T89 |
 | Plan a Docs/Research Project with Citations (2nd adapter) | ✅ [plan-a-docs-project-with-citations.md](plan-a-docs-project-with-citations.md) — T90/T91 |
 | Add HeartBeat to an Existing Repository | ✅ [add-heartbeat-to-an-existing-repo.md](add-heartbeat-to-an-existing-repo.md) — T77 |
