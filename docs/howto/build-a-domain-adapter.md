@@ -24,12 +24,22 @@ for CodeGraph's rows.
 
 ## 2. Reuse the engines
 
-You do **not** write new validation or context logic — you feed the existing ones:
+You do **not** write new validation, change-impact, or context logic — you feed the existing
+**domain-neutral** engines, which all operate on the `{edges, tasks}` codemap:
 
-- Plan authoring: `node plugin/adapters/code/deplint.js <dag.json> <codemap.json>` reports missing /
-  redundant / collision-prone edges. It is domain-neutral; your codemap is all it needs.
-- Context assembly: point the executor's generic `context_cmd` hook at a provider that renders the
+- **Dep-lint** (plan authoring): `node plugin/adapters/code/deplint.js <dag.json> <codemap.json>` reports
+  missing / redundant / collision-prone edges. Your codemap is all it needs.
+- **Discovery** (change impact / scoping): `node plugin/adapters/code/codegraph-discover.js
+  <codemap.json> <entry> --dependents` gives the units that transitively depend on `<entry>` — reusable
+  over *any* graph (the docs adapter runs it over its **citation** codemap to find which sections build
+  on one).
+- **Context assembly**: point the executor's generic `context_cmd` hook at a provider that renders the
   relevant slice of your graph (see [feed code context to Stage B](feed-code-context-to-stage-b.md)).
+
+Not everything is neutral, so don't assume it transfers: `codegraph-coverage` counts a *task's symbols*
+(meaningful only when a task maps to several units — a docs task maps to its own section, so it yields no
+signal), and `codegraph-exclude-hb` is CodeGraph-specific. You write **the provider** (emit the codemap)
+plus any genuinely domain-specific glue; the neutral engines above you get for free.
 
 ## 3. Ship it in both runtimes (a parity surface)
 
@@ -81,3 +91,25 @@ real, **wired** proofs. So a new domain that forgets its skill turns the suite r
 ```bash
 bash docs/howto/gate-examples/skill-integrity.sh   # -> SKILL-INTEGRITY-OK
 ```
+
+## 7. Hard-won lessons
+
+Distilled from building and repeatedly **correcting** the code and docs adapters — each of these bit us:
+
+- **Prove against the *real* provider.** An adapter's model of an external tool or format drifts —
+  CodeGraph renamed both its DB columns *and* its edge kinds between releases. A harness that runs the
+  real thing (skipping cleanly when it's absent, e.g.
+  [`tests/real-codegraph-map.sh`](../../tests/real-codegraph-map.sh)) catches drift a hermetic
+  fixture never will.
+- **Prefer a denylist over an allowlist.** An allowlist of "known-good kinds" silently drops the
+  unmodeled — CodeGraph's new `extends`/`instantiates` edges, or a docs corpus's reference-style links.
+  Keep everything except what you *know* is noise, and the next new form isn't lost.
+- **Absence of data is not a negative signal.** A task the graph can't see (a not-yet-existing file, a
+  dynamic/framework binding) has **no basis** to judge, not "no dependency" — don't emit a finding
+  against it; surface it as a **blind spot** the author must read by hand.
+- **Exclude the orchestrator's own artifacts.** HeartBeat's `.hb/` scaffold polluted the very graph the
+  code adapter reads — scope the provider's input to the *application*, not the tooling.
+- **Parity is per-function, not per-entrypoint.** A node-only helper (a fuzzy matcher) hid a parity gap
+  behind a green suite for a while — port *every* function and cross-check it.
+- **Gate the adapter's own docs.** The adapter READMEs/skills claimed "node-only, not a parity surface"
+  long after the port made that false. A doc is a claim; sweep it whenever the surface grows.
