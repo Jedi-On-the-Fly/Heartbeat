@@ -1,7 +1,31 @@
 # STATUS — HeartBeat
 
-**Version:** v1.26 (the evidence lifecycle made first-class — reviewed-only checkpoints, generated falsification questions, gate provenance, and graph blind-spots, over v1.25)
+**Version:** v1.27 (the research adapter completes its loop — an internet-sourced writeup earns acceptance the same way code does: source → stamp → ground → refute → write, over v1.26)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.27 — the research adapter's full loop (source → stamp → ground → refute → write)
+
+The research adapter graduates from a single grounding check to the **whole evidence lifecycle for
+facts**: an internet-sourced writeup is accepted only when every claim is backed by a real, stored
+source and survives an adversarial refuter — the same bar HeartBeat holds code to. The web **fetch stays
+on-demand and non-gated** (it's non-deterministic by design); everything downstream of the stored
+snapshot is deterministic and gates.
+
+- **A grounding verifier (the gate).** `ground-check` verifies OFFLINE that every claim's verbatim
+  excerpt is present in its stored source and the source still matches its recorded sha (**STALE**
+  detection), catching hallucinated citations and fabricated quotes. Advisory; `--strict` blocks. Both
+  runtimes (**T110/T111**).
+- **Honest hashes — `stamp-evidence`.** Records each source's sha256 from the **stored bytes** into the
+  evidence map (a one-time, at-store-time step), so an agent-supplied hash can't lie and a later edit
+  surfaces as STALE. node ≡ python same map (**T113**).
+- **Grounded context for the writer — `research-context`.** Renders **only** a given section's grounded
+  claims (id + text + source url + verbatim excerpt) as the Seam-2 block fed to Stage B — no
+  cross-section leak. node ≡ python byte-identical (**T112**).
+- **The skill documents the full loop.** `research-grounding` now walks source → stamp → ground →
+  refute (a distinct-actor review seeded by `hb-audit --questions`) → write, handing off to
+  `docs-authoring` (ordering) and `gated-docs` (prose). Two gated how-tos ship
+  (`source-and-ground-research.md`, `run-a-grounded-research-project.md`). Honest throughout: **it
+  verifies grounding, not truth** — HeartBeat does not fetch or fact-check for you.
 
 ## v1.26 — the evidence lifecycle, made first-class
 
