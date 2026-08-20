@@ -1,0 +1,50 @@
+{
+  "_meta": {
+    "project": "research-grounding",
+    "note": "Build the DETERMINISTIC CORE of the research/grounding adapter (planning/research-adapter-scope.md), no network. A `research` domain adapter with a `ground-check` verifier: given an evidence map ({sources:{id:{url,sha256,fetched}}, claims:{id:{text,source,excerpt,section}}}) + the stored source texts under a directory, it verifies OFFLINE that every claim is GROUNDED — the cited source is declared, its stored text file exists and matches the recorded sha256 (STALE detection), and a whitespace-normalized `excerpt` is a substring of that text (FABRICATED-QUOTE detection); an ungrounded claim (missing source / no excerpt) is flagged. Advisory by default; --strict blocks. This is the gate half of the evidence lifecycle for research (the gate proves the quote is REAL; a later refutation phase proves the quote MEANS what you say). node ≡ python (byte-identical report). The web fetch that produces the evidence map is OUT of scope here — on-demand / harness-first (scope doc phases SB/RS). Every adapter ships a skill (T92) + gated proofs; add a research-grounding skill + a gated how-to. Proof-driven: spec-first, gated, refuted; suites (node/python/parity/prose/self-audit/skill-integrity) green."
+  },
+  "phases": [
+    {
+      "id": "GR",
+      "title": "Grounding core — the deterministic evidence-map verifier (no network)",
+      "gate_entry": null,
+      "gate_exit": "GATE_GR",
+      "tasks": [
+        {
+          "id": "GR1",
+          "title": "Spec-first: fixtures + proofs for the grounding verifier",
+          "requires": [],
+          "description": "Author RED-first. Fixtures under plugin/adapters/research/fixtures/evidence/: (a) sources/s1.txt containing a sentence like 'water boils at 100 degrees Celsius at sea level' (and NOT 'the sky is green'); (b) evidence.json with sources.s1 = {url, title, sha256: <the REAL sha256 of s1.txt>, fetched} and claims: c_ok (source s1, excerpt = a whitespace-variant of the real sentence → GROUNDED), c_fab (source s1, excerpt 'the sky is green' → FABRICATED-QUOTE), c_nosrc (source s2 not declared → UNGROUNDED), c_empty (source s1, excerpt '' → UNGROUNDED). Proof docs/howto/gate-examples/ground-check.sh (prints GROUND-CHECK-OK): `node plugin/adapters/research/ground-check.js <evidence.json> <sourcesDir>` reports grounded=1 and flags c_fab (FABRICATED-QUOTE), c_nosrc + c_empty (UNGROUNDED); with --strict it exits NONZERO; and on a temp COPY whose s1.txt is edited (sha no longer matches) it reports STALE. Proof docs/howto/gate-examples/ground-check-parity.sh (prints GROUND-CHECK-PARITY-OK): node ≡ python byte-identical report on the fixture. Must FAIL now (no ground-check yet) — confirm red."
+        },
+        {
+          "id": "GR2",
+          "title": "Implement the grounding verifier (both runtimes)",
+          "requires": ["GR1"],
+          "description": "plugin/adapters/research/ground-check.js (export ground_check(evidence, sourcesDir) — or groundCheck) + py/src/heartbeat/adapters/research/ground_check.py (ground_check). For each claim (sorted by id): resolve source in evidence.sources (else UNGROUNDED 'source not in evidence.sources'); read <sourcesDir>/<source>.txt (else MISSING-SOURCE); if the recorded sha256 is present and sha256(file-bytes) != recorded → STALE; if excerpt empty → UNGROUNDED 'no excerpt'; else if the whitespace-normalized excerpt (collapse runs of whitespace to one space, trim) is NOT a substring of the normalized source text → FABRICATED-QUOTE; else GROUNDED. Print a deterministic report: 'HB-GROUND: grounded=<n> issues=<m>' then one sorted line per issue. CLI `<cmd> <evidence.json> <sourcesDir> [--strict]`; advisory exit 0, --strict exit 1 iff issues>0. sha256 via node crypto / python hashlib (same hex over the same bytes). Imports nothing from core; node ≡ python BYTE-identical report. Add a py/tests case. Make ground-check.sh + ground-check-parity.sh pass; keep tests/parity.sh green."
+        },
+        {
+          "id": "GR3",
+          "title": "Ship the skill + a gated how-to + wire the proofs",
+          "requires": ["GR2"],
+          "description": "Every adapter must ship a skill (enforced by skill-integrity T92): write plugin/skills/research-grounding/SKILL.md with an `HB-ADAPTER: research` marker and a NARROW trigger (grounding research claims against stored sources — NOT general search/writing), documenting the evidence-map contract + `ground-check` and NAMING its proof `docs/howto/gate-examples/ground-check.sh`. Write a gated how-to docs/howto/ground-research-claims.md (mechanism guide: the deterministic grounding gate catches a fabricated quote / ungrounded claim, and the determinism boundary — the web fetch is on-demand, the stored source is what gates; be honest it verifies GROUNDING not TRUTH), referencing ground-check.sh; add it to docs/howto/howto-list.md. Add groups T110 (ground-check.sh → GROUND-CHECK-OK) and T111 (ground-check-parity.sh → GROUND-CHECK-PARITY-OK) to tests/run-tests.sh (markers on the same check line). Confirm ALL suites green: node (T110+T111 in GROUPS-PASSED), python pytest, tests/parity.sh, whole-docs prose (T93), self-audit (SELF-AUDIT-OK, the how-to's proof exists+wired), and skill-integrity (T92 — the research adapter now declared by its skill)."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_GR": {
+      "desc": "A `research` adapter verifies OFFLINE that every claim in an evidence map is grounded in a stored source (excerpt present, sha matches) — flagging fabricated quotes, ungrounded claims, missing/stale sources — advisory/--strict, node ≡ python; shipped with a skill (T92) and a gated how-to; suites green.",
+      "review": {
+        "prompt": "Refute that GR is done. Does ground-check actually verify GROUNDING deterministically and offline — a fabricated quote (excerpt not in the stored source) is caught as FABRICATED-QUOTE, an undeclared source or empty excerpt as UNGROUNDED, a missing stored file as MISSING-SOURCE, and an edited source (sha mismatch) as STALE — with a GROUNDED claim passing? Is the excerpt match whitespace-normalized so a line-wrapped quote still matches, WITHOUT becoming so loose it passes a fabricated quote? Is --strict blocking (exit 1 iff issues)? Is the report node ≡ python BYTE-identical (sorted, deterministic)? Is the boundary honest — it checks the STORED snapshot offline (no network in the gate), and verifies grounding NOT truth? Does it import nothing from core? Does the research-grounding skill declare the adapter (HB-ADAPTER: research) + name a real wired proof so skill-integrity (T92) is green, and does the how-to prose-check + self-audit clean? Do the proofs have TEETH (ground-check.sh red before GR2; would it catch a verifier that treats every claim as grounded)?"
+      },
+      "criteria": [
+        { "id": "gra", "desc": "grounding proof: fabricated/ungrounded/missing/stale caught, grounded passes, --strict blocks", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/ground-check.sh\" 2>&1 | grep -q 'GROUND-CHECK-OK'" },
+        { "id": "grb", "desc": "node ≡ python byte-identical report", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/ground-check-parity.sh\" 2>&1 | grep -q 'GROUND-CHECK-PARITY-OK'" },
+        { "id": "grc", "desc": "behavioral (independent): a fabricated quote is flagged and a grounded claim passes; --strict exits nonzero", "cmd": "cd \"$PROJECT_DIR\" && FX=plugin/adapters/research/fixtures/evidence && out=$(node plugin/adapters/research/ground-check.js \"$FX/evidence.json\" \"$FX/sources\") && printf '%s' \"$out\" | grep -q 'FABRICATED-QUOTE' && printf '%s' \"$out\" | grep -q 'grounded=1' && ! node plugin/adapters/research/ground-check.js \"$FX/evidence.json\" \"$FX/sources\" --strict" },
+        { "id": "grd", "desc": "both proofs wired into the suite (markers on the same line)", "cmd": "grep -qE 'ground-check\\.sh.*GROUND-CHECK-OK' \"$PROJECT_DIR/tests/run-tests.sh\" && grep -qE 'ground-check-parity\\.sh.*GROUND-CHECK-PARITY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "gre", "desc": "the research adapter is declared by its skill — skill-integrity (T92) green", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/skill-integrity.sh\" 2>&1 | grep -q 'SKILL-INTEGRITY-OK'" },
+        { "id": "grf", "desc": "python twin callable + the how-to documents grounding (self-audit's referenced proofs intact)", "cmd": "cd \"$PROJECT_DIR\" && PYTHONPATH=py/src python3 -c \"import heartbeat.adapters.research.ground_check as g; assert callable(getattr(g,'ground_check',None))\" && grep -qiE 'ground' docs/howto/ground-research-claims.md" }
+      ]
+    }
+  }
+}

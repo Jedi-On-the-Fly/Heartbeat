@@ -35,6 +35,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Write Dependencies That Don't Over-Constrain | ✅ [write-sparse-dependencies.md](write-sparse-dependencies.md) — T77 |
 | Plan Code-Aware DAGs (dep-lint `requires` against a code graph) | ✅ [plan-code-aware-dags.md](plan-code-aware-dags.md) — T87 |
 | Build a Domain Adapter (make the method smart about a domain) | ✅ [build-a-domain-adapter.md](build-a-domain-adapter.md) — T87/T88 |
+| Ground Research Claims (verify quotes against stored sources) | ✅ [ground-research-claims.md](ground-research-claims.md) — T110/T111 |
 | Feed Code Context to Stage B (Seam 2 context hook) | ✅ [feed-code-context-to-stage-b.md](feed-code-context-to-stage-b.md) — T88/T89 |
 | Plan a Docs/Research Project with Citations (2nd adapter) | ✅ [plan-a-docs-project-with-citations.md](plan-a-docs-project-with-citations.md) — T90/T91 |
 | Add HeartBeat to an Existing Repository | ✅ [add-heartbeat-to-an-existing-repo.md](add-heartbeat-to-an-existing-repo.md) — T77 |

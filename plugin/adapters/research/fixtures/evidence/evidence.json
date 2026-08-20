@@ -1,0 +1,11 @@
+{
+  "sources": {
+    "s1": { "url": "https://example.org/thermo", "title": "Thermodynamic properties", "sha256": "6da67c96b95d3ea06f403683f225cc29599020155de0d0a0be6272184483b9e8", "fetched": "2026-08-20T00:00:00Z" }
+  },
+  "claims": {
+    "c_ok":    { "text": "Water boils at 100°C at sea level.", "source": "s1", "excerpt": "water boils at 100 degrees Celsius at sea level", "section": "background" },
+    "c_fab":   { "text": "The sky is green at noon.", "source": "s1", "excerpt": "the sky is green", "section": "background" },
+    "c_nosrc": { "text": "An unsourced assertion.", "source": "s2", "excerpt": "anything", "section": "background" },
+    "c_empty": { "text": "A claim with no evidence.", "source": "s1", "excerpt": "", "section": "background" }
+  }
+}

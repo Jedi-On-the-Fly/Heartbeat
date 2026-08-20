@@ -1355,6 +1355,18 @@ grp "T109 — docs change-impact reuses the neutral discover engine (reverse-cit
 check "T109.1 discover over the docs citation codemap = who transitively cites a section (docs-discover.sh → DOCS-DISCOVER-OK)" \
   'bash "'"$GEX"'/docs-discover.sh" 2>&1 | grep -q "DOCS-DISCOVER-OK"'
 
+grp "T110 — research adapter: ground-check verifies claims are grounded in stored sources (fabricated/ungrounded/stale)"
+check "T110.1 grounding verifier classifies grounded/fabricated/ungrounded/stale, --strict blocks (ground-check.sh → GROUND-CHECK-OK)" \
+  'bash "'"$GEX"'/ground-check.sh" 2>&1 | grep -q "GROUND-CHECK-OK"'
+
+grp "T111 — research adapter: ground-check is node ≡ python (byte-identical grounding report)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T111.1 ground-check node ≡ python (ground-check-parity.sh → GROUND-CHECK-PARITY-OK)" \
+    'bash "'"$GEX"'/ground-check-parity.sh" 2>&1 | grep -q "GROUND-CHECK-PARITY-OK"'
+else
+  echo "  (python3 absent — T111 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
