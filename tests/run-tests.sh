@@ -1379,6 +1379,10 @@ grp "T114 — research adapter: red-team corpus proves ground-check catches mech
 check "T114.1 all mechanical failure modes classified, two grounded-but-wrong claims unflagged, node ≡ python (ground-check-redteam.sh → RED-TEAM-OK)" \
   'bash "'"$GEX"'/ground-check-redteam.sh" 2>&1 | grep -q "RED-TEAM-OK grounded=3 issues=5"'
 
+grp "T115 — research adapter: node ≡ python on a large generated corpus (60 sources / 200 claims, unicode, line-wraps)"
+check "T115.1 ground-check + research-context byte-identical, stamp-evidence same map, within a timeout ceiling (research-scale-parity.sh → SCALE-PARITY-OK)" \
+  'bash "'"$GEX"'/research-scale-parity.sh" 2>&1 | grep -q "SCALE-PARITY-OK sources=60 claims=200 grounded=160 issues=40"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

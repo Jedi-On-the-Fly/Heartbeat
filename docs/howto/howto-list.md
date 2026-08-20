@@ -39,6 +39,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Source and Ground Research (on-demand fetch → stamp → ground → context) | ✅ [source-and-ground-research.md](source-and-ground-research.md) — T112/T113 |
 | Run a Grounded Research Project (worked end-to-end: source→stamp→ground→refute→write) | ✅ [run-a-grounded-research-project.md](run-a-grounded-research-project.md) — T112/T113 |
 | Red-team a Grounding Corpus (prove the gate catches fabrication, stays silent on truth) | ✅ [red-team-a-grounding-corpus.md](red-team-a-grounding-corpus.md) — T114 |
+| Scale-test the Research Adapter (parity on a large generated corpus) | ✅ [scale-test-the-research-adapter.md](scale-test-the-research-adapter.md) — T115 |
 | Feed Code Context to Stage B (Seam 2 context hook) | ✅ [feed-code-context-to-stage-b.md](feed-code-context-to-stage-b.md) — T88/T89 |
 | Plan a Docs/Research Project with Citations (2nd adapter) | ✅ [plan-a-docs-project-with-citations.md](plan-a-docs-project-with-citations.md) — T90/T91 |
 | Add HeartBeat to an Existing Repository | ✅ [add-heartbeat-to-an-existing-repo.md](add-heartbeat-to-an-existing-repo.md) — T77 |
