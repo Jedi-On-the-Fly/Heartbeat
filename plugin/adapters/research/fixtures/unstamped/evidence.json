@@ -1,0 +1,8 @@
+{
+  "sources": {
+    "s1": { "url": "https://example.org/thermo", "title": "Thermodynamic properties", "fetched": "2026-08-20T00:00:00Z" }
+  },
+  "claims": {
+    "c1": { "text": "Water boils at 100°C at sea level.", "source": "s1", "excerpt": "water boils at 100 degrees Celsius at sea level", "section": "background" }
+  }
+}

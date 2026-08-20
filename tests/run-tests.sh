@@ -1367,6 +1367,14 @@ else
   echo "  (python3 absent — T111 skipped)"
 fi
 
+grp "T112 — research adapter: research-context renders a section's grounded claims for the writer (node ≡ python)"
+check "T112.1 research-context renders only its section's claims + excerpts, node ≡ python (research-context.sh → RESEARCH-CONTEXT-OK)" \
+  'bash "'"$GEX"'/research-context.sh" 2>&1 | grep -q "RESEARCH-CONTEXT-OK"'
+
+grp "T113 — research adapter: stamp-evidence records honest source shas so ground-check can verify (node ≡ python)"
+check "T113.1 stamp-evidence stamps the real sha, ground-check then GROUNDED, a later edit is STALE (stamp-evidence.sh → STAMP-EVIDENCE-OK)" \
+  'bash "'"$GEX"'/stamp-evidence.sh" 2>&1 | grep -q "STAMP-EVIDENCE-OK"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

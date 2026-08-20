@@ -1,0 +1,11 @@
+{
+  "sources": {
+    "s1": { "url": "https://example.org/thermo", "title": "Thermodynamic properties", "sha256": "6da67c96b95d3ea06f403683f225cc29599020155de0d0a0be6272184483b9e8", "fetched": "2026-08-20T00:00:00Z" },
+    "s2": { "url": "https://example.org/methods", "title": "Study design", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "fetched": "2026-08-20T00:00:00Z" }
+  },
+  "claims": {
+    "c_bg1": { "text": "Water boils at 100°C at sea level.", "source": "s1", "excerpt": "water boils at 100 degrees Celsius at sea level", "section": "background" },
+    "c_bg2": { "text": "Ice melts at 0°C.", "source": "s1", "excerpt": "ice melts at zero degrees Celsius", "section": "background" },
+    "c_m1": { "text": "We used a regression-discontinuity design.", "source": "s2", "excerpt": "METHOD-ONLY-EXCERPT: regression discontinuity around the cutoff", "section": "method" }
+  }
+}

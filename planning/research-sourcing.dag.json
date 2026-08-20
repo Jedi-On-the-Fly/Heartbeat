@@ -1,0 +1,77 @@
+{
+  "_meta": {
+    "project": "research-sourcing",
+    "note": "Build the SOURCING BRIDGE (scope-doc phase SB) and the full RESEARCH SKILL (RS) on top of the grounding core (GATE_GR). The actual web FETCH stays on-demand / agent-driven (a CLI can't call WebSearch; the fetch is non-deterministic) — so the CODE deliverables are the two DETERMINISTIC, gate-able bridges: (1) `research-context` — a Seam-2 provider that renders a section's grounded claims (source + excerpt) as the context block fed to the writer (the claim→section bridge into the docs-authoring Seam-2 flow); (2) `stamp-evidence` — computes honest sha256 of the STORED source files and stamps them into evidence.json, so the shas ground-check verifies are trustworthy (computed from what was stored, not agent-supplied). Both node ≡ python. The on-demand fetch (agent uses WebSearch / the deep-research skill → drops raw source text into files → stamp-evidence materializes the map → ground-check gates it → refute) is DOCUMENTED, not a gated CLI. RS extends the research skill to the full loop + a worked example, seeding the refutation with hb-audit --questions. Proof-driven: spec-first, gated, refuted; honest that grounding != truth and the fetch is on-demand."
+  },
+  "phases": [
+    {
+      "id": "SB",
+      "title": "Sourcing bridge — the deterministic research-context + stamp-evidence providers",
+      "gate_entry": null,
+      "gate_exit": "GATE_SB",
+      "tasks": [
+        {
+          "id": "SB1",
+          "title": "Spec-first: fixtures + proofs for research-context and stamp-evidence",
+          "requires": [],
+          "description": "Author RED-first. Fixtures under plugin/adapters/research/fixtures/: (a) context/evidence.json — an all-grounded evidence map with 2 claims in section 'background' (each with source+url+excerpt) and 1 claim in section 'method' whose excerpt contains the DISTINCTIVE token 'METHOD-ONLY-EXCERPT' (so a section-leak is detectable); (b) unstamped/evidence.json (sources.s1 with NO sha256) + unstamped/sources/s1.txt whose text contains a claim's excerpt, so that after stamping, ground-check reports that claim GROUNDED. Proof docs/howto/gate-examples/research-context.sh (prints RESEARCH-CONTEXT-OK): `node plugin/adapters/research/research-context.js <context/evidence.json> background` renders BOTH background claims (ids + their excerpts + source url) and NOT the method-section claim; node ≡ python byte-identical. Proof docs/howto/gate-examples/stamp-evidence.sh (prints STAMP-EVIDENCE-OK): `node plugin/adapters/research/stamp-evidence.js <unstamped/evidence.json> <unstamped/sources>` outputs an evidence.json whose sources.s1.sha256 = the REAL sha of s1.txt, such that piping it to ground-check yields GROUNDED (was UNGROUNDED-shaless / would-STALE before); node ≡ python produce the SAME stamped map (parsed-equal). Both must FAIL now (no providers yet)."
+        },
+        {
+          "id": "SB2",
+          "title": "Implement research-context + stamp-evidence (both runtimes)",
+          "requires": ["SB1"],
+          "description": "plugin/adapters/research/research-context.js (export researchContext(evidence, section)) + py twin py/src/heartbeat/adapters/research/research_context.py: for each claim (sorted id) whose section == the given section, render a block — 'Grounded evidence for <section>:' then per claim '  - <id>: <text>' / '    source <sourceId> <url>' / '    » <excerpt>'; '(none)' if no claims. Deterministic; node ≡ python BYTE-identical. plugin/adapters/research/stamp-evidence.js (export stampEvidence(evidence, sourcesDir)) + py twin py/src/heartbeat/adapters/research/stamp_evidence.py: for each source id in evidence.sources, if <sourcesDir>/<id>.txt exists set its sha256 = sha256(file bytes); print the stamped evidence JSON. node ≡ python produce the SAME map. Both import nothing from core, are advisory. CLIs: `research-context.js <evidence.json> <section>`, `stamp-evidence.js <evidence.json> <sourcesDir>`. Add py/tests. Make research-context.sh + stamp-evidence.sh + tests/parity.sh green."
+        },
+        {
+          "id": "SB3",
+          "title": "Wire the proofs + document the on-demand sourcing flow",
+          "requires": ["SB2"],
+          "description": "Add groups T112 (research-context.sh → RESEARCH-CONTEXT-OK) and T113 (stamp-evidence.sh → STAMP-EVIDENCE-OK) to tests/run-tests.sh (markers on the same check line). Write a gated how-to docs/howto/source-and-ground-research.md: the ON-DEMAND sourcing flow — an agent searches (WebSearch / the deep-research skill) and drops each source's extracted text into a file; `stamp-evidence` records honest shas → `evidence.json`; `ground-check --strict` gates it; then `research-context` feeds each section's grounded evidence to the writer. Be explicit about the determinism boundary (fetch = on-demand/non-gated; the stored snapshot + these two providers are deterministic) and that it verifies GROUNDING not TRUTH. Reference research-context.sh + stamp-evidence.sh + ground-check.sh; add it to docs/howto/howto-list.md. Confirm all suites green (node T112+T113 in GROUPS-PASSED, python pytest, parity, whole-docs prose T93, self-audit, skill-integrity T92)."
+        }
+      ]
+    },
+    {
+      "id": "RS",
+      "title": "The research skill — the full loop (search → ground → refute → write) + worked example",
+      "gate_entry": "GATE_SB",
+      "gate_exit": "GATE_RS",
+      "tasks": [
+        {
+          "id": "RS1",
+          "title": "Extend the research skill to the full loop + a worked example",
+          "requires": [],
+          "description": "Extend plugin/skills/research-grounding/SKILL.md from grounding-only to the FULL research loop while keeping its `HB-ADAPTER: research` marker and named proofs: (1) SOURCE on-demand — agent searches (WebSearch / deep-research skill) and stores each source's text; (2) STAMP — `stamp-evidence` records honest shas → evidence.json; (3) GROUND — `ground-check --strict` (the gate); (4) REFUTE — a distinct-actor review, seeded by `node .hb/hb-audit.js .hb/dag.json --questions <gate>` (is the excerpt in context? source primary? contradicting source ignored?); (5) WRITE — `research-context` feeds each section's grounded evidence to the writer, handing off to the docs-authoring adapter (ordering) and gated-docs (prose). Keep the boundary honest (grounding != truth; fetch on-demand). Write a worked-example how-to docs/howto/run-a-grounded-research-project.md walking a tiny end-to-end example (source → stamp → ground → refute → research-context → write), referencing the real proofs; it is prose-gated (docs/howto/gate-examples/prose-check.sh) and added to docs/howto/howto-list.md. Confirm all suites green (python pytest, parity, whole-docs prose T93, self-audit, skill-integrity T92 — the research skill still declares the adapter with wired proofs)."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_SB": {
+      "desc": "Two deterministic sourcing bridges ship (node ≡ python): research-context renders a section's grounded evidence for the writer, and stamp-evidence records honest sha256 of stored sources into evidence.json (so ground-check then verifies GROUNDED). The on-demand fetch flow is documented with an honest determinism boundary; suites green.",
+      "review": {
+        "prompt": "Refute that SB is done. Does research-context render exactly the claims of the GIVEN section (id + text + source url + excerpt) and NOT other sections, deterministically and node ≡ python byte-identical? Does stamp-evidence compute the sha over the stored file BYTES and stamp it so ground-check then reports GROUNDED (and would it produce a WRONG sha or miss a source)? Are node and python producing the SAME stamped map? Do both import nothing from core? Is the how-to honest that the FETCH is on-demand/non-gated and that this verifies GROUNDING not TRUTH (no overclaim that HeartBeat fetches or fact-checks)? Do the proofs have TEETH (research-context.sh red before SB2; would stamp-evidence.sh catch a stamper that writes a bogus sha)? node/python/parity/prose/self-audit/skill-integrity green with T112/T113 wired?"
+      },
+      "criteria": [
+        { "id": "sba", "desc": "research-context renders a section's grounded evidence (node ≡ python)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/research-context.sh\" 2>&1 | grep -q 'RESEARCH-CONTEXT-OK'" },
+        { "id": "sbb", "desc": "stamp-evidence records honest shas so ground-check then reports GROUNDED (node ≡ python)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/stamp-evidence.sh\" 2>&1 | grep -q 'STAMP-EVIDENCE-OK'" },
+        { "id": "sbc", "desc": "both proofs wired into the suite (markers on the same line)", "cmd": "grep -qE 'research-context\\.sh.*RESEARCH-CONTEXT-OK' \"$PROJECT_DIR/tests/run-tests.sh\" && grep -qE 'stamp-evidence\\.sh.*STAMP-EVIDENCE-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "sbd", "desc": "behavioral: research-context for 'background' renders a background excerpt but EXCLUDES the method-section claim (no cross-section leak)", "cmd": "cd \"$PROJECT_DIR\" && FX=plugin/adapters/research/fixtures/context/evidence.json && out=$(node plugin/adapters/research/research-context.js \"$FX\" background) && printf '%s' \"$out\" | grep -q '»' && ! printf '%s' \"$out\" | grep -q 'METHOD-ONLY-EXCERPT'" },
+        { "id": "sbe", "desc": "behavioral: stamp-evidence records the REAL sha so ground-check then reports GROUNDED (a bogus/constant sha would STALE → grounded=0)", "cmd": "cd \"$PROJECT_DIR\" && FX=plugin/adapters/research/fixtures/unstamped && node plugin/adapters/research/ground-check.js <(node plugin/adapters/research/stamp-evidence.js \"$FX/evidence.json\" \"$FX/sources\") \"$FX/sources\" | grep -qE 'grounded=[1-9]'" },
+        { "id": "sbf", "desc": "python twins callable (parity surface, not node-only)", "cmd": "cd \"$PROJECT_DIR\" && PYTHONPATH=py/src python3 -c \"import heartbeat.adapters.research.research_context as rc, heartbeat.adapters.research.stamp_evidence as se; assert callable(getattr(rc,'research_context',None)) and callable(getattr(se,'stamp_evidence',None))\"" },
+        { "id": "sbg", "desc": "the how-to documents the on-demand fetch boundary + grounding-not-truth", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'on-demand|fetch' docs/howto/source-and-ground-research.md && grep -qiE 'grounding.*not.*truth|not.*truth' docs/howto/source-and-ground-research.md" }
+      ]
+    },
+    "GATE_RS": {
+      "desc": "The research skill documents the full loop (source → stamp → ground → refute → write) with the refutation seeded from hb-audit --questions and hand-off to docs-authoring/gated-docs; a worked-example how-to ships; skill-integrity + prose + self-audit green.",
+      "review": {
+        "prompt": "Refute that RS is done. Does the research skill now document the FULL loop — on-demand source, stamp-evidence, ground-check gate, an ADVERSARIAL refutation seeded by hb-audit --questions, research-context for writing, hand-off to docs-authoring + gated-docs — without overclaiming (it still verifies grounding not truth; fetch is on-demand)? Does it still declare HB-ADAPTER: research and name real wired proofs (skill-integrity T92 green)? Is the worked-example how-to concrete, prose-clean, and referencing REAL proofs, and is it in howto-list? Are prose (T93), self-audit, python, and parity green?"
+      },
+      "criteria": [
+        { "id": "rsa", "desc": "the research skill documents the full loop (source → ground → refute → write) reusing the real tools", "cmd": "cd \"$PROJECT_DIR\" && S=plugin/skills/research-grounding/SKILL.md && grep -qiE 'search|source' \"$S\" && grep -qiE 'refute|review|--questions' \"$S\" && grep -qiE 'research-context' \"$S\" && grep -qiE 'docs-authoring|gated-docs' \"$S\"" },
+        { "id": "rsb", "desc": "the worked-example how-to is prose-clean (links resolve, real commands)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/run-a-grounded-research-project.md\" 2>&1 | grep -qE 'PROSE-OK|ALL-PROSE-OK'" },
+        { "id": "rsc", "desc": "the worked-example how-to references the real proofs + is listed", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'ground-check|research-context|stamp-evidence' docs/howto/run-a-grounded-research-project.md && grep -q 'run-a-grounded-research-project.md' docs/howto/howto-list.md" },
+        { "id": "rsd", "desc": "skill-integrity (T92) + self-audit green after the skill/how-to changes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/skill-integrity.sh\" 2>&1 | grep -q 'SKILL-INTEGRITY-OK' && bash \"$PROJECT_DIR/docs/howto/gate-examples/self-audit.sh\" 2>&1 | grep -qE 'SELF-AUDIT-OK:[1-9][0-9]*/[1-9][0-9]*'" }
+      ]
+    }
+  }
+}
