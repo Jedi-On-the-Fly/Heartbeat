@@ -1,0 +1,83 @@
+{
+  "_meta": {
+    "project": "research-adapter-testing",
+    "note": "Turn two research-adapter test ideas into runnable, wired harnesses over the ALREADY-SHIPPED adapter (ground-check / stamp-evidence / research-context). These are characterization/red-team proofs: teeth = they go RED if the code regresses or a boundary claim is false. (RT) Red-team the gate/review BOUNDARY — a committed corpus that plants every mechanical failure mode (FABRICATED-QUOTE / UNGROUNDED / MISSING-SOURCE / STALE) PLUS two grounded-but-wrong claims (a paraphrase that overreaches its real excerpt; a real excerpt quoted out of context). The deterministic proof asserts ground-check catches all MECHANICAL fabrication and stays SILENT on truth (the two grounded-but-wrong claims report `grounded`), node ≡ python. The phase is review-gated: a distinct actor, seeded by `hb-audit --questions`, must independently identify the two grounded-but-wrong claims the gate passed — proving the review layer closes the semantic gap. Grounding != truth, made testable. (SC) Scale + parity — a DETERMINISTIC seeded generator builds a large messy corpus (60 sources, 200 claims, unicode, line-wraps, multi-claim-per-source, 4 sections); the proof asserts ground-check + research-context are node ≡ python BYTE-identical at scale, stamp-evidence produces the same map, the run completes within a timeout ceiling, and the grounded/issue counts are honest — catching the encoding/sort/perf divergences the toy fixtures hide. Proof-driven: spec-first, gated, refuted; each harness wired into the suite and documented as a method."
+  },
+  "phases": [
+    {
+      "id": "RT",
+      "title": "Red-team the gate/review boundary (grounding catches fabrication, stays silent on truth)",
+      "gate_entry": null,
+      "gate_exit": "GATE_RT",
+      "tasks": [
+        {
+          "id": "RT1",
+          "title": "Spec-first: red-team corpus + the classification/boundary proof",
+          "requires": [],
+          "description": "Author the committed red-team fixture under plugin/adapters/research/fixtures/redteam/ : evidence.json + sources/ with EIGHT claims exercising the whole boundary — c_ok (grounded clean), c_fab (FABRICATED-QUOTE: excerpt not in source), c_nosrc (UNGROUNDED: source undeclared), c_noex (UNGROUNDED: empty excerpt), c_missing (MISSING-SOURCE: source s_missing declared but plugin/adapters/research/fixtures/redteam/sources/s_missing.txt absent), c_stale (STALE: source s_stale with a deliberately WRONG recorded sha256), and the two GROUNDED-BUT-WRONG cases the gate cannot judge: c_drift (a real excerpt present in its source, but `text` overreaches it — mark the text with the token OVERREACH) and c_context (a real excerpt present in a secondary source, quoted out of context — mark the text with the token OUT-OF-CONTEXT). Grounded sources (s1, s_blog) are shaless so they ground via excerpt. Expected: ground-check reports grounded=3 issues=5, and c_drift/c_context are in the grounded set (never flagged). Author the proof docs/howto/gate-examples/ground-check-redteam.sh (prints `RED-TEAM-OK grounded=3 issues=5`): assert the exact grounded/issue counts, that each mechanical defect id appears with its expected class, that c_drift and c_context do NOT appear in any issue line (the gate stays silent on truth), and that ground-check is node ≡ python on the red-team corpus. The proof characterizes existing ground-check; its teeth are the exact classification (a regression that over- or under-flags, or that starts judging truth, turns it RED)."
+        },
+        {
+          "id": "RT2",
+          "title": "Wire the red-team proof + document the boundary as a method",
+          "requires": ["RT1"],
+          "description": "Add group T114 (ground-check-redteam.sh -> RED-TEAM-OK) to tests/run-tests.sh (marker on the same check line). Write the gated how-to docs/howto/red-team-a-grounding-corpus.md: the method — build a corpus that plants each failure mode INCLUDING grounded-but-wrong claims; the deterministic gate (`ground-check`) catches mechanical fabrication (fabricated quote, undeclared/empty source, missing file, stale sha) but is SILENT on truth by design; the distinct-actor refutation, seeded by `node .hb/hb-audit.js .hb/dag.json --questions <gate>` (is the excerpt in context? does it support the paraphrase? is the source primary?), closes the semantic gap. State plainly that it verifies grounding, NOT truth. Reference docs/howto/gate-examples/ground-check-redteam.sh and add the guide to docs/howto/howto-list.md. Confirm node (T114 in GROUPS-PASSED), python, parity, whole-docs prose, self-audit, and skill-integrity stay green."
+        }
+      ]
+    },
+    {
+      "id": "SC",
+      "title": "Scale + parity — the adapter stays node ≡ python and fast on a large messy corpus",
+      "gate_entry": "GATE_RT",
+      "gate_exit": "GATE_SC",
+      "tasks": [
+        {
+          "id": "SC1",
+          "title": "Spec-first: the scale-parity proof (RED before the generator exists)",
+          "requires": [],
+          "description": "Author the proof docs/howto/gate-examples/research-scale-parity.sh (prints `SCALE-PARITY-OK sources=60 claims=200 grounded=160 issues=40`) RED-first — it references a not-yet-existing generator, so it FAILS now. Contract the proof asserts: generate a large corpus into a temp dir via the generator; ground-check node ≡ python BYTE-identical on it and reports `grounded=160 issues=40`; research-context node ≡ python byte-identical for each of the four sections (background/method/results/discussion); stamp-evidence node ≡ python produce the SAME map (canonicalized parsed-equal); the ground-check run completes within a `timeout` ceiling (a perf guard against an accidental O(n^2) blowup); then print the marker with the scale/counts. mktemp lives in the PROOF (not a gate criterion). The heavy scale teeth ride on this proof's structured marker line."
+        },
+        {
+          "id": "SC2",
+          "title": "Implement the deterministic large-corpus generator (make the proof green)",
+          "requires": ["SC1"],
+          "description": "Implement plugin/adapters/research/fixtures/scale/gen.js — a DETERMINISTIC, seeded-by-index generator (no time / no randomness) that writes evidence.json + sources/ to an output dir arg. 60 sources (s_00..s_59), 200 claims (c_000..c_199, ZERO-PADDED so node and python string-sort identically), source = i % 60, section = [background,method,results,discussion][i%4]. Every 5th claim (i%5==0) is FABRICATED (excerpt a NOTINSOURCE-<i> token absent from the source) -> 40 fabricated / 160 grounded. Two-pass: assign claims, then build each source's .txt from the grounded excerpts that cite it (plus filler and unicode °C / » / é / — ) with a synthetic line-wrap injected into each stored excerpt (so whitespace normalization is exercised) while the claim keeps a single-space excerpt. Sources are shaless (ground via excerpt; no STALE). Result: ground-check reports grounded=160 issues=40 deterministically. Make docs/howto/gate-examples/research-scale-parity.sh green; keep tests/parity.sh green."
+        },
+        {
+          "id": "SC3",
+          "title": "Wire the scale proof + document the scale-test method",
+          "requires": ["SC2"],
+          "description": "Add group T115 (research-scale-parity.sh -> SCALE-PARITY-OK) to tests/run-tests.sh (marker on the same check line). Write the gated how-to docs/howto/scale-test-the-research-adapter.md: why toy fixtures hide encoding / sort-order / perf divergences; the seeded-generator method (deterministic, index-derived, zero-padded ids for stable cross-runtime sort, unicode + line-wraps, multi-claim-per-source); the two guarantees it enforces — node ≡ python BYTE-identical output and completion within a timeout ceiling. Reference docs/howto/gate-examples/research-scale-parity.sh and add the guide to docs/howto/howto-list.md. Confirm node (T115 in GROUPS-PASSED), python, parity, whole-docs prose, self-audit, and skill-integrity stay green."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_RT": {
+      "desc": "A committed red-team corpus proves ground-check catches every MECHANICAL failure mode and stays SILENT on truth (two grounded-but-wrong claims report grounded), node ≡ python; the distinct-actor review independently identifies those two claims (the review layer closes the semantic gap). Wired (T114) + documented as a method; suites green.",
+      "review": {
+        "prompt": "Refute that RT is done. (1) Harness soundness: does ground-check-redteam.sh have TEETH — would it go RED if ground-check stopped catching a fabrication, or started flagging a grounded-but-wrong claim (mutation-test it)? Are the counts (grounded=3 issues=5) and per-class assertions real, and is node ≡ python actually checked on the red-team corpus? (2) THE BOUNDARY, exercised for real: independently of the gate, run `node plugin/templates/hb-audit.js planning/research-adapter-testing.dag.json --questions GATE_RT`, read plugin/adapters/research/fixtures/redteam/ , and identify WHICH claims are grounded-but-wrong (a real excerpt that does not support the paraphrase / is out of context). You must find c_drift and c_context — the gate reports them grounded; the review is what catches them. If you cannot, the red-team corpus or the boundary claim is weak. (3) Does the how-to state honestly that it verifies grounding, NOT truth, and that the refutation (seeded by --questions) is what closes the gap — no overclaim? (4) node/python/parity/prose/self-audit/skill-integrity green with T114 wired?"
+      },
+      "criteria": [
+        { "id": "rta", "desc": "red-team classification proof passes (all mechanical classes + boundary + node ≡ python)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/ground-check-redteam.sh\" 2>&1 | grep -q 'RED-TEAM-OK grounded=3 issues=5'" },
+        { "id": "rtb", "desc": "the red-team proof is wired into the suite (marker on the same line)", "cmd": "grep -qE 'ground-check-redteam\\.sh.*RED-TEAM-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "rtc", "desc": "ground-check is node ≡ python on the red-team corpus (independent of the proof)", "cmd": "cd \"$PROJECT_DIR\" && FX=plugin/adapters/research/fixtures/redteam && [ \"$(node plugin/adapters/research/ground-check.js \"$FX/evidence.json\" \"$FX/sources\")\" = \"$(PYTHONPATH=py/src python3 -m heartbeat.adapters.research.ground_check \"$FX/evidence.json\" \"$FX/sources\")\" ]" },
+        { "id": "rtd", "desc": "boundary: mechanical fabrication is caught, but the two grounded-but-wrong claims are reported grounded (gate silent on truth)", "cmd": "cd \"$PROJECT_DIR\" && FX=plugin/adapters/research/fixtures/redteam && out=$(node plugin/adapters/research/ground-check.js \"$FX/evidence.json\" \"$FX/sources\") && printf '%s' \"$out\" | grep -q 'grounded=3 issues=5' && printf '%s' \"$out\" | grep -qE 'FABRICATED-QUOTE:.*c_fab' && printf '%s' \"$out\" | grep -qE 'STALE:.*c_stale' && printf '%s' \"$out\" | grep -qE 'MISSING-SOURCE:.*c_missing' && ! printf '%s' \"$out\" | grep -qE 'c_drift|c_context'" },
+        { "id": "rte", "desc": "the how-to documents the boundary (grounding not truth; refutation seeded by --questions)", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'grounding.*not.*truth|not.*truth' docs/howto/red-team-a-grounding-corpus.md && grep -qiE 'refute|--questions|review' docs/howto/red-team-a-grounding-corpus.md" },
+        { "id": "rtf", "desc": "the how-to references the proof and is listed", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'ground-check-redteam' docs/howto/red-team-a-grounding-corpus.md && grep -q 'red-team-a-grounding-corpus.md' docs/howto/howto-list.md" }
+      ]
+    },
+    "GATE_SC": {
+      "desc": "A deterministic seeded generator builds a large messy corpus and the proof shows ground-check + research-context stay node ≡ python BYTE-identical at scale, stamp-evidence produces the same map, the run stays within a timeout ceiling, and the grounded/issue counts are honest (grounded=160 issues=40). Wired (T115) + documented; suites green.",
+      "review": {
+        "prompt": "Refute that SC is done. Is the generator plugin/adapters/research/fixtures/scale/gen.js truly DETERMINISTIC (no time/random; same bytes every run) and does it actually inject unicode + line-wraps + multi-claim-per-source (or is the 'messy corpus' cosmetic)? Is the parity check GENUINE — would research-scale-parity.sh catch a real divergence, or could both runtimes be broken identically (mutate one twin and confirm it goes RED)? Are the counts (60/200/160/40) honest and does ground-check actually process the whole corpus (not bail early)? Is the timeout a meaningful perf ceiling? Are zero-padded ids really giving identical node/python sort order? node/python/parity/prose/self-audit/skill-integrity green with T115 wired?"
+      },
+      "criteria": [
+        { "id": "sca", "desc": "scale-parity proof passes with honest scale + counts (node ≡ python byte-identical, within timeout)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/research-scale-parity.sh\" 2>&1 | grep -q 'SCALE-PARITY-OK sources=60 claims=200 grounded=160 issues=40'" },
+        { "id": "scb", "desc": "the scale proof is wired into the suite (marker on the same line)", "cmd": "grep -qE 'research-scale-parity\\.sh.*SCALE-PARITY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "scc", "desc": "the consumer twins the proof relies on are importable (parity surface)", "cmd": "cd \"$PROJECT_DIR\" && PYTHONPATH=py/src python3 -c \"import heartbeat.adapters.research.ground_check as g, heartbeat.adapters.research.research_context as r; assert callable(getattr(g,'ground_check',None)) and callable(getattr(r,'research_context',None))\"" },
+        { "id": "scd", "desc": "the how-to documents the method (byte-identical + timeout ceiling)", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'byte-identical|byte identical' docs/howto/scale-test-the-research-adapter.md && grep -qiE 'timeout|ceiling|perf' docs/howto/scale-test-the-research-adapter.md" },
+        { "id": "sce", "desc": "the how-to references the proof and is listed", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'research-scale-parity' docs/howto/scale-test-the-research-adapter.md && grep -q 'scale-test-the-research-adapter.md' docs/howto/howto-list.md" }
+      ]
+    }
+  }
+}

@@ -1375,6 +1375,10 @@ grp "T113 — research adapter: stamp-evidence records honest source shas so gro
 check "T113.1 stamp-evidence stamps the real sha, ground-check then GROUNDED, a later edit is STALE (stamp-evidence.sh → STAMP-EVIDENCE-OK)" \
   'bash "'"$GEX"'/stamp-evidence.sh" 2>&1 | grep -q "STAMP-EVIDENCE-OK"'
 
+grp "T114 — research adapter: red-team corpus proves ground-check catches mechanical fabrication and stays silent on truth"
+check "T114.1 all mechanical failure modes classified, two grounded-but-wrong claims unflagged, node ≡ python (ground-check-redteam.sh → RED-TEAM-OK)" \
+  'bash "'"$GEX"'/ground-check-redteam.sh" 2>&1 | grep -q "RED-TEAM-OK grounded=3 issues=5"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

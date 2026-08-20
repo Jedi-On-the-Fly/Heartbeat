@@ -1,0 +1,18 @@
+{
+  "sources": {
+    "s1":       { "url": "https://journal.example.org/greentea-cohort-2021", "title": "Green tea cohort study" },
+    "s_blog":   { "url": "https://blog.example.com/tea-roundup", "title": "Weekly roundup (secondary)" },
+    "s_stale":  { "url": "https://example.org/stale", "title": "Edited after fetch", "sha256": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef" },
+    "s_missing":{ "url": "https://example.org/gone", "title": "Never stored", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" }
+  },
+  "claims": {
+    "c_ok":      { "text": "The study reported an association, not causation.", "source": "s1", "excerpt": "the association did not establish causation", "section": "background" },
+    "c_drift":   { "text": "Green tea daily PREVENTS the condition. OVERREACH — the paraphrase overstates a modest, associational finding.", "source": "s1", "excerpt": "green tea daily had a modestly lower incidence", "section": "results" },
+    "c_context": { "text": "A cure-all endorsement built on the quote. OUT-OF-CONTEXT — real words, non-primary blog, caveats stripped.", "source": "s_blog", "excerpt": "green tea daily had a modestly lower incidence", "section": "results" },
+    "c_fab":     { "text": "An invented quotation.", "source": "s1", "excerpt": "the sky is green at midnight", "section": "background" },
+    "c_nosrc":   { "text": "Cites a source that was never declared.", "source": "s_undeclared", "excerpt": "anything at all", "section": "background" },
+    "c_noex":    { "text": "A claim with no supporting excerpt.", "source": "s1", "excerpt": "", "section": "background" },
+    "c_missing": { "text": "Cites a declared source whose file was never stored.", "source": "s_missing", "excerpt": "unreadable", "section": "method" },
+    "c_stale":   { "text": "The stored source changed after it was fetched.", "source": "s_stale", "excerpt": "recorded hash no longer matches", "section": "method" }
+  }
+}
