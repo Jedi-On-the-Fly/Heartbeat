@@ -15,8 +15,8 @@ Two stages. **Stage A** (`tick.sh`, bash) reads settled reality and decides whet
 | `plugin/skills/heartbeat/SKILL.md` | `/heartbeat` command surface + Tick Protocol |
 | `plugin/skills/gated-docs/SKILL.md` | docs-as-verified-claims method (gate a guide with a proof/prose-check, refute it) |
 | `plugin/hooks/hooks.json` + `heartbeat-detect.sh` | SessionStart pointer when a `.hb/` exists |
-| `plugin/adapters/code/` + `plugin/adapters/docs/` | **Domain adapters** — dep-lint + context + **discovery** (change-impact) + **deplint-accept** (plan-acceptance wrapper) + **exclude-hb** (graph hygiene) — a **parity surface** with `py/src/heartbeat/adapters/` (node ≡ python, T94/T95/T98/T100). Exposed over MCP as `deplint`/`code_context`/`code_discover`. NOT scaffolded into `.hb/`, imports nothing from core. See [adapters.md](adapters.md) |
-| `plugin/skills/code-aware-planning/` + `docs-authoring/` | the per-adapter skills (enforced by skill-integrity, T92) |
+| `plugin/adapters/code/` + `plugin/adapters/docs/` + `plugin/adapters/research/` | **Domain adapters** — code (dep-lint + context + **discovery** + **deplint-accept** + **exclude-hb** + **coverage**/blind-spots), docs (citation-graph dep-lint + context), and research (**ground-check** the gate + **stamp-evidence** honest hashes + **research-context** Seam 2) — a **parity surface** with `py/src/heartbeat/adapters/` (node ≡ python, T94/T95/T98/T100/T106/T110–T115). Code exposed over MCP as `deplint`/`code_context`/`code_discover`. NOT scaffolded into `.hb/`, imports nothing from core. See [adapters.md](adapters.md) |
+| `plugin/skills/code-aware-planning/` + `docs-authoring/` + `research-grounding/` | the per-adapter skills (enforced by skill-integrity, T92) |
 | `plugin/templates/*` | Per-project tooling, copied into `.hb/` at bootstrap |
 
 Every project owns copies of the templates under `.hb/`. `HB_DIR` = the `.hb/` dir; `PROJECT_DIR` = its parent.

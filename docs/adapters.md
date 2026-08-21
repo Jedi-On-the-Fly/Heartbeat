@@ -91,6 +91,10 @@ are exposed over MCP):
   `codegraph.json` so CodeGraph indexes the app, not HeartBeat's scaffold. Proof:
   [codegraph-exclude-hb.sh](howto/gate-examples/codegraph-exclude-hb.sh) (T102). deplint also suppresses
   REDUNDANT for a task with no resolved symbols (spec-first / not-yet-existing files) — T101.
+- **Graph coverage / blind-spots** — `codegraph-coverage.js` reports each task's resolved-symbol count
+  and lists the **GRAPH-BLIND** tasks (zero symbols — dynamic/framework bindings or not-yet-existing
+  files the static graph can't model → read manually), so not all code context is trusted equally. Proof:
+  [code-coverage.sh](howto/gate-examples/code-coverage.sh) (T106).
 
 **Honesty about maturity:** the pure engine, the row→codemap mapping, the context provider, and the
 node ≡ python injection mechanism are gated hermetically (node-suite T87–T89). The **live CodeGraph
@@ -98,7 +102,7 @@ database read** and the **local-model end-to-end demo** (`tests/real-context.sh`
 local ollama model) are **harness-first / on-demand** — they need external tools and are
 non-deterministic, so they are *not* part of the gated suite.
 
-## Docs / research — the second domain
+## Docs — the second domain
 
 The `heartbeat-docs` adapter ([README](../plugin/adapters/docs/README.md)) is the proof that the
 architecture generalizes: a completely different provider over the **unchanged** engine.
@@ -115,6 +119,36 @@ Only the provider is new — `deplint.js` and the `context_cmd` hook are reused 
 end-to-end demo (`tests/real-docs-context.sh`, ollama) is harness-first, like code's. Guide:
 [plan a docs project with citations](howto/plan-a-docs-project-with-citations.md).
 
+## Research — the third domain
+
+The `research` adapter ([skill](../plugin/skills/research-grounding/SKILL.md)) points the same
+accept-only-on-evidence lifecycle at **facts**: a claim is provisional until a real, stored source is
+shown to back it and a refuter fails to knock it down. Unlike code and docs, its input — the web fetch —
+is **non-deterministic**, so the adapter draws the determinism boundary explicitly: the **fetch is
+on-demand and non-gated**, and everything downstream of the stored snapshot is deterministic and gates.
+It imports nothing from core and every tool is node ≡ python.
+
+- **Stamp** — `stamp-evidence.js` records each source's sha256 from the **stored bytes** into the
+  evidence map (a one-time, at-store-time step), so an agent-supplied hash can't lie and a later edit
+  surfaces as STALE. Proof: [stamp-evidence.sh](howto/gate-examples/stamp-evidence.sh) (T113).
+- **Ground (the gate)** — `ground-check.js` verifies offline that every claim's verbatim excerpt is in
+  its stored source and the sha still matches, catching FABRICATED-QUOTE / UNGROUNDED / MISSING-SOURCE /
+  STALE. Advisory; `--strict` blocks. Proof: [ground-check.sh](howto/gate-examples/ground-check.sh)
+  (T110, node ≡ python T111).
+- **Context (Seam 2)** — `research-context.js` renders **only** a given section's grounded claims
+  (id + text + source url + verbatim excerpt) as the writer's context block, through the same generic
+  `context_cmd` hook. Proof: [research-context.sh](howto/gate-examples/research-context.sh) (T112).
+
+**It verifies grounding, not truth.** The gate proves the quote is *real*; whether it's in context,
+primary, or actually supports the paraphrase is the **adversarial review's** job (seeded by
+`hb-audit --questions`). That boundary is itself red-teamed: a corpus that plants every mechanical
+failure mode plus two *grounded-but-wrong* claims proves the gate catches fabrication and stays silent on
+truth ([ground-check-redteam.sh](howto/gate-examples/ground-check-redteam.sh), T114); and the whole
+adapter is exercised at scale (60 sources / 200 claims, unicode, line-wraps) for node ≡ python parity
+([research-scale-parity.sh](howto/gate-examples/research-scale-parity.sh), T115).
+
 Guides: [build a domain adapter](howto/build-a-domain-adapter.md) ·
 [feed code context to Stage B](howto/feed-code-context-to-stage-b.md) ·
-[plan code-aware DAGs](howto/plan-code-aware-dags.md).
+[plan code-aware DAGs](howto/plan-code-aware-dags.md) ·
+[ground research claims](howto/ground-research-claims.md) ·
+[source and ground research](howto/source-and-ground-research.md).

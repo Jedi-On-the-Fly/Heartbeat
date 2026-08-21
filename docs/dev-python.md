@@ -35,8 +35,9 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 | `protocol.py` | `PROTOCOL`, `render_md()` | reason keys = plugin; action text cites `hb` console |
 | `executor.py` | `run(hbdir)`, `config(hbdir)`, `dispatch(...)`, `assemble_context`, in-process + subprocess dispatch, worktree parallel | pluggable Stage B |
 | `backends/` | in-process backend registry | see below |
-| `adapters/code/` | `deplint`, `codegraph_map` (+ `resolve_task_symbols`), `codegraph_context`, `codegraph_discover`, `deplint_accept`, `codegraph_exclude_hb` | domain adapter — a parity surface with `plugin/adapters/code/*.js` (node ≡ python; T94/T98/T100). `python3 -m heartbeat.adapters.code.deplint …` |
+| `adapters/code/` | `deplint`, `codegraph_map` (+ `resolve_task_symbols`), `codegraph_context`, `codegraph_discover`, `deplint_accept`, `codegraph_exclude_hb`, `codegraph_coverage` | domain adapter — a parity surface with `plugin/adapters/code/*.js` (node ≡ python; T94/T98/T100/T106). `python3 -m heartbeat.adapters.code.deplint …` |
 | `adapters/docs/` | `docs_map`, `docs_context` (`js_trim`) | docs domain adapter — parity with `plugin/adapters/docs/*.js` (T95). Node-free; usable as a `context_cmd` with zero Node (T96) |
+| `adapters/research/` | `ground_check` (the gate), `stamp_evidence`, `research_context` | research domain adapter — parity with `plugin/adapters/research/*.js` (node ≡ python; T110–T115). Grounding, not truth; the fetch is on-demand/non-gated. `python3 -m heartbeat.adapters.research.ground_check …` |
 | `mcp_server.py` | `serve(hbdir)`, `TOOLS` | `hb mcp-serve` — minimal stdlib-only MCP server over stdio; see below |
 | `bench.py` | `score(hbdir)`, `run(source, specs)`, `reward_records(events, dag)`, `rewards(hbdir)`, `regressions(cards, baseline)`, `render`, `build` | `hb bench` (+`--baseline` regression verdict), `hb reward` — score N backends, extract the verifiable-reward stream, flag model-regression; all pure over the event log |
 | `cli.py` | `main(argv=None)` → argparse dispatch | the `hb` entry |

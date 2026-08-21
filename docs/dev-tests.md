@@ -119,8 +119,22 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T100 | deplint-accept (`deplint-accept.sh`) — plan-acceptance wrapper: codemap resolution + clean skip, node ≡ python |
 | T101 | deplint precision (`deplint-redundant-empty.sh`) — no REDUNDANT for a task with no resolved symbols (spec-first / new files) |
 | T102 | codegraph-exclude-hb (`codegraph-exclude-hb.sh`) — keep CodeGraph off `.hb/`, idempotent, node ≡ python |
+| T103 | checkpoint lifecycle — a review-gated `GATE_x` is tagged only at **review acceptance**, not the deterministic pass (node ≡ python) |
+| T104 | `hb-audit --questions` — falsification questions derived per criterion class to seed the review (node ≡ python) |
+| T105 | gate evidence provenance — `gate_passed` records `{criteria,commit,runtime}`; `hb evidence` reads it back (node ≡ python) |
+| T106 | code adapter coverage (`code-coverage.sh`) — per-task symbol coverage + **GRAPH-BLIND** list (node ≡ python) |
+| T107 | docs adapter — `docs-map` recognizes reference-style links, not just inline (node ≡ python) |
+| T108 | docs adapter real-corpus — `docs-map` over the repo's own `docs/` is a non-empty graph (regression guard, node ≡ python) |
+| T109 | docs change-impact reuses the neutral discover engine (reverse-citation reachability) |
+| T110 | research adapter (`ground-check.sh`) — claims grounded in stored sources; fabricated / ungrounded / missing / stale |
+| T111 | research adapter parity (`ground-check-parity.sh`) — ground-check node ≡ python (byte-identical report) |
+| T112 | research adapter Seam 2 (`research-context.sh`) — renders a section's grounded claims for the writer (node ≡ python) |
+| T113 | research adapter (`stamp-evidence.sh`) — honest source shas so ground-check can verify + catch a later edit (node ≡ python) |
+| T114 | research boundary (`ground-check-redteam.sh`) — gate catches mechanical fabrication, stays **silent on truth** (grounded-but-wrong) |
+| T115 | research scale/parity (`research-scale-parity.sh`) — node ≡ python on 60 sources / 200 claims (unicode, line-wraps) |
+| T116 | adapter doc-coverage (`adapters-doc-coverage.sh`) — every shipped `plugin/adapters/<domain>` tool is named in `adapters.md` |
 
-The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T102; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
+The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T116; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
 
 ## Python suite — `py/tests/`
 
