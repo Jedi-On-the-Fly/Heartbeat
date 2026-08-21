@@ -1,0 +1,80 @@
+{
+  "_meta": {
+    "project": "pre-push-and-cross-model",
+    "note": "Two deliverables from the review discussion. (XR) A worked end-to-end how-to tying the cross-model distinct-actor refuter (#1) to the research adapter (#2): a doer builds a grounded writeup (source→stamp→ground) and a DISTINCT local model (Ollama) runs the refutation seeded by `hb-audit --questions`, with distinct-actor provenance. It composes ALREADY-PROVEN mechanisms (cross-model-refuter.sh T73, ground-check.sh T110, --questions T104), so it's a worked/decision guide gated by prose-integrity + referencing the real wired proofs — honest that it verifies grounding-not-truth and that a second model 'catches more' is model-dependent, not guaranteed. (PH) A blocking pre-PUSH git hook as a BOOTSTRAP FEATURE, both runtimes: whenever a HeartBeat project is bootstrapped (node bootstrap.sh AND python `hb init`), install a non-destructive `.git/hooks/pre-push` that runs `gate.sh --all` (re-verify every gate, read-only) and BLOCKS the push (exit 1) on any failing gate. Pre-push (not pre-commit) avoids colliding with HeartBeat's per-gate auto-commits. Mirrors the existing rot pre-commit hook's pattern (install only if absent → never clobber; bypass via HB_NO_HOOK or `git push --no-verify`). The hook script is runtime-specific (each calls its own gate tool) so parity is BEHAVIORAL (both block identically), like PROTOCOL action-text. The pre-existing rot-hook node-only divergence is documented in parity-notes, not fixed here. Proof-driven: spec-first, gated, refuted."
+  },
+  "phases": [
+    {
+      "id": "XR",
+      "title": "Worked cross-model research review how-to (distinct actor ⇒ the research loop's semantic teeth)",
+      "gate_entry": null,
+      "gate_exit": "GATE_XR",
+      "tasks": [
+        {
+          "id": "XR1",
+          "title": "Write the worked cross-model + research review how-to",
+          "requires": [],
+          "description": "Write docs/howto/run-a-cross-model-research-review.md: a concrete end-to-end walk-through where the DOER builds a grounded research writeup (source → stamp-evidence → ground-check --strict) and a DISTINCT model — a local Ollama model, or a different backend/vendor — runs the adversarial refutation, seeded by `node .hb/hb-audit.js .hb/dag.json --questions <gate>`, with the distinct-actor provenance recorded in the review artifact. Show the real config (HB_REFUTE_BACKEND / HB_REFUTE_MODEL, or executor.json refute_* — e.g. doer ollama llama3.1:8b, refuter ollama qwen2.5:7b-instruct). Be explicit that this is where the research adapter's SEMANTIC check lives (ground-check is mechanical; the distinct refuter judges support/context/primary-source) and honest that it verifies grounding-not-truth and that a second model 'catches more' is model-dependent, not benchmarked by the harness. Cross-link the existing cross-model-verification.md and the research guides; reference the real wired proofs cross-model-refuter.sh and ground-check.sh. Add it to docs/howto/howto-list.md. The phase gate prose-checks it with docs/howto/gate-examples/prose-check.sh; confirm whole-docs prose (T93), self-audit, skill-integrity stay green."
+        }
+      ]
+    },
+    {
+      "id": "PH",
+      "title": "Blocking pre-push hook — a bootstrap feature (both runtimes)",
+      "gate_entry": "GATE_XR",
+      "gate_exit": "GATE_PH",
+      "tasks": [
+        {
+          "id": "PH1",
+          "title": "Spec-first: behavioral proofs for the pre-push hook + its parity",
+          "requires": [],
+          "description": "Author RED-first. Proof docs/howto/gate-examples/pre-push-hook.sh (prints PRE-PUSH-HOOK-OK): bootstrap a temp git project via plugin/bootstrap.sh and assert (a) an executable .git/hooks/pre-push is installed; (b) it BLOCKS — with a .hb gate re-verification that FAILS, running the hook exits non-zero; (c) it ALLOWS — with gate re-verification passing, exits 0; (d) NON-DESTRUCTIVE — bootstrapping a repo that already has a .git/hooks/pre-push leaves the existing one untouched (sentinel survives); (e) SKIPPABLE — HB_NO_HOOK=1 makes the hook exit 0 without running gates. Control the block/allow outcome deterministically (e.g. a stub .hb/gate.sh exiting 1 vs 0) so the proof needs no real failing gate. Proof docs/howto/gate-examples/pre-push-hook-parity.sh (prints PRE-PUSH-PARITY-OK): a node-bootstrapped project (plugin/bootstrap.sh) AND a python-init project (PYTHONPATH=py/src python3 -m heartbeat.cli init) each install a pre-push hook that BLOCKS on a failing gate and ALLOWS on a passing one — behavioral parity (the hook body is runtime-specific by design; assert behavior, not bytes). Both proofs FAIL now (no pre-push install exists)."
+        },
+        {
+          "id": "PH2",
+          "title": "Install the blocking pre-push hook from the node bootstrap",
+          "requires": ["PH1"],
+          "description": "Add pre-push install to plugin/bootstrap.sh, mirroring the existing rot pre-commit hook pattern (lines ~115-135): write .git/hooks/pre-push ONLY if it does not already exist (never clobber a user hook), chmod +x, and install whenever the project is a git work tree (fresh OR existing repo — not only on first git init — so existing repos get the feature), gated by the same HB_NO_HOOK / HB_NO_GIT opt-outs. The hook body: `[ -n \"${HB_NO_HOOK:-}\" ] && exit 0`; find the repo toplevel; guard on .hb/gate.sh existing; run `bash .hb/gate.sh --all`; on non-zero, print a clear 'HeartBeat gate guard: push blocked — a gate no longer verifies' message naming the bypass (`git push --no-verify`) and exit 1; else exit 0. Verify `gate.sh --all` is read-only and returns non-zero iff a gate fails. Make docs/howto/gate-examples/pre-push-hook.sh green; keep tests/parity.sh green."
+        },
+        {
+          "id": "PH3",
+          "title": "Parity: install the equivalent hook from the Python scaffold",
+          "requires": ["PH2"],
+          "description": "Add the equivalent pre-push install to py/src/heartbeat/scaffold.py `_git_init` (which today installs NO hooks): write .git/hooks/pre-push only if absent, chmod +x, HB_NO_HOOK/HB_NO_GIT opt-outs, install on fresh-or-existing repo. The python hook body calls the python gate re-verify (`hb gate --all` / `python3 -m heartbeat.cli gate --all --dir <toplevel>`) and blocks (exit 1) on failure — behaviorally identical to the node hook (runtime-specific body by design). Make docs/howto/gate-examples/pre-push-hook-parity.sh green. Document the divergence in planning/parity-notes.md: BOTH runtimes now install the blocking pre-push hook; the rot PRE-COMMIT hook remains node-only (pre-existing, out of scope here). Keep py/tests + tests/parity.sh green."
+        },
+        {
+          "id": "PH4",
+          "title": "Wire the proofs + document the pre-push gate guard",
+          "requires": ["PH3"],
+          "description": "Add groups T117 (pre-push-hook.sh → PRE-PUSH-HOOK-OK) and T118 (pre-push-hook-parity.sh → PRE-PUSH-PARITY-OK) to tests/run-tests.sh (markers on the same check line). Write the gated how-to docs/howto/block-pushes-on-failing-gates.md: what the pre-push hook does (re-verify every gate before a push, block on regression), that bootstrap installs it in both runtimes non-destructively, why pre-push not pre-commit (no collision with HeartBeat's auto-commits), and the opt-outs (HB_NO_HOOK=1, `git push --no-verify`). Reference docs/howto/gate-examples/pre-push-hook.sh; add it to docs/howto/howto-list.md. Confirm node (T117+T118 in GROUPS-PASSED), python pytest, parity, whole-docs prose (T93), self-audit, skill-integrity all green."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_XR": {
+      "desc": "A worked how-to ties the cross-model distinct-actor refuter to the research loop end-to-end (grounded writeup → distinct-model refute seeded by --questions → distinct-actor provenance), composing real wired proofs, honest that it verifies grounding-not-truth and that catching-more is model-dependent. Prose-clean, references the proofs, listed; suites green.",
+      "review": {
+        "prompt": "Refute that XR is done. Does run-a-cross-model-research-review.md actually walk the FULL loop (source→stamp→ground, then a DISTINCT model refutes seeded by hb-audit --questions, with distinct-actor provenance) with REAL, runnable commands and config keys that resolve (HB_REFUTE_BACKEND/HB_REFUTE_MODEL / executor.json refute_*)? Is it honest that ground-check is mechanical and the SEMANTIC judgment is the refuter's, that it verifies grounding-not-truth, and that a second model 'catches more' is model-dependent (not benchmarked)? Any overclaim? Does it reference the real wired proofs (cross-model-refuter.sh, ground-check.sh) and cross-link cross-model-verification.md without duplicating it? Links resolve, listed in howto-list, prose (T93) + self-audit + skill-integrity green?"
+      },
+      "criteria": [
+        { "id": "xra", "desc": "the how-to is prose-clean (links resolve, real commands)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/run-a-cross-model-research-review.md\" 2>&1 | grep -qE 'PROSE-OK|ALL-PROSE-OK'" },
+        { "id": "xrb", "desc": "it composes the real mechanisms: distinct-actor refuter + --questions + ground-check", "cmd": "cd \"$PROJECT_DIR\" && F=docs/howto/run-a-cross-model-research-review.md && grep -qiE 'HB_REFUTE_(BACKEND|MODEL)|refute_(backend|model)' \"$F\" && grep -qiE 'ground-check' \"$F\" && grep -qiE 'hb-audit .*--questions|--questions' \"$F\"" },
+        { "id": "xrc", "desc": "it is listed in the how-to index", "cmd": "grep -q 'run-a-cross-model-research-review.md' \"$PROJECT_DIR/docs/howto/howto-list.md\"" },
+        { "id": "xrd", "desc": "self-audit + skill-integrity stay green (guide references wired proofs)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/self-audit.sh\" 2>&1 | grep -qE 'SELF-AUDIT-OK:[1-9][0-9]*/[1-9][0-9]*' && bash \"$PROJECT_DIR/docs/howto/gate-examples/skill-integrity.sh\" 2>&1 | grep -q 'SKILL-INTEGRITY-OK'" }
+      ]
+    },
+    "GATE_PH": {
+      "desc": "Bootstrap installs a blocking pre-push hook in BOTH runtimes: it re-verifies every gate (gate.sh --all / hb gate --all) and blocks the push on any failing gate, non-destructively (never clobbers an existing hook), skippable via HB_NO_HOOK / git --no-verify, pre-push not pre-commit. Behavioral node≡python parity; wired T117/T118; documented; suites green.",
+      "review": {
+        "prompt": "Refute that PH is done. Do the proofs have TEETH — would pre-push-hook.sh go RED if the hook did NOT block on a failing gate (mutate the hook to always exit 0)? Does the installed hook actually (a) BLOCK (exit non-zero) when gate re-verification fails and (b) ALLOW on pass; (c) NOT clobber an existing .git/hooks/pre-push; (d) skip on HB_NO_HOOK=1 and honor `git push --no-verify`; (e) install on an EXISTING repo, not only a fresh git init? Is it pre-PUSH (so it never fires on HeartBeat's per-gate auto-commits)? Is the node≡python parity BEHAVIORAL and real (pre-push-hook-parity.sh exercises both bootstraps)? Is the pre-existing rot-hook node-only divergence documented in parity-notes.md? node/python/parity/prose/self-audit/skill-integrity green with T117/T118 wired?"
+      },
+      "criteria": [
+        { "id": "pha", "desc": "the pre-push hook proof passes (installed + blocks on fail + allows on pass + non-clobber + opt-out)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/pre-push-hook.sh\" 2>&1 | grep -q 'PRE-PUSH-HOOK-OK'" },
+        { "id": "phb", "desc": "node ≡ python behavioral parity: both bootstraps install an equivalent blocking hook", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/pre-push-hook-parity.sh\" 2>&1 | grep -q 'PRE-PUSH-PARITY-OK'" },
+        { "id": "phc", "desc": "both proofs wired into the suite (markers on the same line)", "cmd": "grep -qE 'pre-push-hook\\.sh.*PRE-PUSH-HOOK-OK' \"$PROJECT_DIR/tests/run-tests.sh\" && grep -qE 'pre-push-hook-parity\\.sh.*PRE-PUSH-PARITY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "phd", "desc": "the how-to documents the opt-outs and is listed", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'no-verify|HB_NO_HOOK' docs/howto/block-pushes-on-failing-gates.md && grep -q 'block-pushes-on-failing-gates.md' docs/howto/howto-list.md" }
+      ]
+    }
+  }
+}
