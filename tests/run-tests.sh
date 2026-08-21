@@ -1233,9 +1233,9 @@ check "T92.1 skill-integrity passes (skill-integrity.sh → SKILL-INTEGRITY-OK)"
 check "T92.2 the integrity checker has teeth (selftest catches missing-skill + unwired-proof)" \
   'bash "'"$GEX"'/skill-integrity.sh" --selftest 2>&1 | grep -q "SKILL-INTEGRITY-SELFTEST-OK"'
 
-grp "T93 — EVERY markdown file under docs/ is prose-gated (top-level + concept + dev docs, not just how-tos)"
-check "T93.1 all docs/**/*.md pass prose-integrity (count == file count)" \
-  'D="'"$HB_SRC"'/docs"; n=$(find "$D" -name "*.md" | wc -l); bash "'"$GEX"'/prose-check.sh" $(find "$D" -name "*.md" | sort) 2>&1 | grep -q "ALL-PROSE-OK:$n"'
+grp "T93 — EVERY markdown file under docs/ AND the root claim-docs are prose-gated (README, SECURITY, INSTALL, AGENTS, STATUS, …)"
+check "T93.1 all docs/**/*.md + root *.md pass prose-integrity (count == file count; CLAUDE.md excluded — a thin @import pointer to AGENTS.md, itself gated)" \
+  'D="'"$HB_SRC"'/docs"; R="'"$HB_SRC"'"; FILES="$(find "$D" -name "*.md"; ls "$R"/*.md | grep -v "/CLAUDE\.md$")"; n=$(printf "%s\n" $FILES | wc -l); bash "'"$GEX"'/prose-check.sh" $(printf "%s\n" $FILES | sort) 2>&1 | grep -q "ALL-PROSE-OK:$n"'
 
 grp "T94 — code adapter parity (node ≡ python: deplint byte-identical, map set-equal, context byte-equal)"
 if command -v node >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then

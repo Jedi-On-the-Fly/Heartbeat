@@ -32,7 +32,25 @@ not trusted** — a phase advances only when its *behavioral* gate passes (does 
 DAG and tick protocol run on two runtimes (a node+bash plugin and a pure-Python port)
 held to identical results.
 
+## What it verifies — and where it stops
 
+HeartBeat's guarantees are real but bounded, and it states the boundary at each one rather than
+overclaiming:
+
+- **Gates prove behavior, not correctness in the abstract.** A gate proves *the assertion you wrote*
+  passes; write the wrong assertion and it proves the wrong thing. The auditor (`hb-audit`) and the
+  refutation exist to attack that — but the ceiling is the criteria you author.
+- **Grounding is not truth.** The research adapter's `ground-check` proves a quote is really in a stored
+  source; whether the source is right, primary, or in context is the adversarial review's job, not the
+  gate's — see [ground-research-claims.md](docs/howto/ground-research-claims.md).
+- **The refuter is a dial, not a guarantee.** A "distinct actor" is enforced by identity; a distinct
+  *capability* — a genuinely different model with different blind spots — is opt-in, see
+  [cross-model-verification.md](docs/howto/cross-model-verification.md).
+- **Doc-gating covers the how-tos, the adapter reference** ([adapters.md](docs/adapters.md)), **and the
+  root claim-docs** (this file, SECURITY, INSTALL, …) — but not yet every reference-doc *list* (e.g. the
+  dev-doc tables aren't verified against source).
+- **A `dag.json` / executor is trusted input** — running one is equivalent to running a shell script.
+  See [SECURITY.md](SECURITY.md).
 
 ## Install on Claude Code
 

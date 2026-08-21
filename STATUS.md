@@ -87,7 +87,7 @@ in **both runtimes**, so the capability is native to the Python/framework path, 
   `code_context`, and `code_discover` — so a framework/MCP client gets the code-aware capability
   in-session, node-free (**T97**/**T99**, `mcp-adapters.sh` / `code-discover-mcp.sh` drive real
   `mcp-serve` and compare each tool result to the adapter).
-- **Live viz dashboard.** `hb viz --serve` runs a loopback-only HTTP server that re-reads
+- **Live viz dashboard.** `hb-viz.js --serve` runs a loopback-only HTTP server that re-reads
   `dag.json`+`state.json` fresh per request (no regenerate), refusing a non-loopback bind and
   validating `Origin` (DNS-rebinding) — alongside the point-in-time snapshot (**T86**,
   `viz-serve.sh`). Guide: `docs/howto/watch-a-run-live.md`.
