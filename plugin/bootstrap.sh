@@ -141,6 +141,30 @@ HOOKEOF
   fi
 fi
 
+# Pre-push gate guard: before a push, RE-VERIFY every gate and BLOCK if any regressed. Installs into any
+# git work tree (fresh OR existing), never clobbering an existing pre-push. The hook is bypassable at push
+# time (`git push --no-verify` or HB_NO_HOOK=1); HeartBeat never auto-pushes, so it only fires on a human push.
+if [ -z "${HB_NO_GIT:-}" ] && [ "$NO_GIT" != "1" ] && command -v git >/dev/null 2>&1 \
+   && git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  PPHOOK="$PROJECT_DIR/.git/hooks/pre-push"
+  if [ ! -e "$PPHOOK" ]; then
+    mkdir -p "$(dirname "$PPHOOK")"
+    cat > "$PPHOOK" <<'HOOKEOF'
+#!/usr/bin/env bash
+[ -n "${HB_NO_HOOK:-}" ] && exit 0
+DIR="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+[ -x "$DIR/.hb/gate.sh" ] || exit 0
+if ! bash "$DIR/.hb/gate.sh" --all >/dev/null 2>&1; then
+  echo "✗ HeartBeat gate guard: push blocked — a gate no longer verifies."
+  echo "  Re-verify: bash .hb/gate.sh --all    ·    bypass: git push --no-verify"
+  exit 1
+fi
+exit 0
+HOOKEOF
+    chmod +x "$PPHOOK"
+  fi
+fi
+
 echo ""
 echo "✅ HeartBeat initialized in $HB_DIR"
 [ -n "$GIT_MSG" ] && echo "   $GIT_MSG"

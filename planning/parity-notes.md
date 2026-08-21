@@ -66,6 +66,13 @@ Two gotchas it encodes:
 
 ## Intentional divergences (not on the byte-equal surface)
 
+- **Pre-push gate guard: behavioral parity, runtime-specific body; rot pre-commit is node-only.** Both
+  bootstraps now install a **blocking `pre-push` hook** (re-verify every gate, block the push on any
+  regression) — behavioral parity (T118): the body differs by runtime (node calls `bash .hb/gate.sh
+  --all`, python calls `hb gate --all`), and the seed outcome differs (node's template `GATE_P1` fails a
+  fresh `--all`, python's `true` placeholder passes), so the proof asserts *the hook blocks iff gate
+  re-verify fails*, not byte-equality. The **rot `pre-commit`** hook (`bootstrap.sh`) remains **node-only**
+  — a pre-existing divergence, out of scope for the pre-push work.
 - **Backend name aliases.** The Python `_KNOWN` registry accepts `claude` as an alias for
   `claude-code` (both resolve to the same adapter); the node `defaultCmd` has only `claude-code`
   (bare `claude` falls through to a custom command). T85 normalizes this alias before comparing.

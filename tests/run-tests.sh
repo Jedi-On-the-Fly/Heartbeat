@@ -1391,6 +1391,18 @@ grp "T116 — reference doc stays in sync: every shipped adapter tool is documen
 check "T116.1 each plugin/adapters/<domain>/*.js is named in docs/adapters.md (anti-drift, derived from the filesystem) (adapters-doc-coverage.sh → ADAPTERS-DOC-OK)" \
   'bash "'"$GEX"'/adapters-doc-coverage.sh" 2>&1 | grep -q "ADAPTERS-DOC-OK"'
 
+grp "T117 — bootstrap installs a BLOCKING pre-push gate guard (blocks on a failing gate, non-clobber, HB_NO_HOOK bypass, existing repos)"
+check "T117.1 the pre-push hook blocks iff gate re-verify fails, never clobbers, honors HB_NO_HOOK, installs on existing repos (pre-push-hook.sh → PRE-PUSH-HOOK-OK)" \
+  'bash "'"$GEX"'/pre-push-hook.sh" 2>&1 | grep -q "PRE-PUSH-HOOK-OK"'
+
+grp "T118 — pre-push gate guard is behavioral node ≡ python (both bootstraps install a blocking hook)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T118.1 node bootstrap.sh and python hb init both install a hook that blocks iff gate re-verify fails (pre-push-hook-parity.sh → PRE-PUSH-PARITY-OK)" \
+    'bash "'"$GEX"'/pre-push-hook-parity.sh" 2>&1 | grep -q "PRE-PUSH-PARITY-OK"'
+else
+  echo "  (python3 absent — T118 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
