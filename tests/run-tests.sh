@@ -1143,8 +1143,12 @@ grp "T82 — tick decision parity (both runtimes emit the same data.reason, incl
 if command -v python3 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
   check "T82.1 node ≡ python on tick data.reason across fixtures (incl. review_stuck escalation)" \
     'bash "'"$GEX"'/tick-parity.sh" 2>&1 | grep -q "TICK-PARITY-OK"'
-  check "T82.2 the Python review_stuck escalation fires at the threshold" \
-    'cd "'"$HB_SRC"'/py" && PYTHONPATH=src python3 -m pytest -q tests/test_tick.py -k review_stuck 2>&1 | grep -qE "[1-9][0-9]* passed"'
+  if python3 -c "import pytest" >/dev/null 2>&1; then
+    check "T82.2 the Python review_stuck escalation fires at the threshold" \
+      'cd "'"$HB_SRC"'/py" && PYTHONPATH=src python3 -m pytest -q tests/test_tick.py -k review_stuck 2>&1 | grep -qE "[1-9][0-9]* passed"'
+  else
+    echo "  (pytest absent — T82.2 skipped)"
+  fi
 else
   echo "  (python3/node absent — T82 skipped)"
 fi
