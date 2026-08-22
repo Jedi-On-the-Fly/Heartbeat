@@ -569,4 +569,4 @@ switch (cmd) {
 }
 }
 
-module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd };
+module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock };

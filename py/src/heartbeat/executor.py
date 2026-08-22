@@ -345,11 +345,11 @@ def _run(hbdir):
                 fpath = fdir / f"{g}.attempt.md"
                 fpath.write_text(f"# Refutation attempt for {g}\n\nRefuter: {refuter_id}\n"
                                  f"Verdict: could not refute (refuted=false)\n\n{findings}\n")
-                from . import cli as _cli
+                from . import review_policy
                 saved = os.environ.get("HB_ACTOR")
                 os.environ["HB_ACTOR"] = refuter_actor
                 try:
-                    rc = _cli.main(["review", g, "pass", "--artifact", str(fpath), "--dir", str(hbdir)])
+                    rc, _out, _err = review_policy.accept_review(hbdir, g, "pass", artifact=str(fpath))
                 finally:
                     if saved is None:
                         os.environ["HB_ACTOR"] = worker_actor

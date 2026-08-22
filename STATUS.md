@@ -386,7 +386,7 @@ the deterministic layer can re-inspect.
   whole DAG) sits on top, documented in the skill.
 - **Ported to both runtimes** — `hb-audit.js` (node) and `heartbeat.audit` (`hb audit`,
   Python) share one ruleset and are checked for **parity** on shared fixtures
-  (`planning/audit-fixtures/`, see `planning/parity-notes.md`).
+  (`tests/fixtures/audit/`, see `planning/parity-notes.md`).
 
 ## v1.8 — pluggable Stage B
 

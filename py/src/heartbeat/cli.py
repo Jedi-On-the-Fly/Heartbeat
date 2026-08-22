@@ -164,67 +164,16 @@ def main(argv=None):
             sys.stderr.write(f"hb heartbeat: no lease for {args.task}\n"); return 0
         (lease / "beat").write_text(st.now_iso()); print(f"beat {args.task}")
     elif args.cmd == "review":
-        gate = args.gate
-        if args.verdict == "fail":
-            ev = {"event": "review_failed", "gate": gate}
-            if args.note:
-                ev["note"] = " ".join(args.note)
-            st.mutate(hb, ev)
-            print(f"review fail {gate}")
-            return 0
-        # pass — must be backed by a substantive, phase-citing artifact from a distinct actor
-        if not args.artifact:
-            sys.stderr.write("review pass requires --artifact <findings-file>: the refuter's written attempt (a pass must cite evidence, not just assert one).\n")
-            return 1
-        project_dir = Path(hb).parent
-        ap = Path(args.artifact) if os.path.isabs(args.artifact) else project_dir / args.artifact
-        try:
-            body = ap.read_text()
-        except OSError as e:
-            sys.stderr.write(f"review pass: cannot read artifact {args.artifact} ({e})\n")
-            return 1
-        if len(body.strip()) < 40:
-            sys.stderr.write(f"review pass: artifact {args.artifact} is too thin ({len(body.strip())} chars) to be a real refutation — a rubber-stamp is not a review.\n")
-            return 1
-        dag = st.read_dag(hb)
-        phase = next((p for p in (dag.get("phases") or []) if p.get("gate_exit") == gate), None)
-        anchors = {gate}
-        if phase:
-            anchors.add(phase["id"])
-            anchors.update(t["id"] for t in (phase.get("tasks") or []))
-        for c in ((dag.get("gates") or {}).get(gate, {}).get("criteria") or []):
-            for pth in lintmod.extract_paths(c.get("cmd", "")):
-                anchors.add(pth)
-                anchors.add(pth.split("/")[-1])
-        hay = body.lower()
-        cited = [a for a in anchors if a and len(str(a)) > 1 and str(a).lower() in hay]
-        if not cited:
-            usable = ", ".join(a for a in anchors if a and len(str(a)) > 1)
-            sys.stderr.write(f"review pass: artifact {args.artifact} does not reference the phase under review (it cites nothing real; expected one of: {usable}).\n")
-            return 1
-        reviewer = os.environ.get("HB_ACTOR", "unknown")
-        if reviewer != "unknown" and phase:
-            phase_task_ids = {t["id"] for t in (phase.get("tasks") or [])}
-            doers = {e.get("actor") for e in st.read_events(hb)
-                     if e.get("event") == "task_done" and e.get("task") in phase_task_ids
-                     and e.get("actor") and e.get("actor") != "unknown"}
-            if reviewer in doers:
-                sys.stderr.write(f"review pass: reviewer '{reviewer}' also executed this phase's work — a self-review is not adversarial (set a different HB_ACTOR).\n")
-                return 1
-        revdir = Path(hb) / "reviews"
-        revdir.mkdir(parents=True, exist_ok=True)
-        (revdir / f"{gate}.md").write_text(body)
-        ev = {"event": "review_passed", "gate": gate, "artifact": f"reviews/{gate}.md",
-              "artifact_chars": len(body.strip()), "cited": cited, "reviewer": reviewer}
-        if args.note:
-            ev["note"] = " ".join(args.note)
-        st.mutate(hb, ev)
-        # Reviewed acceptance is what creates the phase's restore point (commit+tag) — the
-        # deterministic pass deferred it so the tag only ever certifies a reviewed-good state.
-        from . import gate as _gate
-        _gate._git_snapshot(hb, gate)
-        print(f"review pass {gate} (backed by reviews/{gate}.md, {len(body.strip())} chars, cites: {', '.join(cited[:3])})")
-        return 0
+        # Policy lives in review_policy.accept_review (one source of truth; the
+        # executor and MCP server call it directly). The CLI only routes I/O.
+        from . import review_policy
+        rc, out, err = review_policy.accept_review(hb, args.gate, args.verdict,
+                                                   artifact=args.artifact, note=args.note)
+        if out:
+            print(out)
+        if err:
+            sys.stderr.write(err + "\n")
+        return rc
     elif args.cmd == "evidence":
         # The provenance of a gate's acceptance: what was proven, how, on which commit.
         evs = st.read_events(hb)

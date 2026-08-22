@@ -3,7 +3,7 @@ from pathlib import Path
 
 from heartbeat import audit
 
-FIX = Path(__file__).resolve().parents[2] / "planning" / "audit-fixtures"
+FIX = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "audit"
 
 
 def _load(name):

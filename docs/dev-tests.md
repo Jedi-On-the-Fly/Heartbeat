@@ -154,8 +154,10 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T135 | honesty: coverage floor (`coverage-floor.sh`) — a mostly-skipped run is INCOMPLETE, not silent ALL-GREEN |
 | T136 | honesty: every example DAG gated (`example-dags-gated.sh`) — all planning/*.dag.json lint clean + 0 hollow |
 | T137 | honesty: audit-fixture count in docs matches parity.sh (`doc-fixture-count.sh`) |
+| T138 | anti-drift: must-not-drift logic is single-sourced (`single-source.sh`) — SKILL.md reason table == protocol.py keys; hb-exec imports hb-audit's `nonBehavioral` (no fork) |
+| T139 | safety: write-lock gives real mutual exclusion (`wlock-tested.sh`) — two concurrent workers through withWlock/with_wlock serialize an RMW (counter==2); gutting the lock makes it RED, node + python |
 
-The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T137; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
+The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T139; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
 
 ## Python suite — `py/tests/`
 
@@ -205,8 +207,8 @@ Non-ratcheted; skip when the Ollama server is unreachable. `tests/real-backend.s
 
 | Path | Purpose |
 |---|---|
-| `planning/audit-fixtures/{hollow,existence,nondeterministic,good,side-effect}.json` | auditor + parity |
-| `planning/parity-fixtures/broken.json` | lint-error parity |
+| `tests/fixtures/audit/{hollow,existence,nondeterministic,good,side-effect}.json` | auditor + parity |
+| `tests/fixtures/parity/broken.json` | lint-error parity |
 
 ## Invariants
 

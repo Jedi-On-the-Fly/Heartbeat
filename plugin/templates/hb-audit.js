@@ -139,4 +139,11 @@ if (require.main === module) {
   process.exit(r.errors ? 1 : 0);
 }
 
-module.exports = { audit, classify, isNondet, reviewQuestions };
+
+// Canonical non-behavioral-criterion check (shared with hb-exec.js strict mode — single source).
+function nonBehavioral(cmd) {
+  // A criterion that only checks a file/dir EXISTS (not that it behaves).
+  return /^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls\b)/.test(cmd || '');
+}
+
+module.exports = { audit, classify, isNondet, reviewQuestions, nonBehavioral };

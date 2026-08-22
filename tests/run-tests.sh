@@ -636,7 +636,7 @@ fi
 
 grp "T42 — DAG auditor: gate-quality (adversarial plan review)"
 AUD="$HB_SRC/plugin/templates/hb-audit.js"
-FIX="$HB_SRC/planning/audit-fixtures"
+FIX="$HB_SRC/tests/fixtures/audit"
 check "T42.1 hb-audit.js is requirable and exports audit()" \
   'node -e "const m=require(\"'"$AUD"'\");process.exit(typeof m.audit===\"function\"?0:1)"'
 check "T42.2 flags a hollow (always-true) gate → error, exit 1" \
@@ -1515,7 +1515,19 @@ check "T136.1 all planning/*.dag.json lint 0-error and audit 0-hollow (example-d
 
 grp "T137 — honesty: the audit-fixture count in the docs matches what parity.sh iterates"
 check "T137.1 docs state the same audit-fixture count parity.sh uses (doc-fixture-count.sh → DOC-FIXTURE-COUNT-OK)" \
-  'bash "'"$GEX"'/doc-fixture-count.sh" 2>&1 | grep -q "DOC-FIXTURE-COUNT-OK"' 
+  'bash "'"$GEX"'/doc-fixture-count.sh" 2>&1 | grep -q "DOC-FIXTURE-COUNT-OK"'
+
+grp "T138 — anti-drift: must-not-drift logic is single-sourced (protocol keys + nonBehavioral)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T138.1 SKILL.md reason table == protocol.py keys AND hb-exec imports hb-audit's nonBehavioral, not a fork (single-source.sh → SINGLE-SOURCE-OK)" \
+    'bash "'"$GEX"'/single-source.sh" 2>&1 | grep -q "SINGLE-SOURCE-OK"'
+else echo "  (python3 absent — T138 skipped)"; fi
+
+grp "T139 — safety: the write-lock gives real mutual exclusion over a read-modify-write, both runtimes"
+if command -v python3 >/dev/null 2>&1; then
+  check "T139.1 two concurrent workers through withWlock/with_wlock serialize an RMW (counter==2, no lost update); gutting the lock turns it RED (wlock-tested.sh → WLOCK-TESTED-OK)" \
+    'bash "'"$GEX"'/wlock-tested.sh" 2>&1 | grep -q "WLOCK-TESTED-OK"'
+else echo "  (python3 absent — T139 skipped)"; fi
 
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done

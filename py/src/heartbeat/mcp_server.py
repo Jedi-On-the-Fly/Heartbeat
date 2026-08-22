@@ -147,22 +147,12 @@ def _fail(hb, a):
 
 
 def _review(hb, a):
-    """Delegate to the CLI's review path verbatim — the distinct-actor / artifact
+    """Delegate to review_policy.accept_review — the distinct-actor / artifact
     validation is security-sensitive and lives in one place."""
-    import io
-    import contextlib
-    from . import cli
-    argv = ["review", a["gate"], a["verdict"]]
-    note = a.get("note")
-    if note:
-        argv += note if isinstance(note, list) else [note]
-    if a.get("artifact"):
-        argv += ["--artifact", a["artifact"]]
-    argv += ["--dir", str(hb)]
-    buf, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
-        rc = cli.main(argv)
-    return {"ok": rc == 0, "stdout": buf.getvalue().strip(), "stderr": err.getvalue().strip()}
+    from . import review_policy
+    rc, out, err = review_policy.accept_review(hb, a["gate"], a["verdict"],
+                                               artifact=a.get("artifact"), note=a.get("note"))
+    return {"ok": rc == 0, "stdout": out.strip(), "stderr": err.strip()}
 
 
 TOOLS.update({

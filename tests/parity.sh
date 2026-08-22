@@ -29,13 +29,13 @@ cmp(){ # label nodeval pyval
 
 echo "── audit parity ──"
 for f in hollow existence nondeterministic good side-effect; do
-  cmp "audit:$f" "$(a_node "$ROOT/planning/audit-fixtures/$f.json")" "$(a_py "$ROOT/planning/audit-fixtures/$f.json")"
+  cmp "audit:$f" "$(a_node "$ROOT/tests/fixtures/audit/$f.json")" "$(a_py "$ROOT/tests/fixtures/audit/$f.json")"
 done
 
 echo "── lint parity ──"
-cmp "lint:broken" "$(l_node "$ROOT/planning/parity-fixtures/broken.json")" "$(l_py "$ROOT/planning/parity-fixtures/broken.json")"
+cmp "lint:broken" "$(l_node "$ROOT/tests/fixtures/parity/broken.json")" "$(l_py "$ROOT/tests/fixtures/parity/broken.json")"
 for f in good hollow; do
-  cmp "lint:$f" "$(l_node "$ROOT/planning/audit-fixtures/$f.json")" "$(l_py "$ROOT/planning/audit-fixtures/$f.json")"
+  cmp "lint:$f" "$(l_node "$ROOT/tests/fixtures/audit/$f.json")" "$(l_py "$ROOT/tests/fixtures/audit/$f.json")"
 done
 
 echo "── state projection parity ──"

@@ -14,12 +14,12 @@ is easy to build. Update as we add cross-implementation surface.
 | Protocol | `hb.js PROTOCOL` | `heartbeat.protocol.PROTOCOL` | same reason KEYS (action text is runtime-specific by design — see below) |
 | **Auditor** | `hb-audit.js audit()` | `heartbeat.audit.audit()` | same dag → same findings (rule + severity per gate) |
 
-Fixtures for the auditor live in `planning/audit-fixtures/` and are consumed by BOTH
+Fixtures for the auditor live in `tests/fixtures/audit/` and are consumed by BOTH
 suites (node T42, py test_audit.py).
 
 **The parity test `tests/parity.sh`** (ratcheted as node-suite T43) now has **full
 coverage** of the shared surfaces — node ≡ python on:
-- **audit** findings (5 fixtures), **lint** errors (`parity-fixtures/broken.json` + fixtures),
+- **audit** findings (5 fixtures), **lint** errors (`tests/fixtures/parity/broken.json` + fixtures),
 - **protocol** — the reason KEYS (not the action text, see below),
 - **resolve** (`hb next`), **ready** (the runnable set), **report** (progress numbers),
 - **diagnose** (the inferred blocker's first line),

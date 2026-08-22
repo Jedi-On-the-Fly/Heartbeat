@@ -24,6 +24,7 @@
  *         HB_EXEC_MAX_ITERS, HB_EXEC_MODEL).
  */
 'use strict';
+const { nonBehavioral } = require('./hb-audit.js');   // single-sourced (R4)
 const fs   = require('fs');
 const path = require('path');
 const { execFileSync, execSync, spawn } = require('child_process');
@@ -165,10 +166,6 @@ function contextHook(task) {
 }
 
 // ── strict mode: in an unattended run, refuse weak gates ─────────────────────
-function nonBehavioral(cmd) {
-  // A criterion that only checks a file/dir EXISTS (not that it behaves).
-  return /^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls\b)/.test(cmd || '');
-}
 function strictBlock(gateId) {
   const dag  = readJson(DAG, { gates: {} });
   const gate = (dag.gates || {})[gateId] || {};

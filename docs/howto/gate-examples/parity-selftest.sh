@@ -28,7 +28,7 @@ PY
 # Sanity: the mutated runtime still runs and emits valid output (divergence, not breakage).
 # Note lint exits non-zero here BECAUSE it found the injected error — that is the point —
 # so check it produces parseable JSON, not its exit code.
-PYTHONPATH="$tmp/src" python3 -m heartbeat.cli lint "$ROOT/planning/audit-fixtures/good.json" --json 2>/dev/null \
+PYTHONPATH="$tmp/src" python3 -m heartbeat.cli lint "$ROOT/tests/fixtures/audit/good.json" --json 2>/dev/null \
   | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null \
   || { echo "FAIL: mutated runtime does not emit valid output — that would trip parity for the wrong reason"; exit 1; }
 
