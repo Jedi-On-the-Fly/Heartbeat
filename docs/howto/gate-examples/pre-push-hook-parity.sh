@@ -33,10 +33,17 @@ pn="$tmp/node"; mkdir -p "$pn"
 bash "$ROOT/plugin/bootstrap.sh" "$pn" >/dev/null 2>&1 || fail "node bootstrap failed"
 check_runtime "$pn" bash .hb/gate.sh --all
 
-# python runtime (its `true` seed gate PASSES → check_runtime exercises the ALLOW direction)
+# python runtime (its `true` seed gate PASSES → check_runtime exercises the ALLOW direction).
+# The hook uses `hb gate --all`, so test it AS IT RUNS: reverify with the SAME `hb` invocation (NOT
+# PYTHONPATH — that was the false-green). The hook requires hb on PATH; if absent, its honest skip
+# behavior is proven by pre-push-selfcontained.sh (T122), so guard this leg like T82.2 guards pytest.
 pp="$tmp/py"
 PYTHONPATH="$ROOT/py/src" python3 -m heartbeat.cli init "$pp" >/dev/null 2>&1 || fail "python init failed"
-check_runtime "$pp" env PYTHONPATH="$ROOT/py/src" python3 -m heartbeat.cli gate --all --dir "$pp"
+if command -v hb >/dev/null 2>&1; then
+  check_runtime "$pp" hb gate --all --dir "$pp"
+else
+  echo "  (hb not on PATH — python pre-push parity leg skipped; honest-skip covered by pre-push-selfcontained.sh)"
+fi
 
 # python BLOCK teeth: force a failing gate (the seed passes), then the hook MUST block — so a hollow
 # python hook (always exit 0) fails here, not just the node side.

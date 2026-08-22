@@ -1411,6 +1411,30 @@ else
   echo "  (python3 absent — T119 skipped)"
 fi
 
+grp "T120 — hb init preserves the append-only event log unless --force (parity with node bootstrap)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T120.1 re-init without --force does not wipe events.jsonl (init-preserves-log.sh → INIT-LOG-SAFE-OK)" \
+    'bash "'"$GEX"'/init-preserves-log.sh" 2>&1 | grep -q "INIT-LOG-SAFE-OK"'
+else
+  echo "  (python3 absent — T120 skipped)"
+fi
+
+grp "T121 — gate criteria run under the same shell in both runtimes (bash, not dash) + failure output not swallowed"
+if command -v python3 >/dev/null 2>&1; then
+  check "T121.1 a [[ ]] criterion passes identically under gate.sh and gate.py; a failing gate surfaces a diagnostic (gate-shell-parity.sh → GATE-SHELL-PARITY-OK)" \
+    'bash "'"$GEX"'/gate-shell-parity.sh" 2>&1 | grep -q "GATE-SHELL-PARITY-OK"'
+else
+  echo "  (python3 absent — T121 skipped)"
+fi
+
+grp "T122 — the pre-push hook is self-contained/honest (tested as it runs: no PYTHONPATH, hb-absent = skip not import-error-block)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T122.1 node hook self-contained (blocks under a clean PATH); py hook skips with a message when hb absent (pre-push-selfcontained.sh → PRE-PUSH-SELFCONTAINED-OK)" \
+    'bash "'"$GEX"'/pre-push-selfcontained.sh" 2>&1 | grep -q "PRE-PUSH-SELFCONTAINED-OK"'
+else
+  echo "  (python3 absent — T122 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

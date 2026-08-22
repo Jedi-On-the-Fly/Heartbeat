@@ -33,11 +33,15 @@ _PRE_PUSH_HOOK = """#!/usr/bin/env bash
 [ -n "${HB_NO_HOOK:-}" ] && exit 0
 DIR="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 [ -f "$DIR/.hb/dag.json" ] || exit 0
-if command -v hb >/dev/null 2>&1; then GATE=(hb gate --all --dir "$DIR")
-else GATE=(python3 -m heartbeat.cli gate --all --dir "$DIR"); fi
-if ! "${GATE[@]}" >/dev/null 2>&1; then
-  echo "✗ HeartBeat gate guard: push blocked — a gate no longer verifies."
-  echo "  Re-verify: hb gate --all    ·    bypass: git push --no-verify"
+# A python HeartBeat project runs through `hb`. If it isn't on PATH, SKIP with a visible message —
+# never block the push on a missing tool / an import error (the guard is a bypassable convenience).
+if ! command -v hb >/dev/null 2>&1; then
+  echo "HeartBeat gate guard: hb not on PATH — skipping the pre-push gate check (install heartbeat-hb, or bypass with git push --no-verify)" >&2
+  exit 0
+fi
+if ! hb gate --all --dir "$DIR" >/dev/null 2>&1; then
+  echo "✗ HeartBeat gate guard: push blocked — a gate no longer verifies." >&2
+  echo "  Re-verify: hb gate --all    ·    bypass: git push --no-verify" >&2
   exit 1
 fi
 exit 0
@@ -52,8 +56,14 @@ def init(project_dir, force=False):
     dag = hb / "dag.json"
     if force or not dag.exists():
         dag.write_text(json.dumps(DEFAULT_DAG, indent=2))
-    (hb / "executor.json").write_text(json.dumps(DEFAULT_EXECUTOR, indent=2))
-    (hb / "events.jsonl").write_text(json.dumps({"event": "initialized", "project": project.name}) + "\n")
+    ex = hb / "executor.json"
+    if force or not ex.exists():
+        ex.write_text(json.dumps(DEFAULT_EXECUTOR, indent=2))
+    # events.jsonl is the append-only source of truth — NEVER overwrite it on re-init without --force
+    # (that would wipe real history; the node bootstrap refuses re-init without --force for the same reason).
+    log = hb / "events.jsonl"
+    if force or not log.exists():
+        log.write_text(json.dumps({"event": "initialized", "project": project.name}) + "\n")
     st.reproject(hb)
     (hb / "PROTOCOL.md").write_text(protocol.render_md())
 

@@ -5,6 +5,7 @@ shell with $PROJECT_DIR/$HB_DIR in the environment and a per-criterion timeout. 
 appends gate_passed and (optionally) commits+tags a git restore point.
 """
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -28,12 +29,16 @@ def _env(hbdir):
 
 
 def _run_cmd(cmd, hbdir, timeout):
+    # Run under bash to MATCH plugin/templates/gate.sh (`bash -c`) — shell=True uses /bin/sh (often dash),
+    # which silently rejects bash-isms ([[ ]], arrays) a node gate accepts. Fall back to sh only if bash
+    # is genuinely absent (documented divergence). Capture output so a blocked gate is diagnosable.
+    shell = shutil.which("bash") or "/bin/sh"
     try:
-        r = subprocess.run(cmd, shell=True, cwd=_project_dir(hbdir), env=_env(hbdir),
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
-        return r.returncode == 0
-    except Exception:
-        return False
+        r = subprocess.run([shell, "-c", cmd], cwd=_project_dir(hbdir), env=_env(hbdir),
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
+        return r.returncode == 0, (r.stdout or b"").decode("utf-8", "replace")
+    except Exception as e:
+        return False, str(e)
 
 
 def eval_gate(hbdir, gate_id, timeout=None):
@@ -51,8 +56,12 @@ def eval_gate(hbdir, gate_id, timeout=None):
     lines = []
     results = []
     for c in criteria:
-        ok = _run_cmd(c.get("cmd", ""), hbdir, timeout)
+        ok, out = _run_cmd(c.get("cmd", ""), hbdir, timeout)
         lines.append(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')}")
+        if not ok and out.strip():
+            # surface the failing criterion's output (was swallowed) so a blocked gate is diagnosable
+            for ln in out.strip().splitlines():
+                lines.append(f"      {ln}")
         results.append({"id": c.get("id"), "cmd": c.get("cmd", ""), "exit": 0 if ok else 1})
         passed += 1 if ok else 0
         failed += 0 if ok else 1
