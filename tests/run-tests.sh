@@ -1447,6 +1447,26 @@ grp "T125 — honest claims: LICENSE (MIT) ships + no unpublished pip-install pr
 check "T125.1 LICENSE exists (MIT) and no doc uses \`pip install heartbeat-hb\` as an install line (claim-honesty.sh → CLAIM-HONESTY-OK)" \
   'bash "'"$GEX"'/claim-honesty.sh" 2>&1 | grep -q "CLAIM-HONESTY-OK"' 
 
+grp "T126 — kernel: rot-lint precision (sed/abspath criteria don't false-trip gate_rot; a real deletion still does)"
+check "T126.1 extractPaths excludes shell constructs + absolute paths, keeps real relative artifacts (rot-lint-precision.sh → ROT-LINT-PRECISION-OK)" \
+  'bash "'"$GEX"'/rot-lint-precision.sh" 2>&1 | grep -q "ROT-LINT-PRECISION-OK"'
+
+grp "T127 — kernel: state.json is a deterministic projection (byte-stable across rebuilds)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T127.1 two rebuilds produce byte-identical state.json (state-determinism.sh → STATE-DETERMINISM-OK)" \
+    'bash "'"$GEX"'/state-determinism.sh" 2>&1 | grep -q "STATE-DETERMINISM-OK"'
+else echo "  (python3 absent — T127 skipped)"; fi
+
+grp "T128 — kernel: a gate passes on a git-less machine (git is optional, no crash)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T128.1 gate PASS with git absent from PATH does not crash + records the pass (gate-gitless.sh → GATE-GITLESS-OK)" \
+    'bash "'"$GEX"'/gate-gitless.sh" 2>&1 | grep -q "GATE-GITLESS-OK"'
+else echo "  (python3 absent — T128 skipped)"; fi
+
+grp "T129 — kernel: gate_blocked circuit breaker (stops re-waking after a bound)"
+check "T129.1 a persistently blocked gate emits a terminal waiting signal instead of re-waking every tick (gate-blocked-breaker.sh → GATE-BLOCKED-BREAKER-OK)" \
+  'bash "'"$GEX"'/gate-blocked-breaker.sh" 2>&1 | grep -q "GATE-BLOCKED-BREAKER-OK"' 
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

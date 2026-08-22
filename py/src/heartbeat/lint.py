@@ -91,10 +91,17 @@ def extract_paths(cmd):
         p = re.sub(r"^\./", "", p)
         if not p or p.startswith("$"):
             continue
+        if p.startswith("/"):   # absolute path — a system/tool path, not a produced artifact
+            continue
         if ".hb/" in p:
             continue
         base = p.rstrip("/").split("/")[-1]
         if base in ("state.json", "dag.json", "events.jsonl"):
+            continue
+        # exclude shell constructs (sed s/a/b/, y/a/b/) — a single-letter first segment — while keeping
+        # EXTENSIONLESS artifacts (Dockerfile, Makefile, bin/hb) tracked for rot. (Absolute/awk /re/ are
+        # already excluded by the leading-"/" check.)
+        if re.match(r"^[A-Za-z]/", p):
             continue
         out.add(p)
     return out

@@ -107,9 +107,15 @@ function extractPaths(cmd) {
     if (/HB_DIR/.test(tokRaw)) continue;            // HeartBeat's own dir
     let p = tokRaw.replace(/\$\{?PROJECT_DIR\}?\//, '').replace(/^\.\//, '');
     if (!p || p.startsWith('$')) continue;          // bare/unresolved var
+    if (p.startsWith('/')) continue;                // absolute path — a system/tool path, not a produced artifact
     if (p.includes('.hb/')) continue;
     const base = p.replace(/\/$/, '').split('/').pop();
     if (['state.json', 'dag.json', 'events.jsonl'].includes(base)) continue;
+    // Exclude shell constructs that merely contain slashes — sed `s/a/b/`, `y/a/b/` — which start with a
+    // single-letter command segment. A real artifact path (`tests/x.js`, `dist/`, `a/b/Dockerfile`) does
+    // not. (Absolute paths and awk `/re/` are already excluded above by the leading-`/` check.) This
+    // keeps EXTENSIONLESS artifacts (Dockerfile, Makefile, bin/hb) tracked for rot.
+    if (/^[A-Za-z]\//.test(p)) continue;
     out.add(p);
   }
   return out;

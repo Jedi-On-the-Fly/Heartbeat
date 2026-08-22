@@ -77,8 +77,10 @@ def run_gate(hbdir, gate_id, check=False):
         return res
     if res["failed"] == 0:
         # Evidence provenance: per-criterion {id,cmd,exit}, the commit tested, the runtime.
-        commit = subprocess.run(["git", "-C", _project_dir(hbdir), "rev-parse", "HEAD"],
-                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode().strip() or None
+        commit = None
+        if shutil.which("git"):   # git is optional — never crash a gate pass on a git-less machine
+            commit = subprocess.run(["git", "-C", _project_dir(hbdir), "rev-parse", "HEAD"],
+                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode().strip() or None
         st.mutate(hbdir, {"event": "gate_passed", "gate": gate_id, "pass": res["passed"], "fail": 0,
                           "criteria": res.get("results", []), "commit": commit, "runtime": "python"})
         review = bool((st.read_dag(hbdir).get("gates") or {}).get(gate_id, {}).get("review"))
@@ -110,6 +112,8 @@ def _git(pd, *args, **kw):
 
 def _git_snapshot(hbdir, gate_id):
     if os.environ.get("HB_NO_GIT") or os.environ.get("HB_GIT_AUTOCOMMIT", "1") == "0":
+        return
+    if not shutil.which("git"):   # git is optional
         return
     pd = _project_dir(hbdir)
     if _git(pd, "rev-parse", "--is-inside-work-tree").returncode != 0:

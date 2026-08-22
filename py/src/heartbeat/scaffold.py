@@ -85,7 +85,7 @@ def _git_init(project):
             if "HeartBeat runtime" not in (gi.read_text() if gi.exists() else ""):
                 with open(gi, "a") as f:
                     f.write("\n# HeartBeat runtime (ephemeral — never source)\n"
-                            ".hb/.lock\n.hb/.wlock\n.hb/leases/\n.hb/.*-alerted\n.hb/*.tmp\n.hb/wt/\n")
+                            ".hb/.lock\n.hb/.wlock\n.hb/leases/\n.hb/.*-alerted\n.hb/.gate-blocked-ticks\n.hb/*.tmp\n.hb/wt/\n")
             subprocess.run(["git", "-C", pd, "add", "-A"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["git", "-c", "user.name=HeartBeat", "-c", "user.email=heartbeat@local",
                             "-C", pd, "commit", "--no-verify", "-q", "-m", "chore(heartbeat): initialize project"],

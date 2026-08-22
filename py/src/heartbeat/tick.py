@@ -110,9 +110,20 @@ def _body(hbdir):
         return _sleep({"reason": "stuck_waiting_human", "build_stuck_count": state["build_stuck_count"]})
     _rm(_flag(hbdir, ".stuck-alerted"))
 
-    # 8. gate errors from a previous run
+    # 8. gate errors from a previous run — with a circuit breaker (mirrors the build_stuck breaker):
+    # a persistently blocked gate must not re-wake the agent every tick forever.
+    gbt_file = _flag(hbdir, ".gate-blocked-ticks")
     if state["gate"]["errors"] > 0:
-        return _wake({"reason": "gate_blocked", "gate_errors": state["gate"]["errors"]})
+        try:
+            gbt = int(gbt_file.read_text().strip() or "0")
+        except Exception:
+            gbt = 0
+        gbt += 1
+        gbt_file.write_text(str(gbt))
+        if gbt >= int(os.environ.get("GATE_BLOCKED_MAX", "5")):
+            return _sleep({"reason": "gate_blocked_waiting_human", "gate_errors": state["gate"]["errors"], "ticks": gbt})
+        return _wake({"reason": "gate_blocked", "gate_errors": state["gate"]["errors"], "ticks": gbt})
+    _rm(gbt_file)
 
     # 9. next task
     dag = st.read_dag(hbdir)

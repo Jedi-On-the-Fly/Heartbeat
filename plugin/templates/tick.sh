@@ -239,11 +239,20 @@ gate_errors=$(node -e "
   console.log(s.gate?.errors??0);
 " 2>/dev/null || echo "0")
 
+GBTICKS_FILE="$HB_DIR/.gate-blocked-ticks"
 if [ "$gate_errors" -gt 0 ]; then
+  gbt=$(cat "$GBTICKS_FILE" 2>/dev/null || echo 0); gbt=$((gbt + 1)); echo "$gbt" > "$GBTICKS_FILE"
+  # Circuit breaker: a persistently blocked gate must NOT re-wake the agent every tick forever. After
+  # GATE_BLOCKED_MAX no-progress ticks, stop waking and wait for a human (mirrors the build_stuck breaker).
+  if [ "$gbt" -ge "${GATE_BLOCKED_MAX:-5}" ]; then
+    sleep_out "{\"reason\":\"gate_blocked_waiting_human\",\"gate_errors\":$gate_errors,\"ticks\":$gbt}"
+  fi
   if [ -n "$HB_NOTIFY_CMD" ] && [ ! -f "$GATE_NOTIFY_FLAG" ]; then
     touch "$GATE_NOTIFY_FLAG"; notify "gate_blocked" "errors=$gate_errors"
   fi
-  wake_out "{\"reason\":\"gate_blocked\",\"gate_errors\":$gate_errors}"
+  wake_out "{\"reason\":\"gate_blocked\",\"gate_errors\":$gate_errors,\"ticks\":$gbt}"
+else
+  rm -f "$GBTICKS_FILE"
 fi
 rm -f "$GATE_NOTIFY_FLAG"
 

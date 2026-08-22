@@ -1,0 +1,146 @@
+{
+  "_meta": {
+    "project": "critical-fixes-2",
+    "note": "The remaining tail of the critical review, verified present in the code, in five themed phases. KB (kernel correctness): C1 hb-lint extractPaths false-positives (sed/abspath → permanent gate_rot), C3 state.py list(set()) → nondeterministic state.json (git churn), C4 gate.py crashes on a git-less machine (no which/try guard), C8 gate_blocked re-wakes every tick with no circuit breaker. SP (safety/parse): C2 py backends' verdict is grep-anywhere `REFUTED` (11 backends) — the node fix didn't reach python, R1 doctor.py shell=True f-string path-injection, R2 node -e sites splice shell vars into JS source instead of argv. PT (portability/installed-plugin): C5 drift detection is a silent no-op on macOS (sha256sum absent, `|| true`), C6 adapter skills use repo-relative plugin/adapters/ links that 404 from an installed plugin, C7 .mcp.json declares `hb mcp-serve` a node-only install can't run, R9 no commands/ dir (/heartbeat is skill-prose). HN (honesty/coverage — the thesis): H1 no coverage floor (ALL-GREEN can lie on a stripped box), H2 the 53 planning/*.dag.json example DAGs are ungated, H3/H4 docs say '4 audit fixtures' but parity.sh uses 5 (+ any other parity-notes inaccuracy). DR (DRY/tests): R3 reason→action table duplicated, R4 non-behavioral regex forked (hb-audit.js vs hb-exec.js), R5 git-snapshot logic duplicated, R6 withWlock/with_wlock untested, R7 fixtures live in planning/ (move to tests/fixtures/), R8 mcp_server/executor scrape cli.main stdout for the review policy. Proof-driven: spec-first, gated, refuted in a stripped env; each phase keeps node/python/parity green."
+  },
+  "phases": [
+    {
+      "id": "KB",
+      "title": "Kernel correctness — rot-lint precision, deterministic state, git-less safety, a gate_blocked breaker",
+      "gate_entry": null,
+      "gate_exit": "GATE_KB",
+      "tasks": [
+        { "id": "KB1", "title": "Spec-first: proofs for the four kernel bugs", "requires": [],
+          "description": "Author RED-first, in a stripped env: docs/howto/gate-examples/rot-lint-precision.sh (ROT-LINT-PRECISION-OK) — a gate cmd using a bash-ism like `sed 's/a/b/'` or an absolute path like `/usr/bin/node` in a COMPLETED phase does NOT trip hb-lint/doctor 'no longer reproducible', while a genuinely deleted project artifact (e.g. tests/x.js) STILL does; docs/howto/gate-examples/state-determinism.sh (STATE-DETERMINISM-OK) — two independent `rebuild`s of the same event log produce BYTE-identical state.json (completed/active/completed_phases order is stable), both runtimes; docs/howto/gate-examples/gate-gitless.sh (GATE-GITLESS-OK) — a non-review gate PASS on a machine with no `git` binary (PATH stripped) does NOT crash and still records the pass (git snapshot skipped, not fatal); docs/howto/gate-examples/gate-blocked-breaker.sh (GATE-BLOCKED-BREAKER-OK) — repeated ticks on a persistently blocked gate stop re-waking after a bounded count (a circuit breaker fires, like the no-progress breaker). All FAIL now." },
+        { "id": "KB2", "title": "Fix hb-lint/doctor extractPaths precision (C1)", "requires": ["KB1"],
+          "description": "In plugin/templates/hb-lint.js (and mirror in py if the rot heuristic exists there) tighten extractPaths so it only treats a token as a produced-artifact reference when it plausibly is one — exclude shell constructs (sed `s/.../.../` , flags), exclude ABSOLUTE paths (leading /), and require a relative path with a file extension or trailing slash. A completed phase whose gate uses sed or an absolute tool path must not become permanent gate_rot. Make rot-lint-precision.sh green; keep hb-lint's existing dangling-artifact tests green." },
+        { "id": "KB3", "title": "Deterministic state projection (C3)", "requires": ["KB1"],
+          "description": "In py/src/heartbeat/state.py, serialize completed_tasks/active_tasks/completed_phases deterministically (sorted, or insertion-ordered via dict.fromkeys) instead of list(set(...)), so state.json byte-content is stable across rebuilds and stops churning in git. Mirror in the node projector (hb.js) if it has the same nondeterminism. Make state-determinism.sh green (both runtimes); keep parity + pytest green." },
+        { "id": "KB4", "title": "Git-optional gate pass (C4)", "requires": ["KB1"],
+          "description": "In py/src/heartbeat/gate.py, guard EVERY git call against a missing binary — the primary crash site is run_gate (~line 80, the bare `subprocess.run(['git', … 'rev-parse','HEAD'])` for the commit) AND _git/_git_snapshot — with shutil.which('git') or try/except so a gate PASS on a git-less machine skips the snapshot/commit gracefully instead of raising FileNotFoundError ('git is optional' must hold). Mirror the guard in gate.sh if it assumes git. Make gate-gitless.sh green; keep pytest + T26/T31 git tests green." },
+        { "id": "KB5", "title": "gate_blocked circuit breaker (C8)", "requires": ["KB1"],
+          "description": "Add a bounded circuit breaker so a persistently blocked gate stops re-waking every tick: after N consecutive gate_blocked wakes with no state change, escalate to a distinct terminal signal (like build_stuck / no_progress) and stop re-alerting — both runtimes' resolver/tick (hb-next-task.js/tick.sh + tick.py). Make gate-blocked-breaker.sh green; keep the existing circuit-breaker tests (T6) green." }
+      ]
+    },
+    {
+      "id": "SP",
+      "title": "Safety & parse — robust verdict on the python side, injection-safe subprocess/JS",
+      "gate_entry": "GATE_KB",
+      "gate_exit": "GATE_SP",
+      "tasks": [
+        { "id": "SP1", "title": "Spec-first: verdict-robustness + injection-safety proofs", "requires": [],
+          "description": "Author RED-first: docs/howto/gate-examples/verdict-robust.sh (VERDICT-ROBUST-OK) — a shared verdict helper decides REFUTED/CLEAR from the reply's FINAL token, so prose that merely contains the word 'REFUTED' but ends CLEAR is NOT scored as a refutation; assert via importing the python helper and feeding both orderings (matches the node claude-exec.sh fix). docs/howto/gate-examples/injection-safe.sh (INJECTION-SAFE-OK) — use REAL injection vectors, not inert ones: a project dir whose NAME contains a command-substitution `$(touch PWNED)` (which IS evaluated inside double quotes — the doctor.py:130 vector) plus a single-quote (the `node -e` JS-string breakout vector). Assert NO `PWNED` file is created by doctor.py AND the affected `node -e` sites still return correct output (don't crash/execute) — proving data is passed via argv/env, not spliced into a shell/JS source string. (A `;`-only payload is inert inside quotes and would false-pass — do not use it.) Both FAIL now." },
+        { "id": "SP2", "title": "Robust python verdict parse (C2)", "requires": ["SP1"],
+          "description": "Add a shared verdict helper (e.g. heartbeat.backends.base._verdict(text) → final REFUTED/CLEAR token) and route ALL py backends' refute() genuine-verdict path through it instead of `\"REFUTED\" in text.upper()` (11 backends). Mirrors the node fix (RV3). Make verdict-robust.sh green; keep pytest green." },
+        { "id": "SP3", "title": "Injection-safe subprocess + node -e (R1, R2)", "requires": ["SP1"],
+          "description": "Fix doctor.py:130 (and doctor.py:75) to pass the project path via an argv list (no shell=True f-string). Audit the `node -e` call sites across the plugin templates that splice a shell variable into the JS SOURCE and convert the ones that carry external/path data to pass it via process.argv or an env var (the safe pattern already used elsewhere in the same files). Make injection-safe.sh green; keep node + pytest suites green." }
+      ]
+    },
+    {
+      "id": "PT",
+      "title": "Portability — macOS drift, installed-plugin skill links, MCP entry, command surface",
+      "gate_entry": "GATE_SP",
+      "gate_exit": "GATE_PT",
+      "tasks": [
+        { "id": "PT1", "title": "Spec-first: portability proofs", "requires": [],
+          "description": "Author RED-first: docs/howto/gate-examples/drift-portable.sh (DRIFT-PORTABLE-OK) — the tick.sh drift hash uses a sha tool that exists on macOS too (sha256sum OR shasum fallback), and drift detection is NOT a silent no-op when sha256sum is absent (simulate by shadowing sha256sum off PATH; a changed WATCH_PATHS still yields a different hash). docs/howto/gate-examples/skill-paths.sh (SKILL-PATHS-OK) — no adapter skill under plugin/skills/*/ references a bare repo-relative `plugin/adapters/...`/`docs/...` path that would 404 from an installed plugin; they use ${CLAUDE_PLUGIN_ROOT} or a resolvable relative link like the main skill. docs/howto/gate-examples/mcp-json-runtime.sh (MCP-JSON-RUNTIME-OK) — plugin/.mcp.json's server command is runnable by the plugin's own runtime (or the file documents/handles that `hb` must be installed), i.e. the declared command resolves or is guarded; AND the R9 command-surface decision is realized — EITHER a plugin commands/ directory registers the /heartbeat verbs, OR plugin/skills/heartbeat/SKILL.md explicitly documents that /heartbeat is a skill (not commands/) so the absence is intentional — the proof asserts one of the two holds. All FAIL now." },
+        { "id": "PT2", "title": "Portable drift hashing (C5)", "requires": ["PT1"],
+          "description": "In plugin/templates/tick.sh, make the drift hash portable: use `sha256sum` if present else `shasum -a 256` (macOS), and do NOT swallow a missing hasher into an empty hash that silently disables drift — surface it. Make drift-portable.sh green; keep T8 (drift) green." },
+        { "id": "PT3", "title": "Installed-plugin-safe skill links (C6)", "requires": ["PT1"],
+          "description": "Fix the adapter skills (plugin/skills/research-grounding, code-aware-planning, docs-authoring) so their references to adapter/proof files resolve from an INSTALLED plugin — use ${CLAUDE_PLUGIN_ROOT}/... like plugin/skills/heartbeat/SKILL.md, or relative links that resolve. Keep skill-integrity (T92) green. Make skill-paths.sh green." },
+        { "id": "PT4", "title": "MCP entry + command surface (C7, R9)", "requires": ["PT1"],
+          "description": "Resolve plugin/.mcp.json declaring `hb mcp-serve` on a node-only install: either point it at a runtime-appropriate command, guard/document that the MCP server needs the Python `hb` (install step), and align with how the plugin is actually installed. Decide the command surface (R9): either add a plugin commands/ directory registering the /heartbeat verbs as real slash commands, OR document explicitly that /heartbeat is a skill (not commands/) so the absence is intentional, not a gap. Make mcp-json-runtime.sh green; whichever R9 path, gate it (a check that the decision is realized: commands/ exists with the verbs, or the skill doc states the design)." }
+      ]
+    },
+    {
+      "id": "HN",
+      "title": "Honesty & coverage — a coverage floor, gate the example DAGs, fix the fixture-count docs",
+      "gate_entry": "GATE_PT",
+      "gate_exit": "GATE_HN",
+      "tasks": [
+        { "id": "HN1", "title": "Spec-first: honesty/coverage proofs", "requires": [],
+          "description": "Author RED-first: docs/howto/gate-examples/coverage-floor.sh (COVERAGE-FLOOR-OK) — run-tests.sh cannot print a green RESULT while a large fraction of groups silently skipped: it emits a machine-checkable count of run vs skipped groups and FAILS (or loudly warns non-green) if fewer than a floor of groups ran; assert that simulating a stripped env (no python3) is reported as skipped-not-passed, not a silent ✅. docs/howto/gate-examples/example-dags-gated.sh (EXAMPLE-DAGS-GATED-OK) — every planning/*.dag.json lints clean and audits with 0 hollow gates (the 53 example DAGs are the best evidence and must be gated). docs/howto/gate-examples/doc-fixture-count.sh (DOC-FIXTURE-COUNT-OK) — the audit-fixture count stated in docs (parity-notes.md, dev-tests.md) equals the number parity.sh actually iterates (derived, not hardcoded). All FAIL now." },
+        { "id": "HN2", "title": "Coverage floor in run-tests (H1)", "requires": ["HN1"],
+          "description": "Add a coverage floor to tests/run-tests.sh: count groups that RAN vs SKIPPED, print a machine-checkable line (e.g. `GROUPS-RAN: n SKIPPED: m`), and make the run NON-green (nonzero or a loud FAIL line) if run groups fall below a floor — so a stripped box cannot print ✅ with two-thirds unrun. Keep the full-env run green (all groups run). Make coverage-floor.sh green." },
+        { "id": "HN3", "title": "Gate the 53 example DAGs (H2)", "requires": ["HN1"],
+          "description": "Add a suite group that lints (hb-lint, 0 errors) and audits (hb-audit, 0 hollow gates) EVERY planning/*.dag.json — the example DAGs are the project's best evidence and are currently ungated. If any existing planning DAG fails, fix that DAG (not the gate). Make example-dags-gated.sh green and wire it." },
+        { "id": "HN4", "title": "Fix the fixture-count + parity-notes accuracy (H3, H4)", "requires": ["HN1"],
+          "description": "Correct the '4 audit fixtures' claims to 5 (planning/parity-notes.md lines ~22 and ~198; docs/dev-tests.md ~175) to match the 5 parity.sh actually iterates (hollow/existence/nondeterministic/good/side-effect), and scan planning/parity-notes.md for any other internal contradiction the review flagged, correcting to current reality. Make doc-fixture-count.sh green; keep whole-docs prose (T93) green." }
+      ]
+    },
+    {
+      "id": "DR",
+      "title": "DRY & tests — single-source the duplicated logic, test the write-lock, relocate fixtures",
+      "gate_entry": "GATE_HN",
+      "gate_exit": "GATE_DR",
+      "tasks": [
+        { "id": "DR1", "title": "Spec-first: dedup + write-lock proofs", "requires": [],
+          "description": "Author RED-first: docs/howto/gate-examples/single-source.sh (SINGLE-SOURCE-OK) — the reason→action protocol table has ONE source (protocol.py/PROTOCOL machinery) that SKILL.md/docs derive from or are checked against (no forked hand-copy that can drift); the non-behavioral-criterion detection is shared between hb-audit.js and hb-exec.js (one definition); the git-snapshot logic is one helper. docs/howto/gate-examples/wlock-tested.sh (WLOCK-TESTED-OK) — withWlock (node) and with_wlock (python) have a real concurrency test: two concurrent writers under the lock don't interleave/lose an event. Both FAIL now." },
+        { "id": "DR2", "title": "Single-source the protocol table (R3)", "requires": ["DR1"],
+          "description": "Make the reason→action table single-sourced: SKILL.md / docs either embed a generated block or are checked against protocol.py's PROTOCOL map by a proof, so the three copies can't drift. Make the single-source.sh protocol assertion green." },
+        { "id": "DR3", "title": "Deduplicate the forked logic (R4, R5)", "requires": ["DR1"],
+          "description": "Share the non-behavioral-criterion detection between hb-audit.js and hb-exec.js (one definition imported by both), and extract the duplicated git-snapshot logic into one helper used by both call sites. Make the single-source.sh dedup assertions green; keep audit + exec tests green." },
+        { "id": "DR4", "title": "Test the write-lock (R6)", "requires": ["DR1"],
+          "description": "Add real tests for withWlock (node) and with_wlock (python): two concurrent writers serialize (no lost/interleaved event in events.jsonl). Wire into the node suite + pytest. Make wlock-tested.sh green." },
+        { "id": "DR5", "title": "Relocate fixtures out of planning/ (R7)", "requires": ["DR1"],
+          "description": "Move the TEST fixtures (planning/audit-fixtures/, planning/parity-fixtures/) to tests/fixtures/ and update every reference (tests/parity.sh, any proof, docs) so planning/ holds only real plans (no longer 'undeletable'). Keep parity.sh + example-dags-gated (HN3) green after the move." },
+        { "id": "DR6", "title": "Extract the review-acceptance policy (R8)", "requires": ["DR1"],
+          "description": "Extract the review-acceptance policy out of cli.py into a shared callable named `accept_review(...)` (a module fn, e.g. heartbeat.review_policy.accept_review) so BOTH mcp_server.py and executor.py stop re-entering cli.main() + scraping stdout to reach it — each imports and calls `accept_review` directly for the review-pass path (cli.py's `review` subcommand also delegates to it). Both files must reference `accept_review`. Keep review tests (T45/T46) + pytest green." }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_KB": {
+      "desc": "Kernel correctness: rot-lint no longer false-positives on sed/abspath criteria; state.json is a deterministic projection; a gate passes on a git-less machine; a persistently blocked gate stops re-waking. Wired; suites green.",
+      "review": { "prompt": "Refute that KB is done, in a STRIPPED env. Does rot-lint-precision.sh have teeth — would a sed/abspath criterion in a completed phase still trip gate_rot (mutate the fix back)? Is state.json genuinely byte-stable across rebuilds in BOTH runtimes (not just sorted on one side)? Does a gate PASS truly not crash with no `git` binary (strip PATH), and still record the pass? Does the gate_blocked breaker actually stop re-waking after a bound (not just once)? node/python/parity green with the new groups wired?" },
+      "criteria": [
+        { "id": "kba", "desc": "rot-lint precision (sed/abspath don't false-positive; a real deletion still does)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/rot-lint-precision.sh\" 2>&1 | grep -q 'ROT-LINT-PRECISION-OK'" },
+        { "id": "kbb", "desc": "state.json is a deterministic projection (byte-stable across rebuilds, both runtimes)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/state-determinism.sh\" 2>&1 | grep -q 'STATE-DETERMINISM-OK'" },
+        { "id": "kbc", "desc": "a gate passes without a git binary (no crash, pass recorded)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/gate-gitless.sh\" 2>&1 | grep -q 'GATE-GITLESS-OK'" },
+        { "id": "kbd", "desc": "gate_blocked circuit breaker stops re-waking after a bound", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/gate-blocked-breaker.sh\" 2>&1 | grep -q 'GATE-BLOCKED-BREAKER-OK'" },
+        { "id": "kbe", "desc": "the four KB proofs are wired into the suite", "cmd": "cd \"$PROJECT_DIR\" && for m in rot-lint-precision state-determinism gate-gitless gate-blocked-breaker; do grep -q \"$m.sh\" tests/run-tests.sh || exit 1; done" }
+      ]
+    },
+    "GATE_SP": {
+      "desc": "Python verdict parse is robust (final token, shared helper); doctor + node -e call sites are injection-safe (data via argv/env, not source splicing). Wired; suites green.",
+      "review": { "prompt": "Refute that SP is done. Does verdict-robust.sh have teeth — feed the python verdict helper 'REFUTED … CLEAR' (ends CLEAR) and confirm refuted=false, and '… CLEAR … REFUTED' → true; do ALL 11 backends route through it (grep for a surviving `\"REFUTED\" in`)? CRITICAL: does injection-safe.sh use a REAL vector — a dir name containing `$(touch PWNED)` (evaluated inside the double-quoted `git -C \"{pd}\"`) and/or a quote-breakout — NOT an inert `;` (which is harmless inside quotes and would false-pass against the vulnerable code)? Verify by mutating the fix back (restore shell=True f-string) → PWNED IS created → RED. Any site still splicing a variable into a shell/JS source? node/pytest green with the groups wired?" },
+      "criteria": [
+        { "id": "spa", "desc": "python verdict decided by the final token (shared helper), not grep-anywhere", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/verdict-robust.sh\" 2>&1 | grep -q 'VERDICT-ROBUST-OK'" },
+        { "id": "spb", "desc": "no py backend still uses grep-anywhere REFUTED for its verdict", "cmd": "cd \"$PROJECT_DIR\" && ! grep -rnE '\"REFUTED\" in .*\\.upper\\(\\)' py/src/heartbeat/backends/" },
+        { "id": "spc", "desc": "doctor + node -e call sites are injection-safe (no command execution via a crafted path)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/injection-safe.sh\" 2>&1 | grep -q 'INJECTION-SAFE-OK'" },
+        { "id": "spd", "desc": "both SP proofs wired", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'verdict-robust.sh' tests/run-tests.sh && grep -q 'injection-safe.sh' tests/run-tests.sh" }
+      ]
+    },
+    "GATE_PT": {
+      "desc": "Portable: drift hashing works on macOS and isn't a silent no-op; adapter skill links resolve from an installed plugin; the MCP entry is runnable/guarded; the command surface decision is realized. Wired; suites green.",
+      "review": { "prompt": "Refute that PT is done. Does drift-portable.sh prove drift still detects a change when sha256sum is absent (shasum fallback) and is NOT a silent no-op? Does skill-paths.sh actually catch a repo-relative adapter path that would 404 from an installed plugin (mutate one back)? Is the .mcp.json entry genuinely runnable by the install (or honestly guarded/documented), not just present? Is the R9 command-surface decision realized and gated (commands/ exists OR the skill documents the design)? node/pytest/skill-integrity green with the groups wired?" },
+      "criteria": [
+        { "id": "pta", "desc": "drift hashing is macOS-portable and not a silent no-op", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/drift-portable.sh\" 2>&1 | grep -q 'DRIFT-PORTABLE-OK'" },
+        { "id": "ptb", "desc": "adapter skill links resolve from an installed plugin", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/skill-paths.sh\" 2>&1 | grep -q 'SKILL-PATHS-OK'" },
+        { "id": "ptc", "desc": "the MCP entry is runtime-appropriate / guarded", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-json-runtime.sh\" 2>&1 | grep -q 'MCP-JSON-RUNTIME-OK'" },
+        { "id": "ptd", "desc": "the three PT proofs are wired", "cmd": "cd \"$PROJECT_DIR\" && for m in drift-portable skill-paths mcp-json-runtime; do grep -q \"$m.sh\" tests/run-tests.sh || exit 1; done" }
+      ]
+    },
+    "GATE_HN": {
+      "desc": "A coverage floor makes ALL-GREEN honest on a stripped box; every example DAG lints+audits clean; the fixture-count docs match reality. Wired; suites green.",
+      "review": { "prompt": "Refute that HN is done. Does coverage-floor.sh prove a stripped run (e.g. no python3) is reported as skipped/NON-green rather than a silent ✅ — and does the full-env run still pass the floor? Does example-dags-gated.sh actually lint+audit ALL planning/*.dag.json (not a subset), and would it catch a hollow example DAG? Do the docs now say 5 audit fixtures (matching parity.sh), derived not hardcoded? node/python/parity/prose green with the groups wired?" },
+      "criteria": [
+        { "id": "hna", "desc": "a coverage floor prevents a silent green on a stripped box; full env clears it", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/coverage-floor.sh\" 2>&1 | grep -q 'COVERAGE-FLOOR-OK'" },
+        { "id": "hnb", "desc": "every planning/*.dag.json lints clean + audits 0 hollow", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/example-dags-gated.sh\" 2>&1 | grep -q 'EXAMPLE-DAGS-GATED-OK'" },
+        { "id": "hnc", "desc": "the audit-fixture count in docs equals what parity.sh iterates", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/doc-fixture-count.sh\" 2>&1 | grep -q 'DOC-FIXTURE-COUNT-OK'" },
+        { "id": "hnd", "desc": "the three HN proofs are wired", "cmd": "cd \"$PROJECT_DIR\" && for m in coverage-floor example-dags-gated doc-fixture-count; do grep -q \"$m.sh\" tests/run-tests.sh || exit 1; done" }
+      ]
+    },
+    "GATE_DR": {
+      "desc": "The must-not-drift logic is single-sourced (protocol table, non-behavioral regex, git snapshot); the write-lock is tested; test fixtures live under tests/; the review policy is a callable, not stdout-scraped. Wired; suites green.",
+      "review": { "prompt": "Refute that DR is done. Is the reason→action table genuinely single-sourced (mutate protocol.py and confirm SKILL.md/docs are re-checked/regenerated, not silently stale)? Is the non-behavioral regex ONE definition used by both hb-audit.js and hb-exec.js (not two copies)? Does wlock-tested.sh prove real serialization under concurrency (two writers, no lost event)? Did the fixture move update every reference (parity.sh + example-dags-gated still green)? Do mcp_server/executor now call the review policy directly (no cli.main stdout scrape)? node/python/parity green with the groups wired?" },
+      "criteria": [
+        { "id": "dra", "desc": "protocol table single-sourced; non-behavioral regex + git-snapshot deduplicated", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/single-source.sh\" 2>&1 | grep -q 'SINGLE-SOURCE-OK'" },
+        { "id": "drb", "desc": "the write-lock has a real concurrency test (both runtimes)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/wlock-tested.sh\" 2>&1 | grep -q 'WLOCK-TESTED-OK'" },
+        { "id": "drc", "desc": "test fixtures relocated under tests/ (planning/ holds only plans)", "cmd": "cd \"$PROJECT_DIR\" && [ -d tests/fixtures ] && [ ! -d planning/audit-fixtures ]" },
+        { "id": "drd", "desc": "review policy is a shared callable BOTH files use (not cli.main-reached in either) — positive teeth, catches the mcp_server variable-argv case", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'accept_review' py/src/heartbeat/executor.py && grep -q 'accept_review' py/src/heartbeat/mcp_server.py && ! grep -qE 'cli\\.main\\(\\[.review' py/src/heartbeat/executor.py" },
+        { "id": "dre", "desc": "the DR proofs are wired", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'single-source.sh' tests/run-tests.sh && grep -q 'wlock-tested.sh' tests/run-tests.sh" }
+      ]
+    }
+  }
+}

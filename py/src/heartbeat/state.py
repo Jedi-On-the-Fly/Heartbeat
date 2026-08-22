@@ -153,9 +153,9 @@ def project(events, dag):
         if gv.get("review") and st and st["det"] and not st["rev"]:
             pending_reviews.append(g)
 
-    s["completed_tasks"] = list(completed)
-    s["active_tasks"] = list(active)
-    s["completed_phases"] = list(completed_phases)
+    s["completed_tasks"] = sorted(completed)
+    s["active_tasks"] = sorted(active)
+    s["completed_phases"] = sorted(completed_phases)
     s["pending_reviews"] = pending_reviews
 
     cur = None
