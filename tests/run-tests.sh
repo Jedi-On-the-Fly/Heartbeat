@@ -22,12 +22,14 @@ P="$TMP/proj"
 HB="$P/.hb"
 
 PASS=0; FAIL=0
-declare -A _GFAIL; _CURG=""; _ALLG=""
+declare -A _GFAIL; declare -A _GCHECKS; _CURG=""; _ALLG=""
 # grp "<Tnn — title>" — start a group; enables an outcome marker (GROUPS-PASSED) so a
 # coverage gate can assert a group PASSED, not just that its header exists.
 grp(){ _CURG="${1%% *}"; case " $_ALLG " in *" $_CURG "*) ;; *) _ALLG="$_ALLG $_CURG";; esac; echo "═══ $1 ═══"; }
-ok(){ echo "  ✓ $1"; PASS=$((PASS+1)); }
-ko(){ echo "  ✗ $1"; FAIL=$((FAIL+1)); [ -n "$_CURG" ] && _GFAIL["$_CURG"]=1; }
+ok(){ echo "  ✓ $1"; PASS=$((PASS+1)); [ -n "$_CURG" ] && _GCHECKS["$_CURG"]=1; }
+ko(){ echo "  ✗ $1"; FAIL=$((FAIL+1)); [ -n "$_CURG" ] && { _GFAIL["$_CURG"]=1; _GCHECKS["$_CURG"]=1; }; }
+# H1 coverage floor: a run that silently SKIPPED most groups (a stripped box) must NOT read green.
+_coverage_check(){ local skipped="${2:-0}" floor="${HB_SKIP_FLOOR:-20}"; if [ "$skipped" -gt "$floor" ]; then echo "⚠ COVERAGE-INCOMPLETE: $skipped groups skipped (> floor $floor) — suite NOT fully verified"; return 3; fi; return 0; }
 check(){ if eval "$2" >/dev/null 2>&1; then ok "$1"; else ko "$1"; fi; }
 set_state(){ node -e "const fs=require('fs');const f=process.argv[1];const s=JSON.parse(fs.readFileSync(f,'utf8'));${1};fs.writeFileSync(f,JSON.stringify(s,null,2));" "$HB/state.json"; }
 tick(){ rm -rf "$HB/.lock"; bash "$HB/tick.sh"; }
@@ -1304,8 +1306,10 @@ else
 fi
 
 grp "T101 — deplint: no REDUNDANT for a task with no resolved symbols (spec-first / new files)"
-check "T101.1 empty-symbol REDUNDANT suppressed, genuine kept, node ≡ python (deplint-redundant-empty.sh → REDUNDANT-EMPTY-OK)" \
-  'bash "'"$GEX"'/deplint-redundant-empty.sh" 2>&1 | grep -q "REDUNDANT-EMPTY-OK"'
+if command -v python3 >/dev/null 2>&1; then
+  check "T101.1 empty-symbol REDUNDANT suppressed, genuine kept, node ≡ python (deplint-redundant-empty.sh → REDUNDANT-EMPTY-OK)" \
+    'bash "'"$GEX"'/deplint-redundant-empty.sh" 2>&1 | grep -q "REDUNDANT-EMPTY-OK"'
+else echo "  (python3 absent — T101 skipped)"; fi
 
 grp "T102 — codegraph-exclude-hb: keep CodeGraph off HeartBeat's .hb/ scaffold (idempotent, node ≡ python)"
 if command -v python3 >/dev/null 2>&1; then
@@ -1372,20 +1376,28 @@ else
 fi
 
 grp "T112 — research adapter: research-context renders a section's grounded claims for the writer (node ≡ python)"
-check "T112.1 research-context renders only its section's claims + excerpts, node ≡ python (research-context.sh → RESEARCH-CONTEXT-OK)" \
-  'bash "'"$GEX"'/research-context.sh" 2>&1 | grep -q "RESEARCH-CONTEXT-OK"'
+if command -v python3 >/dev/null 2>&1; then
+  check "T112.1 research-context renders only its section's claims + excerpts, node ≡ python (research-context.sh → RESEARCH-CONTEXT-OK)" \
+    'bash "'"$GEX"'/research-context.sh" 2>&1 | grep -q "RESEARCH-CONTEXT-OK"'
+else echo "  (python3 absent — T112 skipped)"; fi
 
 grp "T113 — research adapter: stamp-evidence records honest source shas so ground-check can verify (node ≡ python)"
-check "T113.1 stamp-evidence stamps the real sha, ground-check then GROUNDED, a later edit is STALE (stamp-evidence.sh → STAMP-EVIDENCE-OK)" \
-  'bash "'"$GEX"'/stamp-evidence.sh" 2>&1 | grep -q "STAMP-EVIDENCE-OK"'
+if command -v python3 >/dev/null 2>&1; then
+  check "T113.1 stamp-evidence stamps the real sha, ground-check then GROUNDED, a later edit is STALE (stamp-evidence.sh → STAMP-EVIDENCE-OK)" \
+    'bash "'"$GEX"'/stamp-evidence.sh" 2>&1 | grep -q "STAMP-EVIDENCE-OK"'
+else echo "  (python3 absent — T113 skipped)"; fi
 
 grp "T114 — research adapter: red-team corpus proves ground-check catches mechanical fabrication and stays silent on truth"
-check "T114.1 all mechanical failure modes classified, two grounded-but-wrong claims unflagged, node ≡ python (ground-check-redteam.sh → RED-TEAM-OK)" \
-  'bash "'"$GEX"'/ground-check-redteam.sh" 2>&1 | grep -q "RED-TEAM-OK grounded=3 issues=5"'
+if command -v python3 >/dev/null 2>&1; then
+  check "T114.1 all mechanical failure modes classified, two grounded-but-wrong claims unflagged, node ≡ python (ground-check-redteam.sh → RED-TEAM-OK)" \
+    'bash "'"$GEX"'/ground-check-redteam.sh" 2>&1 | grep -q "RED-TEAM-OK grounded=3 issues=5"'
+else echo "  (python3 absent — T114 skipped)"; fi
 
 grp "T115 — research adapter: node ≡ python on a large generated corpus (60 sources / 200 claims, unicode, line-wraps)"
-check "T115.1 ground-check + research-context byte-identical, stamp-evidence same map, within a timeout ceiling (research-scale-parity.sh → SCALE-PARITY-OK)" \
-  'bash "'"$GEX"'/research-scale-parity.sh" 2>&1 | grep -q "SCALE-PARITY-OK sources=60 claims=200 grounded=160 issues=40"'
+if command -v python3 >/dev/null 2>&1; then
+  check "T115.1 ground-check + research-context byte-identical, stamp-evidence same map, within a timeout ceiling (research-scale-parity.sh → SCALE-PARITY-OK)" \
+    'bash "'"$GEX"'/research-scale-parity.sh" 2>&1 | grep -q "SCALE-PARITY-OK sources=60 claims=200 grounded=160 issues=40"'
+else echo "  (python3 absent — T115 skipped)"; fi
 
 grp "T116 — reference doc stays in sync: every shipped adapter tool is documented in adapters.md"
 check "T116.1 each plugin/adapters/<domain>/*.js is named in docs/adapters.md (anti-drift, derived from the filesystem) (adapters-doc-coverage.sh → ADAPTERS-DOC-OK)" \
@@ -1464,8 +1476,10 @@ if command -v python3 >/dev/null 2>&1; then
 else echo "  (python3 absent — T128 skipped)"; fi
 
 grp "T129 — kernel: gate_blocked circuit breaker (stops re-waking after a bound)"
-check "T129.1 a persistently blocked gate emits a terminal waiting signal instead of re-waking every tick (gate-blocked-breaker.sh → GATE-BLOCKED-BREAKER-OK)" \
-  'bash "'"$GEX"'/gate-blocked-breaker.sh" 2>&1 | grep -q "GATE-BLOCKED-BREAKER-OK"' 
+if command -v python3 >/dev/null 2>&1; then
+  check "T129.1 a persistently blocked gate emits a terminal waiting signal instead of re-waking every tick (gate-blocked-breaker.sh → GATE-BLOCKED-BREAKER-OK)" \
+    'bash "'"$GEX"'/gate-blocked-breaker.sh" 2>&1 | grep -q "GATE-BLOCKED-BREAKER-OK"' 
+else echo "  (python3 absent — T129 skipped)"; fi
 
 grp "T130 — safety: python backends decide the verdict by the final REFUTED/CLEAR token (shared helper)"
 if command -v python3 >/dev/null 2>&1; then
@@ -1491,12 +1505,31 @@ grp "T134 — portability: MCP entry is runtime-honest + the command-surface dec
 check "T134.1 .mcp.json declares the server, a doc states it needs the Python hb, and R9 (commands/ OR skill-documented) holds (mcp-json-runtime.sh → MCP-JSON-RUNTIME-OK)" \
   'bash "'"$GEX"'/mcp-json-runtime.sh" 2>&1 | grep -q "MCP-JSON-RUNTIME-OK"' 
 
+grp "T135 — honesty: a coverage floor prevents a silent ALL-GREEN when most groups skipped"
+check "T135.1 run-tests emits GROUPS-SKIPPED + a _coverage_check floor marks a mostly-skipped run INCOMPLETE (coverage-floor.sh → COVERAGE-FLOOR-OK)" \
+  'bash "'"$GEX"'/coverage-floor.sh" 2>&1 | grep -q "COVERAGE-FLOOR-OK"'
+
+grp "T136 — honesty: every example DAG (planning/*.dag.json) lints clean + audits 0 hollow"
+check "T136.1 all planning/*.dag.json lint 0-error and audit 0-hollow (example-dags-gated.sh → EXAMPLE-DAGS-GATED-OK)" \
+  'bash "'"$GEX"'/example-dags-gated.sh" 2>&1 | grep -q "EXAMPLE-DAGS-GATED-OK"'
+
+grp "T137 — honesty: the audit-fixture count in the docs matches what parity.sh iterates"
+check "T137.1 docs state the same audit-fixture count parity.sh uses (doc-fixture-count.sh → DOC-FIXTURE-COUNT-OK)" \
+  'bash "'"$GEX"'/doc-fixture-count.sh" 2>&1 | grep -q "DOC-FIXTURE-COUNT-OK"' 
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
+# H1: groups that registered but ran NO checks were skipped (a tool/dep was absent).
+_ran=0; _skipped=0
+for g in $_ALLG; do if [ -n "${_GCHECKS[$g]:-}" ]; then _ran=$((_ran+1)); else _skipped=$((_skipped+1)); fi; done
+echo "GROUPS-RAN: $_ran  GROUPS-SKIPPED: $_skipped"
+_coverage_check "$_ran" "$_skipped" || COVER_INCOMPLETE=1
 
 echo ""
 echo "═══════════════════════════════════════"
 echo "  RESULT: $PASS passed, $FAIL failed"
 echo "═══════════════════════════════════════"
-[ "$FAIL" -eq 0 ] && { echo "✅ ALL GREEN"; exit 0; } || { echo "❌ FAILURES"; exit 1; }
+if [ "$FAIL" -ne 0 ]; then echo "❌ FAILURES"; exit 1
+elif [ "${COVER_INCOMPLETE:-0}" = 1 ]; then echo "❌ INCOMPLETE — coverage floor (too many groups skipped)"; exit 3
+else echo "✅ ALL GREEN"; exit 0; fi

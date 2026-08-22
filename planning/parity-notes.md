@@ -19,7 +19,7 @@ suites (node T42, py test_audit.py).
 
 **The parity test `tests/parity.sh`** (ratcheted as node-suite T43) now has **full
 coverage** of the shared surfaces — node ≡ python on:
-- **audit** findings (4 fixtures), **lint** errors (`parity-fixtures/broken.json` + fixtures),
+- **audit** findings (5 fixtures), **lint** errors (`parity-fixtures/broken.json` + fixtures),
 - **protocol** — the reason KEYS (not the action text, see below),
 - **resolve** (`hb next`), **ready** (the runnable set), **report** (progress numbers),
 - **diagnose** (the inferred blocker's first line),
@@ -195,7 +195,7 @@ info note.
 
 ## Parity result (DA3)
 
-Node ≡ Python on all four fixtures — same `errors`, `warns`, and sorted rule set.
+Node ≡ Python on all five fixtures — same `errors`, `warns`, and sorted rule set.
 (Only cosmetic difference: `json.dumps` spacing; compare via normalized serialization.)
 This is the working parity test; a future dedicated one should also diff `project()`,
 `resolve()`, and `lint()` on shared fixtures.
