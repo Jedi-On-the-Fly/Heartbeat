@@ -327,7 +327,8 @@ def _run(hbdir):
                                                 "context": assemble_context(hbdir, {"id": "?", "phase": data["next_task"].get("phase")})},
                          hbdir, None, model=cfg["refute_model"], provider=cfg["refute_provider"])
             if not isinstance(r.get("refuted"), bool):
-                print(f"HB-EXEC STOP: review_error — {g}")
+                # A degraded/unavailable refuter cannot certify a pass — never fail open.
+                print(f"HB-EXEC STOP: review_error — {g}: refuter could not run ({r.get('error') or 'no verdict'})")
                 return 1
             if r["refuted"]:
                 st.mutate(hbdir, {"event": "review_failed", "gate": g, "note": (r.get("findings", "") or "")[:200]})

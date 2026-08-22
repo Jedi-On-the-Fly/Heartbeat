@@ -64,10 +64,10 @@ def refute(payload):
         from smolagents import ToolCallingAgent
         model = _model()
     except Exception as e:
-        return {"refuted": False, "findings": f"smolagents unavailable ({e})"}
+        return {"error": f"smolagents unavailable ({e})"}
     try:
         agent = ToolCallingAgent(tools=[], model=model)
         out = str(agent.run(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd with REFUTED or CLEAR.'))
         return {"refuted": "REFUTED" in out.upper(), "findings": out[:500]}
     except Exception as e:
-        return {"refuted": False, "findings": f"reviewer error: {e}"}
+        return {"error": f"reviewer error: {e}"}

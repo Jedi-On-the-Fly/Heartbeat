@@ -40,7 +40,7 @@ def refute(payload):
         from crewai import Agent, Task, Crew
         llm = _llm()
     except Exception as e:
-        return {"refuted": False, "findings": f"crewai unavailable ({e})"}
+        return {"error": f"crewai unavailable ({e})"}
     rev = Agent(role="Skeptical adversarial reviewer", goal="Find a real hole in the claimed completion",
                 backstory="You refuse to rubber-stamp.", llm=llm, verbose=False)
     task = Task(description=f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd with REFUTED or CLEAR.',
@@ -49,4 +49,4 @@ def refute(payload):
         out = str(Crew(agents=[rev], tasks=[task], verbose=False).kickoff())
         return {"refuted": "REFUTED" in out.upper(), "findings": out[:500]}
     except Exception as e:
-        return {"refuted": False, "findings": f"reviewer error: {e}"}
+        return {"error": f"reviewer error: {e}"}

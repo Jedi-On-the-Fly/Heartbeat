@@ -64,6 +64,16 @@ Two gotchas it encodes:
 - **Backends registry.** Both runtimes must offer the same canonical backend set. Enforced by
   **T85** (`registry-parity.sh`), modulo the python-only `claude` alias (below).
 
+## Review acceptance is a shared behavioral surface (must match)
+
+Both runtimes decide a review-gated phase the same way, and a **degraded refuter never fails open**:
+a refute result with **no boolean `refuted`** (a sentinel — `{"error": …}` from a py backend, or
+`{"error": …}` from a bash backend when its CLI is absent) routes to **review_error**, never a pass
+(`executor.py` ~329, `hb-exec.js` ~352). A genuine "could not refute" requires `refuted:false` **plus
+substantive findings ≥40 chars** (the reviewer's actual text) → review pass; `refuted:true` →
+review_failed. The model-text verdict is the reply's **final REFUTED/CLEAR token**, not a grep-anywhere
+(the prompt itself contains "REFUTED"). Proof: `gate-examples/refute-integrity.sh` (T119), both runtimes.
+
 ## Intentional divergences (not on the byte-equal surface)
 
 - **Pre-push gate guard: behavioral parity, runtime-specific body; rot pre-commit is node-only.** Both

@@ -73,7 +73,7 @@ def refute(payload):
     try:
         model = _model()
     except Exception as e:
-        return {"refuted": False, "findings": f"langgraph unavailable ({e})"}
+        return {"error": f"langgraph unavailable ({e})"}
     try:
         prompt = (f'{payload.get("prompt", "Refute that the phase is complete.")}\n\nContext:\n{ctx}\n\n'
                   "You are a skeptical adversarial reviewer. End with exactly one token: REFUTED or CLEAR.")
@@ -81,4 +81,4 @@ def refute(payload):
         text = getattr(out, "content", str(out))
         return {"refuted": "REFUTED" in str(text).upper(), "findings": str(text)[:500]}
     except Exception as e:
-        return {"refuted": False, "findings": f"reviewer error: {e}"}
+        return {"error": f"reviewer error: {e}"}

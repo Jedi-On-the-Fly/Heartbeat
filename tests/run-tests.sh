@@ -1403,6 +1403,14 @@ else
   echo "  (python3 absent — T118 skipped)"
 fi
 
+grp "T119 — review integrity: a degraded refuter never passes (sentinel → review_error), a genuine review isn't discarded, robust verdict (both runtimes)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T119.1 py backends degrade to a sentinel (no bool refuted); node claude-exec.sh degrade→sentinel, clear carries real findings, verdict by final token (refute-integrity.sh → REFUTE-INTEGRITY-OK)" \
+    'bash "'"$GEX"'/refute-integrity.sh" 2>&1 | grep -q "REFUTE-INTEGRITY-OK"'
+else
+  echo "  (python3 absent — T119 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

@@ -69,7 +69,7 @@ def refute(payload):
         from agents import Agent, Runner
         model = _model()
     except Exception as e:
-        return {"refuted": False, "findings": f"openai-agents unavailable ({e})"}
+        return {"error": f"openai-agents unavailable ({e})"}
     try:
         agent = Agent(name="Skeptic",
                       instructions="You are a skeptical adversarial reviewer. End with exactly one token: REFUTED or CLEAR.",
@@ -78,4 +78,4 @@ def refute(payload):
         text = _final(res)
         return {"refuted": "REFUTED" in str(text).upper(), "findings": str(text)[:500]}
     except Exception as e:
-        return {"refuted": False, "findings": f"reviewer error: {e}"}
+        return {"error": f"reviewer error: {e}"}

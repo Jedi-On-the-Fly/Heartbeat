@@ -39,10 +39,10 @@ def refute(payload):
         from agno.agent import Agent
         agent = Agent(model=_model(), instructions="Skeptical adversarial reviewer. End with REFUTED or CLEAR.")
     except Exception as e:
-        return {"refuted": False, "findings": f"agno unavailable ({e})"}
+        return {"error": f"agno unavailable ({e})"}
     try:
         r = agent.run(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd with REFUTED or CLEAR.')
         text = getattr(r, "content", str(r))
         return {"refuted": "REFUTED" in text.upper(), "findings": text[:500]}
     except Exception as e:
-        return {"refuted": False, "findings": f"reviewer error: {e}"}
+        return {"error": f"reviewer error: {e}"}

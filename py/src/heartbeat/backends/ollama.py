@@ -52,5 +52,5 @@ def refute(payload):
     try:
         out = _generate(prompt)
     except (urllib.error.URLError, OSError) as e:
-        return {"refuted": False, "findings": f"ollama unreachable ({e})"}
+        return {"error": f"ollama unreachable ({e})"}
     return {"refuted": "REFUTED" in out.upper(), "findings": out[:500]}

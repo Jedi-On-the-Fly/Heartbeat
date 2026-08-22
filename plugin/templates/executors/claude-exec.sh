@@ -14,7 +14,9 @@ jstr()  { node -pe 'JSON.stringify(require("fs").readFileSync(0,"utf8"))'; }
 ctx="$(field .context)"
 
 if ! command -v claude >/dev/null 2>&1; then
-  if [ "$mode" = refute ]; then echo '{"refuted":false,"findings":"claude CLI not available — could not run the refuter"}'
+  # Degrade to a SENTINEL (no boolean `refuted`) — a refuter that could not run must route to
+  # review_error, never fail open into a "could not refute" pass.
+  if [ "$mode" = refute ]; then echo '{"error":"claude CLI not available — could not run the refuter"}'
   else echo '{"ok":false,"summary":"claude CLI not available"}'; fi
   exit 0
 fi
@@ -28,10 +30,14 @@ Context:
 ${ctx}
 
 Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with the single token REFUTED (you found a hole) or CLEAR (you could not)." 2>/dev/null)"
-  if printf '%s' "$ans" | grep -q 'REFUTED'; then
+  # Verdict = the reply's FINAL REFUTED/CLEAR token (the prompt itself contains "REFUTED", so a
+  # grep-anywhere would misread a CLEAR reply that merely restates the instruction). Carry the
+  # reviewer's ACTUAL text as findings on BOTH paths, so a genuine CLEAR has substantive evidence.
+  verdict="$(printf '%s' "$ans" | tr '[:lower:]' '[:upper:]' | grep -oE 'REFUTED|CLEAR' | tail -1)"
+  if [ "$verdict" = REFUTED ]; then
     printf '{"refuted":true,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 500 | jstr)"
   else
-    echo '{"refuted":false,"findings":"reviewer could not refute"}'
+    printf '{"refuted":false,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 500 | jstr)"
   fi
 else
   if claude -p "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.

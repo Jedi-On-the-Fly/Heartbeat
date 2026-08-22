@@ -1,0 +1,157 @@
+{
+  "_meta": {
+    "project": "critical-fixes",
+    "note": "Fix the real issues a critical review found (verified against code), in severity order, plus two regressions I introduced this session. The review's own thesis proved out: the confident claims fell when attacked. (RV) Review integrity — the differentiator fails in BOTH directions: the Python executor FAILS OPEN (a degraded backend returns {refuted:false, findings:'<x> unavailable…'} ≥40 chars → executor.py accepts it as a 'could not refute' PASS → tag certifies an UN-reviewed state, contradicting the v1.26 guarantee); the node path FAILS CLOSED (claude-exec.sh clear path emits a canned <40-char string → hb-exec.js escalates → every review-gated run dead-ends), and verdict parse is grep REFUTED on output whose prompt contains 'REFUTED'. Fix: a degraded refute is a distinct sentinel → review_error (never a pass); the clear path carries the reviewer's real findings; robust verdict parse. Both runtimes; review acceptance is a shared behavioral surface. (RB) Robustness/parity — hb init (scaffold.py) rewrites events.jsonl UNCONDITIONALLY (node refuses without --force) → re-init wipes the append-only source of truth; gate.py runs criteria shell=True (dash) while gate.sh uses bash -c → bash-ism criteria silently diverge cross-runtime and gate.py swallows output; and my v1.27 pre-push hook is NOT self-contained — its parity proof computed the expected exit WITH PYTHONPATH but the hook runs WITHOUT it, a false-green that a stripped-env refutation would have caught. (DC) Docs↔claims — make the confident prose true: add a real .github/workflows CI running the three suites AND reword 'CI-enforced' to say exactly what enforces what; add LICENSE (MIT declared 5×, no file); fix the quickstarts that open with an unpublished `pip install heartbeat-hb`; derive the how-to index + the dev-tests T-table from source (they drifted — dev-tests stops at T116 while the suite ships T118) and gate the derivation (the T116 pattern); document the intentionally-independent plugin vs pyproject version lines. Proof-driven: spec-first, gated, refuted in a stripped env."
+  },
+  "phases": [
+    {
+      "id": "RV",
+      "title": "Review integrity — a degraded refute must never pass; a real review must not dead-end (both runtimes)",
+      "gate_entry": null,
+      "gate_exit": "GATE_RV",
+      "tasks": [
+        {
+          "id": "RV1",
+          "title": "Spec-first: the refute-integrity proof (both runtimes, script-stub driven)",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/refute-integrity.sh (prints REFUTE-INTEGRITY-OK) RED-first, driving the executor with the `script` backend + stubs (like cross-model-refuter.sh), deterministic, no model. Assert, for BOTH runtimes (node .hb/hb-exec.js and python -m heartbeat.cli/executor): (a) a DEGRADED refute (stub emits a sentinel meaning 'refuter could not run', e.g. no boolean `refuted`) does NOT advance the phase — it routes to review_error, records NO review pass, creates NO tag; (b) a GENUINE could-not-refute (stub emits refuted:false WITH substantive findings ≥40 chars) DOES pass and tags; (c) a real refutation (refuted:true) → review_failed; (d) a reviewer reply that merely echoes the instruction word 'REFUTED' inside prose but ends with the CLEAR token is NOT scored as a refutation (robust verdict parse). Must FAIL now (today the degraded path passes on python, and the node clear path dead-ends)."
+        },
+        {
+          "id": "RV2",
+          "title": "Fix the Python fail-open: degraded refute → review_error, not pass",
+          "requires": ["RV1"],
+          "description": "Change EVERY py backend's non-verdict refute() path — both the degrade/'unavailable' path AND the 'reviewer error: {e}' exception path — across ALL of py/src/heartbeat/backends/*.py (the 7 frameworks agno/autogen/crewai/pydanticai/smolagents/langgraph/openai_agents plus any others, e.g. ollama/claude/codex/opencode) to return a distinct sentinel with NO boolean `refuted` (e.g. {\"error\": \"<backend> unavailable (…)\"}) — never a hardcoded {\"refuted\": false}. A genuine verdict path computes `refuted` dynamically, so the literal `\"refuted\": False` should remain nowhere in backends/ (this is what criterion rvd enforces). executor.py already routes a non-bool `refuted` to review_error (line ~329); make its message explicit that a degraded/unavailable refuter cannot certify a pass. Update the tests that asserted the old fail-open contract (py/tests/test_backends_frameworks.py, test_exec.py) to assert the sentinel routes to review_error and does NOT create a review pass or tag (re-assert the safe behavior — do not just delete the tests). Make refute-integrity.sh's python assertions green; keep the rest of pytest green."
+        },
+        {
+          "id": "RV3",
+          "title": "Fix the node dead-end + fragile verdict parse",
+          "requires": ["RV1"],
+          "description": "In plugin/templates/executors/claude-exec.sh (and the sibling bash backends): on the CLEAR path emit the reviewer's ACTUAL reply text as `findings` (so a genuine review has substantive findings and clears the ≥40 guard instead of the canned 'reviewer could not refute'); on a DEGRADE (the `claude`/backend command failed to run) emit a sentinel with no boolean `refuted` → hb-exec.js routes to review_error, not a silent pass. Make the verdict robust in claude-exec.sh AND hb-exec.js: decide REFUTED/CLEAR from the reply's final token/line, not a grep for 'REFUTED' anywhere (the prompt itself contains the word). Make refute-integrity.sh's node assertions green."
+        },
+        {
+          "id": "RV4",
+          "title": "Wire + document the review-acceptance parity surface",
+          "requires": ["RV2", "RV3"],
+          "description": "Add group T119 (refute-integrity.sh → REFUTE-INTEGRITY-OK) to tests/run-tests.sh (marker on the same check line). Record in planning/parity-notes.md that review acceptance is a SHARED BEHAVIORAL surface (both runtimes: degraded→review_error, genuine-clear-with-substance→pass, refuted→review_failed) and that a degraded refuter is a sentinel, never a pass. Confirm node (T119 in GROUPS-PASSED), python pytest, parity, whole-docs prose all green."
+        }
+      ]
+    },
+    {
+      "id": "RB",
+      "title": "Robustness & cross-runtime parity — no data loss, one shell, a self-contained hook",
+      "gate_entry": "GATE_RV",
+      "gate_exit": "GATE_RB",
+      "tasks": [
+        {
+          "id": "RB1",
+          "title": "Spec-first: proofs for event-log safety, gate-shell parity, hook self-containment",
+          "requires": [],
+          "description": "Author RED-first, all in a STRIPPED env (unset PYTHONPATH; do not rely on an editable install): (1) docs/howto/gate-examples/init-preserves-log.sh (INIT-LOG-SAFE-OK): `hb init` on a project that ALREADY has .hb/events.jsonl with real events preserves it (and executor.json) unless --force is given — matching node bootstrap.sh which refuses re-init without --force. (2) docs/howto/gate-examples/gate-shell-parity.sh (GATE-SHELL-PARITY-OK): a criterion using a bash-ism (e.g. `[[ 1 = 1 ]]`) yields the SAME pass/fail under node gate.sh and python gate.py, and a failing gate surfaces some diagnostic (output not fully swallowed). (3) docs/howto/gate-examples/pre-push-selfcontained.sh (PRE-PUSH-SELFCONTAINED-OK): the installed pre-push hook is tested AS IT RUNS (no PYTHONPATH) — it blocks iff gate re-verify fails when the runtime tool is available, and when the tool is absent it behaves as designed (documented) rather than blocking on an import error. All three FAIL now."
+        },
+        {
+          "id": "RB2",
+          "title": "Fix hb init truncating the event log",
+          "requires": ["RB1"],
+          "description": "In py/src/heartbeat/scaffold.py, guard events.jsonl (and executor.json, PROTOCOL.md) behind `force or not exists` — never overwrite an existing event log without --force, matching node bootstrap.sh's refuse-without-force. Preserve the append-only source of truth on re-init. Make init-preserves-log.sh green; keep pytest green."
+        },
+        {
+          "id": "RB3",
+          "title": "Fix gate.py shell divergence + swallowed output",
+          "requires": ["RB1"],
+          "description": "In py/src/heartbeat/gate.py, run each criterion under `bash -c` (matching plugin/templates/gate.sh) instead of shell=True/dash, so bash-ism criteria don't silently diverge cross-runtime; and stop swallowing output on failure — capture stdout/stderr so a blocked gate is diagnosable (surface it via diagnose/the return). Make gate-shell-parity.sh green; keep pytest + tests/parity.sh green. Document the (now closed) divergence in planning/parity-notes.md.",
+          "note": "bash -c keeps parity with gate.sh; if bash is genuinely absent the behavior + fallback must be documented."
+        },
+        {
+          "id": "RB4",
+          "title": "Make the pre-push hook honest + self-contained; fix its false-green proof",
+          "requires": ["RB1"],
+          "description": "Fix the v1.27 regression: docs/howto/gate-examples/pre-push-hook-parity.sh computed the python expected-exit WITH PYTHONPATH but the hook runs WITHOUT it (false green on a box with hb installed). Make the parity proof test the hook exactly as it runs (same invocation; guard the python leg on `command -v hb` like T82.2 guards pytest). Fix the hook body (bootstrap.sh + scaffold.py) so it never blocks on an IMPORT error: node calls the always-present `.hb/gate.sh --all` (already self-contained); python requires `hb` on PATH and, if absent, prints a clear message and skips (exit 0) rather than blocking on a broken import — documented as the intentional node-vs-python difference in planning/parity-notes.md. Make pre-push-selfcontained.sh green and pre-push-hook-parity.sh honest+green."
+        },
+        {
+          "id": "RB5",
+          "title": "Wire the RB proofs",
+          "requires": ["RB2", "RB3", "RB4"],
+          "description": "Add groups T120 (init-preserves-log.sh → INIT-LOG-SAFE-OK), T121 (gate-shell-parity.sh → GATE-SHELL-PARITY-OK), T122 (pre-push-selfcontained.sh → PRE-PUSH-SELFCONTAINED-OK) to tests/run-tests.sh (markers on the same check line). Confirm node (T120/T121/T122 in GROUPS-PASSED), python pytest, parity, prose all green."
+        }
+      ]
+    },
+    {
+      "id": "DC",
+      "title": "Docs ↔ claims — make the confident prose true and keep it from drifting",
+      "gate_entry": "GATE_RB",
+      "gate_exit": "GATE_DC",
+      "tasks": [
+        {
+          "id": "DC1",
+          "title": "Spec-first: proofs for CI validity, index/table derivation, and claim honesty",
+          "requires": [],
+          "description": "Author RED-first: (1) docs/howto/gate-examples/ci-workflow.sh (CI-WORKFLOW-OK): a valid workflow under .github/workflows/ exists, parses, and invokes the three suites (tests/run-tests.sh, py pytest, tests/parity.sh); the scripts it references exist. (2) docs/howto/gate-examples/index-coverage.sh (INDEX-COVERAGE-OK): every docs/howto/*.md guide (excluding README/howto-list) is linked in docs/howto/howto-list.md, AND every `grp \"Tnn` group in tests/run-tests.sh appears in the docs/dev-tests.md T-table — derived from the filesystem/suite (the T116 anti-drift pattern). (3) docs/howto/gate-examples/claim-honesty.sh (CLAIM-HONESTY-OK): a LICENSE file exists and says MIT; no doc presents an unpublished `pip install heartbeat-hb` as the install line (the quickstarts use the real local install); any remaining 'CI-enforced' wording is accurate (CI now exists). All FAIL now."
+        },
+        {
+          "id": "DC2",
+          "title": "Add real CI + reword the enforcement claim accurately",
+          "requires": ["DC1"],
+          "description": "Add .github/workflows/ci.yml running the three suites (node tests/run-tests.sh, python pytest, tests/parity.sh) on push + pull_request. Reword the 'CI-enforced' claims (docs/howto/README.md, howto-list.md) to state exactly what enforces what: guides are enforced by tests/run-tests.sh locally and by CI on push. Make ci-workflow.sh green.",
+          "note": "I cannot run GitHub Actions locally; the gate verifies the workflow is valid and wires the real suites (which are themselves green), the honest boundary for a remote runner."
+        },
+        {
+          "id": "DC3",
+          "title": "LICENSE, quickstart install, version-line note",
+          "requires": ["DC1"],
+          "description": "Add a top-level LICENSE (MIT) matching the declarations in plugin.json/marketplace.json/pyproject/README. Fix the quickstart docs that open with `pip install heartbeat-hb` (docs/howto/heartbeat-in-5-minutes.md, choose-runtime.md, run-heartbeat-fully-locally.md, run-heartbeat-in-ci.md) to use the real local install (`pip install -e py` / `PYTHONPATH=py/src`) since the package is unpublished, consistent with README/INSTALL/SECURITY. Add a short note (README or INSTALL) that the plugin version (plugin.json == marketplace) and the Python package version (pyproject) are INTENTIONALLY independent lines. Make claim-honesty.sh green."
+        },
+        {
+          "id": "DC4",
+          "title": "Regenerate + gate the how-to index and the dev-tests T-table",
+          "requires": ["DC1"],
+          "description": "Bring docs/howto/howto-list.md into sync with the shipped guides, and extend the docs/dev-tests.md T-table to cover every group the suite ships (T117, T118, and every new group from this DAG). These are the drift the review caught (index off; table stops at T116). Make index-coverage.sh green so the drift can't recur.",
+          "note": "This is the derive-from-source fix the review recommended (the T116 pattern generalized to the index + T-table)."
+        },
+        {
+          "id": "DC5",
+          "title": "Wire the DC proofs",
+          "requires": ["DC2", "DC3", "DC4"],
+          "description": "Add groups T123 (ci-workflow.sh → CI-WORKFLOW-OK), T124 (index-coverage.sh → INDEX-COVERAGE-OK), T125 (claim-honesty.sh → CLAIM-HONESTY-OK) to tests/run-tests.sh (markers on the same check line), and add their rows to docs/dev-tests.md (so DC4's own additions stay covered). Confirm the FULL suite green (node with the new groups in GROUPS-PASSED, python pytest, parity, whole-docs prose, self-audit, skill-integrity)."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_RV": {
+      "desc": "A degraded refute never becomes a review pass (routes to review_error) and a genuine review no longer dead-ends — both runtimes; verdict parse is robust; wired T119; review acceptance documented as a parity surface; suites green.",
+      "review": {
+        "prompt": "Refute that RV is done. Run in a STRIPPED env (unset PYTHONPATH; don't rely on the editable hb). Does refute-integrity.sh have TEETH — would it go RED if the Python executor still accepted a degraded refute as a pass, or if the node clear path still dead-ended? Concretely: simulate a degraded backend (refuter 'unavailable' with a ≥40-char message) and confirm NO review pass and NO tag are created, in BOTH runtimes. Confirm a genuine could-not-refute WITH substantive findings still passes, and refuted:true still fails. Is the verdict parse fooled by a reply that contains the word 'REFUTED' in prose but ends with CLEAR? Did RV2 update the tests that asserted the old fail-open (not just delete them)? node/python/parity/prose green with T119 wired?"
+      },
+      "criteria": [
+        { "id": "rva", "desc": "refute-integrity proof passes (degrade→review_error, genuine-clear→pass, refuted→fail, robust verdict; both runtimes)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refute-integrity.sh\" 2>&1 | grep -q 'REFUTE-INTEGRITY-OK'" },
+        { "id": "rvb", "desc": "the proof is wired into the suite (marker on the same line)", "cmd": "grep -qE 'refute-integrity\\.sh.*REFUTE-INTEGRITY-OK' \"$PROJECT_DIR/tests/run-tests.sh\"" },
+        { "id": "rvc", "desc": "node fix: the bash backend clear path no longer emits the canned <40-char string (dead-end removed)", "cmd": "cd \"$PROJECT_DIR\" && ! grep -q 'reviewer could not refute' plugin/templates/executors/claude-exec.sh" },
+        { "id": "rvd", "desc": "py fix: no framework backend returns a boolean refuted:false on its degrade path (fail-open removed)", "cmd": "cd \"$PROJECT_DIR\" && ! grep -rnE '\"refuted\": *False' py/src/heartbeat/backends/" }
+      ]
+    },
+    "GATE_RB": {
+      "desc": "hb init preserves the event log unless --force (parity with node); gate.py runs criteria under bash (parity with gate.sh) and no longer swallows failure output; the pre-push hook is honest + self-contained and its parity proof tests it as it runs. Wired T120/T121/T122; suites green.",
+      "review": {
+        "prompt": "Refute that RB is done, in a STRIPPED env (unset PYTHONPATH; test WITHOUT relying on an editable hb, and also with hb absent from PATH where relevant). (1) Does `hb init` on an existing project with a real events.jsonl now PRESERVE it (and refuse/require --force), and would init-preserves-log.sh catch a regression that truncates it? (2) Does a `[[ ]]`/array criterion now pass identically under gate.sh (bash) and gate.py, and is a failing gate diagnosable (output not swallowed)? Would gate-shell-parity.sh catch a reversion to dash? (3) The pre-push hook: does the FIXED parity proof test it as it actually runs (no PYTHONPATH), and does the hook avoid blocking on an import error when hb is absent (skip-with-message, documented)? Prove the old proof was a false green and the new one isn't. node/python/parity/prose green with T120/T121/T122 wired?"
+      },
+      "criteria": [
+        { "id": "rba", "desc": "hb init preserves an existing event log unless --force (parity with node)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/init-preserves-log.sh\" 2>&1 | grep -q 'INIT-LOG-SAFE-OK'" },
+        { "id": "rbb", "desc": "gate criteria behave identically under gate.sh (bash) and gate.py, output not swallowed", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/gate-shell-parity.sh\" 2>&1 | grep -q 'GATE-SHELL-PARITY-OK'" },
+        { "id": "rbc", "desc": "the pre-push hook is self-contained/honest (proof tests it as it runs)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/pre-push-selfcontained.sh\" 2>&1 | grep -q 'PRE-PUSH-SELFCONTAINED-OK'" },
+        { "id": "rbd", "desc": "all three RB proofs wired into the suite", "cmd": "cd \"$PROJECT_DIR\" && grep -qE 'init-preserves-log\\.sh.*INIT-LOG-SAFE-OK' tests/run-tests.sh && grep -qE 'gate-shell-parity\\.sh.*GATE-SHELL-PARITY-OK' tests/run-tests.sh && grep -qE 'pre-push-selfcontained\\.sh.*PRE-PUSH-SELFCONTAINED-OK' tests/run-tests.sh" }
+      ]
+    },
+    "GATE_DC": {
+      "desc": "The confident claims are true and kept from drifting: real CI runs the three suites (+ accurate wording); LICENSE ships; quickstarts use the real install; the how-to index + dev-tests T-table are synced and gate-derived from source. Wired T123/T124/T125; full suite green.",
+      "review": {
+        "prompt": "Refute that DC is done. Does .github/workflows actually invoke all THREE suites and reference scripts that exist, and is the 'CI-enforced' wording now accurate (not overclaiming)? Does a LICENSE exist and say MIT? Do the quickstarts no longer present an unpublished `pip install heartbeat-hb` as the install line? Does index-coverage.sh have TEETH — would it go RED if a guide were unlisted or a suite group missing from dev-tests.md (test by imagining a new group)? Is the plugin-vs-pyproject version independence documented (so it's not read as skew)? Full node suite (T123/T124/T125 in GROUPS-PASSED, 0 failed), python, parity, prose, self-audit, skill-integrity green?"
+      },
+      "criteria": [
+        { "id": "dca", "desc": "a valid CI workflow wires the three suites", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/ci-workflow.sh\" 2>&1 | grep -q 'CI-WORKFLOW-OK'" },
+        { "id": "dcb", "desc": "how-to index + dev-tests T-table cover the shipped guides/groups (anti-drift)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/index-coverage.sh\" 2>&1 | grep -q 'INDEX-COVERAGE-OK'" },
+        { "id": "dcc", "desc": "LICENSE + honest quickstart/claims", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/claim-honesty.sh\" 2>&1 | grep -q 'CLAIM-HONESTY-OK'" },
+        { "id": "dcd", "desc": "all three DC proofs wired into the suite", "cmd": "cd \"$PROJECT_DIR\" && grep -qE 'ci-workflow\\.sh.*CI-WORKFLOW-OK' tests/run-tests.sh && grep -qE 'index-coverage\\.sh.*INDEX-COVERAGE-OK' tests/run-tests.sh && grep -qE 'claim-honesty\\.sh.*CLAIM-HONESTY-OK' tests/run-tests.sh" }
+      ]
+    }
+  }
+}

@@ -20,11 +20,11 @@ def execute(payload):
 
 def refute(payload):
     if not which("claude"):
-        return {"refuted": False, "findings": "claude CLI not available"}
+        return {"error": "claude CLI not available"}
     prompt = (f'{payload.get("prompt", "Refute.")}\n\nContext:\n{payload.get("context", "")}\n\n'
               "You are a skeptical reviewer. End with REFUTED or CLEAR.")
     try:
         r = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True, timeout=600)
         return {"refuted": "REFUTED" in r.stdout.upper(), "findings": r.stdout[:500]}
     except Exception as e:
-        return {"refuted": False, "findings": f"reviewer error: {e}"}
+        return {"error": f"reviewer error: {e}"}

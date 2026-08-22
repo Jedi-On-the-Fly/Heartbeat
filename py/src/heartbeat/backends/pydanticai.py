@@ -64,9 +64,9 @@ def refute(payload):
         from pydantic_ai import Agent
         agent = Agent(_model(), system_prompt="You are a skeptical adversarial reviewer. End with exactly one token: REFUTED or CLEAR.")
     except Exception as e:
-        return {"refuted": False, "findings": f"pydantic-ai unavailable ({e})"}
+        return {"error": f"pydantic-ai unavailable ({e})"}
     try:
         text = _text(agent.run_sync(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}'))
         return {"refuted": "REFUTED" in text.upper(), "findings": text[:500]}
     except Exception as e:
-        return {"refuted": False, "findings": f"reviewer error: {e}"}
+        return {"error": f"reviewer error: {e}"}

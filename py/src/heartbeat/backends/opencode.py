@@ -51,7 +51,7 @@ def execute(payload):
 
 def refute(payload):
     if not which("opencode"):
-        return {"refuted": False, "findings": "opencode CLI not available"}
+        return {"error": "opencode CLI not available"}
     cwd = payload.get("cwd") or os.getcwd()
     prompt = (f'{payload.get("prompt", "Refute.")}\n\nContext:\n{payload.get("context", "")}\n\n'
               "You are a skeptical reviewer. Do not modify files. End with REFUTED or CLEAR.")
@@ -60,4 +60,4 @@ def refute(payload):
                            capture_output=True, text=True, timeout=600)
         return {"refuted": "REFUTED" in (r.stdout or "").upper(), "findings": (r.stdout or "")[:500]}
     except Exception as e:
-        return {"refuted": False, "findings": f"reviewer error: {e}"}
+        return {"error": f"reviewer error: {e}"}

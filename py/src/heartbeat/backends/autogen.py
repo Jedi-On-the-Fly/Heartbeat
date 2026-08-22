@@ -57,5 +57,5 @@ def refute(payload):
         text = _run("You are a skeptical adversarial reviewer. End with exactly one token: REFUTED or CLEAR.",
                     f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}')
     except Exception as e:
-        return {"refuted": False, "findings": f"autogen unavailable ({e})"}
+        return {"error": f"autogen unavailable ({e})"}
     return {"refuted": "REFUTED" in str(text).upper(), "findings": str(text)[:500]}
