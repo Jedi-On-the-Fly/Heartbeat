@@ -17,7 +17,7 @@ exit codes are meaningful, so a pipeline gates on them — no wrapper needed.
   gate passed. A blocked gate or exhausted retries exits non-zero and the build goes red
   ([escalate-instead-of-retry.md](escalate-instead-of-retry.md)).
 
-Because the runtime is pure-Python with a stdlib core (`pip install heartbeat-hb`), it runs on
+Because the runtime is pure-Python with a stdlib core (`pip install -e py`), it runs on
 any CI runner with no services. Choose a headless backend (a local model, a script, or Claude
 Code) and pass a key only if the backend needs one.
 

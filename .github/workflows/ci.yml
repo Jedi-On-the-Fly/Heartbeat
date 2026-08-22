@@ -1,0 +1,22 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install the Python package (for pytest)
+        run: pip install -e py pytest
+      - name: Node suite (tests/run-tests.sh)
+        run: bash tests/run-tests.sh
+      - name: Python suite (pytest)
+        run: cd py && PYTHONPATH=src python3 -m pytest -q
+      - name: Cross-runtime parity (tests/parity.sh)
+        run: bash tests/parity.sh

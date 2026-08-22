@@ -2,7 +2,7 @@
 
 Task-oriented guides for using HeartBeat well. Mechanism guides are backed by a runnable proof;
 the decision/best-practice guides are integrity-checked (links resolve, only real commands) and
-clarity-reviewed. Every guide is CI-enforced. The full roadmap (created + planned, across
+clarity-reviewed. Every guide is enforced by the test suite (`tests/run-tests.sh`), locally and in CI on push. The full roadmap (created + planned, across
 families A–J) is in [howto-list.md](howto-list.md).
 
 - [Writing behavioral gates](writing-behavioral-gates.md) — how to make a gate assert the

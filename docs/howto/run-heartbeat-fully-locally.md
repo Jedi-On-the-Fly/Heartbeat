@@ -10,7 +10,7 @@ is local.
 ## Do it
 
 ```bash
-pip install heartbeat-hb                 # the pure-Python port; stdlib-only core, no node
+pip install -e py                 # the pure-Python port; stdlib-only core, no node
 ollama pull qwen2.5:7b-instruct          # a local model to be the worker
 
 hb init myproject

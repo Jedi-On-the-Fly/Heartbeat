@@ -360,4 +360,4 @@ bash tests/run-tests.sh      # full regression suite (all green)
 
 ## Version and changes
 
-See [STATUS.md](STATUS.md) for the changelog. The version is single-sourced: the plugin's in `plugin/.claude-plugin/plugin.json` and the Python package's in `py/pyproject.toml`; `.claude-plugin/marketplace.json` mirrors the plugin version (marketplace format). No version number is restated in prose.
+See [STATUS.md](STATUS.md) for the changelog. The version is single-sourced: the plugin's in `plugin/.claude-plugin/plugin.json` and the Python package's in `py/pyproject.toml`; `.claude-plugin/marketplace.json` mirrors the plugin version (marketplace format). The plugin and the Python package are versioned **independently** (distinct products, distinct cadence) — a plugin `1.27.x` alongside a package `0.17.x` is expected, not skew. No version number is restated in prose.

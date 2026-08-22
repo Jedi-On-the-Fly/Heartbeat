@@ -2,7 +2,7 @@
 
 The full how-to map, organized by job (families **A–J**, after the original ideas list).
 Each entry is either **created** (linked file, with the suite group that enforces it) or
-**Not available yet**. Created guides are CI-enforced across `tests/run-tests.sh` groups
+**Not available yet**. Created guides are enforced by `tests/run-tests.sh` groups (locally and in CI on push)
 **T53–T85**: the mechanism guides by a runnable proof, the launch-prose guides (T62) by an
 integrity check (links resolve, no placeholders, only real commands) plus adversarial clarity
 review, and the framework guides (T64) by a Docker-free harness check + backend conformance
@@ -66,6 +66,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 |---|---|
 | Write Your First Behavioral Gate | ✅ [writing-behavioral-gates.md](writing-behavioral-gates.md) — T53 |
 | Convert Structural Checks into Behavioral Checks | ✅ [writing-behavioral-gates.md](writing-behavioral-gates.md) (imports-not-behavior) — T53 |
+| Discovery Notes (how the imports-not-behavior example was found) | ✅ [discovery-notes.md](discovery-notes.md) — T53 |
 | Write Fast Deterministic Gates | ✅ [write-fast-deterministic-gates.md](write-fast-deterministic-gates.md) — T54 |
 | Write Gates for Non-Code Work | ✅ [write-gates-for-non-code-work.md](write-gates-for-non-code-work.md) — T53 |
 | Ten Rules for a Good Gate | ✅ [writing-gates-10-rules.md](writing-gates-10-rules.md) — T53 |
@@ -195,7 +196,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 
 The **assurance** spine (families C/D/F — gates, refutation, auditor, parity, recovery,
 liveness, portability, diagnosis, re-verification, restore points) is essentially complete
-and CI-enforced. This maps to **Hero Journey 2 (self-confirmation → evidence): done.**
+and enforced by the suite (locally + CI on push). This maps to **Hero Journey 2 (self-confirmation → evidence): done.**
 
 The Quick-Start (A), backend (E), and the operational spine of G are largely in place, and the
 Tier-1/Tier-2 gaps are now filled: parallel fan-out + worktree isolation, add-to-an-existing-repo,

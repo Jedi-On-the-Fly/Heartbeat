@@ -4,7 +4,7 @@
 work with a *behavioral* gate, let a worker do it, and watch the phase advance only because
 the gate passed.
 
-Use the Python runtime (`pip install heartbeat-hb`, or `PYTHONPATH=py/src` from a clone). No
+Use the Python runtime (`pip install -e py`, or `PYTHONPATH=py/src` from a clone). No
 Claude Code required.
 
 ## 1. Init

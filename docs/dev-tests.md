@@ -133,8 +133,17 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T114 | research boundary (`ground-check-redteam.sh`) — gate catches mechanical fabrication, stays **silent on truth** (grounded-but-wrong) |
 | T115 | research scale/parity (`research-scale-parity.sh`) — node ≡ python on 60 sources / 200 claims (unicode, line-wraps) |
 | T116 | adapter doc-coverage (`adapters-doc-coverage.sh`) — every shipped `plugin/adapters/<domain>` tool is named in `adapters.md` |
+| T117 | pre-push gate guard installed by bootstrap — blocks on a failing gate, non-clobber, HB_NO_HOOK / --no-verify bypass, existing repos (`pre-push-hook.sh`) |
+| T118 | pre-push guard is behavioral node ≡ python — both bootstraps install a blocking hook (`pre-push-hook-parity.sh`) |
+| T119 | review integrity — a degraded refuter → review_error (never a pass), a genuine review isn't discarded, robust verdict; both runtimes (`refute-integrity.sh`) |
+| T120 | `hb init` preserves the append-only event log unless --force (parity with node) (`init-preserves-log.sh`) |
+| T121 | gate criteria run under bash in both runtimes (not dash) + failing output surfaced (`gate-shell-parity.sh`) |
+| T122 | the pre-push hook is self-contained/honest — tested as it runs; hb-absent = skip, not import-error block (`pre-push-selfcontained.sh`) |
+| T123 | CI workflow wires the three suites (run-tests.sh + pytest + parity.sh) (`ci-workflow.sh`) |
+| T124 | how-to index + dev-tests T-table stay derived-consistent with source (`index-coverage.sh`) |
+| T125 | honest claims — LICENSE (MIT) + no unpublished pip-install as an install line (`claim-honesty.sh`) |
 
-The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T116; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
+The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T125; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
 
 ## Python suite — `py/tests/`
 

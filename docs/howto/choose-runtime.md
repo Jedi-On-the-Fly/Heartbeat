@@ -10,7 +10,7 @@ both. So this is not "which is better" — it's "which fits where you're running
 - **Claude Code plugin** — you're working *inside* Claude Code interactively and want the
   `/heartbeat` skill (plan, run, drive) in the session. This is the beachhead
   ([use-heartbeat-with-claude-code.md](use-heartbeat-with-claude-code.md)).
-- **Python runtime** (`pip install heartbeat-hb`, the `hb` console) — anywhere else: CI, a
+- **Python runtime** (`pip install -e py`, the `hb` console) — anywhere else: CI, a
   server, cron, a container, or embedding in a larger Python program. No Claude Code required;
   it runs wherever Python does ([run-heartbeat-in-ci.md](run-heartbeat-in-ci.md),
   [embed-heartbeat-in-python.md](embed-heartbeat-in-python.md)).

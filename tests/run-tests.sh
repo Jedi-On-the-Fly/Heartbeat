@@ -1435,6 +1435,18 @@ else
   echo "  (python3 absent — T122 skipped)"
 fi
 
+grp "T123 — real CI: a .github/workflows wires the three suites (run-tests.sh + pytest + parity.sh)"
+check "T123.1 a valid CI workflow exists and invokes the three suites on push/PR (ci-workflow.sh → CI-WORKFLOW-OK)" \
+  'bash "'"$GEX"'/ci-workflow.sh" 2>&1 | grep -q "CI-WORKFLOW-OK"'
+
+grp "T124 — anti-drift: the how-to index + dev-tests T-table stay derived-consistent with source"
+check "T124.1 every guide is listed and every suite group is in the dev-tests table (index-coverage.sh → INDEX-COVERAGE-OK)" \
+  'bash "'"$GEX"'/index-coverage.sh" 2>&1 | grep -q "INDEX-COVERAGE-OK"'
+
+grp "T125 — honest claims: LICENSE (MIT) ships + no unpublished pip-install presented as an install line"
+check "T125.1 LICENSE exists (MIT) and no doc uses \`pip install heartbeat-hb\` as an install line (claim-honesty.sh → CLAIM-HONESTY-OK)" \
+  'bash "'"$GEX"'/claim-honesty.sh" 2>&1 | grep -q "CLAIM-HONESTY-OK"' 
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

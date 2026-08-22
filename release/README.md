@@ -46,7 +46,7 @@ Same DAG format and protocol; the two implementations are kept in lockstep by a 
 
 **Python:**
 ```bash
-pip install heartbeat-hb          # or: pip install ./py from a clone
+pip install -e py                 # from a clone (heartbeat-hb is not published)
 hb init myproject
 hb audit --dir myproject          # refuse hollow gates before running
 hb exec run --dir myproject       # drive the loop with a backend
