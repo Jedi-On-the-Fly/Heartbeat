@@ -1,5 +1,6 @@
 # Drive HeartBeat over MCP
 
+> **Runtime note.** The MCP server (`hb mcp-serve`, declared in `plugin/.mcp.json`) requires the **Python** `hb` (`pip install -e py` / heartbeat-hb) — a node-only plugin install cannot run `hb mcp-serve`. Install the Python package to use it.
 Two relationships, kept separate:
 
 - **HeartBeat drives the agent** — a Stage B backend (`codex`, `claude-code`, a framework, …)

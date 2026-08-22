@@ -12,6 +12,8 @@ real work exists, driven by `data.reason`.
 A project is a DAG (`dag.json`): phases → tasks → dependencies + quality gates.
 Bootstrap creates a `.hb/` directory inside any project folder.
 
+The `/heartbeat …` verbs below are provided by **this skill** (a Claude Code skill), not a `plugin/commands/` directory — invoking `/heartbeat` loads these instructions; the sub-verbs are interpreted from here.
+
 **Plugin files** live under `${CLAUDE_PLUGIN_ROOT}`:
 - Bootstrap: `${CLAUDE_PLUGIN_ROOT}/bootstrap.sh`
 - Templates: `${CLAUDE_PLUGIN_ROOT}/templates/`

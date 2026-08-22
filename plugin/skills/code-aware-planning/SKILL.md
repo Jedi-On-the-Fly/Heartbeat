@@ -25,7 +25,7 @@ into a project's `.hb/`.
    `.hb/` before you index:
 
    ```bash
-   node plugin/adapters/code/codegraph-exclude-hb.js <project>
+   node ${CLAUDE_PLUGIN_ROOT}/adapters/code/codegraph-exclude-hb.js <project>
    # node-free twin:  python3 -m heartbeat.adapters.code.codegraph_exclude_hb <project>
    ```
 
@@ -38,7 +38,7 @@ into a project's `.hb/`.
    `edges`; the `tasks` mapping is yours (best-effort — the fuzzy step; confirm it).
 3. **Discover the affected set first (discovery-first).** Before finalizing tasks, start from the
    feature's entry-point symbols and trace the graph to scope the change:
-   `node plugin/adapters/code/codegraph-discover.js <codemap.json> <entry1,entry2,…> [--dependents|--dependencies|--both]`
+   `node ${CLAUDE_PLUGIN_ROOT}/adapters/code/codegraph-discover.js <codemap.json> <entry1,entry2,…> [--dependents|--dependencies|--both]`
    (node-free twin: `python3 -m heartbeat.adapters.code.codegraph_discover …`). `dependents` = who
    transitively depends on the entry (**change impact** — surfaces indirect consumers, e.g. hidden
    authorization callers); `dependencies` = what it needs; `both` = the neighborhood. Map the affected
@@ -59,7 +59,7 @@ Don't leave dep-lint as a step to remember. When planning a **code** project, ma
 plan's acceptance (right after `hb-lint` / `hb-audit`), via the acceptance wrapper:
 
 ```bash
-node plugin/adapters/code/deplint-accept.js --dir <project> --dag <project>/.hb/dag.json
+node ${CLAUDE_PLUGIN_ROOT}/adapters/code/deplint-accept.js --dir <project> --dag <project>/.hb/dag.json
 # node-free twin (Python package / a framework backend):
 python3 -m heartbeat.adapters.code.deplint_accept --dir <project> --dag <project>/.hb/dag.json
 ```
@@ -77,7 +77,7 @@ Don't trust all context equally. Before you rely on the dep-lint findings, check
 can actually *see*:
 
 ```bash
-node plugin/adapters/code/codegraph-coverage.js <codemap.json> <dag.json>
+node ${CLAUDE_PLUGIN_ROOT}/adapters/code/codegraph-coverage.js <codemap.json> <dag.json>
 # node-free twin:  python3 -m heartbeat.adapters.code.codegraph_coverage <codemap.json> <dag.json>
 ```
 
@@ -93,7 +93,7 @@ generic **`context_cmd`** hook so each task's worker (Stage B) receives the subg
 symbols the task touches plus their direct neighbors — instead of rediscovering them:
 
 ```bash
-export HB_EXEC_CONTEXT_CMD='node plugin/adapters/code/codegraph-context.js codemap.json "$HB_TASK_ID"'
+export HB_EXEC_CONTEXT_CMD='node ${CLAUDE_PLUGIN_ROOT}/adapters/code/codegraph-context.js codemap.json "$HB_TASK_ID"'
 # — or node-free (Python package / a framework backend like Agno), same output (node ≡ python):
 export HB_EXEC_CONTEXT_CMD='python3 -m heartbeat.adapters.code.codegraph_context codemap.json "$HB_TASK_ID"'
 # dep-lint node-free too:  python3 -m heartbeat.adapters.code.deplint your.dag.json codemap.json

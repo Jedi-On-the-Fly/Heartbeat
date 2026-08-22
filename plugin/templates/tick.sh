@@ -86,8 +86,9 @@ notify() {
 }
 
 compute_watch_hash() {
+  local sha="sha256sum"; command -v sha256sum >/dev/null 2>&1 || sha="shasum -a 256"   # macOS fallback
   ( eval "find $WATCH_PATHS" 2>/dev/null || true ) \
-    | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1 || true
+    | sort | xargs $sha 2>/dev/null | $sha | cut -d' ' -f1
 }
 
 HAVE_LOCK=false

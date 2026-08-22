@@ -1479,6 +1479,18 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/injection-safe.sh" 2>&1 | grep -q "INJECTION-SAFE-OK"'
 else echo "  (python3 absent — T131 skipped)"; fi
 
+grp "T132 — portability: drift hashing works on macOS (shasum fallback) and is not a silent no-op"
+check "T132.1 with sha256sum absent, drift still hashes (shasum) and a changed watched file yields a different hash (drift-portable.sh → DRIFT-PORTABLE-OK)" \
+  'bash "'"$GEX"'/drift-portable.sh" 2>&1 | grep -q "DRIFT-PORTABLE-OK"'
+
+grp "T133 — portability: adapter-skill runnable commands resolve from an installed plugin (\${CLAUDE_PLUGIN_ROOT})"
+check "T133.1 no adapter skill runs a bare repo-relative plugin/adapters path (skill-paths.sh → SKILL-PATHS-OK)" \
+  'bash "'"$GEX"'/skill-paths.sh" 2>&1 | grep -q "SKILL-PATHS-OK"'
+
+grp "T134 — portability: MCP entry is runtime-honest + the command-surface decision is realized"
+check "T134.1 .mcp.json declares the server, a doc states it needs the Python hb, and R9 (commands/ OR skill-documented) holds (mcp-json-runtime.sh → MCP-JSON-RUNTIME-OK)" \
+  'bash "'"$GEX"'/mcp-json-runtime.sh" 2>&1 | grep -q "MCP-JSON-RUNTIME-OK"' 
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

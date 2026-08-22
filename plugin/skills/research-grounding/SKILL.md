@@ -46,14 +46,14 @@ bridge or an adversarial review. Worked end-to-end: [run-a-grounded-research-pro
    url in `evidence.json`. This is your judgment step — nothing downstream trusts it.
 2. **Stamp** the honest hashes so an agent-supplied `sha256` can't lie:
    ```bash
-   node plugin/adapters/research/stamp-evidence.js evidence.json sources/ > stamped.json
+   node ${CLAUDE_PLUGIN_ROOT}/adapters/research/stamp-evidence.js evidence.json sources/ > stamped.json
    # node-free twin:  python3 -m heartbeat.adapters.research.stamp_evidence evidence.json sources/
    ```
    It recomputes each source's sha from the **stored bytes** (a one-time, at-store-time record). Proof:
    [`gate-examples/stamp-evidence.sh`](../../../docs/howto/gate-examples/stamp-evidence.sh) (node-suite T113).
 3. **Ground-check** the evidence map (deterministic, no network) — the gate:
    ```bash
-   node plugin/adapters/research/ground-check.js stamped.json sources/ --strict
+   node ${CLAUDE_PLUGIN_ROOT}/adapters/research/ground-check.js stamped.json sources/ --strict
    # node-free twin:  python3 -m heartbeat.adapters.research.ground_check stamped.json sources/ --strict
    ```
    For each claim it reports `GROUNDED` or an issue — **FABRICATED-QUOTE** (excerpt not in the stored
@@ -66,7 +66,7 @@ bridge or an adversarial review. Worked end-to-end: [run-a-grounded-research-pro
 5. **Write.** Feed each section's grounded evidence to the writer, then hand off to `docs-authoring`
    (ordering/context) and `gated-docs` (verify the finished prose):
    ```bash
-   node plugin/adapters/research/research-context.js stamped.json <section>
+   node ${CLAUDE_PLUGIN_ROOT}/adapters/research/research-context.js stamped.json <section>
    # node-free twin:  python3 -m heartbeat.adapters.research.research_context stamped.json <section>
    ```
    It renders **only that section's** grounded claims. Proof:
