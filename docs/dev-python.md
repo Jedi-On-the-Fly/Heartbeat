@@ -42,7 +42,7 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 | `bench.py` | `score(hbdir)`, `run(source, specs)`, `reward_records(events, dag)`, `rewards(hbdir)`, `regressions(cards, baseline)`, `render`, `build` | `hb bench` (+`--baseline` regression verdict), `hb reward` — score N backends, extract the verifiable-reward stream, flag model-regression; all pure over the event log |
 | `cli.py` | `main(argv=None)` → argparse dispatch | the `hb` entry |
 
-State mutation path (`mutate`): `with_wlock` (`.wlock`) → `append_event` → `reproject` → atomic write. Constants read from env at import: `LOCK_STALE_S`, `HEARTBEAT_STALE_S`, `STUCK_TICKS`, `HB_MAX_CONCURRENCY`, `HB_ROT_CHECK`, `GATE_TIMEOUT_S`.
+State mutation path (`mutate`): `with_wlock` (`.wlock`) → `append_event` → `reproject` → atomic write. The lock guards exactly this state.json read-modify-write; append-only informational events (`wake`, `lease_expired`, …) are written lock-free by design (atomic O_APPEND + reproject is a full re-fold — see [parity-notes.md](../planning/parity-notes.md) "Write-lock scope"). Constants read from env at import: `LOCK_STALE_S`, `HEARTBEAT_STALE_S`, `STUCK_TICKS`, `HB_MAX_CONCURRENCY`, `HB_ROT_CHECK`, `GATE_TIMEOUT_S`.
 
 ## CLI — `hb <cmd>`
 

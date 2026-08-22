@@ -74,6 +74,24 @@ substantive findings ≥40 chars** (the reviewer's actual text) → review pass;
 review_failed. The model-text verdict is the reply's **final REFUTED/CLEAR token**, not a grep-anywhere
 (the prompt itself contains "REFUTED"). Proof: `gate-examples/refute-integrity.sh` (T119), both runtimes.
 
+## Write-lock scope (both runtimes)
+
+The write-lock (`withWlock` / `with_wlock`, a `.wlock` mkdir) guards exactly one thing in both
+runtimes: the **state.json read-modify-write** — `mutate` = `append_event` → `reproject` → atomic
+write. Two concurrent `mutate`s must serialize there or one clobbers the other's projection; T139
+(`wlock-tested.sh`) proves the lock actually does this (gut it → a lost update → RED), both runtimes.
+
+What is deliberately **outside** the lock: the append-only informational events `tick.sh` writes via a
+raw `echo "{…}" >> events.jsonl` (`wake`, `lease_expired`, `review_wake`, `log_event` — tick.sh
+lines 72/181/338/388). These are **lock-free by design and it is safe**: a POSIX **O_APPEND** write of
+a short line (< `PIPE_BUF`, 4096) is atomic, so concurrent appends never tear or lose a line; and
+because `state.json` is a **full re-fold of events.jsonl** (`reproject`), it stays eventually-consistent
+without the lock — a `tick.sh` append is picked up by the next `mutate`/`rebuild`. So the docs do **not**
+claim "all writes are locked"; the lock scope is precisely the state.json RMW. Proven by
+`docs/howto/gate-examples/tick-append-safe.sh` (60 concurrent appends stay valid + all present; real
+concurrent `tick.sh` don't corrupt the log; a `--selftest` non-atomic read-concat-write *does* lose
+updates, so the check has teeth), wired as node-suite T140.
+
 ## Intentional divergences (not on the byte-equal surface)
 
 - **Pre-push gate guard: behavioral parity, runtime-specific body; rot pre-commit is node-only.** Both

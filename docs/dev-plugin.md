@@ -112,7 +112,10 @@ Each criterion runs under `GATE_TIMEOUT_S` (timeout → fail). Git snapshot (unl
 
 ## State CLI — `hb.js`
 
-Mutation is `withWlock` (`.wlock` mkdir) → append event → reproject → atomic write.
+Mutation is `withWlock` (`.wlock` mkdir) → append event → reproject → atomic write. The lock's scope is
+exactly that state.json read-modify-write; the append-only informational events `tick.sh` writes (`wake`,
+`lease_expired`, …) are lock-free by design (atomic O_APPEND + reproject is a full re-fold). See
+[parity-notes.md](../planning/parity-notes.md) "Write-lock scope".
 
 | Command | Effect |
 |---|---|

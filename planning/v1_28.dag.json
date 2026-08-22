@@ -1,0 +1,121 @@
+{
+  "_meta": {
+    "project": "v1.28",
+    "note": "Close the last residuals from the v1.27 adversarial review, bump to v1.28, and bring every doc/how-to current with the two prior fix-waves (critical-fixes RV/RB/DC + critical-fixes-2 KB/SP/PT/HN/DR). Three phases. (LK) Write-lock scope honesty — the review's one real residual: tick.sh appends informational events (wake/lease_expired/review_wake/log_event) via raw `>>` OUTSIDE withWlock. That is safe by design (POSIX O_APPEND line writes are atomic; reproject is a full re-fold, so state.json is eventually consistent; the lock only guards the state.json read-modify-write, proven by T139) — but it was undocumented and unproven. Prove it (concurrent appends never corrupt events.jsonl; a non-atomic writer DOES, so the proof has teeth) and document the lock's true scope in parity-notes + dev docs. (GS) git-snapshot parity — the snapshot-on-pass logic is a deliberate cross-runtime pair (bash git_snapshot in gate.sh ≡ python _git_snapshot in gate.py); per the parity contract a shared behavioral surface owes a parity case, and this one had none. Add a behavioral parity proof (a gate pass commits + force-tags the gate id in BOTH runtimes) and note the pair in parity-notes. (VD) Version bump + docs currency — bump plugin/marketplace to 1.28.0 and the Python package to 0.18.0 (independent cadence, already documented as intentional), add the STATUS changelog entry, and sweep dev-plugin.md / dev-python.md / dev-tests.md / parity-notes.md / README so no doc lags the code (review_policy.accept_review as the single review-acceptance source; single-sourced nonBehavioral; coverage floor; tests/fixtures/ paths; withWlock export; gate_blocked breaker; verdict robustness). Gate docs-currency behaviorally: no doc references the moved audit-fixtures/parity-fixtures paths, the review policy is single-sourced, and versions are consistent. Skill-prose commands are kept by decision (no plugin/commands/ dir). Proof-driven throughout: spec-first, lint+audit clean, refuted SOUND, distinct-actor refutation per gate, suites green (node/pytest/parity), commit + tag."
+  },
+  "phases": [
+    {
+      "id": "LK",
+      "title": "Write-lock scope — prove + document that tick.sh's lock-free appends are safe",
+      "gate_entry": null,
+      "gate_exit": "GATE_LK",
+      "tasks": [
+        {
+          "id": "lk1",
+          "title": "Spec-first: author the tick-append-safety proof",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/tick-append-safe.sh (a runnable proof). It must (a) fire many concurrent appenders using the EXACT idiom tick.sh uses (echo \"{json}\" >> \"$EVENTS\", tick.sh:72/181/338/388) into one events.jsonl and assert every line is valid JSON, no line is torn/interleaved, and all appended ids are present; (b) additionally run several real `bash tick.sh` processes concurrently against one bootstrapped project and assert events.jsonl stays all-valid-JSON; (c) carry a --selftest that swaps the atomic `>>` append for a non-atomic read-concat-write and shows it loses or corrupts updates (proving the proof has teeth). Print TICK-APPEND-SAFE-OK only when every claim holds. Deterministic, self-contained (own mktemp dir), under 5s."
+        },
+        {
+          "id": "lk2",
+          "title": "Document the write-lock's true scope",
+          "requires": ["lk1"],
+          "description": "Update planning/parity-notes.md (and a line in docs/dev-plugin.md + docs/dev-python.md) to state the write-lock's real scope: withWlock/with_wlock guards the state.json read-modify-write (mutate = append_event → reproject → atomic write); the append-only informational events tick.sh writes (wake, lease_expired, review_wake, log_event) are intentionally lock-free because O_APPEND line writes are atomic and reproject is a full re-fold, so state.json is eventually consistent. Cite the proof (tick-append-safe.sh) and T139 (the RMW-serialization proof). No overclaim."
+        },
+        {
+          "id": "lk3",
+          "title": "Wire the proof into the suite + dev-tests",
+          "requires": ["lk1", "lk2"],
+          "description": "Wire tick-append-safe.sh into tests/run-tests.sh as a new T-group (run the proof, grep its TICK-APPEND-SAFE-OK marker on the same line) and add the matching row to docs/dev-tests.md (T124 anti-drift requires the enumeration stays current)."
+        }
+      ]
+    },
+    {
+      "id": "GS",
+      "title": "git-snapshot parity — the cross-runtime snapshot pair gets a parity case",
+      "gate_entry": "GATE_LK",
+      "gate_exit": "GATE_GS",
+      "tasks": [
+        {
+          "id": "gs1",
+          "title": "Spec-first: author the git-snapshot parity proof",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/git-snapshot-parity.sh (a runnable proof) that proves gate.sh's bash git_snapshot and gate.py's python _git_snapshot behave identically ON THE PATH HEARTBEAT ACTUALLY USES — the REVIEW-ACCEPTANCE snapshot (real phases are review-gated, so the commit+tag is deferred to `review pass`, gate.sh:154-160 / gate.py:87-90; the on-pass branch only fires for non-review gates). So: in a temp git repo, for EACH runtime, drive a review-gated phase to review acceptance (write a substantive distinct-actor artifact and run `node .hb/hb.js review GATE pass --artifact f` for node / `hb review GATE pass --artifact f` (or review_policy.accept_review) for python with HB_ACTOR set), then assert BOTH runtimes created a commit AND force-created a git tag named exactly after the gate id. The proof MUST contain an internal negative assertion: if either runtime produced no tag, it prints FAIL and exits non-zero (so a silently-skipped snapshot goes RED, not green). Run under `env -u HB_NO_GIT -u HB_NO_HOOK` (the suite exports both). Print GIT-SNAPSHOT-PARITY-OK only when both runtimes tagged at review acceptance. Deterministic, self-contained (own mktemp git repo), under 5s."
+        },
+        {
+          "id": "gs2",
+          "title": "Wire the parity proof + note the pair",
+          "requires": ["gs1"],
+          "description": "Wire git-snapshot-parity.sh into tests/run-tests.sh as a new T-group (run + grep GIT-SNAPSHOT-PARITY-OK on the same line) and add the docs/dev-tests.md row. Add a line to planning/parity-notes.md recording that git-snapshot is a deliberate cross-runtime behavioral pair (bash git_snapshot in gate.sh ≡ python _git_snapshot in gate.py) — cannot be code-shared across languages, so it is held by this parity proof."
+        }
+      ]
+    },
+    {
+      "id": "VD",
+      "title": "Version bump v1.28 + docs/how-to currency sweep",
+      "gate_entry": "GATE_GS",
+      "gate_exit": "GATE_VD",
+      "tasks": [
+        {
+          "id": "vd1",
+          "title": "Spec-first: author the docs-currency proof",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/docs-currency.sh (a runnable proof). Its teeth must come from POSITIVE current-state assertions that are FALSE until the vd3 sweep runs, not only from grep-for-absence (which is already true today and paraphrase-defeatable). Assert: (a) POSITIVE — the dev docs now DESCRIBE current mechanisms the sweep must add: docs/dev-python.md (or dev-plugin.md) reference `review_policy`/`accept_review` as the single review-acceptance source, the coverage floor / GROUPS-SKIPPED honesty marker, and the tests/fixtures/ fixture location; (b) NEGATIVE regression guards — no doc/source outside planning/reviews/ references the moved paths planning/audit-fixtures or planning/parity-fixtures (check both the exact literal AND a paraphrase like an `audit-fixtures/` occurrence not preceded by tests/fixtures/), and executor.py/mcp_server.py contain no `cli.main([\"review\"` scrape while review_policy.py defines accept_review; (c) STATUS.md carries a v1.28 changelog entry; (d) plugin.json == marketplace.json version. Print DOCS-CURRENT-OK only when all hold. Deterministic, self-contained, under 5s. Include a --selftest demonstrating it goes RED both on a planted stale audit-fixtures path AND on a doc missing a required positive mechanism token."
+        },
+        {
+          "id": "vd2",
+          "title": "Bump versions to v1.28 / 0.18.0",
+          "requires": ["vd1"],
+          "description": "Bump plugin/.claude-plugin/plugin.json and .claude-plugin/marketplace.json to \"1.28.0\", and py/pyproject.toml to \"0.18.0\" (independent cadence, already documented as intentional in README). Keep T39.4 (de-hardcoded version-consistency check) green. Note: GATE_VD's vdb criterion pins the literal target versions — that is intentional for a one-shot release gate, but this gate must NOT be copy-forwarded to a later release without updating the target (a copy-paste would keep asserting 1.28.0/0.18.0)."
+        },
+        {
+          "id": "vd3",
+          "title": "Docs/how-to currency sweep + own the index/dev-tests completeness",
+          "requires": ["vd1"],
+          "description": "Sweep docs/dev-plugin.md, docs/dev-python.md, docs/dev-tests.md, planning/parity-notes.md, and README.md for statements that lag the two prior fix-waves, and correct them: review acceptance now flows through review_policy.accept_review (cli.py/executor.py/mcp_server.py all delegate; no cli.main stdout scrape); nonBehavioral is single-sourced (hb-exec imports hb-audit's); the coverage floor + GROUPS-SKIPPED honesty marker; audit/parity fixtures now under tests/fixtures/; hb.js exports withWlock; the gate_blocked circuit breaker; verdict robustness (final REFUTED/CLEAR token + degraded-refute sentinel). ALSO own the index completeness that GATE_VD's vdc criterion asserts: ensure docs/howto/howto-list.md and docs/howto/README.md list every how-to guide, and that docs/dev-tests.md enumerates every T-group in tests/run-tests.sh (including the new tick-append-safe / git-snapshot-parity / docs-currency groups) — so index-coverage.sh (vdc) is verifying a surface this phase actually maintains. Current-state only, no version narrative."
+        },
+        {
+          "id": "vd4",
+          "title": "STATUS.md v1.28 changelog entry",
+          "requires": ["vd1"],
+          "description": "Add a v1.28 entry to STATUS.md summarizing this release: closed the last v1.27-review residuals (write-lock scope proven+documented, git-snapshot parity), bumped versions, and brought all docs/how-tos current. Reference the new T-groups (tick-append-safe, git-snapshot-parity, docs-currency)."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_LK": {
+      "desc": "tick.sh's lock-free appends are proven safe under concurrency and the lock's true scope is documented — no overclaim, real teeth.",
+      "review": {
+        "prompt": "Refute that LK is done. Does tick-append-safe.sh actually prove O_APPEND atomicity — i.e. does its --selftest non-atomic writer genuinely go RED (lost/torn updates), and does the real path stay green across repeated runs (not flaky)? Does it exercise the REAL tick.sh append idiom (and real concurrent `bash tick.sh`), not a strawman? Do parity-notes + dev docs state the lock's scope honestly (guards the state.json RMW; informational appends are lock-free by design) without overclaiming that all writes are locked? Is the proof wired by running it and asserting its marker, not by grepping a filename? node/python/parity green?"
+      },
+      "criteria": [
+        { "id": "lka", "desc": "the tick-append-safety proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/tick-append-safe.sh\" 2>&1 | grep -q 'TICK-APPEND-SAFE-OK'" },
+        { "id": "lkb", "desc": "parity-notes documents the write-lock's true scope by EXPLAINING THE MECHANISM (not just a token): lock-free/atomic appends + reproject re-fold + events.jsonl must co-occur — a contradicting/opposite doc lacks all three", "cmd": "cd \"$PROJECT_DIR\" && grep -qiE 'lock-free|O_APPEND|atomic append|atomic.*append' planning/parity-notes.md && grep -qiE 'reproject|re-fold|full fold|full re-fold' planning/parity-notes.md && grep -qi 'events.jsonl' planning/parity-notes.md" },
+        { "id": "lkc", "desc": "the proof is wired into the suite and enumerated in dev-tests", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'tick-append-safe.sh' tests/run-tests.sh && grep -q 'tick-append-safe' docs/dev-tests.md" }
+      ]
+    },
+    "GATE_GS": {
+      "desc": "The git-snapshot cross-runtime pair has a behavioral parity proof (a gate pass tags in both runtimes) and the pair is recorded in parity-notes.",
+      "review": {
+        "prompt": "Refute that GS is done. Does git-snapshot-parity.sh drive a REAL gate pass in BOTH runtimes and assert BOTH produced a commit AND a tag named after the gate — and does it go RED if a runtime fails to tag (teeth)? Does it correctly unset HB_NO_GIT/HB_NO_HOOK? Is it deterministic and under time? Is it wired by running the proof and asserting its marker? Does parity-notes record git_snapshot ≡ _git_snapshot as an intentional cross-runtime pair? node/python/parity green?"
+      },
+      "criteria": [
+        { "id": "gsa", "desc": "the git-snapshot parity proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/git-snapshot-parity.sh\" 2>&1 | grep -q 'GIT-SNAPSHOT-PARITY-OK'" },
+        { "id": "gsb", "desc": "the proof is wired into the suite and enumerated in dev-tests", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'git-snapshot-parity.sh' tests/run-tests.sh && grep -q 'git-snapshot-parity' docs/dev-tests.md" },
+        { "id": "gsc", "desc": "parity-notes records git-snapshot as a cross-runtime PAIR on one line (frames it, not just mentions the word)", "cmd": "cd \"$PROJECT_DIR\" && grep -iE 'git.?snapshot' planning/parity-notes.md | grep -qiE 'pair|cross-runtime|both runtime|≡|gate\\.sh.*gate\\.py|_git_snapshot'" }
+      ]
+    },
+    "GATE_VD": {
+      "desc": "Versions bumped to v1.28/0.18.0 and consistent; docs/how-tos are current (no stale moved-fixture paths, review policy single-sourced, STATUS updated); the how-to index is complete.",
+      "review": {
+        "prompt": "Refute that VD is done. Does docs-currency.sh actually catch a stale doc — does its --selftest go RED on a planted reference to the old audit-fixtures/parity-fixtures path? Are the version bumps consistent (plugin == marketplace == 1.28.0, py == 0.18.0) and is T39.4 still green? Did the sweep miss any doc that still describes pre-fix behavior (cli.main review scrape, forked nonBehavioral, fixtures under planning/, no coverage floor)? Is the how-to index complete (index-coverage green)? node/python/parity all green with the three new T-groups wired?"
+      },
+      "criteria": [
+        { "id": "vda", "desc": "the docs-currency proof passes", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/docs-currency.sh\" 2>&1 | grep -q 'DOCS-CURRENT-OK'" },
+        { "id": "vdb", "desc": "versions bumped + consistent (plugin==marketplace==1.28.0, py==0.18.0)", "cmd": "cd \"$PROJECT_DIR\" && python3 -c \"import json; p=json.load(open('plugin/.claude-plugin/plugin.json'))['version']; mk=json.load(open('.claude-plugin/marketplace.json')); m=[x['version'] for x in mk['plugins'] if x['name']=='heartbeat'][0]; assert p==m=='1.28.0',(p,m)\" && grep -q '0.18.0' py/pyproject.toml" },
+        { "id": "vdc", "desc": "the how-to index is complete (index-coverage proof green)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/index-coverage.sh\" 2>&1 | grep -q 'INDEX-COVERAGE-OK'" }
+      ]
+    }
+  }
+}

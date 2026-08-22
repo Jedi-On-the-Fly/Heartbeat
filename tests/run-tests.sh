@@ -1529,6 +1529,14 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/wlock-tested.sh" 2>&1 | grep -q "WLOCK-TESTED-OK"'
 else echo "  (python3 absent — T139 skipped)"; fi
 
+grp "T140 — safety: tick.sh's lock-free appends don't corrupt events.jsonl (atomic O_APPEND), with teeth"
+if command -v python3 >/dev/null 2>&1; then
+  check "T140.1 60 concurrent >> appends + real concurrent ticks keep events.jsonl valid & complete (tick-append-safe.sh → TICK-APPEND-SAFE-OK)" \
+    'bash "'"$GEX"'/tick-append-safe.sh" 2>&1 | grep -q "TICK-APPEND-SAFE-OK"'
+  check "T140.2 the check has teeth: a non-atomic read-concat-write loses updates under the same concurrency (tick-append-safe.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/tick-append-safe.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T140 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
