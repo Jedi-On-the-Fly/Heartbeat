@@ -146,8 +146,10 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T127 | kernel: deterministic state projection (`state-determinism.sh`) — two rebuilds → byte-identical state.json |
 | T128 | kernel: git-optional gate pass (`gate-gitless.sh`) — a gate passes with no git binary, no crash |
 | T129 | kernel: gate_blocked circuit breaker (`gate-blocked-breaker.sh`) — a persistently blocked gate stops re-waking after a bound |
+| T130 | safety: python verdict by final REFUTED/CLEAR token (`verdict-robust.sh`) — shared helper, not grep-anywhere |
+| T131 | safety: argv-not-source-splice (`injection-safe.sh`) — doctor no shell-injection via a \$(...) path; bootstrap node -e argv-safe |
 
-The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T129; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
+The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T131; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
 
 ## Python suite — `py/tests/`
 

@@ -3,6 +3,12 @@
 Wire: argv[1]=execute|refute ; stdin=payload JSON ; stdout=ONE JSON line.
 Provider HB_EXEC_PROVIDER=openai|ollama. save_file tool + FILE-block fallback."""
 import sys, os, json
+
+
+def _verdict(t):
+    import re as _r
+    toks = _r.findall(r"REFUTED|CLEAR", (t or "").upper())
+    return bool(toks) and toks[-1] == "REFUTED"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from _fileblocks import write_blocks, norm_rel
@@ -56,7 +62,7 @@ def do_refute(payload):
         return {"refuted": False, "findings": f"pydantic-ai unavailable ({e})"}
     try:
         text = _text(agent.run_sync(f'{payload.get("prompt","Refute.")}\n\nContext:\n{ctx}'))
-        return {"refuted": "REFUTED" in text.upper(), "findings": text[:500]}
+        return {"refuted": _verdict(text), "findings": text[:500]}
     except Exception as e:
         return {"refuted": False, "findings": f"reviewer error: {e}"}
 

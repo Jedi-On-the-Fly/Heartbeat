@@ -13,7 +13,10 @@ p="$tmp/proj"; HB_NO_GIT=1 hb init "$p" >/dev/null 2>&1 || fail "init"
 # append several task/phase events so the projected sets are non-trivial
 for i in 1 2 3 4 5; do printf '%s\n' "{\"event\":\"task_done\",\"task\":\"T$i\"}" >> "$p/.hb/events.jsonl"; done
 printf '%s\n' '{"event":"phase_complete","phase":"PB"}' '{"event":"phase_complete","phase":"PA"}' >> "$p/.hb/events.jsonl"
-a="$(PYTHONHASHSEED=random hb rebuild --dir "$p" >/dev/null 2>&1; sha256sum "$p/.hb/state.json" 2>/dev/null | cut -d" " -f1)"
-b="$(PYTHONHASHSEED=random hb rebuild --dir "$p" >/dev/null 2>&1; sha256sum "$p/.hb/state.json" 2>/dev/null | cut -d" " -f1)"
-[ -n "$a" ] && [ "$a" = "$b" ] || fail "state.json differs across rebuilds (nondeterministic projection): $a vs $b"
+# canon = the projection MINUS last_updated (an acknowledged wall-clock field, state.py:169) — so this
+# tests the SET-ORDERING determinism KB3 fixed, deterministically (no timestamp flake).
+canon(){ python3 -c "import json,sys; d=json.load(open(sys.argv[1])); d.pop('last_updated',None); print(json.dumps(d,sort_keys=True))" "$1"; }
+PYTHONHASHSEED=random hb rebuild --dir "$p" >/dev/null 2>&1; a="$(canon "$p/.hb/state.json")"
+PYTHONHASHSEED=random hb rebuild --dir "$p" >/dev/null 2>&1; b="$(canon "$p/.hb/state.json")"
+[ -n "$a" ] && [ "$a" = "$b" ] || fail "state projection differs across rebuilds (nondeterministic set ordering): $a vs $b"
 echo "STATE-DETERMINISM-OK"

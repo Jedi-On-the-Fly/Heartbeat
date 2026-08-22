@@ -17,7 +17,7 @@ jstr()  { node -pe 'JSON.stringify(require("fs").readFileSync(0,"utf8"))'; }
 ctx="$(field .context)"
 
 if ! command -v opencode >/dev/null 2>&1; then
-  if [ "$mode" = refute ]; then echo '{"refuted":false,"findings":"opencode CLI not available — could not run the refuter"}'
+  if [ "$mode" = refute ]; then echo '{"error":"opencode CLI not available — could not run the refuter"}'
   else echo '{"ok":false,"summary":"opencode CLI not available"}'; fi
   exit 0
 fi
@@ -34,10 +34,11 @@ Context:
 ${ctx}
 
 Do not modify files. Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with the single token REFUTED (you found a hole) or CLEAR (you could not)." </dev/null 2>/dev/null)"
-  if printf '%s' "$ans" | grep -q 'REFUTED'; then
+  verdict="$(printf '%s' "$ans" | tr '[:lower:]' '[:upper:]' | grep -oE 'REFUTED|CLEAR' | tail -1)"
+  if [ "$verdict" = REFUTED ]; then
     printf '{"refuted":true,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 500 | jstr)"
   else
-    echo '{"refuted":false,"findings":"reviewer could not refute"}'
+    printf '{"refuted":false,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 500 | jstr)"
   fi
 else
   if opencode run --format json "${mdl[@]}" "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.

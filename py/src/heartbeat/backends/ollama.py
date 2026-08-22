@@ -6,6 +6,7 @@ import urllib.request
 import urllib.error
 
 from ._fileblocks import write_blocks
+from . import verdict_refuted
 
 HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 
@@ -53,4 +54,4 @@ def refute(payload):
         out = _generate(prompt)
     except (urllib.error.URLError, OSError) as e:
         return {"error": f"ollama unreachable ({e})"}
-    return {"refuted": "REFUTED" in out.upper(), "findings": out[:500]}
+    return {"refuted": verdict_refuted(out), "findings": out[:500]}

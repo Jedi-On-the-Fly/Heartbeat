@@ -8,6 +8,7 @@ Degrades to protocol-valid JSON if langgraph/langchain isn't installed.
 import os
 
 from ._fileblocks import write_blocks, norm_rel
+from . import verdict_refuted
 
 
 def _model():
@@ -79,6 +80,6 @@ def refute(payload):
                   "You are a skeptical adversarial reviewer. End with exactly one token: REFUTED or CLEAR.")
         out = model.invoke(prompt)
         text = getattr(out, "content", str(out))
-        return {"refuted": "REFUTED" in str(text).upper(), "findings": str(text)[:500]}
+        return {"refuted": verdict_refuted(str(text)), "findings": str(text)[:500]}
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

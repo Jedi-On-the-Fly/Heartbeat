@@ -17,6 +17,12 @@ Provider: HB_EXEC_PROVIDER = anthropic (default) | ollama.
 Model:    HB_EXEC_MODEL (default: claude-sonnet-4-6, or qwen2.5:7b-instruct for ollama).
 """
 import sys, os, json
+
+
+def _verdict(t):
+    import re as _r
+    toks = _r.findall(r"REFUTED|CLEAR", (t or "").upper())
+    return bool(toks) and toks[-1] == "REFUTED"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from _fileblocks import write_blocks
@@ -69,7 +75,7 @@ def main():
         try:
             r = reviewer.run(prompt)
             text = getattr(r, "content", str(r))
-            emit({"refuted": "REFUTED" in text.upper(), "findings": text[:500]})
+            emit({"refuted": _verdict(text), "findings": text[:500]})
         except Exception as e:
             emit({"refuted": False, "findings": f"reviewer error: {e}"})
         return

@@ -1467,6 +1467,18 @@ grp "T129 — kernel: gate_blocked circuit breaker (stops re-waking after a boun
 check "T129.1 a persistently blocked gate emits a terminal waiting signal instead of re-waking every tick (gate-blocked-breaker.sh → GATE-BLOCKED-BREAKER-OK)" \
   'bash "'"$GEX"'/gate-blocked-breaker.sh" 2>&1 | grep -q "GATE-BLOCKED-BREAKER-OK"' 
 
+grp "T130 — safety: python backends decide the verdict by the final REFUTED/CLEAR token (shared helper)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T130.1 verdict_refuted: prose mentioning REFUTED but ending CLEAR is not a refutation; final token wins (verdict-robust.sh → VERDICT-ROBUST-OK)" \
+    'bash "'"$GEX"'/verdict-robust.sh" 2>&1 | grep -q "VERDICT-ROBUST-OK"'
+else echo "  (python3 absent — T130 skipped)"; fi
+
+grp "T131 — safety: subprocess/JS take data via argv, not source-splicing (no injection via a crafted path)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T131.1 doctor rot-trace runs no injected command via a \$(...) project path; bootstrap node -e is argv-safe (injection-safe.sh → INJECTION-SAFE-OK)" \
+    'bash "'"$GEX"'/injection-safe.sh" 2>&1 | grep -q "INJECTION-SAFE-OK"'
+else echo "  (python3 absent — T131 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

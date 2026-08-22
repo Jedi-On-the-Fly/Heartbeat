@@ -19,6 +19,7 @@ PROJECT_DIR="$(dirname "$HB_DIR")"
 export HB_DIR PROJECT_DIR
 
 DAG_FILE="$HB_DIR/dag.json"
+export DAG_FILE HB_DIR   # node -e reads these via process.env (not spliced into JS source)
 EVENTS_FILE="$HB_DIR/events.jsonl"
 
 # Each criterion runs under a timeout so a hanging cmd blocks the gate (✗) instead
@@ -34,14 +35,14 @@ run_criterion() {
 
 # eval_gate <GATE> — run the criteria, print ✓/✗, set PASS/FAIL globals. No side effects.
 eval_gate() {
-  local G="$1"; PASS=0; FAIL=0; CRIT_EXITS=""   # CRIT_EXITS: per-criterion exit codes in dag order (provenance)
+  local -x G="$1"; PASS=0; FAIL=0; CRIT_EXITS=""   # CRIT_EXITS: per-criterion exit codes in dag order (provenance)
   echo "=== Gate: $G ==="
   echo ""
   # Hollow-gate floor: a gate with zero criteria proves nothing. The auditor warns
   # about this upstream; the runtime must also refuse it, so an un-audited or
   # post-audit-mutated DAG can't buy a free phase advance.
   local CRIT_COUNT
-  CRIT_COUNT=$(node -e "const d=JSON.parse(require('fs').readFileSync('$DAG_FILE','utf8'));console.log((((d.gates||{})['$G']||{}).criteria||[]).length)" 2>/dev/null || echo 0)
+  CRIT_COUNT=$(node -e "const d=JSON.parse(require('fs').readFileSync(process.env.DAG_FILE,'utf8'));console.log((((d.gates||{})[process.env.G]||{}).criteria||[]).length)" 2>/dev/null || echo 0)
   if [ "${CRIT_COUNT:-0}" -eq 0 ]; then
     echo "  ✗ [--] gate $G has NO criteria — a gate must assert something"
     echo ""
@@ -96,11 +97,11 @@ while [ $# -gt 0 ]; do
     *) break;;
   esac
 done
-GATE="${1:-}"
+GATE="${1:-}"; export GATE
 
 # ── --all: read-only re-verification of every gate ────────────────────────────
 if [ "$ALL" = 1 ]; then
-  GATES=$(node -e "console.log(Object.keys(JSON.parse(require('fs').readFileSync('$DAG_FILE','utf8')).gates).join(' '))")
+  GATES=$(node -e "console.log(Object.keys(JSON.parse(require('fs').readFileSync(process.env.DAG_FILE,'utf8')).gates).join(' '))")
   TOTAL_FAIL=0
   for g in $GATES; do eval_gate "$g"; TOTAL_FAIL=$((TOTAL_FAIL + FAIL)); echo ""; done
   if [ "$TOTAL_FAIL" -eq 0 ]; then echo "✅ ALL GATES PASS (read-only)"; exit 0
@@ -148,7 +149,7 @@ if [ "$FAIL" -eq 0 ]; then
   ' "$DAG_FILE" "$GATE" "$CRIT_EXITS" "$TS" "$PASS" "$COMMIT" "$EVENTS_FILE"
   reproject
   echo ""
-  if node -e "process.exit((JSON.parse(require('fs').readFileSync('$DAG_FILE','utf8')).gates['$GATE']||{}).review?0:1)" 2>/dev/null; then
+  if node -e "process.exit((JSON.parse(require('fs').readFileSync(process.env.DAG_FILE,'utf8')).gates[process.env.GATE]||{}).review?0:1)" 2>/dev/null; then
     # A review-gated phase is ACCEPTED only after the adversarial review passes, so its restore
     # point (commit+tag) is created at review acceptance (hb.js review pass), NOT here — the tag
     # must never certify an un-reviewed / later-refuted state.

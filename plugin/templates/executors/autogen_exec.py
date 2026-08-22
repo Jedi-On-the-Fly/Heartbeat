@@ -3,6 +3,12 @@
 Wire: argv[1]=execute|refute ; stdin=payload JSON ; stdout=ONE JSON line.
 Provider HB_EXEC_PROVIDER=openai|ollama. FILE-block writing. Degrades if autogen absent."""
 import sys, os, json, asyncio
+
+
+def _verdict(t):
+    import re as _r
+    toks = _r.findall(r"REFUTED|CLEAR", (t or "").upper())
+    return bool(toks) and toks[-1] == "REFUTED"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from _fileblocks import write_blocks
@@ -47,7 +53,7 @@ def do_refute(payload):
         text = _run("You are a skeptical adversarial reviewer. End with REFUTED or CLEAR.", f'{payload.get("prompt","Refute.")}\n\nContext:\n{ctx}')
     except Exception as e:
         return {"refuted": False, "findings": f"autogen unavailable ({e})"}
-    return {"refuted": "REFUTED" in str(text).upper(), "findings": str(text)[:500]}
+    return {"refuted": _verdict(str(text)), "findings": str(text)[:500]}
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "execute"

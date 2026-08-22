@@ -26,6 +26,12 @@ import sys, os, json, urllib.request, urllib.error
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _fileblocks import write_blocks
 
+
+def _verdict(t):
+    import re as _r
+    toks = _r.findall(r"REFUTED|CLEAR", (t or "").upper())
+    return bool(toks) and toks[-1] == "REFUTED"
+
 # Guarantee ONLY the protocol JSON lands on stdout: keep the real stdout fd, then point
 # fd 1 at stderr so any library chatter (banners, progress) can't corrupt the JSON line.
 _STDOUT_FD = os.dup(1)
@@ -64,7 +70,7 @@ def main():
                   'short reason, then END with exactly one token: REFUTED (you found a hole) or CLEAR.')
         try:
             out = generate(prompt)
-            emit({"refuted": "REFUTED" in out.upper(), "findings": out[:500]})
+            emit({"refuted": _verdict(out), "findings": out[:500]})
         except (urllib.error.URLError, OSError) as e:
             emit({"refuted": False, "findings": f"ollama unreachable ({e})"})
         return

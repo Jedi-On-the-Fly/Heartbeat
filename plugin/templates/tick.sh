@@ -54,6 +54,7 @@ export HB_DIR PROJECT_DIR
 STATE="$HB_DIR/state.json"
 DAG="$HB_DIR/dag.json"
 EVENTS="$HB_DIR/events.jsonl"
+export STATE DAG EVENTS HB_DIR   # node -e reads these via process.env (not spliced into JS source)
 LOCK="$HB_DIR/.lock"                  # short handout lock (serializes concurrent ticks)
 LEASES="$HB_DIR/leases"               # per-task session claims (mkdir = atomic)
 ARCH_HASH="$HB_DIR/architecture.hash"
@@ -144,16 +145,16 @@ HAVE_LOCK=true
 # v1.3 (#2): state.json is a projection of events.jsonl. On corruption, try to
 # self-heal by reprojecting from the log; only wake state_corrupted if that fails
 # too (log itself unusable).
-if ! node -e "JSON.parse(require('fs').readFileSync('$STATE','utf8'))" 2>/dev/null; then
+if ! node -e "JSON.parse(require('fs').readFileSync(process.env.STATE,'utf8'))" 2>/dev/null; then
   if [ -f "$HB_DIR/hb.js" ] && node "$HB_DIR/hb.js" rebuild >/dev/null 2>&1 \
-     && node -e "JSON.parse(require('fs').readFileSync('$STATE','utf8'))" 2>/dev/null; then
+     && node -e "JSON.parse(require('fs').readFileSync(process.env.STATE,'utf8'))" 2>/dev/null; then
     log_event "state_reprojected"
   else
     log_event "state_corrupted"
     wake_out "{\"reason\":\"state_corrupted\",\"hint\":\"rebuild state.json from events.jsonl and dag.json\"}"
   fi
 fi
-if ! node -e "JSON.parse(require('fs').readFileSync('$DAG','utf8'))" 2>/dev/null; then
+if ! node -e "JSON.parse(require('fs').readFileSync(process.env.DAG,'utf8'))" 2>/dev/null; then
   log_event "dag_corrupted"
   wake_out "{\"reason\":\"dag_corrupted\",\"hint\":\"dag.json is immutable — restore it from backup/git\"}"
 fi
@@ -201,7 +202,7 @@ fi
 
 # ── 3. Circuit breaker (wakes ONCE, then waits for a human reset) ────────────
 stuck=$(node -e "
-  const s=JSON.parse(require('fs').readFileSync('$STATE','utf8'));
+  const s=JSON.parse(require('fs').readFileSync(process.env.STATE,'utf8'));
   console.log(s.build_stuck_count??0);
 " 2>/dev/null || echo "0")
 
@@ -235,7 +236,7 @@ fi
 
 # ── 5. Gate errors from previous run ──────────────────────────────────────────
 gate_errors=$(node -e "
-  const s=JSON.parse(require('fs').readFileSync('$STATE','utf8'));
+  const s=JSON.parse(require('fs').readFileSync(process.env.STATE,'utf8'));
   console.log(s.gate?.errors??0);
 " 2>/dev/null || echo "0")
 
@@ -313,7 +314,7 @@ case "$TYPE" in
       });")
     noreview=$(node -e "
       const fs=require('fs'); const g=process.argv[1];
-      let raw=''; try{raw=fs.readFileSync('$EVENTS','utf8');}catch(e){}
+      let raw=''; try{raw=fs.readFileSync(process.env.EVENTS,'utf8');}catch(e){}
       const lines=raw.split('\n').filter(Boolean); let n=0;
       for(let i=lines.length-1;i>=0;i--){
         let ev; try{ev=JSON.parse(lines[i]);}catch(e){continue;}
@@ -357,7 +358,7 @@ case "$TYPE" in
     fi
     noprog=$(node -e "
       const fs=require('fs'); const id=process.argv[1];
-      let raw=''; try{raw=fs.readFileSync('$EVENTS','utf8');}catch(e){}
+      let raw=''; try{raw=fs.readFileSync(process.env.EVENTS,'utf8');}catch(e){}
       const lines=raw.split('\n').filter(Boolean); let n=0;
       for(let i=lines.length-1;i>=0;i--){
         let ev; try{ev=JSON.parse(lines[i]);}catch(e){continue;}

@@ -13,6 +13,7 @@ Configure opencode.json `permission: allow` for unattended HeartBeat use (openco
 import os
 import subprocess
 from shutil import which
+from . import verdict_refuted
 
 
 def _model():
@@ -58,6 +59,6 @@ def refute(payload):
     try:
         r = subprocess.run(_cmd(prompt), cwd=cwd, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=600)
-        return {"refuted": "REFUTED" in (r.stdout or "").upper(), "findings": (r.stdout or "")[:500]}
+        return {"refuted": verdict_refuted(r.stdout or ""), "findings": (r.stdout or "")[:500]}
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

@@ -72,10 +72,10 @@ node "$HB_DIR/hb-lint.js" "$HB_DIR/dag.json" || echo "!! hb-lint found errors in
 
 # Init state with timestamp
 node -e "
-  const s = JSON.parse(require('fs').readFileSync('$TEMPLATES_DIR/state.json','utf8'));
+  const s = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
   s.last_updated = new Date().toISOString();
-  require('fs').writeFileSync('$HB_DIR/state.json', JSON.stringify(s, null, 2));
-"
+  require('fs').writeFileSync(process.argv[2], JSON.stringify(s, null, 2));
+" "$TEMPLATES_DIR/state.json" "$HB_DIR/state.json"
 
 # Init events log
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)

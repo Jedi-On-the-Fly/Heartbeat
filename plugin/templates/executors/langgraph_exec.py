@@ -9,6 +9,12 @@ model call. Provider HB_EXEC_PROVIDER = anthropic (default) | ollama | openai. A
 ===FILE=== blocks are honored as a fallback. Degrades if langgraph/langchain is absent.
 """
 import sys, os, json
+
+
+def _verdict(t):
+    import re as _r
+    toks = _r.findall(r"REFUTED|CLEAR", (t or "").upper())
+    return bool(toks) and toks[-1] == "REFUTED"
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from _fileblocks import write_blocks, norm_rel
@@ -92,7 +98,7 @@ def do_refute(payload):
         out = model.invoke(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\n'
                            "You are a skeptical adversarial reviewer. End with REFUTED or CLEAR.")
         text = getattr(out, "content", str(out))
-        return {"refuted": "REFUTED" in str(text).upper(), "findings": str(text)[:500]}
+        return {"refuted": _verdict(str(text)), "findings": str(text)[:500]}
     except Exception as e:
         return {"refuted": False, "findings": f"reviewer error: {e}"}
 

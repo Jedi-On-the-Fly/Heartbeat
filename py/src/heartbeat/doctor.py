@@ -70,14 +70,6 @@ def has_rot(hbdir):
     return any("no longer reproducible" in p for p in doctor(hbdir)["problems"])
 
 
-def _sh(cmd):
-    try:
-        return subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                              timeout=8, text=True).stdout
-    except Exception:
-        return ""
-
-
 def diagnose(hbdir, reason=None):
     dag = st.read_dag(hbdir)
     events = st.read_events(hbdir)
@@ -127,7 +119,8 @@ def diagnose(hbdir, reason=None):
             out.append("   " + pr)
             rel = pr.split("missing ", 1)[1].split(" ", 1)[0] if "missing " in pr else None
             if rel:
-                deleted = _sh(f'git -C "{pd}" log --diff-filter=D --oneline -1 -- "{rel}"').strip()
+                deleted = subprocess.run(["git", "-C", pd, "log", "--diff-filter=D", "--oneline", "-1", "--", rel],
+                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode().strip()
                 if deleted:
                     out.append(f"     traced: deleted in {deleted}")
         out.append("  Recover: restore the file (git checkout <commit>^ -- <file>) or re-point the gate.")

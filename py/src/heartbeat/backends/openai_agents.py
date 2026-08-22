@@ -8,6 +8,7 @@ protocol-valid JSON if the `agents` (openai-agents) package isn't installed.
 import os
 
 from ._fileblocks import write_blocks, norm_rel
+from . import verdict_refuted
 
 
 def _model():
@@ -76,6 +77,6 @@ def refute(payload):
                       model=model)
         res = Runner.run_sync(agent, f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}')
         text = _final(res)
-        return {"refuted": "REFUTED" in str(text).upper(), "findings": str(text)[:500]}
+        return {"refuted": verdict_refuted(str(text)), "findings": str(text)[:500]}
     except Exception as e:
         return {"error": f"reviewer error: {e}"}
