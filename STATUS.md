@@ -1,7 +1,32 @@
 # STATUS — HeartBeat
 
-**Version:** v1.27 (the research adapter completes its loop — an internet-sourced writeup earns acceptance the same way code does: source → stamp → ground → refute → write, over v1.26)
+**Version:** v1.28 (closes the last v1.27-adversarial-review residuals — the write-lock's true scope is proven + documented, the git-snapshot pair gets a parity case, and every doc is swept current, over v1.27)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.28 — closing the review loop (lock scope, snapshot parity, docs current)
+
+The final residuals from the v1.27 adversarial review, each proof-driven and refuted by a distinct actor.
+The two prior fix-waves (critical-fixes RV/RB/DC + critical-fixes-2 KB/SP/PT/HN/DR) fixed every headline
+bug and drift item; this release closes what was left and re-affirms the docs as source of truth.
+
+- **Write-lock scope, proven + documented (LK).** `tick.sh` appends informational events
+  (`wake`/`lease_expired`/`review_wake`/`log_event`) via a raw `>>` outside the write-lock — safe by
+  design (atomic O_APPEND short-line writes + `reproject` is a full re-fold, so `state.json` is eventually
+  consistent; the lock guards only the state.json read-modify-write, proven by T139). New proof
+  `tick-append-safe.sh` (**T140**): 60 concurrent appends stay valid & complete, real concurrent ticks
+  don't corrupt the log, and a `--selftest` non-atomic writer *does* lose updates (teeth). Documented in
+  parity-notes "Write-lock scope" + dev-plugin/dev-python.
+- **git-snapshot cross-runtime parity (GS).** The snapshot-on-acceptance (`hb.js review` ≡
+  `gate._git_snapshot`) is a deliberate pair that can't be code-shared across bash/Python. New proof
+  `git-snapshot-parity.sh` (**T141**) drives the real review-acceptance path in both runtimes and asserts
+  each produced the commit + force-tag; a missing tag is RED (teeth verified both directions).
+- **Version bump + docs currency (VD).** Plugin/marketplace → **1.28.0**, Python package → **0.18.0**
+  (independent cadence, by design). Dev docs swept current — `review_policy.accept_review` as the single
+  review-acceptance source, the `GROUPS-SKIPPED` coverage-floor marker, moved fixtures under
+  `tests/fixtures/`. Gated by `docs-currency.sh` (**T142**): positive current-state assertions (false
+  until the sweep) + no stale moved-fixture paths + version consistency, with a `--selftest` for teeth.
+- **Skill-prose commands kept by decision.** `/heartbeat …` stays documented skill-prose (no
+  `plugin/commands/` directory) — the right shape for a skill-based plugin.
 
 ## v1.27 — the research adapter's full loop (source → stamp → ground → refute → write)
 

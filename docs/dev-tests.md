@@ -151,13 +151,14 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T132 | portability: macOS-safe drift hashing (`drift-portable.sh`) — shasum fallback, not a silent no-op |
 | T133 | portability: adapter-skill commands use ${CLAUDE_PLUGIN_ROOT} (`skill-paths.sh`) — resolve from an installed plugin |
 | T134 | portability: MCP entry runtime-honest + command-surface decided (`mcp-json-runtime.sh`) |
-| T135 | honesty: coverage floor (`coverage-floor.sh`) — a mostly-skipped run is INCOMPLETE, not silent ALL-GREEN |
+| T135 | honesty: coverage floor (`coverage-floor.sh`) — the runner emits a `GROUPS-SKIPPED:` count and `_coverage_check` marks a mostly-skipped run INCOMPLETE (exit 3), not a silent ALL-GREEN |
 | T136 | honesty: every example DAG gated (`example-dags-gated.sh`) — all planning/*.dag.json lint clean + 0 hollow |
 | T137 | honesty: audit-fixture count in docs matches parity.sh (`doc-fixture-count.sh`) |
 | T138 | anti-drift: must-not-drift logic is single-sourced (`single-source.sh`) — SKILL.md reason table == protocol.py keys; hb-exec imports hb-audit's `nonBehavioral` (no fork) |
 | T139 | safety: write-lock gives real mutual exclusion (`wlock-tested.sh`) — two concurrent workers through withWlock/with_wlock serialize an RMW (counter==2); gutting the lock makes it RED, node + python |
 | T140 | safety: tick.sh's lock-free appends are corruption-safe (`tick-append-safe.sh`) — 60 concurrent O_APPEND appends + real concurrent ticks keep events.jsonl valid & complete; `--selftest` shows a non-atomic writer loses updates (teeth) |
 | T141 | parity: git-snapshot on review acceptance (`git-snapshot-parity.sh`) — `hb review GATE_P0 pass` commits + force-tags in both node and python; a missing tag is RED (cross-runtime pair `hb.js review` ≡ `gate._git_snapshot`) |
+| T142 | honesty: docs reflect current code (`docs-currency.sh`) — dev docs describe review_policy/accept_review + GROUPS-SKIPPED, no doc references the moved audit-fixtures/parity-fixtures paths, plugin==marketplace version; `--selftest` proves teeth |
 
 The `docs/howto/` proof scripts (`docs/howto/gate-examples/`) are runnable, self-verifying, and enforced by T53–T139; see [../docs/howto/howto-list.md](../docs/howto/howto-list.md). The agent-backend/framework guides (T64–T66, T72) are enforced Docker-free (harness `--check` + backend conformance + prose-integrity); their live proof is the reproducible **pinned Docker** harness in [`../tests/frameworks/`](../tests/frameworks/) — an on-demand tier that never gates the suite. The MCP server is enforced Docker-free by T67–T71 (JSON-RPC over stdio/HTTP with our own client, deterministic); its real-third-party-client proof — the official MCP Python SDK v2 driving `hb mcp-serve` — is `tests/mcp-interop.sh`, an on-demand tier behind the `[mcp-test]` extra (`mcp>=2`) that never gates the suite.
 

@@ -1543,6 +1543,14 @@ if command -v python3 >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
     'bash "'"$GEX"'/git-snapshot-parity.sh" 2>&1 | grep -q "GIT-SNAPSHOT-PARITY-OK"'
 else echo "  (python3/git absent — T141 skipped)"; fi
 
+grp "T142 — honesty: docs reflect current code (review_policy single-source, no stale moved-fixture paths, versions consistent)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T142.1 dev docs describe review_policy/accept_review + GROUPS-SKIPPED, no doc references the moved fixtures, plugin==marketplace version (docs-currency.sh → DOCS-CURRENT-OK)" \
+    'bash "'"$GEX"'/docs-currency.sh" 2>&1 | grep -q "DOCS-CURRENT-OK"'
+  check "T142.2 the check has teeth: RED on a planted stale audit-fixtures path AND on a missing positive token (docs-currency.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/docs-currency.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T142 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
