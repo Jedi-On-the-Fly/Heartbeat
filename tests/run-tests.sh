@@ -1537,6 +1537,12 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/tick-append-safe.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T140 skipped)"; fi
 
+grp "T141 — parity: git-snapshot on review acceptance commits + tags in BOTH runtimes (cross-runtime pair)"
+if command -v python3 >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
+  check "T141.1 driving hb review GATE_P0 pass creates the GATE_P0 commit+tag in node AND python; a missing tag is RED (git-snapshot-parity.sh → GIT-SNAPSHOT-PARITY-OK)" \
+    'bash "'"$GEX"'/git-snapshot-parity.sh" 2>&1 | grep -q "GIT-SNAPSHOT-PARITY-OK"'
+else echo "  (python3/git absent — T141 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

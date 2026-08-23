@@ -63,6 +63,12 @@ Two gotchas it encodes:
   reproducible (the tick keys off this). Enforced by **T84** (`doctor-parity.sh`).
 - **Backends registry.** Both runtimes must offer the same canonical backend set. Enforced by
   **T85** (`registry-parity.sh`), modulo the python-only `claude` alias (below).
+- **git-snapshot on review acceptance is a cross-runtime pair.** node's inline snapshot in `hb.js review`
+  ≡ python's `gate._git_snapshot` (via `review_policy.accept_review`): accepting a review-gated phase must
+  `git add -A` + commit + force-tag the gate id, in both runtimes, so the tag only ever certifies a
+  reviewed-good state. This logic cannot be code-shared across bash and Python, so it is held by a behavioral
+  parity proof: **T141** (`git-snapshot-parity.sh` drives `hb review GATE_P0 pass` in each runtime and asserts
+  both produced the commit+tag; a missing tag is RED).
 
 ## Review acceptance is a shared behavioral surface (must match)
 
