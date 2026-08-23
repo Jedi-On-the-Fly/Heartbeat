@@ -27,6 +27,14 @@ Code) and pass a key only if the backend needs one.
 asserts all three exit codes: a hollow DAG fails `hb audit`, a good project's `exec run` exits
 0, and an unpassable one exits non-zero → `CI-FLOW-OK`.
 
+## Gotcha: the runner's toolchain isn't in `/usr/bin`
+
+GitHub's `setup-node`/`setup-python` install `node`, `python3`, and any `pip`-installed console script
+(like `hb`) under `hostedtoolcache`, not `/usr/bin`. A gate or proof that hardcodes a tool path — or a
+"clean" `PATH` of `/usr/bin:/bin` — passes locally and fails on CI. **Derive** tool locations instead
+(`dirname "$(command -v node)"`); this is the environment-portability trap catalogued in
+[writing-behavioral-gates.md](writing-behavioral-gates.md#environment-portability).
+
 ## Next
 
 - Make the run headless with a local model: [use-heartbeat-with-ollama.md](use-heartbeat-with-ollama.md).

@@ -39,11 +39,20 @@ re-verification belongs. (HeartBeat never auto-pushes, so this hook only ever fi
 The behavior is backed by runnable proofs wired into the suite:
 
 ```bash
-bash docs/howto/gate-examples/pre-push-hook.sh          # -> PRE-PUSH-HOOK-OK  (T117: blocks on fail, allows on pass, non-clobber, HB_NO_HOOK, existing repos)
-bash docs/howto/gate-examples/pre-push-hook-parity.sh   # -> PRE-PUSH-PARITY-OK (T118: node ≡ python — both block iff gate re-verify fails)
+bash docs/howto/gate-examples/pre-push-hook.sh           # -> PRE-PUSH-HOOK-OK  (T117: blocks on fail, allows on pass, non-clobber, HB_NO_HOOK, existing repos)
+bash docs/howto/gate-examples/pre-push-hook-parity.sh    # -> PRE-PUSH-PARITY-OK (T118: node ≡ python — both block iff gate re-verify fails)
+bash docs/howto/gate-examples/pre-push-selfcontained.sh  # -> PRE-PUSH-SELFCONTAINED-OK (T122: hook is self-contained — tested as it runs)
 ```
 
 The proofs bootstrap throwaway projects and assert the hook blocks exactly when `gate.sh --all` /
 `hb gate --all` fails, leaves an existing hook alone, and honors `HB_NO_HOOK`. The two runtimes' hook
 bodies differ (each calls its own gate tool), so parity is **behavioral** — the hook blocks iff a gate
 regresses — not byte-identical, as noted in [parity-notes.md](../../planning/parity-notes.md).
+
+The self-containment proof (T122) runs the hook under a **stripped toolchain PATH** — no `PYTHONPATH`, no
+`hb` on `PATH` — because a hook that only works with your shell's conveniences isn't self-contained: the
+node hook (`gate.sh --all`) must still block on a failing gate, and the Python hook must **skip with a
+message** when `hb` is absent (not die on an import error). That proof derives the clean PATH from where
+`node`/`git`/`python3` actually live (they sit in a toolcache, not `/usr/bin`, on CI runners) — the
+portability trap catalogued in
+[writing-behavioral-gates.md](writing-behavioral-gates.md#environment-portability).

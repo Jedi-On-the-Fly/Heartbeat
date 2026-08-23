@@ -78,6 +78,19 @@ fool. Run `hb-audit` and they cannot survive.
   behavior itself (`greet("Ada") == "Hello, Ada!"`). The static auditor cannot flag this —
   `import greeting` classifies as behavioral — which is why the fleet below exists.
 
+### Environment portability
+
+A gate can be perfectly behavioral and still be wrong about *where it runs*. A proof that hardcodes an
+environment assumption — a "clean" `PATH` of `/usr/bin:/bin`, a tool at `/usr/bin/node`, a `$HOME`
+layout — passes on your box and **false-fails on a different one**. HeartBeat hit this in its own suite:
+`pre-push-selfcontained.sh` (T122) built a stripped `PATH` as the literal `/usr/bin:/bin`, which is fine
+locally but red on GitHub Actions, where `setup-node`/`setup-python` install the toolchain under
+`hostedtoolcache`, **not** `/usr/bin` — so under that `PATH` there was no `node` and the proof's bootstrap
+step failed. It looked like a hook bug; it was a portability bug in the test. Rewrite: **derive** the
+locations you need (`dirname "$(command -v node)"`), and if the environment genuinely can't reproduce the
+condition (e.g. it can't be stripped), **skip cleanly** rather than fail. The static auditor cannot catch
+this — the criterion is behavioral — which is why "green locally" is never enough; run it in CI too.
+
 ## Refute your gates: the adversarial fleet
 
 A gate's weakness is **latent** — it does not show up when the worker happens to do the
