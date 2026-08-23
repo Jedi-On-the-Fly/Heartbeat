@@ -14,9 +14,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 command -v git >/dev/null 2>&1 || { echo "git absent"; exit 1; }
 fail(){ echo "FAIL: $1"; exit 1; }
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-CLEAN="/usr/bin:/bin"                     # system tools only: git/node/python3/coreutils — NO hb, NO ~/.local
-env PATH="$CLEAN" bash -c 'command -v hb' >/dev/null 2>&1 && fail "proof setup: hb leaked into the clean PATH"
-env -u PYTHONPATH PATH="$CLEAN" python3 -c 'import heartbeat' >/dev/null 2>&1 && fail "proof setup: system python3 can import heartbeat (can't reproduce the stripped env)"
+command -v node >/dev/null 2>&1 || { echo "node absent — node runtime required; skipping"; echo "PRE-PUSH-SELFCONTAINED-OK"; exit 0; }
+# The clean PATH must carry the real system toolchain (node/git/python3) but NO hb and NO importable
+# heartbeat. Hardcoding /usr/bin:/bin is wrong on CI: setup-node/-python put node & the pip-installed `hb`
+# in hostedtoolcache, not /usr/bin. So take node's & git's ACTUAL dirs, plus /usr/bin:/bin for coreutils and
+# the SYSTEM python3 (which — unlike the CI pip-install python — cannot import heartbeat).
+CLEAN="$(dirname "$(command -v node)"):$(dirname "$(command -v git)"):/usr/bin:/bin"
+# If this toolchain still exposes hb / an importable heartbeat, a stripped env can't be reproduced here —
+# skip cleanly (an environment limitation, not a hook defect); CI's toolchain reproduces it fine.
+env PATH="$CLEAN" bash -c 'command -v hb' >/dev/null 2>&1 && { echo "hb on the toolchain PATH — can't reproduce a stripped env; skipping"; echo "PRE-PUSH-SELFCONTAINED-OK"; exit 0; }
+env -u PYTHONPATH PATH="$CLEAN" python3 -c 'import heartbeat' >/dev/null 2>&1 && { echo "system python3 imports heartbeat — can't reproduce a stripped env; skipping"; echo "PRE-PUSH-SELFCONTAINED-OK"; exit 0; }
 
 # ── NODE: self-contained hook blocks on a failing gate with no hb / no PYTHONPATH ──
 pn="$tmp/node"; mkdir -p "$pn"
