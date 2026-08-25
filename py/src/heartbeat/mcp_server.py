@@ -55,7 +55,16 @@ def _state(hb):
 
 # ── read tools — each returns a JSON-serialisable result from the same
 #    library function the CLI calls (identical data to `hb <cmd>`).
-def _tick(hb, a):     return tickmod.tick(hb)
+def _tick(hb, a):
+    r = tickmod.tick(hb)
+    # Drive-loop nudge for interactive MCP clients (OpenCode, …): the tick is pull-based, so on a
+    # work-advancing wake, tell the client to call tick again after acting. Nothing on terminal /
+    # human-needed reasons (don't loop when it must stop). MCP-only — shared tick.py is untouched.
+    d = r.get("data") or {}
+    if r.get("wakeAgent") and d.get("reason") in ("next_task", "gate_pending", "review_pending"):
+        d["next"] = ("After performing data.action, call `tick` again — keep looping until reason "
+                     "is all_done or a human-needed reason.")
+    return r
 def _next(hb, a):     return rv.resolve(_state(hb), st.read_dag(hb), hb)
 def _ready(hb, a):    return rv.ready_tasks(_state(hb), st.read_dag(hb), hb, int(a.get("n", 0) or 0))
 def _stateview(hb, a): return _state(hb)
@@ -69,7 +78,7 @@ def _audit(hb, a):    return auditmod.audit(st.read_dag(hb))
 # name -> (handler, description, inputSchema). Act tools are appended in
 # _register_act() so the read surface stands alone.
 TOOLS = {
-    "tick":     (_tick,      "Run one Stage-A tick; returns the next action (wakeAgent, reason, action).", _EMPTY),
+    "tick":     (_tick,      "Run one Stage-A tick and return the next action (wakeAgent, reason, action). To run a whole project, DRIVE the loop: after performing data.action, call `tick` again — keep looping until reason is all_done or a human-needed reason (gate_blocked/build_stuck/deadlock/review_stuck).", _EMPTY),
     "next":     (_next,      "The single next eligible action (resolver.resolve).", _EMPTY),
     "ready":    (_ready,     "The concurrently-runnable task set.", {"type": "object", "properties": {"n": {"type": "integer", "description": "max tasks (0 = all)"}}}),
     "state":    (_stateview, "The projected project state (from the event log).", _EMPTY),

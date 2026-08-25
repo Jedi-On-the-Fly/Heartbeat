@@ -54,6 +54,17 @@ agent can call `tick` to get the next action, do the work, then `gate` to verify
 Or skip the manual wiring: install the HeartBeat plugin and it registers the server for you, on
 either host — see [install-the-heartbeat-plugin.md](install-the-heartbeat-plugin.md).
 
+### Drive the loop (don't stop after one tick)
+
+`tick` is **pull-based**: one call returns one action, then exits — there is no external ticker in
+an interactive session. To run a whole project the client must **drive**: after performing
+`data.action`, call `tick` **again**, and keep looping until the reason is `all_done` or a
+human-needed reason (`gate_blocked` / `build_stuck` / `deadlock` / `review_stuck`). The tool teaches
+this itself — its description says so, and on a work-advancing wake the result carries a `data.next`
+nudge to call `tick` again (and *nothing* on a terminal tick, so a finished project is never told to
+keep looping). A client that reacts to a single tick and stops leaves the DAG unfinished; this is the
+MCP twin of the SessionStart-hook drive-loop directive.
+
 ### Remote (HTTP)
 
 For a remote/hosted client, `hb mcp-serve --http --host <h> --port <p>` serves the same tools over
@@ -102,6 +113,10 @@ drives it with an actual JSON-RPC client over stdio:
   failing gate does not (a load-bearing negative control).
 - **`MCP-INVARIANT-OK`** — after `start` / `done`, `state.json` on disk equals the event-log
   projection, so the server never side-writes state.
+
+[`gate-examples/mcp-drives-loop.sh`](gate-examples/mcp-drives-loop.sh) drives the same real server to
+prove the loop guidance above — **`MCP-DRIVES-LOOP-OK`**: the `tick` tool's description teaches
+driving, a pending tick carries the `data.next` call-again nudge, and an `all_done` tick does not.
 
 ## Scope
 

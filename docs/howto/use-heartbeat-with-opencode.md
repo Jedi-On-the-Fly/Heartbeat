@@ -48,8 +48,14 @@ OpenCode is an MCP client, so it can call HeartBeat's `tick` / `gate` / `state` 
 
 For a remote server, use `{ "type": "remote", "url": "http://<host>:<port>" }` against
 `hb mcp-serve --http`. OpenCode uses its own `opencode.json` config here — it does **not** read the
-`.claude-plugin/marketplace.json` that Codex and Claude Code share. The tools become available to
-the model automatically.
+`.claude-plugin/marketplace.json` that Codex and Claude Code share (so the SessionStart drive-loop
+hint never reaches it). The tools become available to the model automatically.
+
+**Drive the whole DAG, don't stop at one tick.** Because OpenCode reaches HeartBeat only through the
+MCP tools (not the plugin hook), the `tick` tool itself carries the drive-loop guidance: its
+description — and a `data.next` nudge on each work-advancing wake — tells OpenCode to call `tick`
+again until `all_done` or a human-needed reason. See
+[drive-heartbeat-over-mcp.md](drive-heartbeat-over-mcp.md#drive-the-loop-dont-stop-after-one-tick).
 
 **Proof.** [`gate-examples/opencode-mcp.sh`](gate-examples/opencode-mcp.sh) validates the config
 shape and confirms the wired `hb mcp-serve` command spins a working MCP server (initialize

@@ -1557,6 +1557,14 @@ check "T143.1 on a .hb/ project the hook instructs re-running tick.sh in a loop 
 check "T143.2 the check has teeth: a reactive-only hook is rejected, a drive-hook passes, no leakage off-project (hook-drives-loop.sh --selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/hook-drives-loop.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
+grp "T144 — reliability: the MCP tick tool teaches an interactive client to DRIVE the loop (Python-only surface)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T144.1 driving the real hb mcp-serve: the tick tool description teaches driving + a pending tick nudges (data.next) + an all_done tick does not (mcp-drives-loop.sh → MCP-DRIVES-LOOP-OK)" \
+    'bash "'"$GEX"'/mcp-drives-loop.sh" 2>&1 | grep -q "MCP-DRIVES-LOOP-OK"'
+  check "T144.2 the check has teeth: each description check + the nudge/no-nudge rule is individually load-bearing (mcp-drives-loop.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/mcp-drives-loop.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T144 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

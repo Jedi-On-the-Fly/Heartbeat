@@ -1,0 +1,57 @@
+{
+  "project": "mcp-drive-loop",
+  "_meta": "Close the interactive-MCP-client drive-loop gap: an MCP client (OpenCode, or any MCP-capable agent driving HeartBeat over `hb mcp-serve`) sees only the `tick` tool's metadata, which teaches single-tick reaction, not self-driving. Mirror the SessionStart-hook fix (T143) on the MCP surface. MCP is Python-only → no parity obligation. One phase, spec-first, gated on a proof that drives the REAL server, refuted before it advances.",
+  "phases": [
+    {
+      "id": "MD",
+      "title": "MCP tick tool teaches DRIVING the loop (not react to one tick)",
+      "gate_entry": null,
+      "gate_exit": "GATE_MD",
+      "tasks": [
+        {
+          "id": "md1",
+          "title": "Spec-first: author the mcp-drives-loop proof (RED-capable, real server, teeth)",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/mcp-drives-loop.sh (runnable, prints MCP-DRIVES-LOOP-OK). It must drive the REAL server (python3 -m heartbeat.cli mcp-serve over stdio JSON-RPC, the mcp-server.sh pattern) and assert: (a) tools/list returns a `tick` tool whose DESCRIPTION carries a coherent drive-loop instruction — call tick again after acting, framed as a loop, until all_done or a human-needed reason (gate_blocked/build_stuck/deadlock/review_stuck); (b) tools/call `tick` on a bootstrapped project with a pending task returns data.next (a nudge to call tick again); (c) tools/call `tick` on an all_done project returns NO next nudge (don't tell it to loop when it must stop). Carry --selftest that proves EACH assertion is individually load-bearing (a near-miss that fails exactly one is rejected; a good server-shape passes) and prints SELFTEST-OK. Keep an honest SCOPE line: anti-drift presence-of-instruction on first-party tool metadata, not an adjudication of whether the LLM obeys (that is the on-demand live tier). Must go RED against today's mcp_server.py before md2."
+        },
+        {
+          "id": "md2",
+          "title": "Fix mcp_server.py: teach the tick tool to drive the loop",
+          "requires": ["md1"],
+          "description": "In py/src/heartbeat/mcp_server.py: (1) rewrite the `tick` tool DESCRIPTION so it teaches driving — after performing data.action, call tick again; keep looping until reason is all_done or a human-needed reason (gate_blocked/build_stuck/deadlock/review_stuck). (2) In the `_tick` MCP wrapper ONLY (never the shared tick.py, to keep the node≡python tick output identical), add data.next = a call-again nudge when wakeAgent is true AND the reason is work-advancing (next_task/gate_pending/review_pending); add nothing on terminal/human-needed reasons. Surgical, Python-only. After this, md1's proof goes GREEN."
+        },
+        {
+          "id": "md3",
+          "title": "Wire the proof into the suite + bring docs to current-state",
+          "requires": ["md2"],
+          "description": "Add a T144 group to tests/run-tests.sh (python3-guarded, in the MCP region near T67-T71) that runs mcp-drives-loop.sh and greps MCP-DRIVES-LOOP-OK on the same line, plus a --selftest SELFTEST-OK check. Add a T144 row to docs/dev-tests.md (keeps T124 index-coverage green). Update docs/howto/drive-heartbeat-over-mcp.md (and the OpenCode MCP section in use-heartbeat-with-opencode.md) to current-state: the tick tool teaches driving the loop. No version narrative."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_MD": {
+      "desc": "The MCP tick tool teaches an interactive client to DRIVE the loop, proven against the real server with per-assertion teeth, wired into the suite, and docs are current — no overclaim (metadata-presence, not LLM-obedience).",
+      "review": {
+        "prompt": "Refute that MD is done. Does mcp-drives-loop.sh drive the REAL hb mcp-serve (not a stub) and would it go RED on the pre-fix tick description? Is each of its assertions individually load-bearing (does --selftest reject a near-miss that fails exactly one), or is it a hollow token-grep like the first hook proof? Does the fix live in the _tick MCP wrapper and the tool description WITHOUT touching shared tick.py (so node≡python tick output is unchanged)? Is the all_done case correctly given NO nudge? Do the docs/dev-tests claim only metadata-presence (anti-drift), not that an LLM will obey? Is T144 asserted on the same line it runs the proof, and enumerated in dev-tests so T124 stays green? End SOUND or UNSOUND."
+      },
+      "criteria": [
+        {
+          "id": "mda",
+          "desc": "the mcp-drives-loop proof passes against the real server",
+          "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-drives-loop.sh\" 2>&1 | grep -q 'MCP-DRIVES-LOOP-OK'"
+        },
+        {
+          "id": "mdb",
+          "desc": "the proof has per-assertion teeth (each check individually load-bearing)",
+          "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/mcp-drives-loop.sh\" --selftest 2>&1 | grep -q 'SELFTEST-OK'"
+        },
+        {
+          "id": "mdc",
+          "desc": "the proof is wired into the suite, enumerated in dev-tests, and the MCP how-to is updated",
+          "cmd": "cd \"$PROJECT_DIR\" && grep -q 'mcp-drives-loop.sh' tests/run-tests.sh && grep -q 'mcp-drives-loop' docs/dev-tests.md && grep -qiE 'call .{0,20}tick.{0,20}again|until .{0,20}all_done' docs/howto/drive-heartbeat-over-mcp.md"
+        }
+      ]
+    }
+  }
+}
