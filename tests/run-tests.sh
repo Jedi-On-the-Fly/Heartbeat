@@ -1551,6 +1551,12 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/docs-currency.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T142 skipped)"; fi
 
+grp "T143 — reliability: the SessionStart hook teaches an agent to DRIVE the loop (not react to one tick)"
+check "T143.1 on a .hb/ project the hook instructs re-running tick.sh in a loop + names stop conditions (all_done + human-needed); silent off-project (hook-drives-loop.sh → HOOK-DRIVES-LOOP-OK)" \
+  'bash "'"$GEX"'/hook-drives-loop.sh" 2>&1 | grep -q "HOOK-DRIVES-LOOP-OK"'
+check "T143.2 the check has teeth: a reactive-only hook is rejected, a drive-hook passes, no leakage off-project (hook-drives-loop.sh --selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/hook-drives-loop.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

@@ -215,7 +215,7 @@ Copies templates into `.hb/` (incl. `executors/`), lints the seeded DAG, seeds `
 
 ## Skill + hooks
 
-`SKILL.md` commands: `init, plan, status, lint, audit, doctor, viz, tick, run, exec, schedule, help`. `/heartbeat plan` acceptance gate: lint clean + audit clean (0 hollow) + a refutation returning SOUND before proposing. A second skill, `gated-docs`, captures the docs-as-verified-claims method (gate a guide with a runnable proof or prose-check, wire it, refute it). `hooks.json` registers a SessionStart command (`heartbeat-detect.sh`) that prints a pointer when `$CLAUDE_PROJECT_DIR/.hb/hb.js` exists, silent otherwise.
+`SKILL.md` commands: `init, plan, status, lint, audit, doctor, viz, tick, run, exec, schedule, help`. `/heartbeat plan` acceptance gate: lint clean + audit clean (0 hollow) + a refutation returning SOUND before proposing. A second skill, `gated-docs`, captures the docs-as-verified-claims method (gate a guide with a runnable proof or prose-check, wire it, refute it). `hooks.json` registers a SessionStart command (`heartbeat-detect.sh`) that prints a pointer when `$CLAUDE_PROJECT_DIR/.hb/hb.js` exists, silent otherwise. The pointer is the always-on channel (independent of which skill version loads, and shared with Codex via the plugin marketplace), so it teaches the agent to **drive** the loop — after each action re-run `.hb/tick.sh` and act on the new reason, stopping only at `all_done` or a human-needed reason — not merely react to a single tick (gated by T143).
 
 ## Environment variables
 
