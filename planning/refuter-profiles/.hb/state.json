@@ -14,13 +14,17 @@
     "rc4",
     "rp1",
     "rp2",
-    "rp3"
+    "rp3",
+    "rh1",
+    "rh2",
+    "rh3"
   ],
   "completed_phases": [
     "RS",
     "RL",
     "RC",
-    "RP"
+    "RP",
+    "RH"
   ],
   "pending_reviews": [],
   "build_stuck_count": 0,
@@ -28,5 +32,5 @@
     "errors": 0
   },
   "last_event": "review_passed",
-  "last_updated": "2026-08-27T17:22:57.560Z"
+  "last_updated": "2026-08-27T17:37:28.801Z"
 }
