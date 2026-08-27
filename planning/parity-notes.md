@@ -13,6 +13,7 @@ is easy to build. Update as we add cross-implementation surface.
 | Lint | `hb-lint.js lint()` | `heartbeat.lint.lint()` | same dag → same errors (warnings may differ in wording) |
 | Protocol | `hb.js PROTOCOL` | `heartbeat.protocol.PROTOCOL` | same reason KEYS (action text is runtime-specific by design — see below) |
 | **Auditor** | `hb-audit.js audit()` | `heartbeat.audit.audit()` | same dag → same findings (rule + severity per gate) |
+| **Refuter profile resolution** | `refuter_profiles.js resolve()` | `heartbeat.refuter_profiles.resolve()` | same name + `.hb/refuters/` → same normalized `{persona, questions[], model, provider, verdict}`; same precedence (explicit > env > project-file > built-in); unknown explicit name errors on both (T145) |
 
 Fixtures for the auditor live in `tests/fixtures/audit/` and are consumed by BOTH
 suites (node T42, py test_audit.py).

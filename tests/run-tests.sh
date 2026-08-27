@@ -1565,6 +1565,14 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/mcp-drives-loop.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T144 skipped)"; fi
 
+grp "T145 — refuter profiles: the resolver turns a NAME into a normalized profile (node ≡ python), default always resolvable, unknown errors"
+if command -v python3 >/dev/null 2>&1; then
+  check "T145.1 a named profile resolves its fields, a built-in default is always resolvable, an unknown explicit name errors, precedence (explicit > env > project-file > built-in) holds, node ≡ python (refuter-profile-resolve.sh → REFUTER-RESOLVE-OK)" \
+    'bash "'"$GEX"'/refuter-profile-resolve.sh" 2>&1 | grep -q "REFUTER-RESOLVE-OK"'
+  check "T145.2 the check has teeth: each field, each precedence tier (incl. the env default and the project shadow of default), and the unknown-errors path is individually load-bearing (refuter-profile-resolve.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/refuter-profile-resolve.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T145 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

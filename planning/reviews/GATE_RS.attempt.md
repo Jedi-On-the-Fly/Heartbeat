@@ -1,160 +1,65 @@
-# GATE_RS refutation attempt — "The research skill — the full loop"
+# GATE RS — Refuter round 2 attempt
 
-**Phase:** RS — the research-grounding skill documents the FULL research loop
-(source → stamp → ground → refute → write) reusing the real tools, plus a worked
-worked-example how-to; both prose-clean, referencing real wired proofs, no overclaim.
+Phase under review: **RS ("Profile schema + resolver + built-in default, both runtimes")**.
 
-**Reviewer stance:** adversarial. Goal: break the claim with concrete commands.
+Actor: adversarial refuter, round 2 (did NOT do the work). Repo root: `/home/hamid/Téléchargements/heartbeat`.
 
----
+Mandate: (1) verify the round-1 fix (normalize() type-canonical in both runtimes + a malformed-parity teeth case with a `divnorm` mutant) is real and complete; (2) hunt for new/remaining holes.
 
-## 1. Loop completeness & accuracy (real commands run as written)
+Files exercised:
+- `py/src/heartbeat/refuter_profiles.py` — `_normalize`, `resolve`, `_load_from_dirs`, `_load_from_executor`
+- `plugin/templates/refuter_profiles.js` — `normalize`, `resolve`, `loadFromDirs`, `loadFromExecutor`
+- `docs/howto/gate-examples/refuter-profile-resolve.sh` — the parity/property proof (checks 1–5b, `--selftest`)
+- `tests/run-tests.sh` — T145.1 / T145.2 wiring
 
-The skill (`plugin/skills/research-grounding/SKILL.md`) documents all five steps under
-the heading "The loop (source → stamp → ground → refute → write)":
+## 1. The round-1 fix is real
 
-1. **Source** — on-demand, explicitly *not* gated. No command to break.
-2. **Stamp** — `node plugin/adapters/research/stamp-evidence.js evidence.json sources/` + python twin
-   `python3 -m heartbeat.adapters.research.stamp_evidence evidence.json sources/`.
-3. **Ground** — `node plugin/adapters/research/ground-check.js stamped.json sources/ --strict` + twin
-   `python3 -m heartbeat.adapters.research.ground_check stamped.json sources/ --strict`.
-4. **Refute** — `node .hb/hb-audit.js .hb/dag.json --questions <gate>`.
-5. **Write** — `node plugin/adapters/research/research-context.js stamped.json <section>` + twin
-   `python3 -m heartbeat.adapters.research.research_context stamped.json <section>`.
+Round-1 hole: `normalize()` diverged for malformed-but-valid-JSON fields — `persona:null` gave py `null` / node `""`; `questions:<non-list>` char-exploded a string in py while node returned `[]`; and the proof had no normalization-parity case.
 
-Verified against shipped code:
-- Script paths all exist: `plugin/adapters/research/{stamp-evidence.js,ground-check.js,research-context.js}`.
-- Python twins exist and the **module names shown resolve** (`heartbeat.adapters.research.{stamp_evidence,ground_check,research_context}`) — all ran with exit 0 (see §2).
-- `--questions` flag is real: `grep -n questions plugin/templates/hb-audit.js` → line 39 doc + line 130 `argv.indexOf('--questions')`. The `.hb/hb-audit.js` path is the deployed copy of `plugin/templates/hb-audit.js`; consistent with every other how-to.
-- Flags (`--strict`) correct; `--strict` returns exit 1 on any issue (verified in STALE test, §1a).
+Both runtimes are now type-canonical and byte-equivalent:
+- `_normalize` (py): `persona if isinstance(persona,str) else ""`; `list(questions) if isinstance(questions,list) else []`.
+- `normalize` (js): `typeof d.persona==="string" ? d.persona : ""`; `Array.isArray(d.questions) ? d.questions.slice() : []`.
 
-**No command in the skill is wrong or misleading.** REFUTATION FAILED on point 1.
+Exact round-1 repro (`{"persona":null,"questions":"authz"}` resolved via each runtime):
+- py:  `persona=''`  `questions=[]`
+- node: `persona=""` `questions=[]`
 
-### 1a. STALE / --strict blocking
-Edited a stored source after stamping, re-ran ground-check --strict:
-```
-HB-GROUND: grounded=0 issues=2
-STALE: c_boil — source s1 changed since fetch (sha mismatch)
-STALE: c_freeze — source s1 changed since fetch (sha mismatch)
-exit=1
-```
-Matches the skill's description exactly. Restored (in /tmp).
+The null-passthrough and char-explode bugs are closed, not papered over.
 
----
+## 2. Normalization parity — 24-case mistyped-input matrix
 
-## 2. Worked example reproduced byte-for-byte
+Wrote each crafted profile to `.hb/refuters/probe.json` and compared the full canonical resolved dict (sorted keys, tight separators) node vs python. Cases covered: persona as null / number / bool / list / object / missing; questions as string / number / null / bool / object / list-of-numbers / list-of-mixed / missing; model/provider/verdict as null / number / object / list / string / missing; the combined round-1 payload; and an unknown extra key.
 
-Created a temp dir with `sources/s1.txt` and `evidence.json` exactly as printed in
-`docs/howto/run-a-grounded-research-project.md`, then ran the three shown commands.
+Result: **ALL-MATCH** (24/24). No divergence found in normalization for any mistyped input.
 
-**Stamp** → produced `stamped.json` with a real sha256 filled into `s1`.
+## 3. The proof's 5b malformed-parity check has real teeth
 
-**Ground-check --strict** →
-```
-HB-GROUND: grounded=2 issues=0   (exit 0)
-```
-Matches the guide's shown output at line 59 exactly, including the doc's claim that the
-line-wrapped "water boils at 100 degrees Celsius / at sea level" still matches
-(whitespace-normalized). Confirmed.
+- `refuter-profile-resolve.sh` → `REFUTER-RESOLVE-OK` (exit 0).
+- `--selftest` → `SELFTEST-OK` (exit 0): the un-mutated fake passes the whole suite and every mutant (`drop_persona noerror ignore_env noshadow badmodel divnorm`) is caught. The `divnorm` mutant — which reproduces the exact round-1 bug (null persona passthrough + char-explode) — is caught, so check 5b is individually load-bearing.
+- **Mutation on the REAL resolver:** temporarily broke `plugin/templates/refuter_profiles.js` `normalize` so `questions` became `Array.from(d.questions)` (char-explodes a string, the round-1 node/py divergence). The main proof went **RED** (`FAIL: resolver property suite did not hold`, exit 1). Restored the file (verified byte-identical via `diff`) and the proof returned **GREEN**. So the proof genuinely fails on a real normalization divergence — it is not a rubber stamp.
 
-**research-context background** →
-```
-Grounded evidence for background:
-  - c_boil: Water boils at 100°C at sea level.
-    source s1 https://example.org/thermo
-    » water boils at 100 degrees Celsius at sea level
-  - c_freeze: Water freezes at 0°C.
-    source s1 https://example.org/thermo
-    » freezes at zero degrees Celsius
-```
-**Byte-for-byte identical** to the guide's shown block (lines 88–96).
+## 4. Other resolver surfaces — attacked, all sound
 
-Also ran the **python twins** on the same inputs: identical grounding line, identical
-context block, and `diff` of node vs python stamped.json → **IDENTICAL**.
+- **executor.json inline `refuters` path:** `{"refuters":{"inline":{...}}}` resolves identically node ≡ python (MATCH), fully normalized.
+- **Precedence dir-file > executor inline:** same name in both a `.hb/refuters/dup.json` file and executor inline → the dir file wins in both runtimes (MATCH `FROM-DIRFILE`). Matches the documented precedence (project files > executor.json inline > built-in default).
+- **Malformed executor.json (invalid JSON):** both runtimes swallow the parse error (py `except (ValueError, OSError)`, js `catch`), so `default` still resolves and an unknown name still errors — identical behavior, both exit 1 on the unknown name.
+- **Malformed profile FILE (invalid JSON in refuters/x.json):** both runtimes raise and exit **1** (py `JSONDecodeError`, node `SyntaxError`). Same behavior (error, non-zero), not silent-ignore. The malformed *profile-file* is NOT caught by a try/except in either runtime — it propagates. That is identical across runtimes and consistent with "unknown explicit name errors — never a silent no-review": a corrupt named profile is a hard error.
+- **Directory named `x.json` (not a file):** py `os.path.isfile` → False, node `statSync().isFile()` → False; both fall through to executor → unknown → error, exit **1**, identical.
+- **Symlink to a valid profile:** resolves through the link identically (MATCH `LINKED`) in both runtimes.
 
-Adversarial extras:
-- Added a **fabricated** claim → `FABRICATED-QUOTE: c_fake — excerpt not found in source s1` (as documented).
-- Added a **method-section** claim → it did **not** leak into `background` output, confirming the guide's
-  claim "a `method`-section claim would never leak in."
+Exit-code parity spot-check across malformed-file / dir-as-file / unknown-name: py and node both return **1** in every case. The only cross-runtime differences observed are exception *class names* (ValueError vs Error, JSONDecodeError vs SyntaxError) surfaced to stderr — this is the design's explicit contract (behavior/reason parity, not runtime-specific error-text/class parity per AGENTS rule 2). Callers see identical non-zero-exit behavior.
 
-**No overclaim in the shown outputs.** REFUTATION FAILED on point 2.
+## 5. Suites & wiring
 
----
+- Proof wired into the owning suite as `tests/run-tests.sh` T145.1 (property/parity) and T145.2 (selftest teeth).
+- Node suite: **368 passed, 0 failed**; T145 present in `GROUPS-PASSED`.
+- Parity suite: **PARITY OK — node ≡ python**.
+- Python suite: no dedicated `refuter_profiles` unit test exists, but python is exercised behaviorally through the T145 proof (`py_resolve`) and the parity checks against the node oracle. Acceptable under the repo model (the shell proof is the owning test); a pure-python `test_refuter_profiles.py` would be a nice-to-have, not a gate hole.
 
-## 3. Overclaim / honesty
+No stray edits left behind: the temporary break to `refuter_profiles.js` was restored byte-for-byte (`diff` clean); all three source files remain untracked new-file, unmodified by this review.
 
-Both docs state the boundaries explicitly:
-- Skill description: "NOT a web searcher and NOT a truth oracle — it checks grounding, not truth."
-- Skill body: "fetch is on-demand (non-deterministic)"; Boundary: "verifies grounding, not truth", "no live web in the gate".
-- Worked example: "## 1. Source (on-demand)"; "You did **not** prove the sources are correct or unbiased";
-  "HeartBeat didn't fetch or fact-check for you — it made the sourcing you did hard to fake and easy to re-verify."
+## Conclusion
 
-`research-context.js` renders (does not re-verify) grounding — its own docstring says
-"Grounding is verified upstream by ground-check — this only renders." The worked example
-places ground-check --strict (step 3, the gate) *before* research-context (step 5),
-so the ordering claim is honest; nothing claims research-context is itself a gate.
+The round-1 divergence is genuinely fixed in both runtimes; normalization is byte-equivalent across a 24-case mistyped-input matrix; the new 5b malformed-parity check is load-bearing (caught the `divnorm` mutant AND a real hand-broken normalize); precedence, executor-inline, malformed-JSON, dir-vs-file, and symlink surfaces all behave identically across runtimes with identical exit codes. Suites and parity are green and the proof is wired in. I could not refute phase RS.
 
-No drift, no "grounding = truth", no "fetches/fact-checks" claim. REFUTATION FAILED on point 3.
-
----
-
-## 4. T92 skill-integrity
-
-`bash docs/howto/gate-examples/skill-integrity.sh` →
-```
-SKILL-INTEGRITY-OK: 3 adapters, 12 wired proof reference(s), 0 findings.
-```
-The skill still declares `<!-- HB-ADAPTER: research -->` (line 8). It names proofs
-`stamp-evidence.sh` (T113), `ground-check.sh` (T110), `research-context.sh` (T112) —
-all exist and are wired in `tests/run-tests.sh`. Extending the skill dropped/broke no
-named proof. T92.1 and T92.2 (teeth selftest) both green in the full suite. REFUTATION FAILED on point 4.
-
----
-
-## 5. Prose integrity & listing
-
-`bash docs/howto/gate-examples/prose-check.sh docs/howto/run-a-grounded-research-project.md` →
-```
-PROSE-OK:run-a-grounded-research-project.md
-ALL-PROSE-OK:1
-```
-Manually verified every relative link from `docs/howto/` and from the skill resolves
-(run-a-grounded..., source-and-ground-research.md, ground-research-claims.md, the two
-SKILL.md links, gate-examples/, research-adapter-scope.md) — all OK, none dead.
-Listed in `howto-list.md` line 40 (family B), status ✅, tagged T112/T113. No placeholder /
-dead link / fake command. REFUTATION FAILED on point 5.
-
----
-
-## 6. Suite reality
-
-- `bash tests/run-tests.sh` → **331 passed, 0 failed; ALL GREEN.** T92, T110, T111,
-  T112, T113 all present in GROUPS-PASSED and individually ✓.
-- `cd py && PYTHONPATH=src python3 -m pytest -q` → **96 passed.**
-- `bash tests/parity.sh` → **PARITY OK — node ≡ python.**
-- `bash docs/howto/gate-examples/self-audit.sh` →
-  `SELF-AUDIT-OK:66/64 (parity:ok) — 66 guides prose-clean; 64 referenced proofs exist and are wired; node ≡ python.`
-
-No red anywhere. REFUTATION FAILED on point 6.
-
----
-
-## Working tree
-
-All my mutations were confined to `/tmp` (temp evidence maps, source edits). Repo
-working tree contains only phase RS's own deliverables (`SKILL.md`, the new worked
-example, the `howto-list.md` entry); no adapter/fixture/gate-example file was touched by
-this review.
-
----
-
-## Verdict
-
-Every attack failed: the five-step loop is complete and its real commands run as
-written on both runtimes; the worked example reproduces byte-for-byte (grounded=2
-issues=0 and the exact context block, node ≡ python); FABRICATED-QUOTE, STALE, and
-section-filtering behave as documented; both docs state fetch-is-on-demand and
-grounding-not-truth with no overclaim; T92 skill-integrity, prose-check, self-audit,
-all three suites, and parity are green; the guide is listed with all links resolving.
-
-I could not refute that phase RS is done.
+VERDICT: SOUND (could not refute)

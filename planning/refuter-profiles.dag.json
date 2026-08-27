@@ -1,0 +1,190 @@
+{
+  "project": "refuter-profiles",
+  "_meta": "Build personalizable adversarial review — named refuter PROFILES (persona + optional model + domain falsification lens + verdict policy). Design: planning/refuter-profiles-scope.md. Three requirements: (1) DEFAULT ALWAYS WORKS — a gate with NO profile (and no HB_REFUTER) dispatches a refute prompt BYTE-IDENTICAL to today (persona stays in the backend; the feature is opt-in and cannot break/fail-open existing projects); `default` is a shipped, resolvable profile you OPT INTO (name it / HB_REFUTER=default) that composes a better baseline (generic-skeptic persona + the gate's review_questions); an unknown EXPLICIT name errors, never silent no-review. (2) USER-CREATABLE + SHAREABLE — a shipped library plugin/templates/refuters/<name>.json, bootstrap-seeded into .hb/refuters/ exactly as executors are (bootstrap.sh copies templates/executors/), project files shadow shipped, `hb refuters` discovery; sharing = drop a JSON / PR it to the shipped library, no code change (the domain-adapter distribution model). (3) PARITY — resolve/compose/discovery/panel are a node≡python twin (hb-exec.js ≡ executor.py, cli.py ≡ hb.js), mirrored and parity-cased. All THREE refute surfaces (node exec, python exec, interactive skill review_pending) share ONE compose via a new `hb refute-prompt <gate>` command, so the interactive path is behaviorally the same proven compose — not a doc grep. Composes OVER the existing refute path (review.prompt, cross-model refute_*, HB_ACTOR distinct-actor, review_questions). Determinism boundary: gate the plumbing (resolve/compose/discovery/default/backward-compat/invariants), never the LLM's judgment.",
+  "phases": [
+    {
+      "id": "RS",
+      "title": "Profile schema + resolver + built-in default (both runtimes)",
+      "gate_entry": null,
+      "gate_exit": "GATE_RS",
+      "tasks": [
+        {
+          "id": "rs1",
+          "title": "Spec-first: author the resolver proof (default + precedence + unknown-errors, teeth)",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/refuter-profile-resolve.sh (prints REFUTER-RESOLVE-OK). Assert: a named profile from .hb/refuters/<name>.json (and/or executor.json `refuters`) resolves to {persona, questions[], model?, provider?, verdict?}; a shipped `default` profile is always resolvable; an UNKNOWN explicit name ERRORS (non-zero), never silently degrades; precedence per-gate-name > HB_REFUTER env > project-file > built-in-default, with EACH tier (esp. the env default) proven by a dedicated teeth case. Drive BOTH runtimes (parity oracle). --selftest proves each field, each precedence tier, and the unknown-errors path individually load-bearing → SELFTEST-OK. RED before rs2."
+        },
+        {
+          "id": "rs2",
+          "title": "Implement the resolver + built-in default in node AND python (parity)",
+          "requires": ["rs1"],
+          "description": "Add py/src/heartbeat/refuter_profiles.py (resolve(hbdir, name=None) -> dict) and its node twin (plugin/templates/, importable by hb-exec.js). A `default` profile (generic-skeptic persona + no extra questions) is resolvable by name. Read .hb/refuters/*.json + executor.json `refuters` + HB_REFUTER with the documented precedence. Unknown explicit name raises/errors identically in both runtimes. Pure resolution — no dispatch/compose changes yet."
+        },
+        {
+          "id": "rs3",
+          "title": "Wire the resolver proof + document schema/default/precedence + parity-notes",
+          "requires": ["rs2"],
+          "description": "Add a Tnn group to tests/run-tests.sh running refuter-profile-resolve.sh (marker same-line) + a --selftest check; add its row to docs/dev-tests.md. Document the profile schema, the opt-in default, and precedence in dev-python.md and dev-plugin.md (current-state). Record 'refuter profile resolution' in planning/parity-notes.md as a shared node≡python surface."
+        }
+      ]
+    },
+    {
+      "id": "RL",
+      "title": "Shareable refuter library (shipped under templates/refuters, bootstrap-seeded, discovery)",
+      "gate_entry": "GATE_RS",
+      "gate_exit": "GATE_RL",
+      "tasks": [
+        {
+          "id": "rl1",
+          "title": "Spec-first: author the library/discovery proof (teeth)",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/refuter-library.sh (prints REFUTER-LIBRARY-OK). Assert: a shipped refuter under plugin/templates/refuters/<name>.json is discovered and resolvable; bootstrap seeds shipped refuters into a fresh project's .hb/refuters/ (exactly as it copies templates/executors/, bootstrap.sh:66-68); a project .hb/refuters/<name>.json SHADOWS a shipped file of the same name; `hb refuters` lists shipped+project identically in BOTH runtimes; every shipped refuter is valid JSON and resolves (integrity — behavioral, not `test -f`). --selftest proves seeding, override precedence, discovery, and integrity each load-bearing → SELFTEST-OK. RED before rl2."
+        },
+        {
+          "id": "rl2",
+          "title": "Ship templates/refuters/, seed at bootstrap, add `hb refuters` discovery (node AND python)",
+          "requires": ["rl1"],
+          "description": "Create plugin/templates/refuters/ with a shipped `default` refuter; extend the RS resolver search path to include shipped refuters (project shadows shipped). Make bootstrap.sh copy refuters into .hb/refuters/ (mirroring the templates/executors/ copy at bootstrap.sh:66-68). Add an `hb refuters` list command in py cli.py and node hb.js (parity). Add an integrity check that every shipped refuter is valid + resolvable. No dispatch/compose changes here."
+        },
+        {
+          "id": "rl3",
+          "title": "Wire the library proof + parity case + dev-tests + parity-notes",
+          "requires": ["rl2"],
+          "description": "Wire refuter-library.sh into tests/run-tests.sh (marker same-line) + dev-tests.md row. Add a tests/parity.sh case asserting `hb refuters` discovery output is identical node≡python. Note the shipped-library + discovery as a shared surface in parity-notes.md."
+        }
+      ]
+    },
+    {
+      "id": "RC",
+      "title": "Compose via one shared `hb refute-prompt` across all three surfaces + backward-compat + parity",
+      "gate_entry": "GATE_RL",
+      "gate_exit": "GATE_RC",
+      "tasks": [
+        {
+          "id": "rc1",
+          "title": "Spec-first: author the compose proof (backward-compat, coverage-narrowing, fail-closed teeth)",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/refuter-compose.sh (prints REFUTER-COMPOSE-OK) driving the new `hb refute-prompt <gate>` command (the single compose used by all three surfaces). Assert: (A) BACKWARD-COMPAT — a gate with NO profile and no HB_REFUTER yields a refute prompt byte-identical to the pre-change dispatch (just review.prompt / the 'Refute that {g}' fallback; no persona/questions injected), so existing projects are untouched; (B) NAMED profile — the composed prompt CONTAINS persona + the gate's base review_questions + the profile's extra questions + review.prompt, and profile.model/provider reach the refute dispatch (observed via a STUB backend that echoes prompt+model); (C) COVERAGE-NARROWING teeth — a profile with its own questions must APPEND to, never REPLACE, the gate's base review_questions (mutating compose to replace goes RED); (D) an unknown profile named on a gate makes the DISPATCH error non-zero (review not skipped — fail-closed at the compose site, not only the resolver); (E) distinct-actor (HB_ACTOR) + fail-closed unchanged. Drive BOTH runtimes (byte-identical). --selftest proves A–E each load-bearing. RED before rc2."
+        },
+        {
+          "id": "rc2",
+          "title": "Implement compose + the `hb refute-prompt` command in node AND python",
+          "requires": ["rc1"],
+          "description": "Add `hb refute-prompt <gate>` (py cli.py + node hb.js, parity) that prints the composed refute prompt for a gate: resolve profile (RS/RL) → persona + review_questions(base + profile.questions, APPEND) + review.prompt; no profile ⇒ emit exactly today's prompt (backward-compat). Route profile.model/provider. Wire the automated review_pending dispatch (executor.py:315-328 and the hb-exec.js twin) to use this same compose. Unknown profile errors. Preserve distinct-actor + fail-closed. Shared tick.py untouched."
+        },
+        {
+          "id": "rc3",
+          "title": "Parity case + wire the compose proof + dev-tests",
+          "requires": ["rc2"],
+          "description": "Add a tests/parity.sh case asserting `hb refute-prompt` composes an identical prompt node≡python for a fixture profile+gate. Wire refuter-compose.sh into tests/run-tests.sh (marker same-line) + dev-tests.md row. Update parity-notes.md (compose / refute-prompt is part of the shared refute surface)."
+        },
+        {
+          "id": "rc4",
+          "title": "Route the interactive (skill) review_pending refuter through `hb refute-prompt` — the third surface",
+          "requires": ["rc2"],
+          "description": "Update the interactive review_pending path — plugin/skills/heartbeat/SKILL.md and the PROTOCOL guidance — so a spawned-Agent refuter (Claude Code / Codex) is seeded by running `hb refute-prompt <gate>` (the SAME proven compose the automated path uses). This makes the highest-traffic surface behaviorally identical to the gated compose, not a separate prose path, so an interactively-run refutation honors review.profile."
+        }
+      ]
+    },
+    {
+      "id": "RP",
+      "title": "Panel verdict policy (perspective-diverse refutation)",
+      "gate_entry": "GATE_RC",
+      "gate_exit": "GATE_RP",
+      "tasks": [
+        {
+          "id": "rp1",
+          "title": "Spec-first: author the panel proof (RED-capable, teeth)",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/refuter-panel.sh (prints REFUTER-PANEL-OK). With verdict {panel:N, refute_if:'majority'|'any'|'all'} on a profile, assert the dispatch runs N refuters and aggregates correctly (majority => refuted iff > N/2; any/all likewise); with no panel the single-verdict path is unchanged; fail-closed holds (any panelist with no verdict => cannot certify a pass). STUB verdicts (deterministic, no model). Drive both runtimes (identical aggregation). --selftest proves majority/any/all each load-bearing. RED before rp2."
+        },
+        {
+          "id": "rp2",
+          "title": "Implement panel aggregation in node AND python",
+          "requires": ["rp1"],
+          "description": "When profile.verdict.panel > 1, run N refute dispatches and aggregate by refute_if (default single verdict when absent). Fail-closed if any panelist yields no boolean verdict. Mirror exactly across executor.py and hb-exec.js."
+        },
+        {
+          "id": "rp3",
+          "title": "Wire the panel proof + dev-tests + parity case",
+          "requires": ["rp2"],
+          "description": "Wire refuter-panel.sh into tests/run-tests.sh (marker same-line) + dev-tests.md row; add a parity.sh case that panel aggregation is identical node≡python; note it in parity-notes.md."
+        }
+      ]
+    },
+    {
+      "id": "RH",
+      "title": "How-to (author + share a refuter) + domain starter profiles (gated-docs)",
+      "gate_entry": "GATE_RP",
+      "gate_exit": "GATE_RH",
+      "tasks": [
+        {
+          "id": "rh1",
+          "title": "Spec-first: pick the guide kind + confirm its cited proofs",
+          "requires": [],
+          "description": "Decide the guide is a decision+mechanism hybrid: gate it with prose-check.sh (links resolve, real commands, no placeholders) AND it must cite the runnable RS/RL/RC/RP proofs it teaches. Enumerate the claims — including the opt-in default vs backward-compat, and how to AUTHOR and SHARE a refuter (drop a JSON in .hb/refuters/ or PR one to plugin/templates/refuters/) — so each maps to an existing proof (no overclaim)."
+        },
+        {
+          "id": "rh2",
+          "title": "Write write-a-refuter-profile.md + ship domain starter profiles",
+          "requires": ["rh1"],
+          "description": "Write docs/howto/write-a-refuter-profile.md (when to use a profile, how to author one, how to SHARE it like a domain adapter, the opt-in default vs untouched backward-compat, the determinism boundary, panels, coverage-narrowing cautions) and add it to docs/howto/howto-list.md (replacing the '⬜ Not available yet' row for 'Write a Good Refuter Prompt / Profile'). Ship 2-3 domain starter profiles (security / correctness / research-source) under plugin/templates/refuters/ that resolve via the resolver. Every command real; claim only what the proofs show."
+        },
+        {
+          "id": "rh3",
+          "title": "Refute the guide + keep the index derived-consistent",
+          "requires": ["rh2"],
+          "description": "Distinct-actor refutation: is the guide hollow? does it overclaim vs the code (e.g. that a profile GUARANTEES better refutation)? broken links? shipped starters actually resolve? Fix by correcting the doc, never weakening a gate. Ensure index-coverage.sh stays green."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_RS": {
+      "desc": "A named refuter profile resolves to the documented shape in BOTH runtimes; a `default` is always resolvable; an unknown explicit name errors; precedence (per-gate > env > project-file > built-in) each proven — wired, documented.",
+      "review": { "prompt": "Refute that RS is done. Does refuter-profile-resolve.sh go RED without the resolver, and is each field + EACH precedence tier (especially HB_REFUTER env-default) individually load-bearing? Does an unknown EXPLICIT name ERROR in both node and python (not silently fall back to no-review — a fail-open)? Is `default` resolvable? Do node and python resolve the same input to the same dict (real parity)? Is the schema + default + precedence documented current-state and in parity-notes? End SOUND or UNSOUND." },
+      "criteria": [
+        { "id": "rsa", "desc": "the resolver proof passes (named + default + unknown-errors + precedence tiers, both runtimes)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-profile-resolve.sh\" 2>&1 | grep -q 'REFUTER-RESOLVE-OK'" },
+        { "id": "rsb", "desc": "teeth: each field + each precedence tier (incl. env default) + unknown-errors individually load-bearing", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-profile-resolve.sh\" --selftest 2>&1 | grep -q 'SELFTEST-OK'" },
+        { "id": "rsc", "desc": "wired into the suite, enumerated in dev-tests, recorded as a shared surface", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'refuter-profile-resolve.sh' tests/run-tests.sh && grep -q 'refuter-profile-resolve' docs/dev-tests.md && grep -qiE 'refuter[ _-]profile' planning/parity-notes.md" }
+      ]
+    },
+    "GATE_RL": {
+      "desc": "Refuters are shareable like domain adapters: a shipped plugin/templates/refuters/ library is bootstrap-seeded (as executors are), project files shadow shipped, `hb refuters` discovery is node≡python, and every shipped refuter is valid+resolvable — proven behaviorally with teeth.",
+      "review": { "prompt": "Refute that RL is done. Does refuter-library.sh prove a SHIPPED refuter is seeded by bootstrap (the templates/executors/ model) and resolvable, that a project .hb/refuters/ file SHADOWS a shipped one of the same name, and that `hb refuters` lists shipped+project IDENTICALLY in node and python (real discovery parity)? Is integrity BEHAVIORAL (every shipped refuter resolves, not just `test -f`), so a broken shipped refuter can't ship silently? Would it go RED before the library existed? End SOUND or UNSOUND." },
+      "criteria": [
+        { "id": "rla", "desc": "the library/discovery proof passes (seed + override + discovery + behavioral integrity, both runtimes)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-library.sh\" 2>&1 | grep -q 'REFUTER-LIBRARY-OK'" },
+        { "id": "rlb", "desc": "teeth: seeding, override precedence, discovery, integrity each load-bearing", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-library.sh\" --selftest 2>&1 | grep -q 'SELFTEST-OK'" },
+        { "id": "rlc", "desc": "wired into the suite, enumerated in dev-tests, discovery recorded as a shared surface", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'refuter-library.sh' tests/run-tests.sh && grep -q 'refuter-library' docs/dev-tests.md && grep -qi 'refuters' planning/parity-notes.md" }
+      ]
+    },
+    "GATE_RC": {
+      "desc": "One `hb refute-prompt` compose serves all three surfaces: no-profile is byte-identical to today (backward-compat), a named profile injects persona + base review_questions (appended, never replaced) + review.prompt + model, an unknown profile errors at dispatch, node≡python identical, and the interactive skill path routes through the same command — proven against a stub backend.",
+      "review": { "prompt": "Refute that RC is done. Does refuter-compose.sh drive the ACTUAL `hb refute-prompt` and go RED before the change? BACKWARD-COMPAT: is the no-profile prompt byte-identical to today (existing projects untouched)? Does a named profile's prompt contain persona AND the gate's BASE review_questions (a profile must APPEND its questions, never REPLACE the base — coverage narrowing) AND review.prompt? Does an unknown profile error at the DISPATCH (not just the resolver)? Are HB_ACTOR + fail-closed intact? Do node and python compose byte-identically (parity case)? Does the interactive skill review_pending actually route through `hb refute-prompt` (same proven compose, not a separate prose path)? Is shared tick.py untouched? End SOUND or UNSOUND." },
+      "criteria": [
+        { "id": "rca", "desc": "the compose proof passes (backward-compat + named-compose + append + dispatch-errors + invariants, both runtimes)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-compose.sh\" 2>&1 | grep -q 'REFUTER-COMPOSE-OK'" },
+        { "id": "rcb", "desc": "teeth: backward-compat, coverage-narrowing (append not replace), unknown-errors-at-dispatch each individually load-bearing", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-compose.sh\" --selftest 2>&1 | grep -q 'SELFTEST-OK'" },
+        { "id": "rcc", "desc": "wired into the suite + enumerated in dev-tests", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'refuter-compose.sh' tests/run-tests.sh && grep -q 'refuter-compose' docs/dev-tests.md" },
+        { "id": "rcd", "desc": "the interactive skill review_pending routes through the shared `hb refute-prompt` compose (proven by rca), not a separate prose path", "cmd": "cd \"$PROJECT_DIR\" && grep -iE 'review_pending' plugin/skills/heartbeat/SKILL.md | grep -q 'refute-prompt'" }
+      ]
+    },
+    "GATE_RP": {
+      "desc": "A panel verdict policy runs N refuters and aggregates (majority/any/all) with fail-closed, identically in both runtimes; the single-verdict path is unchanged — proven with stub verdicts and teeth.",
+      "review": { "prompt": "Refute that RP is done. Does refuter-panel.sh prove the aggregation (majority/any/all) with deterministic STUB verdicts and go RED without the panel logic? Is fail-closed preserved (a panelist with no verdict cannot certify a pass)? Is the no-panel path byte-for-byte the pre-RP behavior (no regression)? Is aggregation identical node≡python (parity case)? Are the teeth per-rule load-bearing (majority vs any vs all each distinguished)? End SOUND or UNSOUND." },
+      "criteria": [
+        { "id": "rpa", "desc": "the panel proof passes (aggregation + fail-closed, both runtimes)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-panel.sh\" 2>&1 | grep -q 'REFUTER-PANEL-OK'" },
+        { "id": "rpb", "desc": "teeth: majority/any/all each individually load-bearing", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-panel.sh\" --selftest 2>&1 | grep -q 'SELFTEST-OK'" },
+        { "id": "rpc", "desc": "wired into the suite + enumerated in dev-tests", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'refuter-panel.sh' tests/run-tests.sh && grep -q 'refuter-panel' docs/dev-tests.md" }
+      ]
+    },
+    "GATE_RH": {
+      "desc": "The how-to teaches authoring AND sharing a refuter honestly (claims map to the RS/RL/RC/RP proofs), passes prose-integrity, ships resolvable domain starter profiles, and closes the roadmap item — index derived-consistent.",
+      "review": { "prompt": "Refute that RH is done. Does the guide overclaim beyond the proofs (e.g. that a profile GUARANTEES better refutation rather than teaches DRIVING the lens)? Does it explain SHARING (author a JSON, PR it to plugin/templates/refuters/) and the opt-in-default vs untouched-backward-compat distinction? Do all links resolve and commands exist (prose-check)? Do the shipped domain starters actually resolve? Is the howto-list row updated from 'Not available yet', and does index-coverage stay green? End SOUND or UNSOUND." },
+      "criteria": [
+        { "id": "rha", "desc": "the guide passes prose-integrity", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/write-a-refuter-profile.md\" 2>&1 | grep -q 'ALL-PROSE-OK'" },
+        { "id": "rhb", "desc": "the guide is listed in the how-to index (roadmap item closed)", "cmd": "cd \"$PROJECT_DIR\" && grep -Fq '(write-a-refuter-profile.md)' docs/howto/howto-list.md" },
+        { "id": "rhc", "desc": "the how-to index + dev-tests table stay derived-consistent", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/index-coverage.sh\" 2>&1 | grep -q 'INDEX-COVERAGE-OK'" }
+      ]
+    }
+  }
+}

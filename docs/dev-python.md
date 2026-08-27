@@ -41,6 +41,7 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 | `mcp_server.py` | `serve(hbdir)`, `TOOLS` | `hb mcp-serve` — minimal stdlib-only MCP server over stdio; see below |
 | `bench.py` | `score(hbdir)`, `run(source, specs)`, `reward_records(events, dag)`, `rewards(hbdir)`, `regressions(cards, baseline)`, `render`, `build` | `hb bench` (+`--baseline` regression verdict), `hb reward` — score N backends, extract the verifiable-reward stream, flag model-regression; all pure over the event log |
 | `review_policy.py` | `accept_review(hbdir, gate, verdict, artifact=None, note=None)` → `(rc, out, err)` | the single source of the review-acceptance rules (substantive artifact, phase citation, distinct actor, commit+tag on pass); `cli.py`, `executor.py`, and `mcp_server.py` all call it directly — no re-entering `cli.main` and scraping stdout |
+| `refuter_profiles.py` | `resolve(hbdir, name=None)` → `{persona, questions[], model, provider, verdict}`, `DEFAULT_PERSONA` | resolve a refuter-profile NAME to a normalized dict — a parity surface with `plugin/templates/refuter_profiles.js` (node ≡ python; T145). See "Refuter profiles" below |
 | `cli.py` | `main(argv=None)` → argparse dispatch | the `hb` entry |
 
 State mutation path (`mutate`): `with_wlock` (`.wlock`) → `append_event` → `reproject` → atomic write. The lock guards exactly this state.json read-modify-write; append-only informational events (`wake`, `lease_expired`, …) are written lock-free by design (atomic O_APPEND + reproject is a full re-fold — see [parity-notes.md](../planning/parity-notes.md) "Write-lock scope"). Constants read from env at import: `LOCK_STALE_S`, `HEARTBEAT_STALE_S`, `STUCK_TICKS`, `HB_MAX_CONCURRENCY`, `HB_ROT_CHECK`, `GATE_TIMEOUT_S`.
@@ -78,6 +79,26 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 `run(hbdir)` loop mirrors the plugin: tick → route reason. `next_task` → `hb start` → `dispatch(execute)` (lease heartbeat pumped by a `_Pump` thread) → `done`/`fail` (+attempt cap). `gate_pending` → strict check → `gate.run_gate`. `review_pending` → `dispatch(refute)` → `review_policy.accept_review` (the shared policy — a degraded refute routes to `review_error`, never a fail-open pass). Escalate-only on any human-needed reason (`HB-EXEC STOP: <reason>`). Parallel (`concurrency > 1`) uses `ThreadPoolExecutor`, one git worktree per task (`.hb/wt/<id>`), serialized merge-back, in-place fallback without git. `HB_EXEC_MAX_ITERS` bounds the loop (0 = unbounded).
 
 **`dispatch(cfg, mode, payload, hbdir, task_id, cwd=None)`**: if `cfg.cmd` set → subprocess wire protocol (`bash -c "<cmd> <mode>"`, payload on stdin, JSON on stdout); else in-process `backends.get(cfg.backend).execute|refute(payload)` with `payload["cwd"]` set.
+
+## Refuter profiles
+
+`refuter_profiles.resolve(hbdir, name=None)` turns a profile NAME into a normalized bundle
+`{persona, questions[], model, provider, verdict}` — a named adversarial-review persona a gate or
+project selects instead of re-writing free-text prompts. Pure resolution; composition of the actual
+refute prompt from a resolved profile lives at the dispatch site.
+
+- **Schema** — a profile file `.hb/refuters/<name>.json` (or an `executor.json` `{"refuters": {…}}`
+  inline entry) with any of: `persona` (str), `questions` (str[], a domain falsification lens folded
+  *additively* into the gate's `review_questions`), `model`/`provider` (route through the cross-model
+  `refute_*` path), `verdict` (`{panel:N, refute_if:"majority"|"any"|"all"}`). Missing fields
+  normalize to `""`/`[]`/`null` so every profile — and both runtimes — return the same keys.
+- **Built-in default** — a `default` profile (generic-skeptic `DEFAULT_PERSONA`, no extra questions)
+  is *always* resolvable, so refutation can never fail-open for want of a profile. It is **opt-in**
+  (name it, or `HB_REFUTER=default`); the no-profile automated path is byte-unchanged.
+- **Precedence** — which name: explicit `name` (a gate's `review.profile`) > `HB_REFUTER` env >
+  `default`. Where a name resolves: project files (`search_dirs`, project shadows shipped) >
+  `executor.json` inline > built-in `default`. An unknown **explicit** name raises — never a silent
+  no-review. Node twin + parity: `plugin/templates/refuter_profiles.js`, T145.
 
 ## Backends
 

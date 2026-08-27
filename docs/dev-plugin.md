@@ -34,6 +34,7 @@ Every project owns copies of the templates under `.hb/`. `HB_DIR` = the `.hb/` d
 | `hb-report.js` | Progress report (`--json`) | — |
 | `hb-viz.js` | Standalone `dag-view.html` | — |
 | `hb-exec.js` | Executor driver (pluggable Stage B) | `run, config, assembleContext, nonBehavioral, strictBlock` |
+| `refuter_profiles.js` | Resolve a refuter-profile NAME → normalized dict | `resolve, DEFAULT_PERSONA, searchDirs, normalize` |
 | `executors/*` | Backend adapters (wire protocol) | — |
 | `dag.json`, `state.json` | Default templates seeded into `.hb/` | — |
 
@@ -176,6 +177,8 @@ Pluggable Stage B. `run` drives the same loop as a manual session but dispatches
 | `refuteBackend` / `refuteCmd` / `refuteModel` / `refuteProvider` | `HB_REFUTE_BACKEND` / `HB_REFUTE_CMD` / `HB_REFUTE_MODEL` / `HB_REFUTE_PROVIDER` | fall back to the doer's |
 
 Cross-model refuter: the `review_pending` refute is dispatched on `refuteCmd` with `HB_REFUTE_MODEL`/`PROVIDER` merged into the spawn env, so a distinct model refutes; each setting falls back to the doer's (backward compatible). See [cross-model-verification.md](../docs/howto/cross-model-verification.md).
+
+**Refuter profiles** (`refuter_profiles.js`, python twin `refuter_profiles.py`, T145): `resolve(hbdir, name)` turns a profile NAME into a normalized `{persona, questions[], model, provider, verdict}` bundle from `.hb/refuters/<name>.json` (or an `executor.json` `refuters` inline entry). A built-in `default` (generic-skeptic `DEFAULT_PERSONA`) is always resolvable and **opt-in** — the no-profile path is byte-unchanged. Precedence: explicit `name` (a gate's `review.profile`) > `HB_REFUTER` env > `default`; and project files shadow shipped, shadow the built-in. An unknown **explicit** name throws (never a silent no-review). Composition of the refute prompt from a resolved profile lives at the dispatch site.
 
 Loop: run `tick.sh` → route `data.reason`. `next_task` → `hb start` → dispatch execute (lease heartbeat pumped) → `hb done`/`hb fail` (+attempt cap → escalate). `gate_pending` → strict check (`strictBlock`: non-behavioral or lint-warning → escalate) → `gate.sh`. `review_pending` → dispatch refute → `hb review pass|fail`. `all_done` → report + stop. Any human-needed reason → escalate (`HB-EXEC STOP: <reason>`); escalate-only, never auto-fixes a blocked gate.
 
