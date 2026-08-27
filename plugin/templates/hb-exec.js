@@ -351,10 +351,32 @@ async function run() {
         if (rModel) refuterId += ` model=${rModel}`;
         if (c.refuteCmd !== c.cmd || rModel)
           process.stdout.write(`  ↳ refuting ${gate} with a distinct refuter (${refuterId})\n`);
-        const r = await dispatch(c.refuteCmd, 'refute',
-          { mode: 'refute', gate, prompt: refutePrompt,
-            project_dir: PROJECT_DIR, context: sh(`git -C "${PROJECT_DIR}" log --oneline -8`).trim() },
-          null, 0, undefined, Object.keys(refExtra).length ? refExtra : undefined);
+        const refExtraArg = Object.keys(refExtra).length ? refExtra : undefined;
+        const payload = { mode: 'refute', gate, prompt: refutePrompt,
+          project_dir: PROJECT_DIR, context: sh(`git -C "${PROJECT_DIR}" log --oneline -8`).trim() };
+        const verdictCfg = (prof && prof.verdict) || {};
+        const panelN = parseInt(verdictCfg.panel || 1, 10) || 1;
+        let r;
+        if (panelN > 1) {
+          // Perspective-diverse panel: run N refuters, aggregate by refute_if. Fail CLOSED if any
+          // panelist yields no boolean verdict — an inconclusive panelist can't certify a pass.
+          const rule = verdictCfg.refute_if || 'majority';
+          const verdicts = [], findings = [];
+          for (let i = 0; i < panelN; i++) {
+            const ri = await dispatch(c.refuteCmd, 'refute', payload, null, 0, undefined, refExtraArg);
+            if (!ri.json || typeof ri.json.refuted !== 'boolean') {
+              escalate('review_error', `${gate}: panelist ${i + 1}/${panelN} returned no verdict (fail-closed)`); return 1;
+            }
+            verdicts.push(ri.json.refuted);
+            // Only a panelist that produced ACTUAL text contributes a labelled finding — the
+            // `[panelist …]` prefix must never let boilerplate satisfy the pass substance floor.
+            const fi = (ri.json.findings || '').trim();
+            if (fi) findings.push(`[panelist ${i + 1}/${panelN}] ${fi}`);
+          }
+          r = { json: { refuted: rprof.aggregateVerdict(verdicts, rule), findings: findings.join('\n\n') } };
+        } else {
+          r = await dispatch(c.refuteCmd, 'refute', payload, null, 0, undefined, refExtraArg);
+        }
         if (!r.json || typeof r.json.refuted !== 'boolean') {
           escalate('review_error', `${gate}: backend returned no verdict`); return 1;
         }

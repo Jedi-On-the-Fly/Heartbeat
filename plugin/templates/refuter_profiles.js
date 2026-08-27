@@ -73,6 +73,15 @@ function resolve(hbdir, name) {
 // (byte-unchanged for existing projects). Otherwise: persona + BASE review_questions + the profile's
 // EXTRA questions (APPENDED, never replacing the base) + review.prompt. Unknown explicit profile
 // throws (via resolve) — the caller must fail closed.
+// Aggregate a panel of boolean refute verdicts (python twin: aggregate_verdict). majority ⇒ refuted
+// iff >N/2; any ⇒ iff ≥1; all ⇒ iff every panelist refuted.
+function aggregateVerdict(verdicts, rule) {
+  const t = verdicts.filter(Boolean).length, n = verdicts.length;
+  if (rule === "any") return t >= 1;
+  if (rule === "all") return n > 0 && t === n;
+  return 2 * t > n;
+}
+
 // The profile a gate's review selects, or null when NONE is (no review.profile and no HB_REFUTER) —
 // the backward-compat signal. Throws (via resolve) on an unknown explicit name.
 function gateProfile(hbdir, review) {
@@ -97,4 +106,4 @@ function composePrompt(hbdir, dag, gate) {
   return parts.join("\n\n");
 }
 
-module.exports = { resolve, composePrompt, gateProfile, DEFAULT_PERSONA, searchDirs, normalize };
+module.exports = { resolve, composePrompt, gateProfile, aggregateVerdict, DEFAULT_PERSONA, searchDirs, normalize };

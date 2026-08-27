@@ -68,6 +68,18 @@ def _load_from_executor(hbdir, name):
     return None
 
 
+def aggregate_verdict(verdicts, rule):
+    """Aggregate a panel of boolean refute verdicts (node twin: aggregateVerdict). majority ⇒ refuted
+    iff >N/2; any ⇒ iff ≥1; all ⇒ iff every panelist refuted."""
+    t = sum(1 for v in verdicts if v)
+    n = len(verdicts)
+    if rule == "any":
+        return t >= 1
+    if rule == "all":
+        return n > 0 and t == n
+    return 2 * t > n
+
+
 def gate_profile(hbdir, review):
     """The profile a gate's review selects, or None when NONE is selected (no `review.profile` and no
     HB_REFUTER) — the backward-compat signal. Raises (via resolve) on an unknown explicit name."""

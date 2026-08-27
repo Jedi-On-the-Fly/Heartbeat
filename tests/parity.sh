@@ -144,5 +144,13 @@ compose_case(){
 }
 compose_case
 
+echo "── panel aggregation parity ──"
+# aggregateVerdict must agree node ≡ python across rules and verdict mixes
+NODE_AGG='const {aggregateVerdict}=require(process.argv[1]);const cases=[["majority",[true,false,false]],["majority",[true,true,false]],["any",[false,false,true]],["any",[false,false,false]],["all",[true,true,true]],["all",[true,true,false]]];console.log(cases.map(([r,v])=>r+":"+aggregateVerdict(v,r)).join(","))'
+PY_AGG='import sys;from heartbeat.refuter_profiles import aggregate_verdict as a;cs=[("majority",[True,False,False]),("majority",[True,True,False]),("any",[False,False,True]),("any",[False,False,False]),("all",[True,True,True]),("all",[True,True,False])];print(",".join(r+":"+("true" if a(v,r) else "false") for r,v in cs))'
+cmp "panel-aggregate" \
+  "$(node -e "$NODE_AGG" "$ROOT/plugin/templates/refuter_profiles.js")" \
+  "$(eval "PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c '$PY_AGG'")"
+
 echo ""
 [ "$FAIL" -eq 0 ] && { echo "✅ PARITY OK — node ≡ python"; exit 0; } || { echo "❌ PARITY DIVERGENCE"; exit 1; }

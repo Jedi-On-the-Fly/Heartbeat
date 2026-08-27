@@ -1589,6 +1589,14 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/refuter-compose.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T147 skipped)"; fi
 
+grp "T148 — refuter profiles: perspective-diverse panel verdict — a profile's verdict {panel:N, refute_if} runs N refuters and aggregates (majority/any/all), fail-closed, node ≡ python"
+if command -v python3 >/dev/null 2>&1; then
+  check "T148.1 panel aggregation runs N refuters and decides by majority/any/all, the no-panel single path is unchanged, a non-bool panelist fails closed; identical in both runtimes (refuter-panel.sh → REFUTER-PANEL-OK)" \
+    'bash "'"$GEX"'/refuter-panel.sh" 2>&1 | grep -q "REFUTER-PANEL-OK"'
+  check "T148.2 the check has teeth: majority/any/all each produce a distinct outcome on a crafted verdict set, and a non-bool verdict is an error (refuter-panel.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/refuter-panel.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T148 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

@@ -335,10 +335,29 @@ def _run(hbdir):
                 refuter_id += f" model={r_model}"
             if (cfg["refute_backend"], cfg["refute_cmd"], r_model) != (cfg["backend"], cfg["cmd"], None):
                 print(f"  ↳ refuting {g} with a distinct refuter ({refuter_id})")
-            r = dispatch(refute_cfg, "refute", {"mode": "refute", "gate": g,
-                                                "prompt": refute_prompt,
-                                                "context": assemble_context(hbdir, {"id": "?", "phase": data["next_task"].get("phase")})},
-                         hbdir, None, model=r_model, provider=r_provider)
+            _payload = {"mode": "refute", "gate": g, "prompt": refute_prompt,
+                        "context": assemble_context(hbdir, {"id": "?", "phase": data["next_task"].get("phase")})}
+            verdict_cfg = (prof.get("verdict") if prof else None) or {}
+            panel_n = int(verdict_cfg.get("panel") or 1)
+            if panel_n > 1:
+                # Perspective-diverse panel: run N refuters, aggregate by refute_if. Fail CLOSED if any
+                # panelist yields no boolean verdict — an inconclusive panelist can't certify a pass.
+                rule = verdict_cfg.get("refute_if") or "majority"
+                verdicts, findings = [], []
+                for i in range(panel_n):
+                    ri = dispatch(refute_cfg, "refute", _payload, hbdir, None, model=r_model, provider=r_provider)
+                    if not isinstance(ri.get("refuted"), bool):
+                        print(f"HB-EXEC STOP: review_error — {g}: panelist {i + 1}/{panel_n} returned no verdict (fail-closed)")
+                        return 1
+                    verdicts.append(ri["refuted"])
+                    # Only a panelist that produced ACTUAL text contributes a labelled finding — the
+                    # `[panelist …]` prefix must never let boilerplate satisfy the pass substance floor.
+                    fi = (ri.get("findings") or "").strip()
+                    if fi:
+                        findings.append(f"[panelist {i + 1}/{panel_n}] {fi}")
+                r = {"refuted": rp.aggregate_verdict(verdicts, rule), "findings": "\n\n".join(findings)}
+            else:
+                r = dispatch(refute_cfg, "refute", _payload, hbdir, None, model=r_model, provider=r_provider)
             if not isinstance(r.get("refuted"), bool):
                 # A degraded/unavailable refuter cannot certify a pass — never fail open.
                 print(f"HB-EXEC STOP: review_error — {g}: refuter could not run ({r.get('error') or 'no verdict'})")
