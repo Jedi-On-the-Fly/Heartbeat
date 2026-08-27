@@ -50,6 +50,7 @@ def main(argv=None):
     p = sub.add_parser("evidence"); p.add_argument("gate"); _add_dir(p)
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
     p = sub.add_parser("refuters"); _add_dir(p)
+    p = sub.add_parser("refute-prompt"); p.add_argument("gate"); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
     p = sub.add_parser("exec"); p.add_argument("action", nargs="?", default="run"); p.add_argument("--parallel", type=int, default=0); _add_dir(p)
     p = sub.add_parser("mcp-serve"); p.add_argument("--http", action="store_true"); p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=0); p.add_argument("--allow-remote", action="store_true"); _add_dir(p)
@@ -199,6 +200,13 @@ def main(argv=None):
         names = sorted(f[:-5] for f in os.listdir(dref) if f.endswith(".json")) if os.path.isdir(dref) else []
         for n in names:
             print(n)
+    elif args.cmd == "refute-prompt":
+        from . import refuter_profiles as rp
+        try:
+            sys.stdout.write(rp.compose_prompt(str(hb), st.read_dag(hb), args.gate) + "\n")
+        except ValueError as e:
+            sys.stderr.write("refute-prompt: %s\n" % e)
+            return 1
     elif args.cmd == "next":
         s = st.project(st.read_events(hb), st.read_dag(hb))
         print(json.dumps(rv.resolve(s, st.read_dag(hb), hb)))

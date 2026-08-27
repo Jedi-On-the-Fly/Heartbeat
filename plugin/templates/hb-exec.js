@@ -334,16 +334,25 @@ async function run() {
         const gate = data.next_task && data.next_task.gate;
         const dag  = readJson(DAG, { gates: {} });
         const rv   = ((dag.gates || {})[gate] || {}).review || {};
+        // ONE compose (shared with `hb refute-prompt` + the interactive surface). An unknown profile
+        // throws → fail CLOSED (never skip the review). A profile's model/provider route through the
+        // existing cross-model refute path.
+        const rprof = require('./refuter_profiles.js');
+        let refutePrompt, prof;
+        try { refutePrompt = rprof.composePrompt(HB_DIR, dag, gate); prof = rprof.gateProfile(HB_DIR, rv); }
+        catch (e) { escalate('review_error', `${gate}: ${e.message}`); return 1; }
+        const rModel    = (prof && prof.model)    || c.refuteModel;
+        const rProvider = (prof && prof.provider) || c.refuteProvider;
         // Cross-model: dispatch the refute on the distinct refuter config (falls back to the doer).
         const refExtra = {};
-        if (c.refuteModel)    refExtra.HB_EXEC_MODEL = c.refuteModel;
-        if (c.refuteProvider) refExtra.HB_EXEC_PROVIDER = c.refuteProvider;
+        if (rModel)    refExtra.HB_EXEC_MODEL = rModel;
+        if (rProvider) refExtra.HB_EXEC_PROVIDER = rProvider;
         let refuterId = (c.refuteCmd !== c.cmd) ? `cmd:${c.refuteCmd}` : c.refuteBackend;
-        if (c.refuteModel) refuterId += ` model=${c.refuteModel}`;
-        if (c.refuteCmd !== c.cmd || c.refuteModel)
+        if (rModel) refuterId += ` model=${rModel}`;
+        if (c.refuteCmd !== c.cmd || rModel)
           process.stdout.write(`  ↳ refuting ${gate} with a distinct refuter (${refuterId})\n`);
         const r = await dispatch(c.refuteCmd, 'refute',
-          { mode: 'refute', gate, prompt: rv.prompt || `Refute that ${gate} is truly complete.`,
+          { mode: 'refute', gate, prompt: refutePrompt,
             project_dir: PROJECT_DIR, context: sh(`git -C "${PROJECT_DIR}" log --oneline -8`).trim() },
           null, 0, undefined, Object.keys(refExtra).length ? refExtra : undefined);
         if (!r.json || typeof r.json.refuted !== 'boolean') {

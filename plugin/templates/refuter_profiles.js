@@ -68,4 +68,33 @@ function resolve(hbdir, name) {
   );
 }
 
-module.exports = { resolve, DEFAULT_PERSONA, searchDirs, normalize };
+// The ONE refute-prompt compose, shared by every refute surface (python twin: compose_prompt).
+// No profile selected (no gate review.profile AND no HB_REFUTER) ⇒ EXACTLY today's prompt
+// (byte-unchanged for existing projects). Otherwise: persona + BASE review_questions + the profile's
+// EXTRA questions (APPENDED, never replacing the base) + review.prompt. Unknown explicit profile
+// throws (via resolve) — the caller must fail closed.
+// The profile a gate's review selects, or null when NONE is (no review.profile and no HB_REFUTER) —
+// the backward-compat signal. Throws (via resolve) on an unknown explicit name.
+function gateProfile(hbdir, review) {
+  const name = (review || {}).profile;
+  if (!name && !process.env.HB_REFUTER) return null;
+  return resolve(hbdir, name || null);
+}
+
+function composePrompt(hbdir, dag, gate) {
+  const g = (((dag || {}).gates) || {})[gate] || {};
+  const review = g.review || {};
+  const prompt = review.prompt || ("Refute that " + gate + " is truly complete.");
+  const prof = gateProfile(hbdir, review);
+  if (prof === null) return prompt;
+  const { reviewQuestions } = require('./hb-audit.js');
+  const parts = [];
+  if (prof.persona) parts.push(prof.persona);
+  parts.push(reviewQuestions(dag, gate).replace(/\n+$/, ""));
+  const extra = prof.questions || [];
+  if (extra.length) parts.push("Domain checks from the refuter profile:\n" + extra.map(q => "  - " + q).join("\n"));
+  parts.push(prompt);
+  return parts.join("\n\n");
+}
+
+module.exports = { resolve, composePrompt, gateProfile, DEFAULT_PERSONA, searchDirs, normalize };

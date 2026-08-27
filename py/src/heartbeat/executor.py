@@ -314,18 +314,31 @@ def _run(hbdir):
             gatemod.run_gate(hbdir, g)
         elif reason == "review_pending":
             g = data["next_task"].get("gate")
-            rv_block = ((st.read_dag(hbdir).get("gates") or {}).get(g, {}).get("review") or {})
+            from . import refuter_profiles as rp
+            dag = st.read_dag(hbdir)
+            rv_block = ((dag.get("gates") or {}).get(g, {}).get("review") or {})
+            # ONE compose (shared with `hb refute-prompt` + the interactive surface). An unknown
+            # profile raises → fail CLOSED (never skip the review). A profile's model/provider route
+            # through the existing cross-model refute path.
+            try:
+                refute_prompt = rp.compose_prompt(hbdir, dag, g)
+                prof = rp.gate_profile(hbdir, rv_block)
+            except ValueError as e:
+                print(f"HB-EXEC STOP: review_error — {g}: {e}")
+                return 1
+            r_model = (prof.get("model") if prof else None) or cfg["refute_model"]
+            r_provider = (prof.get("provider") if prof else None) or cfg["refute_provider"]
             # Cross-model: dispatch the refute on the distinct refuter config (falls back to the doer).
             refute_cfg = {**cfg, "backend": cfg["refute_backend"], "cmd": cfg["refute_cmd"]}
             refuter_id = ("cmd:" + cfg["refute_cmd"]) if cfg["refute_cmd"] else cfg["refute_backend"]
-            if cfg["refute_model"]:
-                refuter_id += f" model={cfg['refute_model']}"
-            if (cfg["refute_backend"], cfg["refute_cmd"], cfg["refute_model"]) != (cfg["backend"], cfg["cmd"], None):
+            if r_model:
+                refuter_id += f" model={r_model}"
+            if (cfg["refute_backend"], cfg["refute_cmd"], r_model) != (cfg["backend"], cfg["cmd"], None):
                 print(f"  ↳ refuting {g} with a distinct refuter ({refuter_id})")
             r = dispatch(refute_cfg, "refute", {"mode": "refute", "gate": g,
-                                                "prompt": rv_block.get("prompt", f"Refute that {g} is truly complete."),
+                                                "prompt": refute_prompt,
                                                 "context": assemble_context(hbdir, {"id": "?", "phase": data["next_task"].get("phase")})},
-                         hbdir, None, model=cfg["refute_model"], provider=cfg["refute_provider"])
+                         hbdir, None, model=r_model, provider=r_provider)
             if not isinstance(r.get("refuted"), bool):
                 # A degraded/unavailable refuter cannot certify a pass — never fail open.
                 print(f"HB-EXEC STOP: review_error — {g}: refuter could not run ({r.get('error') or 'no verdict'})")

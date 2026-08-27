@@ -99,6 +99,13 @@ refute prompt from a resolved profile lives at the dispatch site.
   `default`. Where a name resolves: project files (`search_dirs`, project shadows shipped) >
   `executor.json` inline > built-in `default`. An unknown **explicit** name raises — never a silent
   no-review. Node twin + parity: `plugin/templates/refuter_profiles.js`, T145.
+- **Compose** — `compose_prompt(hbdir, dag, gate)` (and `hb refute-prompt <gate>`) is the ONE compose
+  every refute surface uses (the executor's `review_pending`, and the interactive skill). No profile
+  selected ⇒ EXACTLY today's prompt (backward-compat); else persona + the gate's BASE
+  `review_questions` + the profile's EXTRA questions (**appended**, never replacing) + `review.prompt`.
+  A profile's `model`/`provider` route through the existing cross-model `refute_*` path
+  (`gate_profile`). Unknown profile ⇒ raises ⇒ the executor fails **closed** (`review_error`). Shipped
+  `hb refuters` lists profiles; both node ≡ python (T146/T147). Shared `tick.py` untouched.
 
 ## Backends
 

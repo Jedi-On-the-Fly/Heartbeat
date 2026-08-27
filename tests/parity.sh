@@ -129,5 +129,20 @@ refuters_case(){
 }
 refuters_case
 
+echo "── refute-prompt compose parity ──"
+compose_case(){
+  local d; d=$(mktemp -d); mkdir -p "$d/.hb/refuters"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-audit.js" \
+     "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" \
+     "$ROOT/plugin/templates/refuter_profiles.js" "$d/.hb/"
+  printf '%s' '{"phases":[{"id":"P0","gate_entry":null,"gate_exit":"GATE_P0","tasks":[{"id":"T1"}]}],"gates":{"GATE_P0":{"desc":"the phase","review":{"prompt":"REVIEW-MARK refute it","profile":"security"},"criteria":[{"id":"c","cmd":"true"}]}}}' > "$d/.hb/dag.json"
+  printf '%s' '{"persona":"SECBOT persona","questions":["Q-EXTRA authz?"],"model":"M1"}' > "$d/.hb/refuters/security.json"
+  cmp "refute-prompt:composed" \
+    "$(node "$d/.hb/hb.js" refute-prompt GATE_P0)" \
+    "$(eval "$PY refute-prompt GATE_P0 --dir \"$d\"")"
+  rm -rf "$d"
+}
+compose_case
+
 echo ""
 [ "$FAIL" -eq 0 ] && { echo "✅ PARITY OK — node ≡ python"; exit 0; } || { echo "❌ PARITY DIVERGENCE"; exit 1; }

@@ -68,6 +68,41 @@ def _load_from_executor(hbdir, name):
     return None
 
 
+def gate_profile(hbdir, review):
+    """The profile a gate's review selects, or None when NONE is selected (no `review.profile` and no
+    HB_REFUTER) — the backward-compat signal. Raises (via resolve) on an unknown explicit name."""
+    name = (review or {}).get("profile")
+    if not name and not os.environ.get("HB_REFUTER"):
+        return None
+    return resolve(hbdir, name)
+
+
+def compose_prompt(hbdir, dag, gate):
+    """The ONE refute-prompt compose, shared by every refute surface (node twin: composePrompt).
+
+    No profile selected ⇒ EXACTLY today's prompt (review.prompt, or the fallback) — existing projects
+    are byte-unchanged. Otherwise: persona + the gate's BASE review_questions + the profile's EXTRA
+    questions (APPENDED, never replacing the base) + review.prompt. An unknown explicit profile raises
+    — the caller must fail closed, never skip the review.
+    """
+    from . import audit
+    g = ((dag or {}).get("gates") or {}).get(gate) or {}
+    review = g.get("review") or {}
+    prompt = review.get("prompt") or ("Refute that %s is truly complete." % gate)
+    prof = gate_profile(hbdir, review)
+    if prof is None:
+        return prompt
+    parts = []
+    if prof.get("persona"):
+        parts.append(prof["persona"])
+    parts.append(audit.review_questions(dag, gate).rstrip("\n"))
+    extra = prof.get("questions") or []
+    if extra:
+        parts.append("Domain checks from the refuter profile:\n" + "\n".join("  - " + q for q in extra))
+    parts.append(prompt)
+    return "\n\n".join(parts)
+
+
 def resolve(hbdir, name=None):
     """Resolve a profile name to a normalized dict.
 

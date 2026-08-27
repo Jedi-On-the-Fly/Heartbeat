@@ -45,7 +45,7 @@ const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0
 const PROTOCOL = {
   next_task:          'hb start <id> → do the work → hb done <id> (or hb fail <id> if you could not complete it). Never hand-edit state.json.',
   gate_pending:       'bash .hb/gate.sh <gate> — a pass advances the phase, UNLESS the gate has a review block (then a review is owed next).',
-  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?) — seed it with `node .hb/hb-audit.js .hb/dag.json --questions <gate>` (a falsification question per criterion). Write its full attempt to a findings file, then: node .hb/hb.js review <gate> fail "<holes>"  OR  node .hb/hb.js review <gate> pass --artifact <findings-file> (a pass MUST cite the refuter\'s written attempt — no rubber-stamps).',
+  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?) — seed it with `node .hb/hb.js refute-prompt <gate>` (the composed refute prompt: the gate\'s profile persona + a falsification question per criterion + the review angle). Write its full attempt to a findings file, then: node .hb/hb.js review <gate> fail "<holes>"  OR  node .hb/hb.js review <gate> pass --artifact <findings-file> (a pass MUST cite the refuter\'s written attempt — no rubber-stamps).',
   gate_blocked:       'Run: node .hb/hb.js diagnose — fix the ROOT cause (do NOT weaken the gate), then re-run bash .hb/gate.sh <gate>.',
   at_capacity:        'Nothing to do — max tasks already in flight. No action.',
   state_corrupted:    'node .hb/hb.js rebuild (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable.',
@@ -557,6 +557,18 @@ switch (cmd) {
     break;
   }
 
+  case 'refute-prompt': {
+    // The ONE compose used by every refute surface — resolve the gate's profile and print the
+    // composed refute prompt (backward-compat when no profile). Unknown profile → error (fail-closed).
+    if (!arg1) die('usage: hb refute-prompt <gate>');
+    const { composePrompt } = require('./refuter_profiles.js');
+    let out;
+    try { out = composePrompt(HB_DIR, readDag(), arg1); }
+    catch (e) { die('refute-prompt: ' + e.message); }
+    process.stdout.write(out + '\n');
+    break;
+  }
+
   case 'import': {
     let legacy;
     try { legacy = JSON.parse(fs.readFileSync(STATE, 'utf8')); }
@@ -576,7 +588,7 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|refuters|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|refuters|refute-prompt|import> [args]');
 }
 }
 

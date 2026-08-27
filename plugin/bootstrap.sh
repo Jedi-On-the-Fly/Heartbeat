@@ -59,7 +59,7 @@ cp "$TEMPLATES_DIR/tick.sh"         "$HB_DIR/tick.sh"
 cp "$TEMPLATES_DIR/gate.sh"         "$HB_DIR/gate.sh"
 cp "$TEMPLATES_DIR/hb-next-task.js" "$HB_DIR/hb-next-task.js"
 cp "$TEMPLATES_DIR/dag.json"        "$HB_DIR/dag.json"
-for f in hb-lint.js hb-report.js hb-viz.js hb.js hb-exec.js hb-audit.js; do
+for f in hb-lint.js hb-report.js hb-viz.js hb.js hb-exec.js hb-audit.js refuter_profiles.js; do
   [ -f "$TEMPLATES_DIR/$f" ] && cp "$TEMPLATES_DIR/$f" "$HB_DIR/$f"
 done
 # v1.8: pluggable Stage-B executor backends (claude-code / agno / crewai).

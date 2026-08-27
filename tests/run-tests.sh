@@ -1581,6 +1581,14 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/refuter-library.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T146 skipped)"; fi
 
+grp "T147 — refuter profiles: ONE `hb refute-prompt` compose serves the refute path — backward-compat byte-identical, named profile appends persona+questions, unknown errors at dispatch, node ≡ python"
+if command -v python3 >/dev/null 2>&1; then
+  check "T147.1 no-profile is byte-identical to today; a named profile injects persona + BASE review_questions (appended, not replaced) + review.prompt; profile.model reaches the dispatch; an unknown profile fails closed; node ≡ python (refuter-compose.sh → REFUTER-COMPOSE-OK)" \
+    'bash "'"$GEX"'/refuter-compose.sh" 2>&1 | grep -q "REFUTER-COMPOSE-OK"'
+  check "T147.2 the check has teeth: backward-compat (no leaked profile material), coverage-narrowing (append not replace), and unknown-errors are each individually load-bearing (refuter-compose.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/refuter-compose.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T147 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

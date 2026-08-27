@@ -15,6 +15,7 @@ is easy to build. Update as we add cross-implementation surface.
 | **Auditor** | `hb-audit.js audit()` | `heartbeat.audit.audit()` | same dag → same findings (rule + severity per gate) |
 | **Refuter profile resolution** | `refuter_profiles.js resolve()` | `heartbeat.refuter_profiles.resolve()` | same name + `.hb/refuters/` → same normalized `{persona, questions[], model, provider, verdict}`; same precedence (explicit > env > project-file > built-in); unknown explicit name errors on both (T145) |
 | **Refuter discovery** | `hb.js refuters` | `heartbeat.cli refuters` | same `.hb/refuters/` → identical sorted profile-name listing (T146 proof + `parity.sh refuters:list`) |
+| **Refute-prompt compose** | `refuter_profiles.js composePrompt` / `hb.js refute-prompt` | `heartbeat.refuter_profiles.compose_prompt` / `heartbeat.cli refute-prompt` | same gate + profile → byte-identical composed prompt (no-profile ⇒ today's prompt; else persona + BASE review_questions + appended profile questions + review.prompt); unknown profile errors on both (T147 + `parity.sh refute-prompt:composed`) |
 
 **Refuter library is a SEED model (deliberate, for parity + portability).** The shipped library lives
 at `plugin/templates/refuters/`; `bootstrap.sh` seeds it into a project's `.hb/refuters/` (no-clobber,
