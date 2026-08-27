@@ -14,6 +14,21 @@ is easy to build. Update as we add cross-implementation surface.
 | Protocol | `hb.js PROTOCOL` | `heartbeat.protocol.PROTOCOL` | same reason KEYS (action text is runtime-specific by design — see below) |
 | **Auditor** | `hb-audit.js audit()` | `heartbeat.audit.audit()` | same dag → same findings (rule + severity per gate) |
 | **Refuter profile resolution** | `refuter_profiles.js resolve()` | `heartbeat.refuter_profiles.resolve()` | same name + `.hb/refuters/` → same normalized `{persona, questions[], model, provider, verdict}`; same precedence (explicit > env > project-file > built-in); unknown explicit name errors on both (T145) |
+| **Refuter discovery** | `hb.js refuters` | `heartbeat.cli refuters` | same `.hb/refuters/` → identical sorted profile-name listing (T146 proof + `parity.sh refuters:list`) |
+
+**Refuter library is a SEED model (deliberate, for parity + portability).** The shipped library lives
+at `plugin/templates/refuters/`; `bootstrap.sh` seeds it into a project's `.hb/refuters/` (no-clobber,
+like `templates/executors/`), and BOTH runtimes resolve/discover from `.hb/refuters/` ONLY — a
+one-tier search path. We deliberately did NOT add a runtime "shipped" tier located relative to each
+runtime's module: that path differs node (plugin tree) vs python (installed package), so it would
+diverge resolution and break the T145 parity oracle (an unknown name could resolve on node but error
+on python). Seeding keeps the shipped set identical for both (they read the same project dir) and
+means a project needs no access to the plugin/package at runtime. "Project shadows shipped" is
+realized by no-clobber seeding (a project's own refuter of the same name is never overwritten).
+Seeding is `bootstrap.sh`'s job; python `hb init` (`scaffold.py`) does NOT seed the library — exactly
+as it does not seed `templates/executors/` — so `hb refuters` on a python-only-init'd project lists
+nothing until bootstrapped. The parity contract is scoped to "same `.hb/refuters/` → same listing",
+which holds; and the built-in `default` still resolves, so refutation never fails open.
 
 Fixtures for the auditor live in `tests/fixtures/audit/` and are consumed by BOTH
 suites (node T42, py test_audit.py).

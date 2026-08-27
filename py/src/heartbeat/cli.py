@@ -49,6 +49,7 @@ def main(argv=None):
     p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail"]); p.add_argument("note", nargs="*"); p.add_argument("--artifact"); _add_dir(p)
     p = sub.add_parser("evidence"); p.add_argument("gate"); _add_dir(p)
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
+    p = sub.add_parser("refuters"); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
     p = sub.add_parser("exec"); p.add_argument("action", nargs="?", default="run"); p.add_argument("--parallel", type=int, default=0); _add_dir(p)
     p = sub.add_parser("mcp-serve"); p.add_argument("--http", action="store_true"); p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=0); p.add_argument("--allow-remote", action="store_true"); _add_dir(p)
@@ -191,6 +192,13 @@ def main(argv=None):
     elif args.cmd == "ready":
         s = st.project(st.read_events(hb), st.read_dag(hb))
         print(json.dumps(rv.ready_tasks(s, st.read_dag(hb), hb, args.n)))
+    elif args.cmd == "refuters":
+        # Discovery: refuter profiles available to this project (.hb/refuters/ — shipped ones seeded
+        # by bootstrap + any project-authored). Sorted names, one per line — node ≡ python.
+        dref = os.path.join(str(hb), "refuters")
+        names = sorted(f[:-5] for f in os.listdir(dref) if f.endswith(".json")) if os.path.isdir(dref) else []
+        for n in names:
+            print(n)
     elif args.cmd == "next":
         s = st.project(st.read_events(hb), st.read_dag(hb))
         print(json.dumps(rv.resolve(s, st.read_dag(hb), hb)))

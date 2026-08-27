@@ -115,5 +115,19 @@ diag_compare(){ # name events
 diag_compare "gate-blocked" '{"event":"initialized"}
 {"event":"gate_failed","gate":"G0"}'
 
+echo "── refuters discovery parity ──"
+refuters_case(){
+  local d; d=$(mktemp -d); mkdir -p "$d/.hb/refuters"
+  cp "$ROOT/plugin/templates/hb.js" "$d/.hb/"
+  printf '%s' '{"persona":"p"}' > "$d/.hb/refuters/default.json"
+  printf '%s' '{"persona":"s"}' > "$d/.hb/refuters/security.json"
+  printf '%s' '{"persona":"z"}' > "$d/.hb/refuters/alpha.json"
+  cmp "refuters:list" \
+    "$(node "$d/.hb/hb.js" refuters | tr '\n' ',')" \
+    "$(eval "$PY refuters --dir \"$d\"" | tr '\n' ',')"
+  rm -rf "$d"
+}
+refuters_case
+
 echo ""
 [ "$FAIL" -eq 0 ] && { echo "✅ PARITY OK — node ≡ python"; exit 0; } || { echo "❌ PARITY DIVERGENCE"; exit 1; }

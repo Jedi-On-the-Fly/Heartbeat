@@ -546,6 +546,17 @@ switch (cmd) {
     break;
   }
 
+  case 'refuters': {
+    // Discovery: the refuter profiles available to this project (.hb/refuters/, shipped ones
+    // seeded by bootstrap + any project-authored). Sorted names, one per line — node ≡ python.
+    const dir = path.join(HB_DIR, 'refuters');
+    let names = [];
+    try { names = fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)); } catch (e) {}
+    names.sort();
+    process.stdout.write(names.map(n => n + '\n').join(''));
+    break;
+  }
+
   case 'import': {
     let legacy;
     try { legacy = JSON.parse(fs.readFileSync(STATE, 'utf8')); }
@@ -565,7 +576,7 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|refuters|import> [args]');
 }
 }
 

@@ -1573,6 +1573,14 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/refuter-profile-resolve.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T145 skipped)"; fi
 
+grp "T146 — refuter profiles: shareable library — shipped refuters seeded by bootstrap (no-clobber shadow), behavioral integrity, `hb refuters` discovery node ≡ python"
+if command -v python3 >/dev/null 2>&1; then
+  check "T146.1 a shipped refuter is seeded into .hb/refuters/ and resolves, a project file shadows a shipped one and survives re-bootstrap, every shipped refuter is valid+resolvable, and hb refuters lists identically node ≡ python (refuter-library.sh → REFUTER-LIBRARY-OK)" \
+    'bash "'"$GEX"'/refuter-library.sh" 2>&1 | grep -q "REFUTER-LIBRARY-OK"'
+  check "T146.2 the check has teeth: seeding, override (no-clobber), discovery-parity, and behavioral integrity are each individually load-bearing (refuter-library.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/refuter-library.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T146 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

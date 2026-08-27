@@ -67,6 +67,16 @@ if [ -d "$TEMPLATES_DIR/executors" ]; then
   mkdir -p "$HB_DIR/executors"
   cp "$TEMPLATES_DIR/executors/"* "$HB_DIR/executors/" 2>/dev/null || true
 fi
+# Refuter profiles: seed the shipped library into the project. NO-CLOBBER — a project's own
+# .hb/refuters/<name>.json shadows a shipped one of the same name and survives re-bootstrap.
+if [ -d "$TEMPLATES_DIR/refuters" ]; then
+  mkdir -p "$HB_DIR/refuters"
+  for _rf in "$TEMPLATES_DIR/refuters/"*.json; do
+    [ -e "$_rf" ] || continue
+    _dest="$HB_DIR/refuters/$(basename "$_rf")"
+    [ -e "$_dest" ] || cp "$_rf" "$_dest"
+  done
+fi
 # Validate the DAG at bootstrap — structural errors show up here, not at tick N.
 node "$HB_DIR/hb-lint.js" "$HB_DIR/dag.json" || echo "!! hb-lint found errors in dag.json — fix them before scheduling the tick"
 
