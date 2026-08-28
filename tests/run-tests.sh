@@ -1597,6 +1597,14 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/refuter-panel.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T148 skipped)"; fi
 
+grp "T149 — refuter profiles: a panel `verdict` is read from the PROFILE only — a gate/review-level verdict is silently inert (both runtimes)"
+if command -v python3 >/dev/null 2>&1; then
+  check "T149.1 verdict{panel:3} on the profile drives 3 refute dispatches; the same verdict on the gate's review block drives 1 (ignored); both runtimes (refuter-verdict-placement.sh → REFUTER-VERDICT-PLACEMENT-OK)" \
+    'bash "'"$GEX"'/refuter-verdict-placement.sh" 2>&1 | grep -q "REFUTER-VERDICT-PLACEMENT-OK"'
+  check "T149.2 the check has teeth: profile-inert (1 dispatch) and gate-honoured (3 dispatches) are each rejected (refuter-verdict-placement.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/refuter-verdict-placement.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T149 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

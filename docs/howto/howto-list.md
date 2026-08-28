@@ -186,7 +186,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | A Completed Phase Became Broken | ✅ [re-verify-completed-gates.md](re-verify-completed-gates.md) — T58 |
 | My Backend Works but State Does Not Advance | ✅ [keep-stage-b-untrusted.md](keep-stage-b-untrusted.md) — T56 |
 | Switching Models Changes Project Behavior | ✅ [swap-workers-without-changing-the-dag.md](swap-workers-without-changing-the-dag.md) — T57 |
-| My Refuter Always / Never Finds Anything | ✅ [tune-refuter-sensitivity.md](tune-refuter-sensitivity.md) — T145–T148 |
+| My Refuter Always / Never Finds Anything | ✅ [tune-refuter-sensitivity.md](tune-refuter-sensitivity.md) — T145–T149 |
 | HeartBeat Is Using More Tokens Than Expected | ⬜ Not available yet |
 | A Gate Command Looks Unsafe | ✅ [review-an-unsafe-gate.md](review-an-unsafe-gate.md) — T77 |
 

@@ -57,7 +57,9 @@ to `.hb/refuters/security.json`:
 ```
 
 That runs 3 refuters and refutes if *any* does. Only a profile's `verdict` is read — a `verdict`
-placed on the gate is silently ignored, so keep it in the profile JSON.
+placed on the gate is silently ignored, so keep it in the profile JSON. That placement rule is pinned
+by a proof ([gate-examples/refuter-verdict-placement.sh](gate-examples/refuter-verdict-placement.sh),
+T149): profile-placed drives N refuters, gate-placed drives one.
 
 **3. Refute with a distinct (stronger) model.** A weak refuter model rubber-stamps; route the refutation
 to a different model than the doer: [cross-model-verification.md](cross-model-verification.md).
