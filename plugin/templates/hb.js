@@ -550,10 +550,15 @@ switch (cmd) {
     // Discovery: the refuter profiles available to this project (.hb/refuters/, shipped ones
     // seeded by bootstrap + any project-authored). Sorted names, one per line — node ≡ python.
     const dir = path.join(HB_DIR, 'refuters');
-    let names = [];
-    try { names = fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)); } catch (e) {}
-    names.sort();
-    process.stdout.write(names.map(n => n + '\n').join(''));
+    const names = new Set();
+    try {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.isFile() && e.name.endsWith('.json')) names.add(e.name.slice(0, -5));
+        else if (e.isFile() && e.name.endsWith('.md')) names.add(e.name.slice(0, -3));
+        else if (e.isDirectory() && fs.existsSync(path.join(dir, e.name, 'SKILL.md'))) names.add(e.name);
+      }
+    } catch (e) {}
+    process.stdout.write([...names].sort().map(n => n + '\n').join(''));
     break;
   }
 

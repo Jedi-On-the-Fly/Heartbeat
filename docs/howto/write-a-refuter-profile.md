@@ -73,6 +73,39 @@ Precedence for *which* name wins: an explicit gate `review.profile` > the `HB_RE
 the built-in `default`. Precedence for *where* a name resolves: your project files shadow shipped
 ones, which shadow the built-in.
 
+## Author it as an agent skill (Markdown, not JSON)
+
+A refuter is really a specialized persona-skill, so you can author it in the same format an agent
+skill uses — prose, not JSON. Two shapes, both resolving to the exact same profile:
+
+- **Canonical folder** `.hb/refuters/<name>/SKILL.md` — a real, portable agent skill (packageable and
+  shareable through the skill ecosystem, and loadable by other agents), which can carry bundled
+  `references/` files alongside it.
+- **Lite** `.hb/refuters/<name>.md` — a single file for quick use.
+
+Both use flat frontmatter plus a persona body and a `## Checklist` (the bullets become the questions):
+
+```markdown
+---
+name: security
+description: Refute a phase for security failures — auth bypass, injection, secret leakage.
+model: claude-opus-4-8
+panel: 3
+refute_if: majority
+---
+You are a SECURITY refuter for a HeartBeat phase gate. Hunt auth bypass, injection, and missing authz
+on any new path. Cite the file and line. End with REFUTED or CLEAR.
+
+## Checklist
+- Does any new endpoint skip the authz check its siblings enforce?
+- Is any secret or token logged, echoed, or committed?
+```
+
+The frontmatter is parsed by a small shared line-parser (deliberately not full YAML) so it resolves
+identically in the node and python runtimes; keep values to simple one-line scalars. The shipped
+`research-source` starter is authored this way — read `plugin/templates/refuters/research-source/SKILL.md`
+as a worked example. `node .hb/hb.js refuters` lists folder, lite, and JSON refuters together.
+
 ## What the composed prompt is (and the one caution)
 
 Inspect exactly what a gate's refuter will be handed:

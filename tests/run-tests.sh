@@ -1605,6 +1605,16 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/refuter-verdict-placement.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T149 skipped)"; fi
 
+grp "T150 — refuter profiles: skill-format authoring — a folder <name>/SKILL.md and a lite <name>.md resolve to the same dict as .json (shared no-YAML parser, node ≡ python), listed + collision-safe"
+if command -v python3 >/dev/null 2>&1; then
+  check "T150.1 a canonical <name>/SKILL.md folder AND a lite <name>.md resolve to the same normalized dict as .json (non-trivial fixture), both are listed by hb refuters (a references/ subdir is not), per-trap parity holds, a cross-format collision errors (refuter-skill-format.sh → REFUTER-SKILL-OK)" \
+    'bash "'"$GEX"'/refuter-skill-format.sh" 2>&1 | grep -q "REFUTER-SKILL-OK"'
+  check "T150.2 the check has teeth: each flat-parser divergence trap is caught by the parity check, and the folder-listing / non-SKILL.md-subdir checks are load-bearing (refuter-skill-format.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/refuter-skill-format.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+  check "T150.3 seeding is collision-safe: the shipped library defines no name in >1 format, a bootstrapped project resolves every seeded refuter incl. a folder one, re-bootstrap manufactures no collision (refuter-skill-format.sh --seeding → SEEDING-SAFE-OK)" \
+    'bash "'"$GEX"'/refuter-skill-format.sh" --seeding 2>&1 | grep -q "SEEDING-SAFE-OK"'
+else echo "  (python3 absent — T150 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

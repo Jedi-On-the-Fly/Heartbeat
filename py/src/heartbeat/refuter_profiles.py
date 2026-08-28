@@ -46,12 +46,87 @@ def search_dirs(hbdir):
     return [os.path.join(hbdir, "refuters")]
 
 
+def parse_skill(text):
+    """Parse an agent-SKILL-format refuter (frontmatter + persona body + `## Checklist`) into a raw
+    profile dict. Node twin: parseSkill. A SHARED minimal line-parser — NOT YAML — so node ≡ python:
+    split frontmatter on the FIRST `:`, trim key (case-insensitive) + value, strip one surrounding
+    quote layer, ignore blank lines, last-duplicate-key wins, tolerate BOM/CRLF; persona = body before
+    a case-insensitive `## Checklist`; questions = the `-`/`*` bullets after it; panel → verdict."""
+    lines = text.split("\n")
+    if lines and lines[0][:1] == "﻿":
+        lines[0] = lines[0][1:]
+    lines = [l[:-1] if l.endswith("\r") else l for l in lines]
+    fm = {}
+    body_start = 0
+    if lines and lines[0].strip() == "---":
+        close = None
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                close = i
+                break
+        if close is not None:
+            for l in lines[1:close]:
+                if l.strip() == "" or ":" not in l:
+                    continue
+                k, _, v = l.partition(":")
+                k = k.strip().lower()
+                v = v.strip()
+                if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+                    v = v[1:-1]
+                fm[k] = v
+            body_start = close + 1
+    body = "\n".join(lines[body_start:])
+    bl = body.split("\n")
+    idx = None
+    for i, l in enumerate(bl):
+        if l.strip().lower() == "## checklist":
+            idx = i
+            break
+    if idx is None:
+        persona, questions = body.strip(), []
+    else:
+        persona = "\n".join(bl[:idx]).strip()
+        questions = []
+        for l in bl[idx + 1:]:
+            ls = l.strip()
+            if ls.startswith("## "):
+                break
+            if ls[:1] in ("-", "*"):
+                questions.append(ls[1:].strip())
+    verdict = None
+    if "panel" in fm:
+        pv = fm["panel"]
+        digits = pv[1:] if pv.startswith("-") else pv
+        if not digits or not all("0" <= c <= "9" for c in digits):
+            raise ValueError("invalid panel value: %r — must be an integer" % pv)
+        iv = int(pv)
+        if abs(iv) > 9007199254740991:  # MAX_SAFE_INTEGER — so node parseInt == python int (parity)
+            raise ValueError("panel value out of range: %r" % pv)
+        verdict = {"panel": iv, "refute_if": fm.get("refute_if", "majority")}
+    return {"persona": persona, "questions": questions, "model": fm.get("model"),
+            "provider": fm.get("provider"), "verdict": verdict}
+
+
 def _load_from_dirs(hbdir, name):
     for d in search_dirs(hbdir):
-        p = os.path.join(d, name + ".json")
-        if os.path.isfile(p):
-            with open(p, encoding="utf-8") as fh:
-                return json.load(fh)
+        cands = []
+        jp = os.path.join(d, name + ".json")
+        mp = os.path.join(d, name + ".md")
+        sp = os.path.join(d, name, "SKILL.md")
+        if os.path.isfile(jp):
+            cands.append(("json", jp))
+        if os.path.isfile(mp):
+            cands.append(("md", mp))
+        if os.path.isfile(sp):
+            cands.append(("skill", sp))
+        if len(cands) > 1:
+            raise ValueError("refuter %r is defined in multiple formats in %s (%s) — remove all but one"
+                             % (name, d, ", ".join(c[0] for c in cands)))
+        if cands:
+            kind, path = cands[0]
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            return json.loads(text) if kind == "json" else parse_skill(text)
     return None
 
 
@@ -123,6 +198,8 @@ def resolve(hbdir, name=None):
     built-in `default`. An unknown EXPLICIT name errors — it never silently degrades to no-review.
     """
     eff = name or os.environ.get("HB_REFUTER") or "default"
+    if "/" in eff or "\\" in eff or os.sep in eff:
+        raise ValueError("invalid refuter profile name %r — must not contain a path separator" % eff)
     raw = _load_from_dirs(hbdir, eff)
     if raw is None:
         raw = _load_from_executor(hbdir, eff)

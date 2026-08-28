@@ -197,8 +197,17 @@ def main(argv=None):
         # Discovery: refuter profiles available to this project (.hb/refuters/ — shipped ones seeded
         # by bootstrap + any project-authored). Sorted names, one per line — node ≡ python.
         dref = os.path.join(str(hb), "refuters")
-        names = sorted(f[:-5] for f in os.listdir(dref) if f.endswith(".json")) if os.path.isdir(dref) else []
-        for n in names:
+        names = set()
+        if os.path.isdir(dref):
+            for e in os.listdir(dref):
+                full = os.path.join(dref, e)
+                if os.path.isfile(full) and e.endswith(".json"):
+                    names.add(e[:-5])
+                elif os.path.isfile(full) and e.endswith(".md"):
+                    names.add(e[:-3])
+                elif os.path.isdir(full) and os.path.isfile(os.path.join(full, "SKILL.md")):
+                    names.add(e)
+        for n in sorted(names):
             print(n)
     elif args.cmd == "refute-prompt":
         from . import refuter_profiles as rp

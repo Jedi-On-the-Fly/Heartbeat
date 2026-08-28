@@ -36,10 +36,76 @@ function searchDirs(hbdir) {
   return [path.join(hbdir, "refuters")];
 }
 
+// Parse an agent-SKILL-format refuter (frontmatter + persona body + `## Checklist`) into a raw profile
+// dict. Python twin: parse_skill. SHARED minimal line-parser (NOT YAML) so node ≡ python.
+function parseSkill(text) {
+  let lines = text.split("\n");
+  if (lines.length && lines[0][0] === "﻿") lines[0] = lines[0].slice(1);
+  lines = lines.map(l => l.endsWith("\r") ? l.slice(0, -1) : l);
+  const fm = {};
+  let bodyStart = 0;
+  if (lines.length && lines[0].trim() === "---") {
+    let close = null;
+    for (let i = 1; i < lines.length; i++) if (lines[i].trim() === "---") { close = i; break; }
+    if (close !== null) {
+      for (const l of lines.slice(1, close)) {
+        if (l.trim() === "" || !l.includes(":")) continue;
+        const ci = l.indexOf(":");
+        const k = l.slice(0, ci).trim().toLowerCase();
+        let v = l.slice(ci + 1).trim();
+        if (v.length >= 2 && v[0] === v[v.length - 1] && (v[0] === '"' || v[0] === "'")) v = v.slice(1, -1);
+        fm[k] = v;
+      }
+      bodyStart = close + 1;
+    }
+  }
+  const bl = lines.slice(bodyStart);
+  let idx = null;
+  for (let i = 0; i < bl.length; i++) if (bl[i].trim().toLowerCase() === "## checklist") { idx = i; break; }
+  let persona, questions = [];
+  if (idx === null) { persona = bl.join("\n").trim(); }
+  else {
+    persona = bl.slice(0, idx).join("\n").trim();
+    for (const l of bl.slice(idx + 1)) {
+      const ls = l.trim();
+      if (ls.startsWith("## ")) break;
+      if (ls[0] === "-" || ls[0] === "*") questions.push(ls.slice(1).trim());
+    }
+  }
+  let verdict = null;
+  if ("panel" in fm) {
+    const pv = fm.panel;
+    const digits = pv.startsWith("-") ? pv.slice(1) : pv;
+    if (!digits || ![...digits].every(c => c >= "0" && c <= "9")) {
+      throw new Error("invalid panel value: '" + pv + "' — must be an integer");
+    }
+    if (BigInt(pv) > 9007199254740991n || BigInt(pv) < -9007199254740991n) {  // MAX_SAFE_INTEGER — parseInt == python int
+      throw new Error("panel value out of range: '" + pv + "'");
+    }
+    verdict = { panel: parseInt(pv, 10), refute_if: fm.refute_if || "majority" };
+  }
+  return { persona, questions, model: fm.model === undefined ? null : fm.model,
+           provider: fm.provider === undefined ? null : fm.provider, verdict };
+}
+
 function loadFromDirs(hbdir, name) {
   for (const d of searchDirs(hbdir)) {
-    const p = path.join(d, name + ".json");
-    if (fs.existsSync(p) && fs.statSync(p).isFile()) return JSON.parse(fs.readFileSync(p, "utf8"));
+    const cands = [];
+    const jp = path.join(d, name + ".json");
+    const mp = path.join(d, name + ".md");
+    const sp = path.join(d, name, "SKILL.md");
+    if (fs.existsSync(jp) && fs.statSync(jp).isFile()) cands.push(["json", jp]);
+    if (fs.existsSync(mp) && fs.statSync(mp).isFile()) cands.push(["md", mp]);
+    if (fs.existsSync(sp) && fs.statSync(sp).isFile()) cands.push(["skill", sp]);
+    if (cands.length > 1) {
+      throw new Error("refuter '" + name + "' is defined in multiple formats in " + d + " (" +
+        cands.map(c => c[0]).join(", ") + ") — remove all but one");
+    }
+    if (cands.length) {
+      const [kind, p] = cands[0];
+      const text = fs.readFileSync(p, "utf8");
+      return kind === "json" ? JSON.parse(text) : parseSkill(text);
+    }
   }
   return null;
 }
@@ -58,6 +124,9 @@ function loadFromExecutor(hbdir, name) {
 // resolves: project files > executor.json inline > built-in default. Unknown explicit name throws.
 function resolve(hbdir, name) {
   const eff = name || process.env.HB_REFUTER || "default";
+  if (eff.includes("/") || eff.includes("\\")) {
+    throw new Error("invalid refuter profile name '" + eff + "' — must not contain a path separator");
+  }
   let raw = loadFromDirs(hbdir, eff);
   if (raw === null) raw = loadFromExecutor(hbdir, eff);
   if (raw !== null) return normalize(raw);
@@ -106,4 +175,4 @@ function composePrompt(hbdir, dag, gate) {
   return parts.join("\n\n");
 }
 
-module.exports = { resolve, composePrompt, gateProfile, aggregateVerdict, DEFAULT_PERSONA, searchDirs, normalize };
+module.exports = { resolve, composePrompt, gateProfile, aggregateVerdict, parseSkill, DEFAULT_PERSONA, searchDirs, normalize };

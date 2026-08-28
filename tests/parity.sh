@@ -152,5 +152,35 @@ cmp "panel-aggregate" \
   "$(node -e "$NODE_AGG" "$ROOT/plugin/templates/refuter_profiles.js")" \
   "$(eval "PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c '$PY_AGG'")"
 
+echo "── refuter skill-format resolve parity ──"
+skillfmt_case(){
+  local d; d=$(mktemp -d); mkdir -p "$d/.hb/refuters/asfolder"
+  local SK; SK='---
+name: x
+model: M1
+provider: PR1
+panel: 3
+refute_if: majority
+---
+PERSONA body.
+
+## Checklist
+- q-one
+- q-two'
+  printf '%s' "$SK" > "$d/.hb/refuters/aslite.md"
+  printf '%s' "$SK" > "$d/.hb/refuters/asfolder/SKILL.md"
+  local NODE_R PY_R
+  NODE_R='const r=require(process.argv[1]);const canon=(x)=>Array.isArray(x)?"["+x.map(canon).join(",")+"]":(x&&typeof x==="object")?"{"+Object.keys(x).sort().map(k=>JSON.stringify(k)+":"+canon(x[k])).join(",")+"}":JSON.stringify(x===undefined?null:x);console.log(canon(r.resolve(process.argv[2],process.argv[3])))'
+  PY_R='import sys,json;from heartbeat.refuter_profiles import resolve;print(json.dumps(resolve(sys.argv[1],sys.argv[2]),sort_keys=True,separators=(",",":")))'
+  local name
+  for name in aslite asfolder; do
+    cmp "skill-format:$name" \
+      "$(node -e "$NODE_R" "$ROOT/plugin/templates/refuter_profiles.js" "$d/.hb" "$name")" \
+      "$(eval "PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c '$PY_R'" "$d/.hb" "$name")"
+  done
+  rm -rf "$d"
+}
+skillfmt_case
+
 echo ""
 [ "$FAIL" -eq 0 ] && { echo "✅ PARITY OK — node ≡ python"; exit 0; } || { echo "❌ PARITY DIVERGENCE"; exit 1; }

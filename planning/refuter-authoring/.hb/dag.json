@@ -1,0 +1,79 @@
+{
+  "project": "refuter-authoring",
+  "_meta": "Refuter authoring: a prose-native, portable on-ramp ALIGNED WITH the official Anthropic skill-creator format (a refuter IS a specialized agent skill). A refuter may be authored as a canonical agent SKILL — a folder `.hb/refuters/<name>/SKILL.md` (YAML-ish frontmatter with name+description + persona body + a `## Checklist` bullet list = questions), in the same shape a `.skill` package / skill-creator / Codex expects — OR as a lite single file `.hb/refuters/<name>.md` (same body rules, quick use). Both, plus the existing `<name>.json`, resolve to the SAME {persona, questions[], model, provider, verdict} dict, so compose/panel/calibration are UNCHANGED (additive front-doors — the seam). `description` is carried in the FILE (informational for HeartBeat's explicit selection, load-bearing for portable triggering) but is NOT part of the normalized compose dict. (Packaging a refuter into a `.skill` is a property of the folder format, done with the standard skill tooling — not something this plan builds or gates.) Plus `hb refuters new <name> [--from <starter>] [--lite]` to scaffold a canonical SKILL.md folder (or lite .md). Design: planning/refuter-authoring-scope.md. PARITY IS THE HARD RULE: strict flat `key: value` frontmatter (no YAML lib, no nesting) + `## Checklist` bullets, parsed by a SHARED minimal line-parser, node≡python byte-identical (cased like T145). Decisions: same NAME across formats (.json / .md / <name>/SKILL.md) in one dir ERRORS (fail-closed, no silent shadow); bootstrap seeds *.md and <name>/ folders too, collision-safe. Built BEFORE the refuter-bench calibration harness.",
+  "phases": [
+    {
+      "id": "AF",
+      "title": "Skill-format resolver input (folder SKILL.md + lite .md → same dict, node≡python)",
+      "gate_entry": null,
+      "gate_exit": "GATE_AF",
+      "tasks": [
+        {
+          "id": "af1",
+          "title": "Spec-first: author the skill-format proof (md≡json dict, per-trap parity, collision, listing, teeth)",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/refuter-skill-format.sh (prints REFUTER-SKILL-OK). Assert: BOTH a canonical `.hb/refuters/<name>/SKILL.md` (frontmatter name/description/model/provider/panel/refute_if + persona body + `## Checklist` bullets) AND a lite `.hb/refuters/<name>.md` (same body rules) resolve to the SAME normalized {persona, questions[], model, provider, verdict} dict as an equivalent `<name>.json`, node ≡ python byte-identical (canonical dict compare) — use a NON-TRIVIAL fixture: panel:3 → int-coerced non-null verdict, model+provider set, multi-bullet checklist. Assert both a `.md` AND a `<name>/SKILL.md` FOLDER refuter are LISTED by `hb refuters` in both runtimes (a folder has no extension — the list must not silently drop it), and that a `references/`/`assets/` subdir WITHOUT a SKILL.md is NOT listed as a refuter. Assert a same-NAME collision across formats (.json / .md / <name>/SKILL.md) in one dir ERRORS (fail-closed, no silent shadow). --selftest teeth must include: a folder refuter dropped from the listing is caught, and a non-SKILL.md subdir mis-enumerated is caught. --selftest MUST prove parity is pinned against EACH known flat-parser divergence trap with a per-trap cross-runtime assertion (the T145 divnorm discipline): first-`:`-split (value containing `:`), surrounding quotes, trailing whitespace/tabs, CRLF, BOM, blank lines in frontmatter, duplicate keys, key case (`Model:` vs `model:`), value with `#`, missing closing `---`, `## Checklist` casing/spacing, bullet `-` vs `*`, persona trim — each must resolve IDENTICALLY node≡python (or be rejected identically), and each check individually load-bearing. Exercise the SHARED parser DIRECTLY (a pure function call per runtime, like T145's resolver fake) — not via bootstrap/exec — so the dozen×2 mutant matrix stays well under GATE_TIMEOUT_S. Also author a `--seeding` mode (prints SEEDING-SAFE-OK): the shipped plugin/templates/refuters/ has NO name defined in more than one format (.json / .md / <name>/SKILL.md); a freshly bootstrapped project resolves EVERY seeded refuter INCLUDING a folder `<name>/SKILL.md` one (folder seeding is a full tree copy, not just SKILL.md — a bundled reference file survives); and on RE-bootstrap a project's own `<name>/` folder is NOT given a shipped `<name>.json`/`.md` beside it (no-clobber across formats, so no collision is manufactured). RED before af2."
+        },
+        {
+          "id": "af2",
+          "title": "Implement the shared parser + folder/lite front-doors + skill-aware listing + collision-safe seeding",
+          "requires": ["af1"],
+          "description": "Extend resolve() in py/src/heartbeat/refuter_profiles.py and plugin/templates/refuter_profiles.js to also read `<name>/SKILL.md` (canonical folder) AND `<name>.md` (lite) via a SHARED minimal line-parser (NOT a YAML library) with EXPLICIT, documented canonicalization pinned by af1's traps (split on FIRST `:`, trim key+value, strip surrounding quotes, ignore blank lines, normalize CRLF, strip BOM, key case, last-duplicate-key-wins or reject, require closing `---`, case-insensitive `## Checklist`, accept `-`/`*` bullets, trim persona) — identical in both runtimes; body-before-`## Checklist` = persona, bullets = questions, panel→verdict; `description` carried. A dir under refuters/ is a refuter IFF it contains a `SKILL.md` (so bundled `references/`/`assets/` subdirs are NOT mis-enumerated); reject a `<name>` containing a path separator. `description` is carried in the FILE for the portable form but is NOT part of the normalized compose dict (compose ignores it). Update the `hb refuters` LIST command (hb.js + cli.py) to enumerate .json + .md + `<name>/` (a dir with SKILL.md), dedup by name — extension globs must not silently drop folder refuters. A same-NAME collision across formats in one dir raises the SAME error both runtimes. Extend bootstrap.sh to seed shipped `*.md` and `<name>/` folders (recursive tree copy) too, COLLISION-SAFE: never seed a format for a name that already exists in the dest in ANY format. No change to compose/panel/dispatch."
+        },
+        {
+          "id": "af3",
+          "title": "Wire the skill-format proof + parity case + integrity + dev-tests + parity-notes + doc",
+          "requires": ["af2"],
+          "description": "Add a Tnn group to tests/run-tests.sh running refuter-skill-format.sh (marker same-line) + --selftest + --seeding; add its dev-tests.md row. Add a tests/parity.sh case asserting a `<name>/SKILL.md` (and a `<name>.md`) resolve to the identical canonical dict node ≡ python. Extend the library integrity loop (refuter-library.sh / T146) to cover seeded `*.md` and `<name>/SKILL.md` refuters too (not just `*.json`), so a broken shipped skill-format refuter can't ship silently. Record 'refuter skill-format parsing' as a shared surface in planning/parity-notes.md. Document the skill formats (canonical `<name>/SKILL.md` folder — a real, packageable agent skill aligned with Anthropic's skill-creator — and the lite `<name>.md`) current-state in docs/howto/write-a-refuter-profile.md (keep it prose-clean — no // -comment copy traps, no placeholder markers)."
+        }
+      ]
+    },
+    {
+      "id": "QS",
+      "title": "Quick scaffolder (`hb refuters new`) + quick-start docs",
+      "gate_entry": "GATE_AF",
+      "gate_exit": "GATE_QS",
+      "tasks": [
+        {
+          "id": "qs1",
+          "title": "Spec-first: author the scaffolder proof (writes a RESOLVABLE refuter, no-clobber, teeth)",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/refuter-scaffold.sh (prints REFUTER-SCAFFOLD-OK). Assert: `hb refuters new <name> [--from <starter>] [--lite]` writes a CANONICAL `.hb/refuters/<name>/SKILL.md` folder by default (or a lite `<name>.md` with --lite) that immediately RESOLVES to a non-empty persona (behavioral — not test -f) via the AF resolver, and whose frontmatter carries name+description; --from a shipped starter (e.g. security) yields a resolvable refuter carrying that starter's lens; an unknown --from starter errors non-zero; a `<name>` containing a path separator is rejected; it will NOT clobber an existing refuter of ANY format (.json / .md / <name>/SKILL.md); the scaffolded output is byte-identical node ≡ python across the WHOLE created tree (for a folder: every file, not just SKILL.md); and the bare `hb refuters` LIST still works after `new` is added (argparse-positional regression guard), both runtimes. --selftest proves resolvable-output, unknown-starter-errors, no-clobber, byte-parity, and bare-list-still-works each load-bearing. RED before qs2."
+        },
+        {
+          "id": "qs2",
+          "title": "Implement `hb refuters new <name> [--from <starter>]` in python AND node",
+          "requires": ["qs1"],
+          "description": "Extend the `refuters` command (py cli.py + node hb.js, parity) so `refuters new <name>` scaffolds a canonical `<name>/SKILL.md` folder (frontmatter name+description[+model/panel] + persona + `## Checklist`), or a lite `<name>.md` with --lite; --from <starter> seeds from a shipped refuter (default: a generic template); no-clobber across ALL formats; unknown starter errors. The scaffolded bytes are identical node ≡ python. The default template follows the skill-creator writing ethos — imperative, NAME the concrete failure classes and explain WHY they matter, avoid rigid ALL-CAPS MUSTs — and is PROSE-CLEAN and placeholder-free (no TODO/'fill in'/lorem, no // comments) so it can appear verbatim in the doc and survive prose-check. The bare `hb refuters` list behaviour is preserved (an optional positional must not break it)."
+        },
+        {
+          "id": "qs3",
+          "title": "Wire the scaffolder proof + parity case + dev-tests + quick-start doc",
+          "requires": ["qs2"],
+          "description": "Add a Tnn group to tests/run-tests.sh running refuter-scaffold.sh (marker same-line) + --selftest; add its dev-tests.md row. Add a tests/parity.sh case asserting `hb refuters new` produces a BYTE-IDENTICAL scaffolded refuter node ≡ python (and that bare `hb refuters` still lists identically). Add a short 'quick start: scaffold a refuter as a skill' section to docs/howto/write-a-refuter-profile.md — cover the canonical `<name>/SKILL.md` folder (a real agent skill, packageable/shareable via the skill ecosystem) vs the lite `<name>.md`, and the skill-creator persona-writing ethos (no new guide — avoid sprawl), keeping it prose-clean (no placeholders/copy-traps). Distinct-actor refutation of the doc/section."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_AF": {
+      "desc": "A canonical `<name>/SKILL.md` folder AND a lite `<name>.md` each resolve to the SAME normalized dict as the equivalent JSON (incl. a non-null int-coerced verdict) via a shared flat-frontmatter/checklist parser (no YAML) that is node ≡ python across every enumerated divergence trap; both are LISTED by `hb refuters`; a same-name cross-format collision errors and seeding is collision-safe — proven with per-trap teeth, wired, parity-recorded.",
+      "review": { "prompt": "Refute that AF is done. Does refuter-skill-format.sh go RED before the skill front-doors exist? Do BOTH a NON-TRIVIAL `<name>/SKILL.md` and a `<name>.md` (panel:3 → int verdict, model+provider, multi-bullet) resolve to the byte-identical canonical dict a JSON one does, BOTH runtimes? PARITY (make-or-break): does --selftest pin EACH flat-parser trap with a per-trap cross-runtime assertion (first-`:`-split, quotes, trailing WS/tabs, CRLF, BOM, blank lines, duplicate keys, key case, missing closing `---`, `## Checklist` casing, `-` vs `*` bullets, persona trim), each load-bearing — or could af2 ship a parser that drifts on a trap the proof never exercises? Are BOTH skill-format refuters actually LISTED by `hb refuters` (not silently dropped)? Does a same-NAME cross-format collision ERROR, and is seeding COLLISION-SAFE (shipped library defines no name in >1 format; bootstrap never creates a collision, so resolve/doctor can't be bricked)? Is the parser recorded in parity-notes + documented current-state? End SOUND or UNSOUND." },
+      "criteria": [
+        { "id": "afa", "desc": "the skill-format proof passes (folder SKILL.md AND lite .md resolve == .json incl. verdict, both listed, collision errors, both runtimes)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-skill-format.sh\" 2>&1 | grep -q 'REFUTER-SKILL-OK'" },
+        { "id": "afb", "desc": "teeth: each enumerated flat-parser divergence trap is pinned by a per-trap cross-runtime assertion, each individually load-bearing", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-skill-format.sh\" --selftest 2>&1 | grep -q 'SELFTEST-OK'" },
+        { "id": "afd", "desc": "seeding is collision-safe across formats: no shipped name in >1 format; a bootstrapped project resolves every seeded refuter incl. a folder one (full tree copy); re-bootstrap never drops a shipped format beside a project's own folder (no manufactured collision)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-skill-format.sh\" --seeding 2>&1 | grep -q 'SEEDING-SAFE-OK'" },
+        { "id": "afc", "desc": "wired into the suite, enumerated in dev-tests, recorded as a shared surface", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'refuter-skill-format.sh' tests/run-tests.sh && grep -q 'refuter-skill-format' docs/dev-tests.md && grep -qiE 'skill[ _-]format|refuter.*frontmatter' planning/parity-notes.md" }
+      ]
+    },
+    "GATE_QS": {
+      "desc": "`hb refuters new <name> [--from <starter>]` scaffolds a SKILL.md-format refuter that immediately RESOLVES (behavioral), no-clobber, unknown-starter errors, node ≡ python; the quick-start is documented prose-clean — proven with teeth, wired.",
+      "review": { "prompt": "Refute that QS is done. Does refuter-scaffold.sh drive the ACTUAL `hb refuters new` and go RED before it exists? Does the scaffolded file actually RESOLVE to a non-empty persona (behavioral, not test -f)? Does --from an unknown starter error, and does it refuse to CLOBBER an existing refuter of EITHER extension? Is the scaffolded file byte-identical node ≡ python, and does bare `hb refuters` still list after `new` was added (argparse-positional regression)? Is the skill-format quick-start documented in write-a-refuter-profile.md, placeholder-free, and does it still pass prose-integrity? End SOUND or UNSOUND." },
+      "criteria": [
+        { "id": "qsa", "desc": "the scaffolder proof passes (resolvable output + unknown-starter-errors + no-clobber both extensions + byte-parity + bare-list-still-works, both runtimes)", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-scaffold.sh\" 2>&1 | grep -q 'REFUTER-SCAFFOLD-OK'" },
+        { "id": "qsb", "desc": "teeth: resolvable-output, unknown-starter-errors, no-clobber, byte-parity, and bare-list-still-works each individually load-bearing", "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-scaffold.sh\" --selftest 2>&1 | grep -q 'SELFTEST-OK'" },
+        { "id": "qsc", "desc": "wired + enumerated in dev-tests, and the skill quick-start is documented prose-clean", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'refuter-scaffold.sh' tests/run-tests.sh && grep -q 'refuter-scaffold' docs/dev-tests.md && grep -qiE 'refuters new|skill.format|SKILL.md' docs/howto/write-a-refuter-profile.md && bash docs/howto/gate-examples/prose-check.sh docs/howto/write-a-refuter-profile.md 2>&1 | grep -q 'ALL-PROSE-OK'" }
+      ]
+    }
+  }
+}

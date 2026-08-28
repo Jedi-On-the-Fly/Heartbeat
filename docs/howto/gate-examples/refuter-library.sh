@@ -50,13 +50,21 @@ check_discovery() { # <nodeList> <pyList> <mustContainName>
 }
 # behavioral integrity: EVERY profile file in .hb/refuters/ resolves to a non-empty persona
 p_integrity() {
-  local f name per
-  for f in "$1"/.hb/refuters/*.json; do
-    [ -e "$f" ] || return 1
-    name="$(basename "$f" .json)"
+  local f name per any=0
+  # every refuter — json, lite .md, and canonical <name>/SKILL.md folder — must resolve to a persona
+  for f in "$1"/.hb/refuters/*.json "$1"/.hb/refuters/*.md; do
+    [ -e "$f" ] || continue
+    any=1; name="$(basename "$f")"; name="${name%.*}"
     per="$(persona_py "$1/.hb" "$name")" || return 1
     [ -n "$per" ] || return 1
   done
+  for f in "$1"/.hb/refuters/*/SKILL.md; do
+    [ -e "$f" ] || continue
+    any=1; name="$(basename "$(dirname "$f")")"
+    per="$(persona_py "$1/.hb" "$name")" || return 1
+    [ -n "$per" ] || return 1
+  done
+  [ "$any" = 1 ] || return 1
 }
 
 # ── selftest: every property is load-bearing (synthetic fixtures, RS resolver, no real CLI) ────────

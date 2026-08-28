@@ -67,14 +67,22 @@ if [ -d "$TEMPLATES_DIR/executors" ]; then
   mkdir -p "$HB_DIR/executors"
   cp "$TEMPLATES_DIR/executors/"* "$HB_DIR/executors/" 2>/dev/null || true
 fi
-# Refuter profiles: seed the shipped library into the project. NO-CLOBBER — a project's own
-# .hb/refuters/<name>.json shadows a shipped one of the same name and survives re-bootstrap.
+# Refuter profiles: seed the shipped library (JSON, lite .md, and canonical <name>/SKILL.md folders)
+# into the project. COLLISION-SAFE — never seed a format for a name that already exists in the dest in
+# ANY format, so a project's own refuter shadows the shipped one and re-bootstrap manufactures no
+# same-name cross-format collision.
 if [ -d "$TEMPLATES_DIR/refuters" ]; then
   mkdir -p "$HB_DIR/refuters"
-  for _rf in "$TEMPLATES_DIR/refuters/"*.json; do
+  _hb_has_refuter() { [ -e "$HB_DIR/refuters/$1.json" ] || [ -e "$HB_DIR/refuters/$1.md" ] || [ -e "$HB_DIR/refuters/$1/SKILL.md" ]; }
+  for _rf in "$TEMPLATES_DIR/refuters/"*.json "$TEMPLATES_DIR/refuters/"*.md; do
     [ -e "$_rf" ] || continue
-    _dest="$HB_DIR/refuters/$(basename "$_rf")"
-    [ -e "$_dest" ] || cp "$_rf" "$_dest"
+    _bn="$(basename "$_rf")"; _n="${_bn%.*}"
+    _hb_has_refuter "$_n" || cp "$_rf" "$HB_DIR/refuters/$_bn"
+  done
+  for _fd in "$TEMPLATES_DIR/refuters/"*/; do
+    [ -e "$_fd/SKILL.md" ] || continue
+    _n="$(basename "$_fd")"
+    _hb_has_refuter "$_n" || cp -R "$TEMPLATES_DIR/refuters/$_n" "$HB_DIR/refuters/$_n"
   done
 fi
 # Validate the DAG at bootstrap — structural errors show up here, not at tick N.
