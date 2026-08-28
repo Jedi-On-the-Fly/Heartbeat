@@ -25,6 +25,72 @@ def _builtin_default():
     return {"persona": DEFAULT_PERSONA, "questions": [], "model": None, "provider": None, "verdict": None}
 
 
+# The `hb refuters new` starter template (no --from). Skill-creator ethos: imperative, name the
+# concrete failure classes, explain WHY — no rigid MUSTs, no placeholders. Kept byte-identical to the
+# node twin so scaffolded output matches across runtimes.
+TEMPLATE_DESC = ("Refute that a phase is truly complete. A starting point — tailor the persona and "
+                 "checklist below to your domain's real failure classes.")
+TEMPLATE_PERSONA = ("You are a refuter for a HeartBeat phase gate. Name the concrete ways this phase's "
+                    "work could be wrong or incomplete, and hunt each one — a generic \"looks fine\" "
+                    "review is exactly what lets real defects through. Cite specific evidence from the "
+                    "phase. End with REFUTED or CLEAR.")
+TEMPLATE_QUESTIONS = [
+    "What is the single most likely way this phase's work is wrong or incomplete?",
+    "Which claim or output has no evidence actually backing it?",
+]
+
+
+def render_skill(name, description, profile):
+    """Serialize a profile to canonical SKILL.md text (node twin: renderSkill). Byte-identical across
+    runtimes — the parity surface `hb refuters new` relies on."""
+    lines = ["---", "name: " + name, "description: " + description]
+    if profile.get("model"):
+        lines.append("model: " + profile["model"])
+    if profile.get("provider"):
+        lines.append("provider: " + profile["provider"])
+    v = profile.get("verdict") or {}
+    if v.get("panel"):
+        lines.append("panel: " + str(v["panel"]))
+        lines.append("refute_if: " + (v.get("refute_if") or "majority"))
+    lines.append("---")
+    lines.append(profile.get("persona") or "")
+    lines.append("")
+    lines.append("## Checklist")
+    for q in (profile.get("questions") or []):
+        lines.append("- " + q)
+    return "\n".join(lines) + "\n"
+
+
+def scaffold(hbdir, name, from_=None, lite=False):
+    """Create a new refuter under .hb/refuters/ — a canonical `<name>/SKILL.md` folder (default) or a
+    lite `<name>.md` (lite=True). --from resolves a starter as the template. No-clobber across ALL
+    formats; a name with a path separator is rejected. Returns the written path."""
+    if not name or name in (".", "..") or "/" in name or "\\" in name or os.sep in name:
+        raise ValueError("invalid refuter name %r — must be a plain name (no path separator, not '.'/'..')" % name)
+    refdir = os.path.join(hbdir, "refuters")
+    if (os.path.exists(os.path.join(refdir, name + ".json")) or
+            os.path.exists(os.path.join(refdir, name + ".md")) or
+            os.path.exists(os.path.join(refdir, name, "SKILL.md"))):
+        raise ValueError("refuter %r already exists — refusing to overwrite" % name)
+    if from_:
+        profile = resolve(hbdir, from_)
+        description = "Refute a phase using the '%s' lens." % from_
+    else:
+        profile = {"persona": TEMPLATE_PERSONA, "questions": list(TEMPLATE_QUESTIONS),
+                   "model": None, "provider": None, "verdict": None}
+        description = TEMPLATE_DESC
+    text = render_skill(name, description, profile)
+    if lite:
+        path = os.path.join(refdir, name + ".md")
+        os.makedirs(refdir, exist_ok=True)
+    else:
+        os.makedirs(os.path.join(refdir, name), exist_ok=True)
+        path = os.path.join(refdir, name, "SKILL.md")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return path
+
+
 def _normalize(d):
     """Fill the full profile shape from a partial file/inline definition — so every profile (and
     both runtimes) return the same keys AND coerce mistyped fields identically (a non-string persona
@@ -198,8 +264,8 @@ def resolve(hbdir, name=None):
     built-in `default`. An unknown EXPLICIT name errors — it never silently degrades to no-review.
     """
     eff = name or os.environ.get("HB_REFUTER") or "default"
-    if "/" in eff or "\\" in eff or os.sep in eff:
-        raise ValueError("invalid refuter profile name %r — must not contain a path separator" % eff)
+    if eff in (".", "..") or "/" in eff or "\\" in eff or os.sep in eff:
+        raise ValueError("invalid refuter profile name %r — must be a plain name (no path separator, not '.'/'..')" % eff)
     raw = _load_from_dirs(hbdir, eff)
     if raw is None:
         raw = _load_from_executor(hbdir, eff)

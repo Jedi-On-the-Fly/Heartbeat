@@ -182,5 +182,37 @@ PERSONA body.
 }
 skillfmt_case
 
+echo "── refuter scaffolder parity ──"
+scaffold_case(){
+  local dp dn; dp=$(mktemp -d); dn=$(mktemp -d)
+  mkdir -p "$dp/.hb/refuters/security" "$dn/.hb/refuters/security"
+  # identical seed starter in both projects
+  local SEC; SEC='---
+name: security
+model: M9
+panel: 3
+refute_if: majority
+---
+SEC persona.
+
+## Checklist
+- authz?
+- secret?'
+  printf '%s' "$SEC" > "$dp/.hb/refuters/security/SKILL.md"
+  printf '%s' "$SEC" > "$dn/.hb/refuters/security/SKILL.md"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/refuter_profiles.js" \
+     "$ROOT/plugin/templates/hb-audit.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" "$dn/.hb/"
+  eval "PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -m heartbeat.cli refuters --dir \"$dp\" new foo --from security" >/dev/null 2>&1
+  node "$dn/.hb/hb.js" refuters new foo --from security >/dev/null 2>&1
+  cmp "scaffold:foo/SKILL.md" \
+    "$(cat "$dp/.hb/refuters/foo/SKILL.md" 2>/dev/null)" \
+    "$(cat "$dn/.hb/refuters/foo/SKILL.md" 2>/dev/null)"
+  cmp "scaffold:list" \
+    "$(node "$dn/.hb/hb.js" refuters | tr '\n' ',')" \
+    "$(eval "PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -m heartbeat.cli refuters --dir \"$dp\"" | tr '\n' ',')"
+  rm -rf "$dp" "$dn"
+}
+scaffold_case
+
 echo ""
 [ "$FAIL" -eq 0 ] && { echo "✅ PARITY OK — node ≡ python"; exit 0; } || { echo "❌ PARITY DIVERGENCE"; exit 1; }

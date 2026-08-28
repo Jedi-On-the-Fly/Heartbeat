@@ -49,7 +49,7 @@ def main(argv=None):
     p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail"]); p.add_argument("note", nargs="*"); p.add_argument("--artifact"); _add_dir(p)
     p = sub.add_parser("evidence"); p.add_argument("gate"); _add_dir(p)
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
-    p = sub.add_parser("refuters"); _add_dir(p)
+    p = sub.add_parser("refuters"); p.add_argument("rest", nargs=argparse.REMAINDER); _add_dir(p)
     p = sub.add_parser("refute-prompt"); p.add_argument("gate"); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
     p = sub.add_parser("exec"); p.add_argument("action", nargs="?", default="run"); p.add_argument("--parallel", type=int, default=0); _add_dir(p)
@@ -193,6 +193,51 @@ def main(argv=None):
     elif args.cmd == "ready":
         s = st.project(st.read_events(hb), st.read_dag(hb))
         print(json.dumps(rv.ready_tasks(s, st.read_dag(hb), hb, args.n)))
+    elif args.cmd == "refuters" and args.rest and args.rest[0] == "new":
+        # Shared hand-parser (node twin: hb.js `refuters new`). Grammar: `<name>` FIRST (not a flag),
+        # then [--from <v>|--from=<v>] [--lite], last --from wins. A flag before the name, a second
+        # positional, `--`, or an unknown option errors — identically in both runtimes, by construction.
+        from . import refuter_profiles as rp
+        toks = args.rest[1:]
+        name = None
+        from_ = None
+        lite = False
+        i = 0
+        err = None
+        if not toks or toks[0].startswith("-"):
+            err = "usage: hb refuters new <name> [--from <starter>] [--lite]"
+        else:
+            name = toks[0]
+            i = 1
+            while i < len(toks) and err is None:
+                a = toks[i]
+                if a == "--lite":
+                    lite = True
+                elif a == "--from":
+                    if i + 1 >= len(toks) or toks[i + 1].startswith("--"):
+                        err = "refuters new: --from requires a value"
+                    else:
+                        i += 1
+                        from_ = toks[i]
+                elif a.startswith("--from="):
+                    from_ = a[len("--from="):]
+                elif a.startswith("--"):
+                    err = "refuters new: unknown option " + a
+                else:
+                    err = "refuters new: unexpected argument " + a
+                i += 1
+        if err:
+            sys.stderr.write(err + "\n")
+            return 2
+        try:
+            p = rp.scaffold(str(hb), name, from_=from_, lite=lite)
+        except ValueError as e:
+            sys.stderr.write("refuters new: %s\n" % e)
+            return 1
+        print("wrote %s" % p)
+    elif args.cmd == "refuters" and args.rest:
+        sys.stderr.write("unknown refuters action: %s\n" % args.rest[0])
+        return 2
     elif args.cmd == "refuters":
         # Discovery: refuter profiles available to this project (.hb/refuters/ — shipped ones seeded
         # by bootstrap + any project-authored). Sorted names, one per line — node ≡ python.

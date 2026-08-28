@@ -106,6 +106,21 @@ identically in the node and python runtimes; keep values to simple one-line scal
 `research-source` starter is authored this way — read `plugin/templates/refuters/research-source/SKILL.md`
 as a worked example. `node .hb/hb.js refuters` lists folder, lite, and JSON refuters together.
 
+### Quick start: scaffold one
+
+Don't hand-write the boilerplate — scaffold a starting point and edit it:
+
+```
+node .hb/hb.js refuters new payments --from security
+```
+
+That writes a canonical `.hb/refuters/payments/SKILL.md` folder (a real agent skill you can later
+package and share through the skill ecosystem) seeded from the `security` starter's lens. Pass `--lite`
+for a single `.hb/refuters/payments.md` instead, or drop `--from` for a generic template. It refuses to
+overwrite an existing refuter, and produces byte-identical output whether you run it from node or
+python. Then open the file and make the persona yours: name the concrete failure classes of *your*
+domain and say why each matters — a specific lens catches what a generic "looks fine" never will.
+
 ## What the composed prompt is (and the one caution)
 
 Inspect exactly what a gate's refuter will be handed:

@@ -547,6 +547,33 @@ switch (cmd) {
   }
 
   case 'refuters': {
+    // `hb refuters new <name> [--from <starter>] [--lite]` scaffolds a new refuter; bare lists them.
+    if (arg1 === 'new') {
+      // Shared hand-parser (python twin: cli.py `refuters new`). Grammar: `<name>` FIRST (not a flag),
+      // then [--from <v>|--from=<v>] [--lite], last --from wins. A flag before the name, a second
+      // positional, `--`, or an unknown option errors — identically in both runtimes, by construction.
+      if (rest[0] === undefined || rest[0].startsWith('-'))
+        die('usage: hb refuters new <name> [--from <starter>] [--lite]');
+      const name = rest[0];
+      let from, lite = false;
+      for (let i = 1; i < rest.length; i++) {
+        const a = rest[i];
+        if (a === '--lite') lite = true;
+        else if (a === '--from') {
+          if (rest[i + 1] === undefined || rest[i + 1].startsWith('--')) die('refuters new: --from requires a value');
+          from = rest[++i];
+        } else if (a.startsWith('--from=')) from = a.slice(7);
+        else if (a.startsWith('--')) die('refuters new: unknown option ' + a);
+        else die('refuters new: unexpected argument ' + a);
+      }
+      const { scaffold } = require('./refuter_profiles.js');
+      let p;
+      try { p = scaffold(HB_DIR, name, { from, lite }); }
+      catch (e) { die('refuters new: ' + e.message); }
+      process.stdout.write('wrote ' + p + '\n');
+      break;
+    }
+    if (arg1) die('unknown refuters action: ' + arg1);
     // Discovery: the refuter profiles available to this project (.hb/refuters/, shipped ones
     // seeded by bootstrap + any project-authored). Sorted names, one per line — node ≡ python.
     const dir = path.join(HB_DIR, 'refuters');

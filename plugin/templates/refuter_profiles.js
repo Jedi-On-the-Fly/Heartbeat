@@ -17,6 +17,63 @@ function builtinDefault() {
   return { persona: DEFAULT_PERSONA, questions: [], model: null, provider: null, verdict: null };
 }
 
+// `hb refuters new` starter template — byte-identical to the python twin (TEMPLATE_* in refuter_profiles.py).
+const TEMPLATE_DESC = "Refute that a phase is truly complete. A starting point — tailor the persona and " +
+  "checklist below to your domain's real failure classes.";
+const TEMPLATE_PERSONA = "You are a refuter for a HeartBeat phase gate. Name the concrete ways this phase's " +
+  "work could be wrong or incomplete, and hunt each one — a generic \"looks fine\" review is exactly what " +
+  "lets real defects through. Cite specific evidence from the phase. End with REFUTED or CLEAR.";
+const TEMPLATE_QUESTIONS = [
+  "What is the single most likely way this phase's work is wrong or incomplete?",
+  "Which claim or output has no evidence actually backing it?",
+];
+
+// Serialize a profile to canonical SKILL.md text (python twin: render_skill). Byte-identical.
+function renderSkill(name, description, profile) {
+  const lines = ["---", "name: " + name, "description: " + description];
+  if (profile.model) lines.push("model: " + profile.model);
+  if (profile.provider) lines.push("provider: " + profile.provider);
+  const v = profile.verdict || {};
+  if (v.panel) {
+    lines.push("panel: " + String(v.panel));
+    lines.push("refute_if: " + (v.refute_if || "majority"));
+  }
+  lines.push("---");
+  lines.push(profile.persona || "");
+  lines.push("");
+  lines.push("## Checklist");
+  for (const q of (profile.questions || [])) lines.push("- " + q);
+  return lines.join("\n") + "\n";
+}
+
+// Create a new refuter — <name>/SKILL.md folder (default) or <name>.md (lite). No-clobber across ALL
+// formats; a name with a path separator is rejected. Returns the written path.
+function scaffold(hbdir, name, opts) {
+  opts = opts || {};
+  if (!name || name === "." || name === ".." || name.includes("/") || name.includes("\\")) {
+    throw new Error("invalid refuter name '" + name + "' — must be a plain name (no path separator, not '.'/'..')");
+  }
+  const refdir = path.join(hbdir, "refuters");
+  if (fs.existsSync(path.join(refdir, name + ".json")) || fs.existsSync(path.join(refdir, name + ".md")) ||
+      fs.existsSync(path.join(refdir, name, "SKILL.md"))) {
+    throw new Error("refuter '" + name + "' already exists — refusing to overwrite");
+  }
+  let profile, description;
+  if (opts.from) {
+    profile = resolve(hbdir, opts.from);
+    description = "Refute a phase using the '" + opts.from + "' lens.";
+  } else {
+    profile = { persona: TEMPLATE_PERSONA, questions: TEMPLATE_QUESTIONS.slice(), model: null, provider: null, verdict: null };
+    description = TEMPLATE_DESC;
+  }
+  const text = renderSkill(name, description, profile);
+  let p;
+  if (opts.lite) { fs.mkdirSync(refdir, { recursive: true }); p = path.join(refdir, name + ".md"); }
+  else { fs.mkdirSync(path.join(refdir, name), { recursive: true }); p = path.join(refdir, name, "SKILL.md"); }
+  fs.writeFileSync(p, text);
+  return p;
+}
+
 // Fill the full profile shape from a partial definition — same keys in both runtimes AND coerce
 // mistyped fields identically to python (a non-string persona or a non-list `questions` from
 // hand-written JSON must not diverge — parity contract).
@@ -124,8 +181,8 @@ function loadFromExecutor(hbdir, name) {
 // resolves: project files > executor.json inline > built-in default. Unknown explicit name throws.
 function resolve(hbdir, name) {
   const eff = name || process.env.HB_REFUTER || "default";
-  if (eff.includes("/") || eff.includes("\\")) {
-    throw new Error("invalid refuter profile name '" + eff + "' — must not contain a path separator");
+  if (eff === "." || eff === ".." || eff.includes("/") || eff.includes("\\")) {
+    throw new Error("invalid refuter profile name '" + eff + "' — must be a plain name (no path separator, not '.'/'..')");
   }
   let raw = loadFromDirs(hbdir, eff);
   if (raw === null) raw = loadFromExecutor(hbdir, eff);
@@ -175,4 +232,4 @@ function composePrompt(hbdir, dag, gate) {
   return parts.join("\n\n");
 }
 
-module.exports = { resolve, composePrompt, gateProfile, aggregateVerdict, parseSkill, DEFAULT_PERSONA, searchDirs, normalize };
+module.exports = { resolve, composePrompt, gateProfile, aggregateVerdict, parseSkill, renderSkill, scaffold, DEFAULT_PERSONA, searchDirs, normalize };

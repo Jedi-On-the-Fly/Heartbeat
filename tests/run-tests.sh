@@ -1573,7 +1573,7 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/refuter-profile-resolve.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T145 skipped)"; fi
 
-grp "T146 — refuter profiles: shareable library — shipped refuters seeded by bootstrap (no-clobber shadow), behavioral integrity, `hb refuters` discovery node ≡ python"
+grp "T146 — refuter profiles: shareable library — shipped refuters seeded by bootstrap (no-clobber shadow), behavioral integrity, hb refuters discovery node ≡ python"
 if command -v python3 >/dev/null 2>&1; then
   check "T146.1 a shipped refuter is seeded into .hb/refuters/ and resolves, a project file shadows a shipped one and survives re-bootstrap, every shipped refuter is valid+resolvable, and hb refuters lists identically node ≡ python (refuter-library.sh → REFUTER-LIBRARY-OK)" \
     'bash "'"$GEX"'/refuter-library.sh" 2>&1 | grep -q "REFUTER-LIBRARY-OK"'
@@ -1581,7 +1581,7 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/refuter-library.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T146 skipped)"; fi
 
-grp "T147 — refuter profiles: ONE `hb refute-prompt` compose serves the refute path — backward-compat byte-identical, named profile appends persona+questions, unknown errors at dispatch, node ≡ python"
+grp "T147 — refuter profiles: ONE hb refute-prompt compose serves the refute path — backward-compat byte-identical, named profile appends persona+questions, unknown errors at dispatch, node ≡ python"
 if command -v python3 >/dev/null 2>&1; then
   check "T147.1 no-profile is byte-identical to today; a named profile injects persona + BASE review_questions (appended, not replaced) + review.prompt; profile.model reaches the dispatch; an unknown profile fails closed; node ≡ python (refuter-compose.sh → REFUTER-COMPOSE-OK)" \
     'bash "'"$GEX"'/refuter-compose.sh" 2>&1 | grep -q "REFUTER-COMPOSE-OK"'
@@ -1597,7 +1597,7 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/refuter-panel.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T148 skipped)"; fi
 
-grp "T149 — refuter profiles: a panel `verdict` is read from the PROFILE only — a gate/review-level verdict is silently inert (both runtimes)"
+grp "T149 — refuter profiles: a panel verdict is read from the PROFILE only — a gate/review-level verdict is silently inert (both runtimes)"
 if command -v python3 >/dev/null 2>&1; then
   check "T149.1 verdict{panel:3} on the profile drives 3 refute dispatches; the same verdict on the gate's review block drives 1 (ignored); both runtimes (refuter-verdict-placement.sh → REFUTER-VERDICT-PLACEMENT-OK)" \
     'bash "'"$GEX"'/refuter-verdict-placement.sh" 2>&1 | grep -q "REFUTER-VERDICT-PLACEMENT-OK"'
@@ -1614,6 +1614,14 @@ if command -v python3 >/dev/null 2>&1; then
   check "T150.3 seeding is collision-safe: the shipped library defines no name in >1 format, a bootstrapped project resolves every seeded refuter incl. a folder one, re-bootstrap manufactures no collision (refuter-skill-format.sh --seeding → SEEDING-SAFE-OK)" \
     'bash "'"$GEX"'/refuter-skill-format.sh" --seeding 2>&1 | grep -q "SEEDING-SAFE-OK"'
 else echo "  (python3 absent — T150 skipped)"; fi
+
+grp "T151 — refuter profiles: quick scaffolder — hb refuters new <name> [--from <starter>] [--lite] writes a resolvable refuter, no-clobber, byte-identical node ≡ python"
+if command -v python3 >/dev/null 2>&1; then
+  check "T151.1 hb refuters new scaffolds a canonical folder (or --lite file) that resolves, --from carries the starter lens, unknown starter + path-separator name error, no-clobber across formats, byte-identical node ≡ python, bare list still works (refuter-scaffold.sh → REFUTER-SCAFFOLD-OK)" \
+    'bash "'"$GEX"'/refuter-scaffold.sh" 2>&1 | grep -q "REFUTER-SCAFFOLD-OK"'
+  check "T151.2 the check has teeth: resolvable-output, unknown-starter-errors, no-clobber, byte-parity, and bare-list-still-works each individually load-bearing (refuter-scaffold.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/refuter-scaffold.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T151 skipped)"; fi
 
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
