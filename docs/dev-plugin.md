@@ -31,7 +31,7 @@ Every project owns copies of the templates under `.hb/`. `HB_DIR` = the `.hb/` d
 | `hb-next-task.js` | Gate-aware resolver | `resolve, readyTasks` |
 | `hb-lint.js` | Structural DAG validation | `lint, extractPaths` |
 | `hb-audit.js` | Gate-quality audit (adversarial plan review) | `audit, classify, isNondet` |
-| `hb-report.js` | Progress report (`--json`) | — |
+| `hb-report.js` | Progress report (`--json`) + refuter-impact (catches/clears per gate + lens, from the event log) | `refuterImpact` |
 | `hb-viz.js` | Standalone `dag-view.html` | — |
 | `hb-exec.js` | Executor driver (pluggable Stage B) | `run, config, assembleContext, nonBehavioral, strictBlock` |
 | `refuter_profiles.js` | Resolve a refuter-profile NAME → normalized dict | `resolve, DEFAULT_PERSONA, searchDirs, normalize` |

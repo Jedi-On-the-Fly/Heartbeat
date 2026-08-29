@@ -91,6 +91,22 @@ Do not guess — observe:
 - After a run, read the stored attempt under `.hb/reviews/<gate>.attempt.md` — the refuter's real
   words, which `hb review` required and which `doctor` re-checks for rot.
 
+## Did the refuter actually help this run?
+
+The question behind this whole guide — *is this refuter earning its keep, or is it theatre?* — has an
+honest, after-the-fact answer in the event log. `hb report` (or `node .hb/hb.js report`) ends with a
+**Refuter impact** section built from what actually happened:
+
+- each `review_failed` is a **catch** — the refuter found a hole and blocked the gate;
+- each `review_passed` is a **clear** — it ran and could not refute;
+- counted per gate, tagged with the `review.profile` lens that was active, with the findings it wrote.
+
+So a finished run tells you, e.g., "the security lens caught 3 holes across 5 reviews." That is the
+right kind of evidence — what the refuter *caught*, from truth, not a synthetic score. It cannot tell
+you what it *missed* (misses are invisible by definition), and a run of all clears is not theatre — it
+is a real review that found nothing. But a lens that catches nothing across runs where you later hit
+bugs is your signal to sharpen it (Case A) — or to drop it.
+
 ## The honest limit
 
 These levers change the *lens*; they do not guarantee a better verdict. Whether a given profile
@@ -108,5 +124,6 @@ Each lever is backed by a runnable proof wired into `tests/run-tests.sh` (see
 [gate-examples/refuter-library.sh](gate-examples/refuter-library.sh)); the persona + appended
 questions reach the one compose (T147, [gate-examples/refuter-compose.sh](gate-examples/refuter-compose.sh));
 panels aggregate with a fail-closed evidence floor (T148,
-[gate-examples/refuter-panel.sh](gate-examples/refuter-panel.sh)); cross-model refutation (T73); and
-scoping which gates to refute (T60). Concept: [../heartbeat.md](../heartbeat.md).
+[gate-examples/refuter-panel.sh](gate-examples/refuter-panel.sh)); the post-run refuter-impact report
+(T152, [gate-examples/refuter-impact.sh](gate-examples/refuter-impact.sh)); cross-model refutation
+(T73); and scoping which gates to refute (T60). Concept: [../heartbeat.md](../heartbeat.md).

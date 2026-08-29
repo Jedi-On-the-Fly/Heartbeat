@@ -82,7 +82,9 @@ results + the refutation verdict, then get sign-off before running.
 ```bash
 node <project-dir>/.hb/hb-report.js <project-dir>/.hb
 ```
-Also read `<project-dir>/.hb/state.json` for current phase and task counts.
+Also read `<project-dir>/.hb/state.json` for current phase and task counts. The report ends with a
+**Refuter impact** section — what refutation actually caught this run (catches vs clears per gate, with
+the `review.profile` lens), so you can tell whether refutation earned its keep or found nothing.
 
 ### `/heartbeat doctor <project-dir>`
 Static integrity check — the key one is **rot detection**: a *completed* phase whose

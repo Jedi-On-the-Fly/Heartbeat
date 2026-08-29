@@ -30,7 +30,7 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 | `gate.py` | `eval_gate(hbdir, gate, timeout)`, `run_gate(hbdir, gate, check)`, `run_all(hbdir)` | criteria via `subprocess(shell=True)` |
 | `tick.py` | `tick(hbdir)` → `{wakeAgent, data}` | Stage A; priority order = plugin |
 | `doctor.py` | `doctor(hbdir)`, `has_rot(hbdir)`, `diagnose(hbdir, reason)` | rot + computed root-cause |
-| `report.py` | `build(hbdir)`, `render(hbdir)` | JSON shape differs from node (progress-only parity) |
+| `report.py` | `build(hbdir)`, `render(hbdir)`, `refuter_impact(events, dag)` | JSON shape differs from node (progress-only parity); the refuter-impact summary (catches/clears per gate + `review.profile` lens, from the event log) is a node≡python shared surface (T152) |
 | `scaffold.py` | `init(project_dir, force)` | `hb init`; `DEFAULT_DAG`, `DEFAULT_EXECUTOR` |
 | `protocol.py` | `PROTOCOL`, `render_md()` | reason keys = plugin; action text cites `hb` console |
 | `executor.py` | `run(hbdir)`, `config(hbdir)`, `dispatch(...)`, `assemble_context`, in-process + subprocess dispatch, worktree parallel | pluggable Stage B |
