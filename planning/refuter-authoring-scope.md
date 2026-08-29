@@ -2,13 +2,12 @@
 
 **One line.** Let a refuter be authored the way agents already author skills — a single Markdown file
 with flat frontmatter + a `## Checklist` — so newcomers get a prose-native, portable on-ramp, while the
-resolver normalizes it to the *same* profile dict the JSON form produces (all compose/panel/calibration
+resolver normalizes it to the *same* profile dict the JSON form produces (all compose/panel
 machinery unchanged). Plus a one-command scaffolder for quick use.
 
 ## Why
 
-The [refuter-bench](refuter-bench-scope.md) harness is the rigorous "does this refuter add value" path.
-But authoring today means writing JSON, and a refuter *is* really a specialized persona-skill. Expressing
+Authoring a refuter today means writing JSON, and a refuter *is* really a specialized persona-skill. Expressing
 it in the agent-**skill** format (frontmatter + prose body) gives: prose-native authoring, portability
 across agents (a `security-refuter` SKILL is loadable outside HeartBeat), and free distribution through
 the plugin/marketplace HeartBeat already rides (incl. Codex). It's the same additive **seam**: the
@@ -59,8 +58,8 @@ this parser is a parity surface, cased like the JSON resolver (T145).
 
 ## Non-goals
 
-- Not YAML (parity). Not a new JSON schema. Not a change to compose/panel/calibration (a second
-  front-door only). Not the calibration harness (that's refuter-bench, built after this).
+- Not YAML (parity). Not a new JSON schema. Not a change to compose/panel (a second
+  front-door only).
 
 ## Acceptance
 
