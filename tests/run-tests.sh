@@ -1623,6 +1623,14 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/refuter-scaffold.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T151 skipped)"; fi
 
+grp "T152 — refuter profiles: hb report surfaces REFUTER IMPACT from the event log (catches vs clears, per gate + lens), node ≡ python"
+if command -v python3 >/dev/null 2>&1; then
+  check "T152.1 review_failed=catch / review_passed=clear, counted per gate with its review.profile lens + findings; a review-less project reports zero and renders no section; node ≡ python canonical summary (refuter-impact.sh → REFUTER-IMPACT-OK)" \
+    'bash "'"$GEX"'/refuter-impact.sh" 2>&1 | grep -q "REFUTER-IMPACT-OK"'
+  check "T152.2 the check has teeth: the caught-count, lens, findings, and parity checks are each individually load-bearing (refuter-impact.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/refuter-impact.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T152 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

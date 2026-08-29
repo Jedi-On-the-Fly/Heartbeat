@@ -214,5 +214,24 @@ SEC persona.
 }
 scaffold_case
 
+echo "── refuter impact parity ──"
+impact_case(){
+  local d; d=$(mktemp -d); mkdir -p "$d/.hb"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-report.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" "$d/.hb/"
+  printf '%s' '{"phases":[{"id":"S","gate_entry":null,"gate_exit":"GATE_S","tasks":[{"id":"s1"}]}],"gates":{"GATE_S":{"review":{"profile":"security","prompt":"r"},"criteria":[{"id":"x","cmd":"true"}]}}}' > "$d/.hb/dag.json"
+  printf '%s\n' '{"event":"initialized"}
+{"event":"review_failed","gate":"GATE_S","note":"a hole"}
+{"event":"review_passed","gate":"GATE_S","reviewer":"r","artifact":"reviews/GATE_S.md"}' > "$d/.hb/events.jsonl"
+  node "$d/.hb/hb.js" rebuild >/dev/null 2>&1
+  local NC PC
+  NC='const r=JSON.parse(require("child_process").execFileSync("node",[process.argv[1]+"/hb-report.js",process.argv[1],"--json"]));const canon=(x)=>Array.isArray(x)?"["+x.map(canon).join(",")+"]":(x&&typeof x==="object")?"{"+Object.keys(x).sort().map(k=>JSON.stringify(k)+":"+canon(x[k])).join(",")+"}":JSON.stringify(x===undefined?null:x);console.log(canon(r.refuters))'
+  PC='import sys,json;from heartbeat.report import build;print(json.dumps(build(sys.argv[1]).get("refuters"),sort_keys=True,separators=(",",":"),ensure_ascii=False))'
+  cmp "refuter-impact" \
+    "$(node -e "$NC" "$d/.hb")" \
+    "$(eval "PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c '$PC'" "$d/.hb")"
+  rm -rf "$d"
+}
+impact_case
+
 echo ""
 [ "$FAIL" -eq 0 ] && { echo "✅ PARITY OK — node ≡ python"; exit 0; } || { echo "❌ PARITY DIVERGENCE"; exit 1; }

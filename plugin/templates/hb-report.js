@@ -87,6 +87,27 @@ for (const e of events) {
 }
 taskDurations.sort((a, b) => b.seconds - a.seconds);
 
+// What the refuter ACTUALLY did this run, from the event log (truth) — python twin: report.refuter_impact.
+// review_failed = a CATCH (found a hole → gate_blocked); review_passed = a clear. Lens = gate review.profile.
+// Records what was caught, never what was missed (unknowable). Summary structurally identical to python.
+function refuterImpact(evs, d) {
+  const g0 = (d && d.gates) || {};
+  const per = {};
+  for (const e of evs) {
+    if (e.event !== 'review_failed' && e.event !== 'review_passed') continue;
+    if (!e.gate) continue;
+    (per[e.gate] ??= { caught: 0, cleared: 0, findings: [] });
+    if (e.event === 'review_failed') { per[e.gate].caught++; per[e.gate].findings.push(e.note || ''); }
+    else per[e.gate].cleared++;
+  }
+  const outGates = Object.keys(per).sort().map(g => ({
+    gate: g, profile: ((g0[g] || {}).review || {}).profile ?? null,
+    caught: per[g].caught, cleared: per[g].cleared, findings: per[g].findings,
+  }));
+  return { caught: outGates.reduce((a, x) => a + x.caught, 0),
+           cleared: outGates.reduce((a, x) => a + x.cleared, 0), gates: outGates };
+}
+
 const report = {
   project: dag._meta?.project ?? path.basename(path.dirname(path.resolve(dir))),
   progress: { done: doneTasks, total: totalTasks, pct: totalTasks ? Math.round(100 * doneTasks / totalTasks) : 0 },
@@ -94,6 +115,7 @@ const report = {
   phase_durations: durations,
   task_durations: taskDurations,
   task_done_events: events.filter(e => e.event === 'task_done').length,
+  refuters: refuterImpact(events, dag),
   generated: new Date().toISOString(),
 };
 
@@ -121,6 +143,13 @@ if (durations.length) {
 if (taskDurations.length) {
   console.log(''); console.log('Longest tasks (start → done):');
   for (const d of taskDurations.slice(0, 5)) console.log(`  ${d.task}: ${hms(d.seconds)}`);
+}
+if (report.refuters.caught || report.refuters.cleared) {
+  console.log(''); console.log(`Refuter impact: caught ${report.refuters.caught} hole(s) across ${report.refuters.caught + report.refuters.cleared} review(s)`);
+  for (const g of report.refuters.gates) {
+    console.log(`  ${g.gate} [${g.profile || '(default prompt)'}]: caught ${g.caught}, cleared ${g.cleared}`);
+    for (const f of g.findings) console.log(`     ✗ ${(f.split('\n')[0] || '').slice(0, 100)}`);
+  }
 }
 console.log('');
 console.log(Object.keys(incidents).length
