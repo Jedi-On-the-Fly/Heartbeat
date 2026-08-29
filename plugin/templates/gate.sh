@@ -50,7 +50,11 @@ eval_gate() {
     FAIL=1
     return
   fi
-  while IFS=$'\x1f' read -r ID DESC CMD; do
+  # Transport: fields joined by \x1f (unit sep), records TERMINATED by \x1e (record sep), and read with
+  # -d $'\x1e'. This is immune to embedded newlines in a cmd/desc (e.g. a heredoc) — which a plain
+  # newline-delimited `read` would split into bogus empty-CMD records that trivially "pass" (a false
+  # gate). \x1e never appears in a shell command, and a multi-line cmd now runs verbatim.
+  while IFS=$'\x1f' read -r -d $'\x1e' ID DESC CMD; do
     if run_criterion "$CMD" >/dev/null 2>&1; then
       echo "  ✓ [$ID] $DESC"; PASS=$((PASS + 1)); CRIT_EXITS="$CRIT_EXITS 0"
     else
@@ -58,7 +62,7 @@ eval_gate() {
     fi
   done < <(node -e "
     const dag = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
-    for (const c of dag.gates[process.argv[2]].criteria) console.log([c.id, c.desc, c.cmd].join('\x1f'));
+    for (const c of dag.gates[process.argv[2]].criteria) process.stdout.write([c.id, c.desc, c.cmd].join('\x1f') + '\x1e');
   " "$DAG_FILE" "$G")
   echo ""
   echo "=== $G: $PASS passed, $FAIL failed ==="

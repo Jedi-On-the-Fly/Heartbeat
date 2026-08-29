@@ -1631,6 +1631,14 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/refuter-impact.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T152 skipped)"; fi
 
+grp "T153 — gate integrity: a criterion cmd with an embedded newline (heredoc) is counted correctly, not misparsed into bogus passing records (gate.sh RS-delimited transport), node ≡ python"
+if command -v python3 >/dev/null 2>&1; then
+  check "T153.1 a 3-fail gate whose middle criterion is a multi-line heredoc reports 0 passed / 3 failed with no bogus heredoc-body entries and the newline criterion correctly fails; node/bash ≡ python (gate-newline-cmd.sh → GATE-NEWLINE-CMD-OK)" \
+    'bash "'"$GEX"'/gate-newline-cmd.sh" 2>&1 | grep -q "GATE-NEWLINE-CMD-OK"'
+  check "T153.2 the check has teeth: the pass-count and bogus-heredoc-body detectors are each load-bearing (gate-newline-cmd.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/gate-newline-cmd.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T153 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

@@ -109,7 +109,7 @@ Priority order (first match wins):
 | `gate.sh --check <GATE>` | eval read-only, no state change | would-pass 0 / would-block 1 |
 | `gate.sh --all` | eval every gate read-only | 0 / 1 |
 
-Each criterion runs under `GATE_TIMEOUT_S` (timeout → fail). Git snapshot (unless `HB_NO_GIT` / `HB_GIT_AUTOCOMMIT=0`): `git add -A` → commit `--no-verify` (`heartbeat(<phase-id>): <title> [GATE]`) → force-tag the gate id. Restore a phase: `git reset --hard <GATE_ID>`.
+Each criterion runs under `GATE_TIMEOUT_S` (timeout → fail). Criteria are transported from the node extractor to the bash consumer as `\x1f`-joined fields **terminated by `\x1e`** (record sep), read with `read -d $'\x1e'` — newline-safe, so a `cmd` may contain an embedded newline (e.g. a heredoc) without splitting into bogus records (T153). Git snapshot (unless `HB_NO_GIT` / `HB_GIT_AUTOCOMMIT=0`): `git add -A` → commit `--no-verify` (`heartbeat(<phase-id>): <title> [GATE]`) → force-tag the gate id. Restore a phase: `git reset --hard <GATE_ID>`.
 
 ## State CLI — `hb.js`
 
