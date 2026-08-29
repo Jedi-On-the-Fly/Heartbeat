@@ -28,8 +28,8 @@ check_all(){
     || { echo "MISSING: review_policy.accept_review not defined"; return 1; }
   grep -qE 'cli\.main\(\[.review' "$root/py/src/heartbeat/executor.py" "$root/py/src/heartbeat/mcp_server.py" \
     && { echo "STALE-CODE: executor/mcp still scrape cli.main([\"review\"...])"; return 1; } || true
-  # (c) STATUS carries a v1.28 entry:
-  grep -qE 'v?1\.28' "$root/STATUS.md" || { echo "MISSING: STATUS.md has no v1.28 entry"; return 1; }
+  # (c) STATUS carries a v1.29 entry:
+  grep -qE 'v?1\.29' "$root/STATUS.md" || { echo "MISSING: STATUS.md has no v1.29 entry"; return 1; }
   # (d) plugin.json version == marketplace version (consistency):
   python3 - "$root" <<'PY' || return 1
 import json, sys
@@ -50,9 +50,9 @@ if [ "${1:-}" = "--selftest" ]; then
   echo "emits GROUPS-SKIPPED for the coverage floor" > "$tmp/docs/dev-tests.md"
   echo "def accept_review(): pass" > "$tmp/py/src/heartbeat/review_policy.py"
   echo "# clean" > "$tmp/py/src/heartbeat/executor.py"; echo "# clean" > "$tmp/py/src/heartbeat/mcp_server.py"
-  echo "v1.28 shipped" > "$tmp/STATUS.md"
-  echo '{"version":"1.28.0"}' > "$tmp/plugin/.claude-plugin/plugin.json"
-  echo '{"plugins":[{"name":"heartbeat","version":"1.28.0"}]}' > "$tmp/.claude-plugin/marketplace.json"
+  echo "v1.29 shipped" > "$tmp/STATUS.md"
+  echo '{"version":"1.29.0"}' > "$tmp/plugin/.claude-plugin/plugin.json"
+  echo '{"plugins":[{"name":"heartbeat","version":"1.29.0"}]}' > "$tmp/.claude-plugin/marketplace.json"
   check_all "$tmp" >/dev/null 2>&1 || fail "selftest baseline should pass"
   # fault 1: planted stale path
   echo "see planning/audit-fixtures/hollow.json" >> "$tmp/docs/dev-tests.md"

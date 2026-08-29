@@ -1,7 +1,44 @@
 # STATUS — HeartBeat
 
-**Version:** v1.28 (closes the last v1.27-adversarial-review residuals — the write-lock's true scope is proven + documented, the git-snapshot pair gets a parity case, and every doc is swept current, over v1.27)
+**Version:** v1.29 (the refuter becomes a first-class, authorable, measurable surface — named profiles, a scaffolder, a post-run impact report — plus a silent gate-runner miscount fixed at the transport and hardened by a loud audit rule, over v1.28)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.29 — the refuter, made first-class (profiles · authoring · impact) + a silent-miscount fix
+
+The adversarial refuter graduates from prompt-craft to a real surface: **named profiles** you select
+per-gate, a **scaffolder** to author your own, and a **post-run report** that answers the honest
+end-of-run question — *did a refuter actually catch anything, or was it theatre and lost tokens?* Plus
+a genuine gate-runner bug (a newline in a `cmd` silently miscounted a blocked gate as passed) fixed at
+the transport and backstopped by a loud audit rule. Each item proof-driven and refuted by a distinct actor.
+
+- **Refuter profiles (RS/RL/RC/RP/RH → T145–T148).** A refuter is now a named
+  `{persona, questions[], model, provider, verdict}` bundle resolved from `.hb/refuters/`, selected
+  per-gate via `review.profile` or `HB_REFUTER`. One `hb refute-prompt <gate>` composes the prompt across
+  all three refute surfaces (node exec, python exec, interactive skill) so they can't drift. `hb refuters`
+  lists what's installed. Ships `default` / `security` / `correctness` / `research-source`. node ≡ python.
+- **Authoring, the skill-creator way (T150/T151).** `hb refuters new <name> [--from <starter>] [--lite]`
+  scaffolds a refuter in canonical folder form (`<name>/SKILL.md`) or lite (`<name>.md`), aligned with
+  Anthropic's skill-creator format (flat frontmatter + `## Checklist`, one shared no-YAML parser,
+  byte-parity node ≡ python). The `refuter-authoring` skill documents the loop; how-to
+  `write-a-refuter-profile.md`.
+- **"Always / never finds anything" + impact (T149/T152).** How-to `tune-refuter-sensitivity.md` teaches
+  verdict placement (a security domain example) for a refuter that's too eager or too meek. `hb report`
+  now renders a **Refuter impact** section derived from the event log (`review_failed` = a catch,
+  `review_passed` = a clear, lensed by `review.profile`) — caught/cleared counts + finding classes per
+  gate. The planned refuter-**bench** was cut by decision: benchmarking a blind-spot catcher against
+  planted ground truth measures the wrong thing.
+- **Silent gate miscount, fixed at the transport (T153).** `gate.sh` transported a gate's criteria to bash
+  `\x1f`-joined + newline-`read` — so an embedded newline (a heredoc `cmd`) split one criterion into bogus
+  extra records and a *blocked* gate could report a pass. Now record-terminated (`\x1e`, `read -d $'\x1e'`):
+  a multi-line `cmd` runs verbatim and a failing gate reports its real count. Proof `gate-newline-cmd.sh`;
+  node/bash ≡ python.
+- **Loud > silent — the `control_char` audit rule (T154).** The one residual fragility (a raw `\x1e`/`\x1f`
+  byte in a `cmd`/`desc`) is now a **loud audit error** (exit 1), not a silent miscount — defense in depth
+  behind the transport fix. Wired into the rule-completeness self-audit; zero false positives across every
+  repo DAG; node ≡ python.
+- **Version bump + docs currency.** Plugin/marketplace → **1.29.0**, Python package → **0.19.0**
+  (independent cadence, by design). Dev docs (dev-plugin/dev-python/dev-tests/parity-notes) swept current
+  for the refuter surface, the transport contract, and the audit rule. Gated by `docs-currency.sh`.
 
 ## v1.28 — closing the review loop (lock scope, snapshot parity, docs current)
 
