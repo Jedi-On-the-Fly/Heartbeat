@@ -95,6 +95,9 @@ function audit(dag) {
       if (isSideEffecting(c.cmd)) F('warn', 'side_effecting', p.id,
         `${p.gate_exit}[${c.id}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)`,
         { gate: p.gate_exit, criterion: c.id });
+      if (/[\x1e\x1f]/.test(c.cmd || '') || /[\x1e\x1f]/.test(c.desc || '')) F('error', 'control_char', p.id,
+        `${p.gate_exit}[${c.id}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it`,
+        { gate: p.gate_exit, criterion: c.id });
     }
     if (behavioral === 0)
       F('error', 'hollow_gate', p.id,

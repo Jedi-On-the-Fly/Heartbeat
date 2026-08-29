@@ -158,6 +158,7 @@ Errors (exit 1): duplicate task ID; `requires` non-existent; dependency cycle; u
 | `unguarded_phase` | warn | phase has tasks, no `gate_exit` |
 | `nondeterministic` | warn | a criterion touches network/time |
 | `gate_offphase` | warn | gate references files no task in the phase mentions |
+| `control_char` | error | a criterion cmd/desc contains a `\x1e`/`\x1f` byte (would corrupt the gate runner's record transport) |
 | `vacuous` / `existence` | info | per-criterion, when not the sole behavioral one |
 
 Exit 1 on any error. Ruleset is byte-identical to the port ([dev-python.md](dev-python.md#audit)); parity-locked.

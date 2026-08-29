@@ -1639,6 +1639,14 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/gate-newline-cmd.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T153 skipped)"; fi
 
+grp "T154 — gate integrity: the auditor flags a \\x1e/\\x1f control byte in a cmd/desc as a LOUD error (defense-in-depth for the transport), node ≡ python"
+if command -v python3 >/dev/null 2>&1; then
+  check "T154.1 a criterion cmd carrying a \\x1e/\\x1f control byte is an audit error (exit 1) named control_char; a clean dag is fine; node ≡ python findings (audit-ctrl-byte.sh → AUDIT-CTRL-BYTE-OK)" \
+    'bash "'"$GEX"'/audit-ctrl-byte.sh" 2>&1 | grep -q "AUDIT-CTRL-BYTE-OK"'
+  check "T154.2 the check has teeth: the detector discriminates (clean not flagged) and BOTH \\x1e and \\x1f trigger it (audit-ctrl-byte.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/audit-ctrl-byte.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T154 skipped)"; fi
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

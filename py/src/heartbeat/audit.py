@@ -106,6 +106,10 @@ def audit(dag):
                 F("warn", "side_effecting", p["id"],
                   f"{p['gate_exit']}[{c.get('id')}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)",
                   gate=p["gate_exit"], criterion=c.get("id"))
+            if any("\x1e" in (c.get(k) or "") or "\x1f" in (c.get(k) or "") for k in ("cmd", "desc")):
+                F("error", "control_char", p["id"],
+                  f"{p['gate_exit']}[{c.get('id')}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it",
+                  gate=p["gate_exit"], criterion=c.get("id"))
         if behavioral == 0:
             F("error", "hollow_gate", p["id"],
               f"gate {p['gate_exit']} has NO behavioural criterion — phase {p['id']} passes without proving its work",
