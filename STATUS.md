@@ -1,7 +1,25 @@
 # STATUS — HeartBeat
 
-**Version:** v1.29 (the refuter becomes a first-class, authorable, measurable surface — named profiles, a scaffolder, a post-run impact report — plus a silent gate-runner miscount fixed at the transport and hardened by a loud audit rule, over v1.28)
+**Version:** v1.29.1 (rot-lint precision: relative path-shaped non-files — module specifiers, URL paths, route args — no longer false-trip `gate_rot`, over v1.29)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.29.1 — rot-lint precision: path-shaped non-files no longer false-trip gate_rot
+
+`doctor` rot-detection feeds each gate `criteria[].cmd` through `extractPaths`, which guessed at file
+paths from a raw bash one-liner. Absolute tokens (`/dev/null`, `/admin` route args) were already
+excluded, but *relative* path-shaped non-files still leaked through and, on a **completed** phase,
+false-tripped "no longer reproducible" → a permanent, non-actionable `gate_rot_waiting` tick.
+
+- **The gap.** `require.resolve('playwright/test')` → `playwright/test`, `curl host:3000/health` →
+  `3000/health`, `node app.js api/v1/users` → `api/v1/users` — module specifiers, URL paths, and route
+  args, none of them files on disk, all flagged as rotted artifacts.
+- **The fix.** A token is rot-checked only when its basename looks like a produced FILE: it has a file
+  extension, or is a known extensionless artifact (`Dockerfile`/`Makefile`). One mirrored line in
+  `hb-lint.js` / `lint.py`; node ≡ python (parity + T126). Accepted tradeoff: a custom *extensionless*
+  binary (`bin/hb`) is no longer rot-tracked — real code artifacts carry an extension.
+- **Proof-driven.** Extended `rot-lint-precision.sh` (T126) with the three reproducers + a `Makefile`
+  keep-case, and `py/tests/test_lint.py` with reject/keep cases — red before, green after.
+- Plugin/marketplace → 1.29.1, Python package → 0.19.1.
 
 ## v1.29 — the refuter, made first-class (profiles · authoring · impact) + a silent-miscount fix
 

@@ -103,6 +103,11 @@ def extract_paths(cmd):
         # already excluded by the leading-"/" check.)
         if re.match(r"^[A-Za-z]/", p):
             continue
+        # Only rot-check tokens that look like a produced FILE: a file extension, or a known extensionless
+        # artifact name (Dockerfile/Makefile). Drops relative path-shaped non-files — module specifiers
+        # (playwright/test), URL paths (host:3000/health), route args (api/v1/users) — never on disk.
+        if not re.search(r"\.[A-Za-z0-9]+$", base) and base not in ("Dockerfile", "Makefile"):
+            continue
         out.add(p)
     return out
 

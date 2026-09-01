@@ -116,6 +116,10 @@ function extractPaths(cmd) {
     // not. (Absolute paths and awk `/re/` are already excluded above by the leading-`/` check.) This
     // keeps EXTENSIONLESS artifacts (Dockerfile, Makefile, bin/hb) tracked for rot.
     if (/^[A-Za-z]\//.test(p)) continue;
+    // Only rot-check tokens that look like a produced FILE: a file extension, or a known extensionless
+    // artifact name (Dockerfile/Makefile). Drops relative path-shaped non-files — module specifiers
+    // (playwright/test), URL paths (host:3000/health), route args (api/v1/users) — that are never on disk.
+    if (!/\.[A-Za-z0-9]+$/.test(base) && base !== 'Dockerfile' && base !== 'Makefile') continue;
     out.add(p);
   }
   return out;
