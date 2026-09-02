@@ -24,6 +24,13 @@ Install from this directory as a local marketplace (nothing is published). Point
 (`/plugin marketplace add` also accepts a GitHub `owner/repo` if you later host
 it — not required.)
 
+> **The plugin also registers an MCP server, which needs the `hb` console on your PATH.**
+> Installing the plugin wires an MCP server that runs `hb mcp-serve` (the Python port). If
+> `hb` isn't installed, the host reports a failed MCP reconnect (`ENOENT`) — the `/heartbeat`
+> skill still works, but the MCP tool surface won't. Install `hb` per the plugin guide's
+> [Prerequisite](docs/howto/install-the-heartbeat-plugin.md#prerequisite) — `pip install ./py`,
+> or an isolated venv + a `~/.local/bin` symlink on externally-managed (PEP 668) Python.
+
 Then verify:
 
 ```
