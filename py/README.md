@@ -68,5 +68,6 @@ and runs it — a fully node/bash-free end-to-end run.
 ## Tests
 
 ```bash
+pip install "./py[test]"                          # test deps (pytest)
 cd py && PYTHONPATH=src python3 -m pytest -q      # the full Python suite
 ```

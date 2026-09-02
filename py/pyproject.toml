@@ -12,6 +12,7 @@ license = { text = "MIT" }
 dependencies = []          # core is stdlib-only
 
 [project.optional-dependencies]
+test = ["pytest"]                 # the Python test suite (pytest -q); install with .[test]
 agno = ["agno", "openai", "ollama"]
 crewai = ["crewai"]
 langgraph = ["langgraph", "langchain-ollama"]
