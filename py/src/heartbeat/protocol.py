@@ -1,4 +1,4 @@
-"""The single source of truth for the tick protocol (reason -> action).
+"""The single source of truth for the pulse protocol (reason -> action).
 
 Rendered into the tick's self-describing `data.action`, `.hb/PROTOCOL.md`, and
 `hb protocol`. Ported verbatim from the node hb.js PROTOCOL map so the two
@@ -23,8 +23,8 @@ PROTOCOL = {
 
 
 def render_md():
-    md = ("# HeartBeat — tick protocol\n\nWhen a tick returns `wakeAgent:true`, act on "
-          "`data.reason`. The tick also embeds the action for the current reason in "
+    md = ("# HeartBeat — pulse protocol\n\nWhen a pulse returns `wakeAgent:true`, act on "
+          "`data.reason`. The pulse also embeds the action for the current reason in "
           "`data.action`. Full reference:\n\n| reason | action |\n|---|---|\n")
     for r, a in PROTOCOL.items():
         md += f"| `{r}` | {a.replace('|', chr(92) + '|')} |\n"

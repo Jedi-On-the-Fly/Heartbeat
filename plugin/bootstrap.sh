@@ -103,7 +103,7 @@ echo "{\"ts\":\"$TS\",\"event\":\"initialized\",\"project\":\"$(basename "$PROJE
 # from the very first tick (log is authoritative from here on).
 node "$HB_DIR/hb.js" rebuild >/dev/null 2>&1 || true
 
-# v1.7: write the tick protocol into the project so it travels with the .hb/ tooling
+# v1.7: write the pulse protocol into the project so it travels with the .hb/ tooling
 # (version-matched, git-tracked) — the agent is never left guessing what a reason means.
 node "$HB_DIR/hb.js" protocol --md > "$HB_DIR/PROTOCOL.md" 2>/dev/null || true
 

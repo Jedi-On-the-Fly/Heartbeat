@@ -13,7 +13,7 @@ def test_cli_no_args_prints_help(capsys):
 
 def test_protocol_render_md():
     md = protocol.render_md()
-    assert "tick protocol" in md and "next_task" in md and "gate_pending" in md
+    assert "pulse protocol" in md and "next_task" in md and "gate_pending" in md
 
 
 def test_protocol_matches_reason_set():

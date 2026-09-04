@@ -1,36 +1,21 @@
-# HeartBeat — tick-driven agent orchestration
+# HeartBeat — verified autonomous agent runs
 
-**HeartBeat is a proof-driven development method: work is accepted only when its claims are backed by
-executable evidence and survive an adversarial attempt to refute them.** Lifecycle: **claim →
-implementation → executable proof → adversarial refutation → acceptance.**
+**HeartBeat is a proof-driven method for running autonomous agents: work is accepted only when its claims are backed by executable evidence that survives a deliberate attempt to refute it.** Lifecycle: **claim → build → prove it works → refute the proof → accept only if it holds.**
 
-> The non-determinism lives *inside* an agent's tasks; the gaps *between* them are
-> deterministic. HeartBeat drops a cheap **Stage A** (bash/Python) observation into
-> that gap — it reads settled reality and wakes the expensive **Stage B** (an LLM)
-> *only when there's real work* — then verifies the result at a gate instead of
-> trusting it.
+> Autonomous agents are driven by large language models, and every step an agent takes calls that model, which costs money. HeartBeat drives a run with a cheap check (**Stage A**, plain bash or Python) that reads the settled state of the work and wakes the expensive model (**Stage B**) only when there's real work to do. That check is the **pulse**. It runs whenever something asks for it (an executor loop, an MCP call, or a timer) and returns one decision: sleep, or wake the model with a reason and the exact next action. When the model returns, HeartBeat verifies the result at a gate instead of trusting it.
 
-**Developer docs (source of truth):** [dev-plugin.md](docs/dev-plugin.md) · [dev-python.md](docs/dev-python.md) · [dev-tests.md](docs/dev-tests.md). Concept: [heartbeat.md](docs/heartbeat.md) · [heartbeat-py.md](docs/heartbeat-py.md). Architecture: [adapters.md](docs/adapters.md) (making the method **code- and docs-aware** — two shipped domain adapters, in **both runtimes** node ≡ python — without giving up its generality). How-to guides (runnable): [docs/howto/](docs/howto/).
+**Developer docs (source of truth):** [dev-plugin.md](docs/dev-plugin.md) · [dev-python.md](docs/dev-python.md) · [dev-tests.md](docs/dev-tests.md). Vocabulary: [vocabulary.md](docs/vocabulary.md). Concept: [heartbeat.md](docs/heartbeat.md) · [heartbeat-py.md](docs/heartbeat-py.md). Architecture: [adapters.md](docs/adapters.md) (making the method **code- and docs-aware**: two shipped domain adapters, in **both runtimes** (node ≡ python), without giving up its generality). How-to guides (runnable): [docs/howto/](docs/howto/).
 
-HeartBeat lets an agent drive a long, multi-phase project autonomously without
-supervision, without losing the thread, and without burning tokens idling. The
-project is described as a **DAG**: phases → tasks → dependencies → quality gates.
+HeartBeat lets an agent drive a long, multi-phase project autonomously without supervision, without losing the thread, and without burning tokens idling. The project is laid out as a map of work: phases break into tasks, each task points to what it depends on, and quality gates guard the steps between them. Developers know this structure as a **DAG** (directed acyclic graph): work that always flows forward, never in circles.
 
 ```
-tick.sh (every 15–30 min)              ← Stage A: pure bash, priority checks, ~0 tokens
+the pulse  (bash .hb/tick.sh · hb pulse)    ← Stage A: plain bash or Python, ~0 tokens
   │
-  ├─ wakeAgent: false → nothing to do, sleep
-  └─ wakeAgent: true  → the LLM is invoked ← Stage B: only when needed
+  ├─ nothing to do → sleep
+  └─ real work     → the model is invoked   ← Stage B: only when needed
 ```
 
-Three things keep a multi-hour run honest. **State is computed, not remembered** —
-`events.jsonl` is the append-only source of truth and `state.json` is a projection of
-it, so a crashed session is rebuilt from the log and continues. **Progress is verified,
-not trusted** — a phase advances only when its *behavioral* gate passes (does the thing
-*work*, not does a file *exist*), and sensitive gates add a second agent told to
-*refute* completion rather than confirm it. And **behavior is a contract** — the same
-DAG and tick protocol run on two runtimes (a node+bash plugin and a pure-Python port)
-held to identical results.
+Three things keep a multi-hour run honest. **State is computed, not remembered:** `events.jsonl` (the event log) is the append-only source of truth and the audit trail, and `state.json` is a projection of it, so a crashed session is rebuilt from the log and continues. **Progress is verified, not trusted:** a phase advances only when its *behavioral* gate passes (does the thing *work*, not does a file *exist*), and sensitive gates add a second agent told to *refute* completion rather than confirm it. And **behavior is a contract:** the same DAG and protocol run on two runtimes (a node+bash plugin and a pure-Python port) held to identical results.
 
 ## What it verifies — and where it stops
 
@@ -77,8 +62,9 @@ Then `/heartbeat help`.
 /heartbeat plan <project-dir>      # convert a written plan into a lint-clean dag.json
 /heartbeat lint <project-dir>      # validate the DAG
 /heartbeat viz <project-dir>       # dag-view.html (add --serve for a live, always-current view)
-/heartbeat tick <project-dir>      # one manual tick
-/loop 15m /heartbeat tick <dir>    # drive it autonomously
+/heartbeat pulse <project-dir>     # take one pulse: one decision, one action
+/heartbeat run <project-dir>       # drive it: pulse → act → pulse, until done or a human is needed
+/loop 15m /heartbeat pulse <dir>   # or drive it on a timer, unattended
 ```
 
 
@@ -151,10 +137,10 @@ tasks, behavioral gates, adversarial review on sensitive gates, and lints clean.
 
 
 
-## Stage A — tick.sh priority checks
+## Stage A — the pulse (`tick.sh`): priority checks
 
 ```
-1. Handout lock     atomic mkdir; serializes concurrent ticks (released before Stage B)
+1. Handout lock     atomic mkdir; serializes concurrent pulses (released before Stage B)
 2. Integrity        corrupt state.json → self-heal via rebuild; corrupt dag.json → wake dag_corrupted
 2.5 Lease reclaim   a stale/hung lease (heartbeat gone) is reclaimed → task returns to pending
 2.6 Rot             a COMPLETED phase's gate references a deleted file → wake gate_rot
@@ -170,7 +156,7 @@ Output is always `{ "wakeAgent": true|false, "data": { "reason": "...", ... } }`
 
 
 
-## Stage B — the tick protocol
+## Stage B — the pulse protocol
 
 When woken (`data.reason` present), the agent acts by reason. **Never hand-edit
 `state.json`** — it is a projection of `events.jsonl`. Mutate state only through the
@@ -180,7 +166,7 @@ When woken (`data.reason` present), the agent acts by reason. **Never hand-edit
 node .hb/hb.js start <id>          # claim the task (lease) + mark active
 node .hb/hb.js done  <id>          # completed → frees the lease, resets stuck count
 node .hb/hb.js fail  <id>          # failed    → frees the lease, bumps stuck count
-node .hb/hb.js heartbeat <id>      # long task: refresh the lease so it isn't reclaimed
+node .hb/hb.js keepalive <id>      # long task: refresh the lease so it isn't reclaimed (legacy: heartbeat)
 node .hb/hb.js ready [N]           # the concurrently-runnable set (parallel drivers)
 node .hb/hb.js review <gate> pass|fail [note]   # record the adversarial verdict
 node .hb/hb.js doctor              # integrity check (rot / drift / stale leases)
@@ -190,10 +176,10 @@ node .hb/hb.js rebuild             # reproject state.json from the log (sync / r
 node .hb/hb.js state               # print the projected state
 ```
 
-**Self-describing ticks:** every wake carries the exact next action in
+**Self-describing pulses:** every wake carries the exact next action in
 `data.action`, so any driver knows what to do from the JSON alone. The protocol is
 one source of truth (`hb protocol`), rendered to `.hb/PROTOCOL.md` at bootstrap and
-embedded in ticks. When blocked, `hb diagnose` computes the root cause (failing
+embedded in pulses. When blocked, `hb diagnose` computes the root cause (failing
 criteria, the commit that deleted a gate's file, the deadlock cause) and recovery
 steps — you are never left guessing.
 
@@ -204,7 +190,7 @@ steps — you are never left guessing.
 | `review_pending` | Spawn a skeptical second agent to **refute** completion, then `hb review <gate> pass\|fail`. Only a pass advances. |
 | `gate_blocked` | Fix the failing criteria/findings, re-run the gate. |
 | `at_capacity` | Nothing to do — max tasks in flight (or the only ready task is leased). |
-| `state_corrupted` | `hb rebuild` (the tick self-heals; surfaces only if the log is unusable). |
+| `state_corrupted` | `hb rebuild` (the pulse self-heals; surfaces only if the log is unusable). |
 | `dag_corrupted` | Restore dag.json from git/backup (structure is immutable). |
 | `deadlock` | `active_orphan` → reclaimed automatically. `dag_invalid` → surface for human review. |
 | `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
@@ -215,14 +201,14 @@ steps — you are never left guessing.
 
 **End of session:** finish each claimed task with `hb done`/`hb fail`. The handout
 lock releases automatically; a crashed session's lease is reclaimed after
-`HEARTBEAT_STALE_S` (or `LOCK_STALE_S` if it never heartbeat).
+`HEARTBEAT_STALE_S` (or `LOCK_STALE_S` if it never sent a keepalive).
 
 
 
 ## Adversarial gates (the second agent)
 
 A gate can carry a `review` block. Then, after the deterministic gate passes, the
-tick emits `review_pending` and the phase does **not** advance until a second,
+pulse emits `review_pending` and the phase does **not** advance until a second,
 skeptical agent — told to *refute* completion, not confirm it — fails to find holes:
 
 ```json
@@ -248,7 +234,7 @@ driver fans them out as **worktree-isolated** sub-agents so simultaneous writes
 can't collide; each does `hb start`/`hb done` under its own lease (atomic — no task
 is claimed twice). Parallelism only applies within a phase (gates serialize
 phases), and works best on file-disjoint slices — foundation phases are usually
-better serial. `HB_MAX_CONCURRENCY` caps the tick's serial handout (default 1).
+better serial. `HB_MAX_CONCURRENCY` caps the pulse's serial handout (default 1).
 
 
 
@@ -263,7 +249,7 @@ Gates have both **safety** (a phase can't advance until its criteria pass) and
 - **Re-verifiable gates** — `bash .hb/gate.sh --check <GATE>` re-runs one gate's
   criteria read-only (no state change); `bash .hb/gate.sh --all` re-verifies every
   gate (a regression check). A passed gate keeps acting as a gate.
-- **Automatic rot detection** — the tick runs `doctor` each tick and wakes
+- **Automatic rot detection** — every pulse runs `doctor` and wakes
   `gate_rot` on rot; a **pre-commit hook** blocks a commit that deletes a file a
   completed gate depends on (bypass: `git commit --no-verify` / `HB_NO_HOOK=1`).
 - **Review liveness** — an adversarial review that never resolves is caught by the
@@ -290,26 +276,30 @@ Disable auto-commit with `HB_GIT_AUTOCOMMIT=0`.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `LOCK_STALE_S` | 1800 | Handout lock / non-heartbeat lease / write-lock staleness |
-| `HEARTBEAT_STALE_S` | 180 | Silence tolerated on a heartbeated lease before reclaim |
+| `LOCK_STALE_S` | 1800 | Handout lock / lease without keepalives / write-lock staleness |
+| `HEARTBEAT_STALE_S` | 180 | Silence tolerated on a lease with keepalives before reclaim |
 | `STUCK_TICKS` | 3 | No-progress wakes (task or review) before escalation |
 | `HB_MAX_CONCURRENCY` | 1 | Tasks in flight at once (leases) |
 | `GATE_TIMEOUT_S` | 5 | Per-criterion gate timeout |
 | `HB_NOTIFY_CMD` | (empty) | Command run on human-needed wakes: `"<reason>" "<project>" "<detail>"` |
-| `HB_ROT_CHECK` | 1 | Per-tick rot detection (0 to disable) |
+| `HB_ROT_CHECK` | 1 | Per-pulse rot detection (0 to disable) |
 | `HB_NO_GIT` | (empty) | Disable git init + commit-on-gate-pass + hook |
 | `HB_GIT_AUTOCOMMIT` | 1 | 0 disables the commit on gate pass |
 
 
 
-## Scheduling
+## Driving it
 
-`tick.sh` runs on a timer. On Claude Code:
+A pulse runs whenever something asks for one. Three drivers, in order of preference:
 
-1. **`/schedule` routine** (`/heartbeat schedule <dir>`) — cron, but runs in the
-   cloud and clones a GitHub repo, so it fits when the project is a git repo.
-2. **In-session:** `/loop 20m /heartbeat tick <dir>` — while a session is open.
-3. **System cron:** `*/20 * * * * cd <dir> && claude -p "run bash .hb/tick.sh and act on data.reason per the tick protocol"`.
+1. **The executor** — `/heartbeat run <dir>`, `hb exec run`, or `node .hb/hb-exec.js run`:
+   pulse → act → pulse, back to back, until the project is done or a human is needed. No timer.
+2. **An MCP client** — an agent takes a pulse (the MCP `tick` tool) whenever it wants its next
+   action; see [Drive HeartBeat over MCP](#drive-heartbeat-over-mcp).
+3. **A timer**, for unattended runs while nothing else is driving:
+   a **`/schedule` routine** (`/heartbeat schedule <dir>` — cron in the cloud, clones a GitHub repo,
+   so it fits when the project is a git repo), **in-session** `/loop 20m /heartbeat pulse <dir>`, or
+   **system cron** `*/20 * * * * cd <dir> && claude -p "run bash .hb/tick.sh and act on data.reason per the pulse protocol"`.
 
 
 
@@ -340,7 +330,7 @@ commands, enforced by a skill-integrity gate. Build one:
 ## Drive HeartBeat over MCP
 
 Besides driving agents, HeartBeat *is* an MCP server: `hb mcp-serve` (Python port)
-exposes its tick / gate / state tools over the Model Context Protocol — plus the code
+exposes its pulse (`tick`) / gate / state tools over the Model Context Protocol — plus the code
 adapter's `deplint`, `code_context`, and `code_discover` (change-impact) — so an MCP client — **Codex, Claude Code, or
 OpenCode** — can drive HeartBeat mid-session (ask what's next, do the work, call the gate
 to verify) and get code-aware planning/context in-session, node-free. It is stdlib-only and

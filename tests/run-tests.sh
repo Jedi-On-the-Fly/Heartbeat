@@ -134,7 +134,7 @@ check "T10.1 README documents the tick checks and --freeze" \
 check "T10.2 STATUS is current (v1.6) and covers doctor/rot" \
   'grep -q "v1.6" "$HB_SRC/STATUS.md" && grep -qi "rot" "$HB_SRC/STATUS.md"'
 check "T10.3 README documents the hb CLI tick protocol" \
-  'grep -q "hb.js start" "$HB_SRC/README.md" && grep -qi "tick protocol" "$HB_SRC/README.md"'
+  'grep -q "hb.js start" "$HB_SRC/README.md" && grep -qi "pulse protocol" "$HB_SRC/README.md"'
 
 grp "T11 — hb-lint (v1.2)"
 FX="$HB_SRC/tests/fixtures"
@@ -445,7 +445,7 @@ check "T32.2 hb protocol <reason> returns that reason" 'node "$H32/hb.js" protoc
 check "T32.3 --oneline is a single bare line (no reason prefix)" \
   'test "$(node "$H32/hb.js" protocol gate_blocked --oneline | wc -l)" -eq 1 && ! node "$H32/hb.js" protocol gate_blocked --oneline | grep -q "^gate_blocked:"'
 check "T32.4 --md renders a table" \
-  'node "$H32/hb.js" protocol --md | grep -q "tick protocol" && node "$H32/hb.js" protocol --md | grep -q next_task'
+  'node "$H32/hb.js" protocol --md | grep -q "pulse protocol" && node "$H32/hb.js" protocol --md | grep -q next_task'
 check "T32.5 unknown reason → exit 1" '! node "$H32/hb.js" protocol nope >/dev/null 2>&1'
 
 grp "T33 — self-describing ticks + PROTOCOL.md (v1.7, #1)"
@@ -1646,6 +1646,14 @@ if command -v python3 >/dev/null 2>&1; then
   check "T154.2 the check has teeth: the detector discriminates (clean not flagged) and BOTH \\x1e and \\x1f trigger it (audit-ctrl-byte.sh --selftest → SELFTEST-OK)" \
     'bash "'"$GEX"'/audit-ctrl-byte.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T154 skipped)"; fi
+
+grp "T155 — vocabulary: pulse / keepalive are real aliases on BOTH runtimes, the protocol is the pulse protocol, README defines pulse before tick and carries every glossary term"
+if command -v python3 >/dev/null 2>&1; then
+  check "T155.1 hb pulse ≡ hb tick; keepalive refreshes a lease (python + node, legacy spellings intact); protocol --md titled pulse protocol node ≡ python; README/glossary coherent (vocabulary.sh → VOCABULARY-OK)" \
+    'bash "'"$GEX"'/vocabulary.sh" 2>&1 | grep -q "VOCABULARY-OK"'
+  check "T155.2 the checks have teeth: unknown alias rejected, tick-before-pulse README caught, missing glossary term caught (vocabulary.sh --selftest → SELFTEST-OK)" \
+    'bash "'"$GEX"'/vocabulary.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+else echo "  (python3 absent — T155 skipped)"; fi
 
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done

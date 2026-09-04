@@ -11,10 +11,12 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CLI="$ROOT/py/src/heartbeat/cli.py"
 
-# Real subcommands: add_parser("x") names + the start/done/fail/heartbeat loop. Derived, not hardcoded.
+# Real subcommands: add_parser("x") names, their argparse aliases=[...] spellings, and the
+# start/done/fail loop. Derived, not hardcoded.
 _subcommands(){
   { grep -oE 'add_parser\("[a-z-]+"' "$CLI" | grep -oE '"[a-z-]+"' | tr -d '"'
-    printf '%s\n' start done fail heartbeat; } | sort -u
+    grep -oE 'aliases=\[[^]]*\]' "$CLI" | grep -oE '"[a-z-]+"' | tr -d '"'
+    printf '%s\n' start done fail; } | sort -u
 }
 SUBS="$(_subcommands)"
 
