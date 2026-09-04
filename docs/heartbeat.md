@@ -20,15 +20,15 @@ look at exactly what exists, decide what should happen next, and only then spend
 expensive, unpredictable resource (the model), and only if there's actually something
 to do.
 
-A *tick* is a deterministic observation dropped into that gap. The rest follows from
+A *pulse* is a deterministic observation dropped into that gap. The rest follows from
 it.
 
-![The tick cycle](heartbeat-cycle-simple.png)
+![The pulse cycle](heartbeat-cycle-simple.png)
 
 ## Two stages
 
-- **Stage A — the tick.** Cheap, deterministic code (bash, or pure Python). It runs on
-  a schedule, reads the settled reality (event log, state, gates), and outputs one
+- **Stage A — the pulse.** Cheap, deterministic code (bash, or pure Python). It runs
+  whenever something drives it, reads the settled reality (event log, state, gates), and outputs one
   thing: should the agent wake, and why. It never generates anything and costs almost nothing.
 - **Stage B — the agent.** The non-deterministic worker. It runs only when Stage A
   says there's real work, does one unit of it, records the outcome, and stops.
@@ -36,7 +36,7 @@ it.
 Splitting them keeps scheduling free and observable, and reserves the model for the
 one thing only it can do.
 
-Stage B is deliberately swappable. The tick doesn't care *what* does the work — only
+Stage B is deliberately swappable. The pulse doesn't care *what* does the work — only
 that something does one unit and records the outcome. So the worker can be an
 interactive session, or an unattended backend agent — a local model, or a framework
 like Agno or CrewAI — driven over a tiny protocol. Whatever it is, the deterministic
@@ -48,7 +48,7 @@ less-trusted worker is safe precisely because nothing believes it until the gate
 State isn't hand-edited by the agent — it's a projection of an append-only event log.
 The agent appends facts ("started this", "finished that", "gate passed"); the
 deterministic layer derives the current picture from them, the same way every time.
-So the state is reconstructible: a session dies, the next tick rebuilds it from the
+So the state is reconstructible: a session dies, the next pulse rebuilds it from the
 log and continues. Nothing is remembered; it's computed.
 
 ## Shape and gates
@@ -74,7 +74,7 @@ catches what looking for reasons to say yes waves through.
 Two smaller things fall out of the same idea. Gates prove something at the moment they
 pass, but files change later and a passed gate can start silently lying — so the
 deterministic layer re-checks its own past claims and won't let a change that breaks
-one slip by. And because the tick knows the true state, it can notice when the
+one slip by. And because the pulse knows the true state, it can notice when the
 non-deterministic side gets stuck (an agent looping, a review never answered) and
 escalate instead of waiting forever.
 
@@ -85,7 +85,7 @@ Roughly:
 1. **Init** a project — this scaffolds a `.hb/` folder and a git repo.
 2. **Describe the work as a DAG** (`dag.json`) — phases, tasks, and gates. There's a
    helper that turns a written plan into one and lints it.
-3. **Drive the tick on a timer** — a loop, system cron, or a scheduled job. Each tick
+3. **Drive the pulse** — an executor loop, an MCP client, or a timer for unattended runs. Each pulse
    either sleeps or wakes the agent with a reason *and the exact next action*: do the
    next task, run a gate, run the adversarial review, or stop because something needs
    a human. When it's blocked, it computes the root cause (which check failed, which
@@ -95,5 +95,5 @@ Roughly:
    at a backend (a local model, Agno, CrewAI) and it drives the same loop headless —
    no Claude Code required. The DAG doesn't change; only who does the work does.
 
-That's the shape of it. You describe the work and the checks; the tick decides,
+That's the shape of it. You describe the work and the checks; the pulse decides,
 cheaply and deterministically, when to spend the model — and tells it what to do.

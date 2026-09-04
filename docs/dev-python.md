@@ -53,7 +53,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | Command | Effect / output |
 |---|---|
 | `init <project_dir> [--force]` | scaffold `.hb/` (dag, state, events, `executor.json`, `PROTOCOL.md`); git unless `HB_NO_GIT` |
-| `tick` | one Stage-A tick → `{wakeAgent, data}` |
+| `tick` (alias `pulse`) | one Stage-A pulse → `{wakeAgent, data}` |
 | `next` | `resolve` result JSON |
 | `ready [N]` | runnable set JSON |
 | `gate <G> [--check] [--all]` | run/verify a gate; exit 1 if blocked |
@@ -65,7 +65,8 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | `protocol [reason] [--md]` | reason→action map |
 | `state` | print projection |
 | `rebuild` | reproject from log |
-| `start/done/fail/heartbeat <id>` | state mutations (+ lease) |
+| `start/done/fail <id>` | state mutations (+ lease) |
+| `keepalive <id>` | refresh a task lease during long work (legacy spellings `heartbeat`, `beat`) |
 | `review <gate> pass\|fail [note]` | record adversarial verdict |
 | `exec [run\|config] [--parallel N]` | `run` (default) drives the loop with a backend; `config` prints the resolved executor config |
 | `mcp-serve [--http] [--host H] [--port P]` | run the MCP server so an MCP client drives HeartBeat; stdio by default, `--http` for a streamable-HTTP endpoint; see below |

@@ -62,3 +62,27 @@ def test_cli_diagnose_gate_blocked(tmp_path, capsys):
     cli.main(["gate", "GATE_P0", "--dir", proj])
     _, out = _run(capsys, "diagnose", "--dir", proj)
     assert "gate_blocked" in out
+
+
+def test_cli_pulse_is_an_alias_of_tick(tmp_path, capsys):
+    # two identical fresh projects: `pulse` and `tick` return the same first decision
+    a, b = str(tmp_path / "a"), str(tmp_path / "b")
+    cli.main(["init", a]); cli.main(["init", b])
+    _, out_t = _run(capsys, "tick", "--dir", a)
+    _, out_p = _run(capsys, "pulse", "--dir", b)
+    t, p = json.loads(out_t), json.loads(out_p)
+    assert p["wakeAgent"] == t["wakeAgent"] is True
+    assert p["data"]["reason"] == t["data"]["reason"] == "next_task"
+    assert p["data"]["next_task"]["id"] == t["data"]["next_task"]["id"] == "P0T1"
+
+
+def test_cli_keepalive_refreshes_lease_and_legacy_heartbeat_still_works(tmp_path):
+    proj = str(tmp_path / "proj")
+    cli.main(["init", proj])
+    cli.main(["start", "P0T1", "--dir", proj])
+    beat = tmp_path / "proj" / ".hb" / "leases" / "P0T1" / "beat"
+    for spelling in ("keepalive", "heartbeat"):
+        if beat.exists():
+            beat.unlink()
+        assert cli.main([spelling, "P0T1", "--dir", proj]) in (0, None)
+        assert beat.exists(), spelling

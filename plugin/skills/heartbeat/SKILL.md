@@ -1,12 +1,12 @@
 ---
 name: heartbeat
-description: HeartBeat tick-driven agent orchestration — bootstrap projects, run ticks, validate DAGs, generate reports and visualizations, and schedule autonomous runs. Use when the user mentions HeartBeat, /heartbeat, or wants to orchestrate a multi-phase project with quality gates.
+description: HeartBeat pulse-driven agent orchestration — bootstrap projects, take pulses (the cheap Stage A check), validate DAGs, generate reports and visualizations, and schedule autonomous runs. Use when the user mentions HeartBeat, /heartbeat, or wants to orchestrate a multi-phase project with quality gates.
 ---
 
 # HeartBeat Skill (Claude Code)
 
-Tick-driven agent orchestration. **Stage A** (`tick.sh`, pure bash, ~0 tokens) runs
-on a schedule and does 6 priority checks. **Stage B** (this LLM) wakes only when
+Pulse-driven agent orchestration. **Stage A** (`tick.sh`, pure bash, ~0 tokens) does
+6 priority checks whenever it is run. **Stage B** (this LLM) wakes only when
 real work exists, driven by `data.reason`.
 
 A project is a DAG (`dag.json`): phases → tasks → dependencies + quality gates.
@@ -146,19 +146,19 @@ view always reflects current execution state with no regenerate — prints the U
 for an ephemeral port). It binds `127.0.0.1` only and validates the `Origin` header
 (DNS-rebinding); a non-loopback bind is refused unless you pass `--allow-remote`.
 
-### `/heartbeat tick <project-dir>`
-Run a manual Stage A tick:
+### `/heartbeat pulse <project-dir>`
+Take one pulse (one decision, one action). `/heartbeat tick` is accepted as the legacy spelling.
 ```bash
 bash <project-dir>/.hb/tick.sh
 ```
 Returns `{ wakeAgent, data }`. If `wakeAgent: true`, act on `data.reason` per the
-Tick Protocol below.
+Pulse Protocol below.
 
 ### `/heartbeat run <project-dir>` — drive the loop
 
 **Serial (default):** repeatedly `bash .hb/tick.sh` → act on `data.reason` → repeat,
 stopping only at a wake that needs a human (`gate_blocked`, `build_stuck`, `deadlock`,
-`review_pending` you can't clear) or `all_done`. Equivalent to `/loop 15m /heartbeat tick <dir>`
+`review_pending` you can't clear) or `all_done`. Equivalent to `/loop 15m /heartbeat pulse <dir>`
 but self-paced.
 
 **Parallel (independent branches):** ask HeartBeat for the concurrently-runnable set
@@ -176,7 +176,7 @@ files, either run them worktree-isolated (recommended) or add a `requires` edge.
 
 Same serial loop as `/heartbeat run`, but Stage B is a **pluggable backend** instead
 of this session — so an unattended process can do the work. HeartBeat stays the
-deterministic brain (the tick decides what/when, the gates verify); the driver
+deterministic brain (the pulse decides what/when, the gates verify); the driver
 dispatches each task to a backend agent over a tiny JSON wire protocol and mediates
 every state transition itself.
 
@@ -210,19 +210,19 @@ shipped adapters (`.hb/executors/agno_exec.py`, `crewai_exec.py`, `claude-exec.s
 are the templates.
 
 ### `/heartbeat schedule <project-dir>`
-Drive ticks autonomously on Claude Code using a **`/schedule` routine** (cron).
+Drive pulses autonomously on Claude Code using a **`/schedule` routine** (cron).
 Present this ready-to-use routine to the user (fill in `<project-dir>`, `<slug>`,
 `<repo>`), and offer to create it via `/schedule`:
 
 ```
-Routine: HeartBeat tick — <slug>
+Routine: HeartBeat pulse — <slug>
 Trigger: schedule, cron "*/20 * * * *"   (every 20 min)
 Repositories: <repo>                     (the git repo containing <project-dir>)
 Prompt: |
-  Run one HeartBeat tick for project <slug>:
+  Run one HeartBeat pulse for project <slug>:
     bash <project-dir>/.hb/tick.sh
   Parse the JSON output. If wakeAgent is false, stop. If true, act on
-  data.reason per the HeartBeat Tick Protocol (next_task, gate_pending,
+  data.reason per the HeartBeat Pulse Protocol (next_task, gate_pending,
   gate_blocked, state_corrupted, dag_corrupted, deadlock, unsanctioned_drift,
   build_stuck, all_done). Update .hb/state.json atomically (tmp + rename) and
   append a task_done event to .hb/events.jsonl.
@@ -231,12 +231,12 @@ Prompt: |
 
 **Important caveat — where the routine runs.** Claude Code `/schedule` routines
 execute in Anthropic's cloud and clone a **GitHub repo** for each run. So a routine
-drives ticks correctly only when `<project-dir>` lives in a git repo the routine
+drives pulses correctly only when `<project-dir>` lives in a git repo the routine
 clones. For **local-only** projects, use one of:
-- **In-session:** `/loop 20m /heartbeat tick <project-dir>` (runs only while a
+- **In-session:** `/loop 20m /heartbeat pulse <project-dir>` (runs only while a
   Claude Code session is open).
 - **System cron** on the user's machine calling headless Claude Code, e.g.
-  `*/20 * * * * cd <project-dir> && claude -p "Run bash .hb/tick.sh and act on data.reason per the HeartBeat Tick Protocol; rm -rf .hb/.lock at end."`
+  `*/20 * * * * cd <project-dir> && claude -p "Run bash .hb/tick.sh and act on data.reason per the HeartBeat Pulse Protocol; rm -rf .hb/.lock at end."`
 
 ### `/heartbeat help`
 Reply with:
@@ -249,7 +249,7 @@ Reply with:
 • /heartbeat audit <dir>    — adversarial gate-quality review (hollow gates)
 • /heartbeat doctor <dir>   — integrity check (rot: gates referencing deleted files)
 • /heartbeat viz <dir>      — generate dag-view.html
-• /heartbeat tick <dir>     — manual tick (one task)
+• /heartbeat pulse <dir>    — take one pulse (one decision; legacy: tick)
 • /heartbeat run <dir>      — drive the loop (serial, or parallel via hb ready)
 • /heartbeat exec <dir>     — drive the loop with a pluggable backend (agno/crewai/claude-code)
 • /heartbeat schedule <dir> — ready-to-use /schedule routine
@@ -258,7 +258,7 @@ Reply with:
 
 ---
 
-## HeartBeat Tick Protocol (Stage B)
+## HeartBeat Pulse Protocol (Stage B)
 
 **Never hand-edit `state.json`.** It is a projection of `events.jsonl`. Mutate
 state ONLY through the `hb` CLI — it appends the event and reprojects atomically:
@@ -267,7 +267,7 @@ state ONLY through the `hb` CLI — it appends the event and reprojects atomical
 node .hb/hb.js start <taskId>      # claim the task (lease) + mark active
 node .hb/hb.js done  <taskId>      # completed → frees the lease, resets stuck count
 node .hb/hb.js fail  <taskId>      # failed    → frees the lease, bumps stuck count
-node .hb/hb.js heartbeat <taskId>  # long task: refresh the lease so it isn't reclaimed
+node .hb/hb.js keepalive <taskId>  # long task: refresh the lease so it isn't reclaimed
 node .hb/hb.js ready [N]           # the concurrently-runnable set (parallel drivers)
 node .hb/hb.js review <gate> pass|fail [note]   # record the adversarial verdict
 node .hb/hb.js doctor              # integrity check (deleted gate files, drift, stale leases)
@@ -277,8 +277,8 @@ node .hb/hb.js rebuild             # reproject state.json from the log (sync / r
 node .hb/hb.js state               # print current projected state
 ```
 
-**Self-describing ticks (v1.7).** Every wake already carries the exact next action
-in `data.action` — you rarely need this table; act on what the tick tells you. When
+**Self-describing pulses (v1.7).** Every wake already carries the exact next action
+in `data.action` — you rarely need this table; act on what the pulse tells you. When
 blocked, `node .hb/hb.js diagnose` computes the root cause (which criteria fail, which
 commit deleted a gate's file, the deadlock cause) and the recovery steps. The full
 protocol also lives in `.hb/PROTOCOL.md`, versioned with the project.
@@ -288,7 +288,7 @@ protocol also lives in `.hb/PROTOCOL.md`, versioned with the project.
 that goes silent is reclaimed fast (hung agent); a lease that never heartbeats
 falls back to the slower `LOCK_STALE_S` deadline.
 
-When woken by a tick (`data.reason` present), act by reason:
+When woken by a pulse (`data.reason` present), act by reason:
 
 | `data.reason` | Action |
 |---|---|
@@ -296,8 +296,8 @@ When woken by a tick (`data.reason` present), act by reason:
 | `gate_pending` | `bash .hb/gate.sh <data.next_task.gate>`. A pass advances the phase — UNLESS the gate has a `review` block, in which case an adversarial review is owed (next). |
 | `review_pending` | The deterministic gate passed; now **spawn a second, skeptical agent** (Agent tool) told to *refute* that the phase is truly complete — hollow tests, criteria not really met, faked outputs. **Seed that agent with `node .hb/hb.js refute-prompt <gate>`** — the SAME compose the automated path uses, so an interactive refutation honors the gate's `review.profile` (persona + the falsification checklist + the profile's extra questions); with no profile it is exactly today's prompt. **Write its attempt to a findings file**, then `node .hb/hb.js review <gate> fail "<holes>"` (found holes → `gate_blocked`) or `node .hb/hb.js review <gate> pass --artifact <file>` (couldn't refute). A pass **requires** a substantive artifact that cites the phase and comes from a different actor than the doer — no rubber-stamps. |
 | `gate_blocked` | `node .hb/hb.js diagnose` → shows which criteria fail + attempts; fix the ROOT cause (never weaken the gate), re-run `bash .hb/gate.sh <gate>`. |
-| `at_capacity` | Nothing to do — max tasks already in flight (or the only ready task is leased). The tick handled it; no wake. |
-| `state_corrupted` | `node .hb/hb.js rebuild` (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable. |
+| `at_capacity` | Nothing to do — max tasks already in flight (or the only ready task is leased). The pulse handled it; no wake. |
+| `state_corrupted` | `node .hb/hb.js rebuild` (replays events.jsonl). The pulse self-heals this; only surfaces if the log itself is unusable. |
 | `dag_corrupted` | Restore dag.json from git/backup (structure is immutable). |
 | `deadlock` | `active_orphan` → the stale-lease reclaim frees it automatically; if it persists, `hb fail <id>`. `dag_invalid` → surface errors for human review. |
 | `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
@@ -307,11 +307,11 @@ When woken by a tick (`data.reason` present), act by reason:
 | `all_done` | Write the final project report. |
 
 **End of session:** finish each claimed task with `hb done`/`hb fail` — that frees
-its lease. The tick's handout lock is released automatically (no more `rm -rf .lock`).
+its lease. The pulse's handout lock is released automatically (no more `rm -rf .lock`).
 A crashed session's lease is reclaimed after `LOCK_STALE_S`.
 
 **Parallelism:** set `HB_MAX_CONCURRENCY > 1` (env) to run independent DAG branches
-concurrently — overlapping ticks hand out distinct ready tasks up to the cap.
+concurrently — overlapping pulses hand out distinct ready tasks up to the cap.
 Default `1` keeps the classic one-task-at-a-time behavior. For explicit fan-out use
 `node .hb/hb.js ready N` and spawn worktree-isolated sub-agents.
 

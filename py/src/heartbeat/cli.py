@@ -28,13 +28,17 @@ def _add_dir(p):
     p.add_argument("--dir", help="project dir (or its .hb). Default: ./.hb or $HB_DIR")
 
 
+# canonical spelling ← accepted aliases (argparse reports the spelling used)
+_CANON = {"pulse": "tick", "heartbeat": "keepalive", "beat": "keepalive"}
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    ap = argparse.ArgumentParser(prog="hb", description="HeartBeat — tick-driven orchestration (pure-Python)")
+    ap = argparse.ArgumentParser(prog="hb", description="HeartBeat — pulse-driven orchestration (pure-Python)")
     sub = ap.add_subparsers(dest="cmd")
 
     p = sub.add_parser("init"); p.add_argument("project_dir"); p.add_argument("--force", action="store_true")
-    p = sub.add_parser("tick"); _add_dir(p)
+    p = sub.add_parser("tick", aliases=["pulse"]); _add_dir(p)   # `pulse` is the name; `tick` the legacy spelling
     p = sub.add_parser("gate"); p.add_argument("gate", nargs="?"); p.add_argument("--check", action="store_true"); p.add_argument("--all", action="store_true"); _add_dir(p)
     p = sub.add_parser("lint"); p.add_argument("dagfile", nargs="?"); p.add_argument("--json", action="store_true"); _add_dir(p)
     p = sub.add_parser("audit"); p.add_argument("dagfile", nargs="?"); p.add_argument("--json", action="store_true"); p.add_argument("--agent", action="store_true"); p.add_argument("--questions"); _add_dir(p)
@@ -44,8 +48,9 @@ def main(argv=None):
     p = sub.add_parser("protocol"); p.add_argument("reason", nargs="?"); p.add_argument("--md", action="store_true")
     p = sub.add_parser("state"); _add_dir(p)
     p = sub.add_parser("rebuild"); _add_dir(p)
-    for name in ("start", "done", "fail", "heartbeat"):
+    for name in ("start", "done", "fail"):
         p = sub.add_parser(name); p.add_argument("task"); p.add_argument("reason", nargs="*"); _add_dir(p)
+    p = sub.add_parser("keepalive", aliases=["heartbeat", "beat"]); p.add_argument("task"); _add_dir(p)   # lease refresh (legacy: heartbeat/beat)
     p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail"]); p.add_argument("note", nargs="*"); p.add_argument("--artifact"); _add_dir(p)
     p = sub.add_parser("evidence"); p.add_argument("gate"); _add_dir(p)
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
@@ -58,6 +63,7 @@ def main(argv=None):
     p = sub.add_parser("reward"); p.add_argument("--json", action="store_true"); _add_dir(p)
 
     args = ap.parse_args(argv)
+    args.cmd = _CANON.get(args.cmd, args.cmd)
     if not args.cmd:
         ap.print_help()
         return 1
@@ -160,10 +166,10 @@ def main(argv=None):
         if args.reason:
             ev["reason"] = " ".join(args.reason)
         st.mutate(hb, ev); st.release_lease(hb, args.task); print(f"failed {args.task}")
-    elif args.cmd == "heartbeat":
+    elif args.cmd == "keepalive":
         lease = st.leases_dir(hb) / args.task
         if not lease.exists():
-            sys.stderr.write(f"hb heartbeat: no lease for {args.task}\n"); return 0
+            sys.stderr.write(f"hb keepalive: no lease for {args.task} (reclaimed?)\n"); return 0
         (lease / "beat").write_text(st.now_iso()); print(f"beat {args.task}")
     elif args.cmd == "review":
         # Policy lives in review_policy.accept_review (one source of truth; the

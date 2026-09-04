@@ -39,7 +39,7 @@ const LOCK_STALE_S = parseInt(process.env.LOCK_STALE_S || '1800', 10);
 const nowIso = () => new Date().toISOString();
 const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-// v1.7: single source of truth for the tick protocol (reason → action). Rendered
+// v1.7: single source of truth for the pulse protocol (reason → action). Rendered
 // into: the tick's self-describing `data.action`, `.hb/PROTOCOL.md`, and `hb protocol`.
 // Keeping it here means it is always version-matched to the tick that emits reasons.
 const PROTOCOL = {
@@ -58,7 +58,7 @@ const PROTOCOL = {
   all_done:           'Write the final project report.',
 };
 function renderProtocolMd() {
-  let md = '# HeartBeat — tick protocol\n\nWhen a tick returns `wakeAgent:true`, act on `data.reason`. The tick also embeds\nthe action for the current reason in `data.action`. Full reference:\n\n| reason | action |\n|---|---|\n';
+  let md = '# HeartBeat — pulse protocol\n\nWhen a pulse returns `wakeAgent:true`, act on `data.reason`. The pulse also embeds\nthe action for the current reason in `data.action`. Full reference:\n\n| reason | action |\n|---|---|\n';
   for (const [r, a] of Object.entries(PROTOCOL)) md += `| \`${r}\` | ${a.replace(/\|/g, '\\|')} |\n`;
   md += '\nNever hand-edit `state.json` — it is a projection of `events.jsonl`; mutate state\nonly through the `hb` CLI.\n';
   return md;
@@ -399,12 +399,13 @@ switch (cmd) {
     break;
   }
 
+  case 'keepalive':              // refresh a task lease; `heartbeat` / `beat` are the legacy spellings
   case 'heartbeat':
   case 'beat': {
-    if (!arg1) die('usage: hb heartbeat <taskId>');
+    if (!arg1) die('usage: hb keepalive <taskId>');
     const lease = path.join(LEASES, arg1);
     if (!fs.existsSync(lease)) {   // lost the claim (already reclaimed) — non-fatal
-      process.stderr.write(`hb heartbeat: no lease for ${arg1} (reclaimed?)\n`);
+      process.stderr.write(`hb keepalive: no lease for ${arg1} (reclaimed?)\n`);
       process.exit(0);
     }
     fs.writeFileSync(path.join(lease, 'beat'), nowIso());   // refreshes mtime = liveness

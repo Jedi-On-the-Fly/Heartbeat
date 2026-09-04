@@ -12,7 +12,7 @@ Two stages. **Stage A** (`tick.sh`, bash) reads settled reality and decides whet
 | `.claude-plugin/marketplace.json` | Local marketplace descriptor (`source: ./plugin`) |
 | `plugin/.mcp.json` | Registers the HeartBeat MCP server (`hb mcp-serve`) so installing the plugin wires it (both hosts) |
 | `plugin/bootstrap.sh` | Scaffolds `<project>/.hb/`; git init + hooks |
-| `plugin/skills/heartbeat/SKILL.md` | `/heartbeat` command surface + Tick Protocol |
+| `plugin/skills/heartbeat/SKILL.md` | `/heartbeat` command surface + Pulse Protocol |
 | `plugin/skills/gated-docs/SKILL.md` | docs-as-verified-claims method (gate a guide with a proof/prose-check, refute it) |
 | `plugin/hooks/hooks.json` + `heartbeat-detect.sh` | SessionStart pointer when a `.hb/` exists |
 | `plugin/adapters/code/` + `plugin/adapters/docs/` + `plugin/adapters/research/` | **Domain adapters** — code (dep-lint + context + **discovery** + **deplint-accept** + **exclude-hb** + **coverage**/blind-spots), docs (citation-graph dep-lint + context), and research (**ground-check** the gate + **stamp-evidence** honest hashes + **research-context** Seam 2) — a **parity surface** with `py/src/heartbeat/adapters/` (node ≡ python, T94/T95/T98/T100/T106/T110–T115). Code exposed over MCP as `deplint`/`code_context`/`code_discover`. NOT scaffolded into `.hb/`, imports nothing from core. See [adapters.md](adapters.md) |
