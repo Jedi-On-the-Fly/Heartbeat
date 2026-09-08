@@ -29,8 +29,17 @@ if   command -v timeout  >/dev/null 2>&1; then TIMEOUT_BIN="timeout"
 elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN="gtimeout"
 else TIMEOUT_BIN=""; fi
 run_criterion() {
-  if [ -n "$TIMEOUT_BIN" ]; then "$TIMEOUT_BIN" "${GATE_TIMEOUT_S}s" bash -c "$1"
-  else bash -c "$1"; fi
+  if [ -n "$TIMEOUT_BIN" ]; then "$TIMEOUT_BIN" "${GATE_TIMEOUT_S}s" bash -c "$1"; return $?; fi
+  # No timeout(1)/gtimeout (e.g. stock macOS ships no coreutils): apply a portable shell-level bound so a
+  # hanging criterion still blocks the gate (kill → ✗) instead of running unbounded — parity with the
+  # python runner (subprocess timeout). Background + poll + kill; </dev/null so the criterion can't read stdin.
+  bash -c "$1" </dev/null &
+  local p=$! i=0 n=$(( GATE_TIMEOUT_S * 10 ))
+  while kill -0 "$p" 2>/dev/null; do
+    i=$((i + 1)); if [ "$i" -ge "$n" ]; then kill -9 "$p" 2>/dev/null; wait "$p" 2>/dev/null; return 124; fi
+    sleep 0.1
+  done
+  wait "$p"
 }
 
 # eval_gate <GATE> — run the criteria, print ✓/✗, set PASS/FAIL globals. No side effects.

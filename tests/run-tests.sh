@@ -1653,6 +1653,12 @@ check "T155.1 non-interactive re-bootstrap returns rather than blocking on a sil
 check "T155.2 the check has teeth: the silent-pipe detector flags the unguarded read AND clears the [-t 0]-guarded one (bootstrap-noninteractive.sh --selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/bootstrap-noninteractive.sh" --selftest 2>/dev/null | grep -q "SELFTEST-OK"'
 
+grp "T156 — gate integrity: gate.sh bounds every criterion even with NO timeout(1)/gtimeout (stock macOS) — a portable shell-level bound kills a hanging criterion (✗) instead of running unbounded; parity with the python runner"
+check "T156.1 under a curated PATH lacking timeout/gtimeout, a sleep-past-GATE_TIMEOUT_S criterion is killed → gate blocks (fast), a quick criterion still passes (gate-timeout-portable.sh → GATE-TIMEOUT-PORTABLE-OK)" \
+  'bash "'"$GEX"'/gate-timeout-portable.sh" 2>/dev/null | grep -q "GATE-TIMEOUT-PORTABLE-OK"'
+check "T156.2 the check has teeth: run_bounded flags a hang AND clears a quick cmd, and the curated PATH truly excludes timeout/gtimeout while keeping bash/node/sleep (gate-timeout-portable.sh --selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/gate-timeout-portable.sh" --selftest 2>/dev/null | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
