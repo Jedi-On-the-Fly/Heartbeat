@@ -1,7 +1,24 @@
 # STATUS — HeartBeat
 
-**Version:** v1.29.1 (rot-lint precision: relative path-shaped non-files — module specifiers, URL paths, route args — no longer false-trip `gate_rot`, over v1.29)
+**Version:** v1.29.2 (portability: re-bootstrap no longer hangs on a silent-but-open stdin, and gate.sh bounds every criterion even with no `timeout(1)` — both surfaced on stock macOS, over v1.29.1)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.29.2 — portability fixes from stock-macOS testing (no coreutils, silent-stdin callers)
+
+Two defects a collaborator hit running the suite on stock macOS (bash 3.2, no coreutils), each fixed
+spec-first with a portable, self-bounded proof.
+
+- **Bootstrap no longer hangs on a silent-but-open stdin (T155).** Re-bootstrapping a project that
+  already has `.hb/` prompted `Overwrite?` guarded for EOF (`read ... || REPLY="n"`) but not for a
+  non-terminal caller holding stdin open on a pipe that never delivers a byte and never reaches EOF (a
+  test harness / agent / CI / inherited-stdin cron) — `read` blocked forever (state `S`, read as "slow").
+  It stalled the suite itself. Fix: prompt only when `[ -t 0 ]`, else refuse; `--force` still overwrites.
+  Python `hb init` is flag-driven (no interactive read) → was never affected.
+- **gate.sh bounds every criterion even with no `timeout(1)`/`gtimeout` (T156).** The runner applied a
+  per-criterion timeout only when a timeout binary was on PATH; stock macOS ships neither, so criteria
+  ran UNBOUNDED (a hang froze the tick/suite). Fix: a portable shell-level bound (background + poll +
+  kill past `GATE_TIMEOUT_S` → ✗) — parity with the python runner, which was already always-bounded.
+- Both proofs carry their own `run_bounded` (never `timeout(1)`). Plugin/marketplace → 1.29.2, Python → 0.19.2.
 
 ## v1.29.1 — rot-lint precision: path-shaped non-files no longer false-trip gate_rot
 
