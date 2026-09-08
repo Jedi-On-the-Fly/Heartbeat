@@ -1647,6 +1647,12 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$GEX"'/audit-ctrl-byte.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 else echo "  (python3 absent — T154 skipped)"; fi
 
+grp "T155 — bootstrap: re-bootstrap with a live-but-silent pipe on stdin refuses instead of hanging ([-t 0] guard); non-tty refuses (no overwrite); --force still overwrites; portable (no timeout(1))"
+check "T155.1 non-interactive re-bootstrap returns rather than blocking on a silent pipe, refuses (no overwrite), and --force overwrites (bootstrap-noninteractive.sh → BOOTSTRAP-NI-OK)" \
+  'bash "'"$GEX"'/bootstrap-noninteractive.sh" 2>/dev/null | grep -q "BOOTSTRAP-NI-OK"'
+check "T155.2 the check has teeth: the silent-pipe detector flags the unguarded read AND clears the [-t 0]-guarded one (bootstrap-noninteractive.sh --selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/bootstrap-noninteractive.sh" --selftest 2>/dev/null | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

@@ -42,10 +42,15 @@ done
 
 if [ -d "$HB_DIR" ] && [ "$FORCE" != "--force" ]; then
   echo "⚠️  .hb/ already exists in $PROJECT_DIR"
-  # v1.1: EOF-safe — in a non-interactive context (cron/agent) there is no tty, so
-  # default to refusing instead of crashing under set -e. Use --force to overwrite.
-  read -p "Overwrite? (y/N) " -n 1 -r REPLY || REPLY="n"
-  echo
+  # Prompt ONLY with a real terminal. A non-interactive caller (cron/agent/CI/test harness) may hold
+  # stdin open on a pipe that never delivers a byte and never reaches EOF — there `read` blocks forever
+  # (EOF-guarding with `|| REPLY="n"` only covers EOF, not never-returns). No tty → refuse; --force overwrites.
+  if [ -t 0 ]; then
+    read -p "Overwrite? (y/N) " -n 1 -r REPLY || REPLY="n"
+    echo
+  else
+    REPLY="n"; echo "(no terminal — refusing; use --force to overwrite)"
+  fi
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Aborted. (use: bootstrap.sh <project-dir> --force to overwrite)"
     exit 0
