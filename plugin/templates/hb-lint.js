@@ -100,13 +100,31 @@ function checkPlaceholders(dag, warnings) {
 
 // v1.4 (#1): warn when a gate cmd references a file/dir that no task appears to
 // produce (heuristic). Catches "gate runs tests/e2e/x.spec.js but nothing writes it".
+// Drop single-quoted spans that sit OUTSIDE double quotes: in shell those are literal
+// strings the command searches FOR (grep/sed patterns, e.g. grep '@import "blocks/x.css"'),
+// not files it depends on. A single quote INSIDE a double-quoted string is just a character
+// — "require('$PROJECT_DIR/f.js')" keeps its path.
+function stripSingleQuoted(cmd) {
+  let out = '', inDouble = false;
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i];
+    if (c === '"') { inDouble = !inDouble; out += c; }
+    else if (c === "'" && !inDouble) {
+      const j = cmd.indexOf("'", i + 1);
+      if (j === -1) { out += cmd.slice(i); break; }
+      out += ' '; i = j;
+    } else out += c;
+  }
+  return out;
+}
 function extractPaths(cmd) {
   const out = new Set();
-  for (const tokRaw of (cmd.match(/[\w.\-/${}]+/g) || [])) {
+  const src = stripSingleQuoted(cmd);
+  for (const tokRaw of (src.match(/[\w.\-/${}]+/g) || [])) {
     if (!tokRaw.includes('/')) continue;            // must look like a path
     if (/HB_DIR/.test(tokRaw)) continue;            // HeartBeat's own dir
     let p = tokRaw.replace(/\$\{?PROJECT_DIR\}?\//, '').replace(/^\.\//, '');
-    if (!p || p.startsWith('$')) continue;          // bare/unresolved var
+    if (!p || /[${}]/.test(p)) continue;            // unresolved var anywhere (blocks/$n.css, ${X:-…} shrapnel)
     if (p.startsWith('/')) continue;                // absolute path — a system/tool path, not a produced artifact
     if (p.includes('.hb/')) continue;
     const base = p.replace(/\/$/, '').split('/').pop();

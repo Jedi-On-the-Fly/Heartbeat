@@ -49,3 +49,24 @@ def test_extract_paths_keeps_real_artifacts():
     assert "tests/e2e/x.spec.js" in lint.extract_paths("node tests/e2e/x.spec.js")
     assert "tests/frameworks/Dockerfile" in lint.extract_paths("docker build -f tests/frameworks/Dockerfile .")
     assert "build/Makefile" in lint.extract_paths("make -f build/Makefile all")
+
+
+def test_extract_paths_drops_single_quoted_grep_literals():
+    # a single-quoted string is text the command searches FOR, not a file it depends on —
+    # grep '@import "blocks/dock.css" …' must not rot-trip on blocks/dock.css
+    cmd = "grep -q '@import \"blocks/dock.css\" layer(jotf.bricks)' \"$PROJECT_DIR/public/blocks.css\""
+    paths = lint.extract_paths(cmd)
+    assert "blocks/dock.css" not in paths
+    assert "public/blocks.css" in paths
+
+
+def test_extract_paths_keeps_single_quotes_nested_in_double_quotes():
+    # inside double quotes a single quote is just a character; the path still expands and counts
+    assert "src/App.php" in lint.extract_paths('php -r "require(\'$PROJECT_DIR/src/App.php\');"')
+
+
+def test_extract_paths_rejects_unresolved_vars_anywhere():
+    # loop variables and ${X:-default} shrapnel are not statically checkable paths
+    assert lint.extract_paths('cmp "$PROJECT_DIR/blocks/$n.css" "$SRC/blocks/$n.css"') == set()
+    paths = lint.extract_paths('S="${SRC:-/opt/kit}"; cmp "$S/blocks/dock.css" "$PROJECT_DIR/vendor/dock.css"')
+    assert paths == {"vendor/dock.css"}

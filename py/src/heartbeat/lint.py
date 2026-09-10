@@ -80,16 +80,41 @@ def _check_placeholders(dag, warnings):
         warnings.append(f"DAG still contains skeleton/template text ({', '.join(hits[:3])}{more}) — replace with the real plan")
 
 
+def _strip_single_quoted(cmd):
+    """Drop single-quoted spans that sit OUTSIDE double quotes: in shell those are literal
+    strings the command searches FOR (grep/sed patterns, e.g. grep '@import "blocks/x.css"'),
+    not files it depends on. A single quote INSIDE a double-quoted string is just a character
+    — "require('$PROJECT_DIR/f.js')" keeps its path."""
+    out = []
+    i, n, in_double = 0, len(cmd), False
+    while i < n:
+        c = cmd[i]
+        if c == '"':
+            in_double = not in_double
+            out.append(c)
+        elif c == "'" and not in_double:
+            j = cmd.find("'", i + 1)
+            if j == -1:
+                out.append(cmd[i:])
+                break
+            out.append(" ")
+            i = j
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def extract_paths(cmd):
     out = set()
-    for tok in re.findall(r"[\w.\-/${}]+", cmd or ""):
+    for tok in re.findall(r"[\w.\-/${}]+", _strip_single_quoted(cmd or "")):
         if "/" not in tok:
             continue
         if "HB_DIR" in tok:
             continue
         p = re.sub(r"\$\{?PROJECT_DIR\}?/", "", tok)
         p = re.sub(r"^\./", "", p)
-        if not p or p.startswith("$"):
+        if not p or re.search(r"[${}]", p):  # unresolved var anywhere (blocks/$n.css, ${X:-…} shrapnel)
             continue
         if p.startswith("/"):   # absolute path — a system/tool path, not a produced artifact
             continue
