@@ -46,7 +46,10 @@ def main(argv=None):
     p = sub.add_parser("rebuild"); _add_dir(p)
     for name in ("start", "done", "fail", "heartbeat"):
         p = sub.add_parser(name); p.add_argument("task"); p.add_argument("reason", nargs="*"); _add_dir(p)
-    p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail"]); p.add_argument("note", nargs="*"); p.add_argument("--artifact"); _add_dir(p)
+    # note is a SINGLE (quoted) argument: with nargs="*", argparse consumed a flag-shaped token
+    # inside an unquoted note as the --model flag — fabricating provenance from note text and
+    # silently truncating the findings (GATE_RE2 refuter catch). Refusing loudly beats guessing.
+    p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail"]); p.add_argument("note", nargs="?"); p.add_argument("--artifact"); p.add_argument("--model"); _add_dir(p)
     p = sub.add_parser("evidence"); p.add_argument("gate"); _add_dir(p)
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
     p = sub.add_parser("refuters"); p.add_argument("rest", nargs=argparse.REMAINDER); _add_dir(p)
@@ -233,7 +236,8 @@ def main(argv=None):
         # executor and MCP server call it directly). The CLI only routes I/O.
         from . import review_policy
         rc, out, err = review_policy.accept_review(hb, args.gate, args.verdict,
-                                                   artifact=args.artifact, note=args.note)
+                                                   artifact=args.artifact, note=args.note,
+                                                   model=args.model)
         if out:
             print(out)
         if err:

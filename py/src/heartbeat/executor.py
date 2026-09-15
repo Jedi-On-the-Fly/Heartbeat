@@ -363,7 +363,9 @@ def _run(hbdir):
                 print(f"HB-EXEC STOP: review_error — {g}: refuter could not run ({r.get('error') or 'no verdict'})")
                 return 1
             if r["refuted"]:
-                st.mutate(hbdir, {"event": "review_failed", "gate": g, "note": (r.get("findings", "") or "")[:200]})
+                # Auto-stamp the resolved refuter model (config-derived — not a self-report).
+                st.mutate(hbdir, {"event": "review_failed", "gate": g, "model": r_model or None,
+                                  "note": (r.get("findings", "") or "")[:200]})
             else:
                 # Sev-1: a "could not refute" pass must cite the refuter's ACTUAL written
                 # attempt. Persist findings + route through the validated review path (as a
@@ -381,7 +383,8 @@ def _run(hbdir):
                 saved = os.environ.get("HB_ACTOR")
                 os.environ["HB_ACTOR"] = refuter_actor
                 try:
-                    rc, _out, _err = review_policy.accept_review(hbdir, g, "pass", artifact=str(fpath))
+                    rc, _out, _err = review_policy.accept_review(hbdir, g, "pass", artifact=str(fpath),
+                                                                 model=r_model or None)
                 finally:
                     if saved is None:
                         os.environ["HB_ACTOR"] = worker_actor

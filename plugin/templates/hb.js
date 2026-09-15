@@ -421,11 +421,26 @@ switch (cmd) {
     const ai = rest.indexOf('--artifact');
     let artifact = null;
     if (ai !== -1) { artifact = rest[ai + 1]; rest.splice(ai, 2); }
-    const note = rest.slice(1).join(' ');
+    // --model: the model that reviewed — recorded on the event (null when omitted: honest,
+    // never fabricated; interactive values are the recorder's self-report).
+    const mi = rest.indexOf('--model');
+    let model = null;
+    if (mi !== -1) { model = rest[mi + 1] ?? null; rest.splice(mi, 2); }
+    // The note must be ONE (quoted) argument — same rule as the python CLI. With a free-form
+    // token list, a flag-shaped token INSIDE an unquoted note was consumed as --model,
+    // fabricating provenance from note text and silently truncating the findings (GATE_RE2
+    // refuter catch). Arity is the only reliable distinguisher (the executor legitimately
+    // passes findings as one element with trailing flags), so: refuse loudly, never guess.
+    const noteToks = rest.slice(1);
+    if (noteToks.length > 1)
+      die(`review: the note must be ONE (quoted) argument — got ${noteToks.length} tokens; refusing rather than guessing (a mis-parse could fabricate provenance).`);
+    if (noteToks[0] && /^--\S+$/.test(noteToks[0]))
+      die(`review: unrecognized flag-shaped token '${noteToks[0]}' in the note position — quote the note (refusing rather than guessing).`);
+    const note = noteToks[0] || '';
     if (!gate || (verdict !== 'pass' && verdict !== 'fail'))
-      die('usage: hb review <gate> pass|fail [--artifact <findings-file>] [note]');
+      die('usage: hb review <gate> pass|fail [--artifact <findings-file>] [--model <m>] [note]');
     if (verdict === 'fail') {
-      mutate({ event: 'review_failed', gate, ...(note ? { note } : {}) });
+      mutate({ event: 'review_failed', gate, model, ...(note ? { note } : {}) });
       process.stdout.write(`review fail ${gate}\n`);
       break;
     }
@@ -462,7 +477,7 @@ switch (cmd) {
     const revDir = path.join(HB_DIR, 'reviews');
     try { fs.mkdirSync(revDir, { recursive: true }); } catch (e) {}
     fs.writeFileSync(path.join(revDir, `${gate}.md`), body);
-    mutate({ event: 'review_passed', gate, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, ...(note ? { note } : {}) });
+    mutate({ event: 'review_passed', gate, model, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, ...(note ? { note } : {}) });
     // Reviewed acceptance creates the phase's restore point (commit+tag) — deferred from the
     // deterministic pass so the tag only ever certifies a reviewed-good state.
     if (!process.env.HB_NO_GIT && process.env.HB_GIT_AUTOCOMMIT !== '0') {

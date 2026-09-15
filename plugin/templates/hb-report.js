@@ -101,13 +101,18 @@ function refuterImpact(evs, d) {
   for (const e of evs) {
     if (e.event !== 'review_failed' && e.event !== 'review_passed') continue;
     if (!e.gate) continue;
-    (per[e.gate] ??= { caught: 0, cleared: 0, findings: [] });
-    if (e.event === 'review_failed') { per[e.gate].caught++; per[e.gate].findings.push(e.note || ''); }
-    else per[e.gate].cleared++;
+    (per[e.gate] ??= { caught: 0, cleared: 0, findings: [], models: {} });
+    // Per-model breakdown — the capability axis of "did the refuter earn its keep?".
+    // Null/absent model buckets under "(none)" (one mirrored convention, node ≡ python).
+    const mk = e.model || '(none)';
+    (per[e.gate].models[mk] ??= { caught: 0, cleared: 0 });
+    if (e.event === 'review_failed') { per[e.gate].caught++; per[e.gate].models[mk].caught++; per[e.gate].findings.push(e.note || ''); }
+    else { per[e.gate].cleared++; per[e.gate].models[mk].cleared++; }
   }
   const outGates = Object.keys(per).sort().map(g => ({
     gate: g, profile: ((g0[g] || {}).review || {}).profile ?? null,
     caught: per[g].caught, cleared: per[g].cleared, findings: per[g].findings,
+    models: per[g].models,
   }));
   return { caught: outGates.reduce((a, x) => a + x.caught, 0),
            cleared: outGates.reduce((a, x) => a + x.cleared, 0), gates: outGates };

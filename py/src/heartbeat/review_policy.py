@@ -21,7 +21,7 @@ from . import state as st
 from . import lint as lintmod
 
 
-def accept_review(hb, gate, verdict, artifact=None, note=None):
+def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
     """Record an adversarial-review verdict. Returns (rc, out, err).
 
     hb       — the project's .hb directory (str or Path)
@@ -29,12 +29,15 @@ def accept_review(hb, gate, verdict, artifact=None, note=None):
     verdict  — "pass" or "fail"
     artifact — path to the refuter's written attempt (required for a pass)
     note     — optional note (str or list of tokens)
+    model    — the model that reviewed, recorded on the event (null when unknown — honest,
+               never fabricated). The exec path auto-stamps the resolved profile model
+               (config-derived); an interactive/MCP value is the recorder's self-report.
     """
     hb = str(hb)
     note_str = (" ".join(note) if isinstance(note, list) else note) or None
 
     if verdict == "fail":
-        ev = {"event": "review_failed", "gate": gate}
+        ev = {"event": "review_failed", "gate": gate, "model": model}
         if note_str:
             ev["note"] = note_str
         st.mutate(hb, ev)
@@ -81,7 +84,7 @@ def accept_review(hb, gate, verdict, artifact=None, note=None):
     revdir = Path(hb) / "reviews"
     revdir.mkdir(parents=True, exist_ok=True)
     (revdir / f"{gate}.md").write_text(body)
-    ev = {"event": "review_passed", "gate": gate, "artifact": f"reviews/{gate}.md",
+    ev = {"event": "review_passed", "gate": gate, "model": model, "artifact": f"reviews/{gate}.md",
           "artifact_chars": len(body.strip()), "cited": cited, "reviewer": reviewer}
     if note_str:
         ev["note"] = note_str

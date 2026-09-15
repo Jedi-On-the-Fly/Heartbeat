@@ -1767,6 +1767,12 @@ check "T163.1 --json binding + one-compose byte pins + text contract + both inst
 check "T163.2 teeth: model-key, byte-pin, instruction-grep, compose-contract each load-bearing (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/refuter-model-routing.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
+grp "T164 — review-event model provenance: --model recorded (both runtimes, both verdicts), exec auto-stamps the profile model, MCP carries it, per-model impact node ≡ python"
+check "T164.1 recording + null-honesty + auto-stamp + MCP + mixed-model impact + guards/Sev-1 intact (refuter-model-provenance.sh → REFUTER-PROVENANCE-OK)" \
+  'bash "'"$GEX"'/refuter-model-provenance.sh" 2>&1 | grep -q "REFUTER-PROVENANCE-OK"'
+check "T164.2 teeth: recording, null-honesty, and impact checks load-bearing (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/refuter-model-provenance.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

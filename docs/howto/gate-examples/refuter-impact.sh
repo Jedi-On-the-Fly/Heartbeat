@@ -59,8 +59,10 @@ printf '%s' "$pj" | grep -q '"caught":2' || fail "caught count wrong (expected 2
 printf '%s' "$pj" | grep -q '"cleared":2' || fail "cleared count wrong (expected 2): $pj"
 printf '%s' "$pj" | grep -q '"profile":"security"' || fail "the GATE_S security lens was not recorded: $pj"
 printf '%s' "$pj" | grep -q 'hole one: a real gap' || fail "the finding text was not recorded: $pj"
-# GATE_C has no profile → null lens, and it cleared (no catch)
-printf '%s' "$pj" | grep -q '"gate":"GATE_C","profile":null' || fail "GATE_C should have a null lens: $pj"
+# GATE_C has no profile → null lens, and it cleared (no catch). Structural check, not a
+# key-adjacency grep — the summary gained a `models` key (v1.31) that sorts between them.
+printf '%s' "$pj" | python3 -c 'import sys,json;d=json.load(sys.stdin);g=[x for x in d["gates"] if x["gate"]=="GATE_C"][0];sys.exit(0 if g["profile"] is None else 1)' \
+  || fail "GATE_C should have a null lens: $pj"
 
 # the human render shows the impact section
 node "$proj/.hb/hb-report.js" "$proj/.hb" 2>/dev/null | grep -q 'Refuter impact: caught 2' || fail "node render omits the refuter-impact section"

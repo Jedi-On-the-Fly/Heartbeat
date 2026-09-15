@@ -381,7 +381,7 @@ async function run() {
           escalate('review_error', `${gate}: backend returned no verdict`); return 1;
         }
         if (r.json.refuted) {
-          hb('review', gate, 'fail', r.json.findings || 'refuted');
+          hb('review', gate, 'fail', r.json.findings || 'refuted', ...(rModel ? ['--model', rModel] : []));
         } else {
           // Sev-1: a "could not refute" pass must cite the refuter's ACTUAL written
           // attempt. Persist findings + pass --artifact so the verdict is reducible to
@@ -394,7 +394,7 @@ async function run() {
           try { fs.mkdirSync(fdir, { recursive: true }); } catch (e) {}
           const fpath = path.join(fdir, `${gate}.attempt.md`);
           fs.writeFileSync(fpath, `# Refutation attempt for ${gate}\n\nRefuter: ${refuterId}\nVerdict: could not refute (refuted=false)\n\n${findings}\n`);
-          hbAs(refuterActor, 'review', gate, 'pass', '--artifact', fpath);
+          hbAs(refuterActor, 'review', gate, 'pass', '--artifact', fpath, ...(rModel ? ['--model', rModel] : []));
         }
         break;
       }

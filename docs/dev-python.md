@@ -107,7 +107,10 @@ refute prompt from a resolved profile lives at the dispatch site.
   `hb refute-prompt <gate> --json` adds the machine-readable binding for an interactive host —
   `{prompt, model, provider, panel, refute_if}` with `prompt` byte-identical to the text compose and
   all fields null when no profile (never fabricated) — so a spawner routes the refuter (and records
-  `--model`) without parsing prose (T163, `parity.sh refute-prompt:json`).
+  `--model`) without parsing prose (T163, `parity.sh refute-prompt:json`). The review-event model
+  field: `accept_review(model=…)` records it on both verdicts (null when unknown — honest, never
+  fabricated), the executor auto-stamps the resolved profile model, the MCP review tool passes
+  `model` through, and `report.refuter_impact` breaks caught/cleared down per model (T164).
   A profile's `model`/`provider` route through the existing cross-model `refute_*` path
   (`gate_profile`). Unknown profile ⇒ raises ⇒ the executor fails **closed** (`review_error`). Shipped
   `hb refuters` lists profiles; both node ≡ python (T146/T147). Shared `tick.py` untouched.

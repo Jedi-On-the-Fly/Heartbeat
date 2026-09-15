@@ -19,14 +19,21 @@ def refuter_impact(events, dag):
         g = e.get("gate")
         if not g:
             continue
-        d = per.setdefault(g, {"caught": 0, "cleared": 0, "findings": []})
+        d = per.setdefault(g, {"caught": 0, "cleared": 0, "findings": [], "models": {}})
+        # Per-model breakdown — the capability axis of "did the refuter earn its keep?".
+        # Null/absent model buckets under "(none)" (one mirrored convention, node ≡ python).
+        mk = e.get("model") or "(none)"
+        md = d["models"].setdefault(mk, {"caught": 0, "cleared": 0})
         if ev == "review_failed":
             d["caught"] += 1
+            md["caught"] += 1
             d["findings"].append(e.get("note") or "")
         else:
             d["cleared"] += 1
+            md["cleared"] += 1
     out_gates = [{"gate": g, "profile": ((gates.get(g) or {}).get("review") or {}).get("profile"),
-                  "caught": per[g]["caught"], "cleared": per[g]["cleared"], "findings": per[g]["findings"]}
+                  "caught": per[g]["caught"], "cleared": per[g]["cleared"], "findings": per[g]["findings"],
+                  "models": per[g]["models"]}
                  for g in sorted(per)]
     return {"caught": sum(x["caught"] for x in out_gates),
             "cleared": sum(x["cleared"] for x in out_gates),

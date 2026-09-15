@@ -160,7 +160,8 @@ def _review(hb, a):
     validation is security-sensitive and lives in one place."""
     from . import review_policy
     rc, out, err = review_policy.accept_review(hb, a["gate"], a["verdict"],
-                                               artifact=a.get("artifact"), note=a.get("note"))
+                                               artifact=a.get("artifact"), note=a.get("note"),
+                                               model=a.get("model"))
     return {"ok": rc == 0, "stdout": out.strip(), "stderr": err.strip()}
 
 
@@ -173,9 +174,10 @@ TOOLS.update({
                {"type": "object", "properties": {"task": {"type": "string"}}, "required": ["task"]}),
     "fail":   (_fail,   "Fail a task (task_failed event + release the lease).",
                {"type": "object", "properties": {"task": {"type": "string"}, "reason": {"type": "string"}}, "required": ["task"]}),
-    "review": (_review, "Record an adversarial review verdict (a pass requires --artifact from a distinct actor).",
+    "review": (_review, "Record an adversarial review verdict (a pass requires --artifact from a distinct actor); model records what reviewed (self-reported).",
                {"type": "object", "properties": {"gate": {"type": "string"}, "verdict": {"type": "string", "enum": ["pass", "fail"]},
-                                                 "artifact": {"type": "string"}, "note": {"type": "array", "items": {"type": "string"}}},
+                                                 "artifact": {"type": "string"}, "note": {"type": "array", "items": {"type": "string"}},
+                                                 "model": {"type": "string"}},
                "required": ["gate", "verdict"]}),
 })
 

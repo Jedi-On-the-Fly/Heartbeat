@@ -236,6 +236,7 @@ impact_case(){
   cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-report.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" "$d/.hb/"
   printf '%s' '{"phases":[{"id":"S","gate_entry":null,"gate_exit":"GATE_S","tasks":[{"id":"s1"}]}],"gates":{"GATE_S":{"review":{"profile":"security","prompt":"r"},"criteria":[{"id":"x","cmd":"true"}]}}}' > "$d/.hb/dag.json"
   printf '%s\n' '{"event":"initialized"}
+{"event":"review_failed","gate":"GATE_S","model":"m1","note":"a hole"}
 {"event":"review_failed","gate":"GATE_S","note":"a hole"}
 {"event":"review_passed","gate":"GATE_S","reviewer":"r","artifact":"reviews/GATE_S.md"}' > "$d/.hb/events.jsonl"
   node "$d/.hb/hb.js" rebuild >/dev/null 2>&1
