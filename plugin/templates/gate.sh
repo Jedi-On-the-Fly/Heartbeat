@@ -38,7 +38,7 @@ GATE_OUT_LINES="${GATE_OUT_LINES:-20}"
 # mktemp may be absent (the coreutils-less PATH T156 exercises) — fall back to a $$-named file.
 if command -v mktemp >/dev/null 2>&1; then CRIT_OUT="$(mktemp "${TMPDIR:-/tmp}/hb-gate-out.XXXXXX")"
 else CRIT_OUT="${TMPDIR:-/tmp}/hb-gate-out.$$"; : > "$CRIT_OUT"; fi
-trap 'rm -f "$CRIT_OUT" 2>/dev/null || true' EXIT
+trap 'rm -f "$CRIT_OUT" "$CRIT_OUT.2" 2>/dev/null || true' EXIT
 if   command -v timeout  >/dev/null 2>&1; then TIMEOUT_BIN="timeout"
 elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN="gtimeout"
 else TIMEOUT_BIN=""; fi
@@ -108,10 +108,11 @@ eval_gate() {
     KEY="$CMD"$'\x1f'"$EFF_T"
     if [ "${DEDUP:-0}" = 1 ] && _dedup_find "$KEY"; then
       RC="${DEDUP_EXITS[$DD_I]}"; DT="${DEDUP_DTS[$DD_I]}"; DEDUP_HITS=$((DEDUP_HITS + 1))
+      FMARK=""; [ "${DEDUP_FLAKY[$DD_I]}" = 1 ] && FMARK=", FLAKY"
       if [ "$RC" -eq 0 ]; then
         echo "  ✓ [$ID] $DESC (deduped, ${DT}s)"; PASS=$((PASS + 1)); CRIT_EXITS="$CRIT_EXITS 0"
       else
-        echo "  ✗ [$ID] $DESC (deduped, ${DT}s)"; echo "      cmd: $CMD"
+        echo "  ✗ [$ID] $DESC (deduped, ${DT}s${FMARK})"; echo "      cmd: $CMD"
         echo "      (first failure of this cmd shown above)"
         FAIL=$((FAIL + 1)); CRIT_EXITS="$CRIT_EXITS 1"
       fi
@@ -125,13 +126,30 @@ eval_gate() {
     if run_criterion "$CMD" "$EFF_T" >"$CRIT_OUT" 2>&1; then RC=0; else RC=1; fi
     DT=$((SECONDS - T0))
     [ -t 1 ] && printf '\r\033[K'
+    # Flake probe (sweep-only): re-run a FAILURE once to distinguish flake from regression.
+    # The verdict NEVER changes — observed nondeterminism is itself a gate-contract violation
+    # (the behavioral complement of the auditor's static `nondeterministic` rule) and fails
+    # closed; the probe only labels. Probe output goes to a second file so the FIRST failure's
+    # tail (the evidence) is preserved.
+    IS_FLAKY=0; REPRO=0; DT2=0
+    if [ "$RC" -ne 0 ] && [ "${DEDUP:-0}" = 1 ]; then
+      T1=$SECONDS
+      if run_criterion "$CMD" "$EFF_T" >"$CRIT_OUT.2" 2>&1; then IS_FLAKY=1; else REPRO=1; fi
+      DT2=$((SECONDS - T1))
+      [ "$IS_FLAKY" = 1 ] && FLAKY_TOTAL=$((FLAKY_TOTAL + 1))
+    fi
     if [ "${DEDUP:-0}" = 1 ]; then
-      DEDUP_KEYS+=("$KEY"); DEDUP_EXITS+=("$RC"); DEDUP_DTS+=("$DT")
+      DEDUP_KEYS+=("$KEY"); DEDUP_EXITS+=("$RC"); DEDUP_DTS+=("$DT"); DEDUP_FLAKY+=("$IS_FLAKY")
     fi
     if [ "$RC" -eq 0 ]; then
       echo "  ✓ [$ID] $DESC (${DT}s)"; PASS=$((PASS + 1)); CRIT_EXITS="$CRIT_EXITS 0"
+    elif [ "$IS_FLAKY" = 1 ]; then
+      echo "  ✗ [$ID] $DESC FLAKY: failed (${DT}s), then passed on re-run (${DT2}s) — still FAILED (a criterion must be deterministic)"
+      echo "      cmd: $CMD"
+      FAIL=$((FAIL + 1)); CRIT_EXITS="$CRIT_EXITS 1"
     else
       echo "  ✗ [$ID] $DESC (${DT}s)"; echo "      cmd: $CMD"
+      [ "$REPRO" = 1 ] && echo "      (failure reproduced on immediate re-run, ${DT2}s)"
       if [ -s "$CRIT_OUT" ]; then
         # Pure-bash tail (no wc/tail/sed — they're absent on the coreutils-less PATH T156 exercises).
         OUT_LINES=()
@@ -214,7 +232,7 @@ if [ "$ALL" = 1 ]; then
   set -- $GATES; NGATES=$#
   echo "— re-verifying $NGATES ever-passed gate(s)…"
   echo ""
-  DEDUP=1; DEDUP_KEYS=(); DEDUP_EXITS=(); DEDUP_DTS=(); DEDUP_HITS=0
+  DEDUP=1; DEDUP_KEYS=(); DEDUP_EXITS=(); DEDUP_DTS=(); DEDUP_FLAKY=(); DEDUP_HITS=0; FLAKY_TOTAL=0
   S0=$SECONDS
   TOTAL_FAIL=0
   for g in $GATES; do eval_gate "$g"; TOTAL_FAIL=$((TOTAL_FAIL + FAIL)); echo ""; done
@@ -225,8 +243,9 @@ if [ "$ALL" = 1 ]; then
     echo ""
   fi
   DSUF=""; [ "$DEDUP_HITS" -gt 0 ] && DSUF=", $DEDUP_HITS deduped"
+  FSUF=""; [ "$FLAKY_TOTAL" -gt 0 ] && FSUF=", $FLAKY_TOTAL flaky"
   if [ "$TOTAL_FAIL" -eq 0 ]; then echo "✅ ALL GATES PASS (read-only: $NGATES gate(s) in ${T_ALL}s${DSUF})"; exit 0
-  else echo "❌ $TOTAL_FAIL failing criteria across gates (read-only; ${T_ALL}s${DSUF})"; exit 1; fi
+  else echo "❌ $TOTAL_FAIL failing criteria across gates (read-only; ${T_ALL}s${DSUF}${FSUF})"; exit 1; fi
 fi
 
 # ── single gate ───────────────────────────────────────────────────────────────

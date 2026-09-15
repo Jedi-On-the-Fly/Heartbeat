@@ -40,6 +40,14 @@ Two decay modes this catches:
 - **Regression** — a later change breaks something an earlier phase proved. `hb gate --all`
   turns a silent "still green" into an actual re-check.
 
+A sweep failure is re-run once — the **flake probe**. If the re-run passes, the line is labeled
+`FLAKY: failed (Ns), then passed on re-run (Ns)` and the verdict counts it; if it fails again,
+the line carries `(failure reproduced on immediate re-run)`. Either way the sweep still blocks:
+the probe distinguishes flake from regression but **never changes the verdict**, because a
+criterion whose result depends on the run is itself broken — a gate must be deterministic, and
+a flake is the runtime sighting of what the auditor's static `nondeterministic` rule catches by
+pattern. Fix the flake; don't re-push until the criterion is reliable.
+
 Never "fix" a re-verification failure by weakening the criterion — that just hides the decay.
 Fix the work, or restore to the last good state
 ([restore-a-verified-phase.md](restore-a-verified-phase.md)).

@@ -183,6 +183,8 @@ OUT="$(bash "$DIR/.hb/gate.sh" --all 2>&1)" && { printf '%s\n' "$OUT" | grep '^�
 echo "✗ HeartBeat gate guard: push blocked — a gate no longer verifies."
 # Name the failing gate(s) — a blocked push must say WHICH claim regressed, not just that one did.
 printf '%s\n' "$OUT" | grep -E '^=== [^:]+: [0-9]+ passed, [1-9][0-9]* failed' | sed -e 's/^=== */  ✗ /' -e 's/ ===$//'
+# Surface flake labels — a transient failure must be distinguishable from a real regression.
+printf '%s\n' "$OUT" | grep 'FLAKY' | sed 's/^ */  /'
 echo "  Re-verify: bash .hb/gate.sh --all    ·    bypass: git push --no-verify"
 exit 1
 HOOKEOF

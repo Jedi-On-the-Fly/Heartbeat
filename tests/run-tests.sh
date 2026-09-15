@@ -1720,8 +1720,28 @@ check "T160.3 the same cmd under a DIFFERENT effective timeout is NOT deduped (b
   'bash "$H160/gate.sh" --all >/dev/null 2>&1; [ "$(grep -c "^y" "$P160/two.txt")" -eq 2 ]'
 node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const fc='echo f >> \"\$PROJECT_DIR/f.txt\"; false';for (const g of ['G0','G1','G2']) d.gates[g].criteria=[{id:'c',desc:'suite',cmd:fc}];fs.writeFileSync(f,JSON.stringify(d,null,2))"
 : > "$P160/f.txt"
-check "T160.4 a cached FAILURE runs once but still fails EVERY referencing gate" \
-  '! bash "$H160/gate.sh" --all >/dev/null 2>&1 && [ "$(grep -c "^f" "$P160/f.txt")" -eq 1 ] && [ "$(bash "$H160/gate.sh" --all 2>&1 | grep -c "✗ \[c\]")" -eq 3 ]'
+check "T160.4 a cached FAILURE executes once (+1 flake probe) but still fails EVERY referencing gate" \
+  '! bash "$H160/gate.sh" --all >/dev/null 2>&1 && [ "$(grep -c "^f" "$P160/f.txt")" -eq 2 ] && [ "$(bash "$H160/gate.sh" --all 2>&1 | grep -c "✗ \[c\]")" -eq 3 ]'
+
+grp "T161 — flake probe: a sweep failure is re-run ONCE to distinguish flake from regression — the verdict NEVER changes (fail-closed)"
+P161="$TMP/p161"; bash "$HB_SRC/plugin/bootstrap.sh" "$P161" >/dev/null 2>&1 </dev/null; H161="$P161/.hb"
+node -e "const fs=require('fs');const f='$H161/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GFLK={desc:'flaky',criteria:[{id:'k',desc:'passes only when flag exists',cmd:'[ -f \"\$PROJECT_DIR/flag\" ] || { : > \"\$PROJECT_DIR/flag\"; false; }'}]};d.gates.GDET={desc:'det',criteria:[{id:'d',desc:'always fails',cmd:'false'}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+bash "$H161/gate.sh" GFLK >/dev/null 2>&1; bash "$H161/gate.sh" GFLK >/dev/null 2>&1   # fail (creates flag), then pass → armed
+bash "$H161/gate.sh" GDET >/dev/null 2>&1   # fails — arm it via a temporary pass instead
+node -e "const fs=require('fs');const f='$H161/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GDET.criteria[0].cmd='true';fs.writeFileSync(f,JSON.stringify(d,null,2))"
+bash "$H161/gate.sh" GDET >/dev/null 2>&1   # arm GDET
+node -e "const fs=require('fs');const f='$H161/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GDET.criteria[0].cmd='false';fs.writeFileSync(f,JSON.stringify(d,null,2))"
+rm -f "$P161/flag"
+O161=$(bash "$H161/gate.sh" --all 2>&1); R161=$?
+check "T161.1 a flaky criterion (fails, then passes on re-run) is labeled FLAKY — and the sweep STILL blocks" \
+  '[ "$R161" -ne 0 ] && echo "$O161" | grep -q "FLAKY"'
+check "T161.2 a deterministic failure carries the affirmative label (reproduced on re-run)" \
+  'echo "$O161" | grep -q "reproduced"'
+check "T161.3 the verdict counts flaky criteria distinctly" \
+  'echo "$O161" | grep -qE "[0-9]+ flaky"'
+node -e "const fs=require('fs');const f='$H161/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GCNT={desc:'cnt',criteria:[{id:'n',desc:'count runs',cmd:'echo p >> \"\$PROJECT_DIR/probes.txt\"; false'}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+check "T161.4 the probe is SWEEP-ONLY: a single-gate --check runs the cmd exactly once" \
+  ': > "$P161/probes.txt"; bash "$H161/gate.sh" --check GCNT >/dev/null 2>&1; [ "$(grep -c "^p" "$P161/probes.txt")" -eq 1 ]'
 
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done

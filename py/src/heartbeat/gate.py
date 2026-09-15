@@ -46,7 +46,7 @@ def _run_cmd(cmd, hbdir, timeout):
         return False, str(e)
 
 
-def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None):
+def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None, probe=False):
     """Run the criteria; no side effects. Returns None for an unknown gate.
 
     Progress hooks (a multi-minute sweep must not be silent — "slow" and "hung" have to be
@@ -59,6 +59,12 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None
     effective timeout because a pass under a 60s budget proves nothing about a 1s one.
     Sound per the DAG contract (criteria are deterministic — the auditor flags the rest),
     and scoped to a single read-only sweep: there is no cross-run cache to rot.
+
+    `probe` (sweep-only, set by run_all): a FAILING criterion is re-run once to distinguish
+    flake from regression — pass on re-run → labeled FLAKY, fail again → labeled reproduced.
+    The verdict NEVER changes: observed nondeterminism is itself a gate-contract violation
+    (the behavioral complement of the auditor's static `nondeterministic` rule) and fails
+    closed; the probe only labels.
     """
     timeout = GATE_TIMEOUT_S if timeout is None else timeout
     gate = (st.read_dag(hbdir).get("gates") or {}).get(gate_id)
@@ -78,6 +84,7 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None
         return {"passed": 0, "failed": 1, "lines": lines}
     passed = failed = 0
     dedup_hits = 0
+    flaky_count = 0
     results = []
     for c in criteria:
         eff = timeout
@@ -95,9 +102,10 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None
                 continue
         key = (c.get("cmd", ""), eff)
         if dedup is not None and key in dedup:
-            ok, dt = dedup[key]
+            ok, dt, was_flaky = dedup[key]
             dedup_hits += 1
-            _add(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')} (deduped, {dt}s)")
+            mark = ", FLAKY" if was_flaky else ""
+            _add(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')} (deduped, {dt}s{mark})")
             if not ok:
                 _add(f"      cmd: {c.get('cmd', '')}")
                 _add("      (first failure of this cmd shown above)")
@@ -110,15 +118,27 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None
         t0 = time.monotonic()
         ok, out = _run_cmd(c.get("cmd", ""), hbdir, eff)
         dt = int(time.monotonic() - t0 + 0.5)
+        is_flaky = reproduced = False
+        if not ok and probe:
+            t1 = time.monotonic()
+            ok2, _out2 = _run_cmd(c.get("cmd", ""), hbdir, eff)
+            dt2 = int(time.monotonic() - t1 + 0.5)
+            is_flaky, reproduced = ok2, not ok2
         if dedup is not None:
-            dedup[key] = (ok, dt)
-        _add(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')} ({dt}s)")
+            dedup[key] = (ok, dt, is_flaky)
+        if is_flaky:
+            flaky_count += 1
+            _add(f"  ✗ [{c.get('id')}] {c.get('desc', '')} FLAKY: failed ({dt}s), then passed on re-run ({dt2}s) — still FAILED (a criterion must be deterministic)")
+        else:
+            _add(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')} ({dt}s)")
         if not ok:
             # Surface the WHY, not just the WHICH: the failing cmd (matches the node runner) and a
             # TAIL of its captured output — full output would bury the gate summary (a chatty test
             # runner), so the cut is bounded (GATE_OUT_LINES) and LOUD, never silent. A passing
             # criterion's output stays quiet.
             _add(f"      cmd: {c.get('cmd', '')}")
+            if reproduced:
+                _add(f"      (failure reproduced on immediate re-run, {dt2}s)")
             if out.strip():
                 tail = out.strip().splitlines()
                 extra = len(tail) - GATE_OUT_LINES
@@ -131,7 +151,7 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None
         passed += 1 if ok else 0
         failed += 0 if ok else 1
     return {"passed": passed, "failed": failed, "lines": lines, "results": results,
-            "deduped": dedup_hits}
+            "deduped": dedup_hits, "flaky": flaky_count}
 
 
 def run_gate(hbdir, gate_id, check=False, emit=None, progress=None):
@@ -180,11 +200,12 @@ def run_all(hbdir, emit=None, progress=None):
     memo = {}   # one sweep's dedup scope: byte-identical (cmd, effective timeout) runs once
     t0 = time.monotonic()
     for g in armed:
-        res = eval_gate(hbdir, g, emit=emit, progress=progress, dedup=memo)
+        res = eval_gate(hbdir, g, emit=emit, progress=progress, dedup=memo, probe=True)
         report[g] = res
         total_fail += res["failed"]
     return {"ok": total_fail == 0, "gates": report, "skipped": skipped,
             "deduped": sum(r["deduped"] for r in report.values()),
+            "flaky": sum(r["flaky"] for r in report.values()),
             "elapsed_s": int(time.monotonic() - t0 + 0.5)}
 
 

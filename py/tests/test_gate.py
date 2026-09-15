@@ -225,5 +225,38 @@ def test_all_dedup_respects_timeout_and_failure(tmp_path):
     (tmp_path / ".hb" / "dag.json").write_text(json.dumps(dag))
     r = gate.run_all(hb)
     assert not r["ok"]
-    assert (tmp_path / "f.txt").read_text().count("f") == 1   # failing cmd also ran once
+    assert (tmp_path / "f.txt").read_text().count("f") == 2   # one run + one flake probe
     assert sum(res["failed"] for res in r["gates"].values()) == 2   # but BOTH gates fail
+
+
+def test_sweep_flake_probe_labels_but_never_absolves(tmp_path):
+    # Issue: a transient failure was reported exactly like a real regression. In a sweep, a
+    # failing criterion is re-run ONCE: pass on re-run → labeled FLAKY; fail again → labeled
+    # reproduced. The verdict NEVER changes — observed nondeterminism is itself a contract
+    # violation and fails closed. The probe is sweep-only.
+    flaky_cmd = '[ -f "$PROJECT_DIR/flag" ] || { : > "$PROJECT_DIR/flag"; false; }'
+    dag = {"phases": [
+        {"id": p, "gate_exit": g, "tasks": [{"id": f"T{p}", "title": "t", "requires": []}]}
+        for p, g in (("P0", "GFLK"), ("P1", "GDET"))],
+        "gates": {"GFLK": {"desc": "f", "criteria": [{"id": "k", "desc": "flaky", "cmd": flaky_cmd}]},
+                  "GDET": {"desc": "d", "criteria": [{"id": "d", "desc": "det", "cmd": "true"}]}}}
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    gate.run_gate(hb, "GFLK")            # fails, creates flag
+    assert gate.run_gate(hb, "GFLK")["status"] == "passed"   # arms it
+    gate.run_gate(hb, "GDET")            # arms GDET (cmd true)
+    import json
+    dag["gates"]["GDET"]["criteria"][0]["cmd"] = "false"     # regress GDET deterministically
+    (tmp_path / ".hb" / "dag.json").write_text(json.dumps(dag))
+    (tmp_path / "flag").unlink()                             # re-arm the flake
+    r = gate.run_all(hb)
+    assert not r["ok"]                                       # flake still blocks (fail-closed)
+    assert r["flaky"] == 1
+    text = "\n".join(ln for res in r["gates"].values() for ln in res["lines"])
+    assert "FLAKY" in text                                   # flake labeled
+    assert "reproduced" in text                              # regression labeled affirmatively
+    # sweep-only: a plain eval_gate (no probe) runs the cmd exactly once
+    dag["gates"]["GDET"]["criteria"][0]["cmd"] = 'echo p >> "$PROJECT_DIR/probes.txt"; false'
+    (tmp_path / ".hb" / "dag.json").write_text(json.dumps(dag))
+    gate.eval_gate(hb, "GDET")
+    assert (tmp_path / "probes.txt").read_text().count("p") == 1

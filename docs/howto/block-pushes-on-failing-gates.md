@@ -16,8 +16,10 @@ gates** (`gate.sh --all` in a node project, `hb gate --all` in a Python one) and
   been killed over exactly that;
 - **exits 0** (push proceeds) if every such gate still verifies, surfacing the sweep's timed
   verdict (`✅ ALL GATES PASS (read-only: N gate(s) in Ss)`) so completion is visible, not silent;
-- **exits 1** (push blocked) if any regressed, **naming the failing gate(s)** and printing which
-  command to run to see the failure.
+- **exits 1** (push blocked) if any regressed, **naming the failing gate(s)** — with any
+  **`FLAKY`** labels surfaced (a failure that passed on the sweep's immediate re-run), so a
+  transient failure is distinguishable from a real regression — and printing which command to
+  run to see the failure.
 
 A gate that has **never passed** — a drafted future phase whose criteria name files that don't exist
 yet — is not part of the sweep: it has nothing to *regress* from, so planning work can never block a
