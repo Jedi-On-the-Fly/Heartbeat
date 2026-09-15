@@ -43,6 +43,12 @@ function buildContext(state, dag, hbDir) {
   return { phases, completedPhases, pendingReviews, taskStatus, leased, gatePassed };
 }
 
+// A parked phase is out of the plan's live surface: its tasks are never offered, it never
+// produces gate_pending/review_pending, and all_done is computed without it. Note that
+// gatePassed (in buildContext) is still computed over ALL phases — parking a completed
+// phase must not re-block downstream phases whose gate_entry it satisfied.
+function isLive(phase) { return !phase.parked; }
+
 function isEligible(task, ctx) {
   if ((ctx.taskStatus[task.id] ?? 'pending') !== 'pending') return false;
   return (task.requires ?? []).every(r => ctx.taskStatus[r] === 'done');
@@ -63,6 +69,7 @@ function readyTasks(state, dag, hbDir, limit) {
   const ctx = buildContext(state, dag, hbDir);
   const out = [];
   for (const phase of ctx.phases) {
+    if (!isLive(phase)) continue;
     if (ctx.completedPhases.has(phase.id)) continue;
     if (phase.gate_entry && !ctx.gatePassed.has(phase.gate_entry)) continue;
     for (const task of (phase.tasks ?? [])) {
@@ -80,6 +87,7 @@ function resolve(state, dag, hbDir) {
   const { phases, completedPhases, pendingReviews, taskStatus, leased, gatePassed } = ctx;
 
   for (const phase of phases) {
+    if (!isLive(phase)) continue;
     if (completedPhases.has(phase.id)) continue;
     if (phase.gate_entry && !gatePassed.has(phase.gate_entry)) continue;
     const tasks = phase.tasks ?? [];
@@ -96,11 +104,12 @@ function resolve(state, dag, hbDir) {
   }
 
   if (phases.length === 0) return null;
-  if (phases.every(p => completedPhases.has(p.id))) return { type: 'all_done' };
+  if (phases.filter(isLive).every(p => completedPhases.has(p.id))) return { type: 'all_done' };
 
   // busy: the only tasks blocking progress are leased (in flight elsewhere)
   const inFlight = [];
   for (const phase of phases) {
+    if (!isLive(phase)) continue;
     if (completedPhases.has(phase.id)) continue;
     if (phase.gate_entry && !gatePassed.has(phase.gate_entry)) continue;
     for (const t of (phase.tasks ?? [])) if (leased.has(t.id)) inFlight.push(t.id);
@@ -110,6 +119,7 @@ function resolve(state, dag, hbDir) {
   // active orphans (agent died mid-task, lease reclaimed but still marked active)
   const orphans = [];
   for (const phase of phases) {
+    if (!isLive(phase)) continue;
     if (completedPhases.has(phase.id)) continue;
     if (phase.gate_entry && !gatePassed.has(phase.gate_entry)) continue;
     for (const t of (phase.tasks ?? [])) if (taskStatus[t.id] === 'active') orphans.push(t.id);

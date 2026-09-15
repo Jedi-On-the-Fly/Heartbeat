@@ -65,6 +65,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | `protocol [reason] [--md]` | reason→action map |
 | `state` | print projection |
 | `rebuild` | reproject from log |
+| `park <PHASE\|GATE> [--reason …]` / `unpark <PHASE\|GATE>` | retire a phase without deleting it (sets `parked` in dag.json; resolver/audit/report/sweep all skip it, loudly; reversible) |
 | `start/done/fail/heartbeat <id>` | state mutations (+ lease) |
 | `review <gate> pass\|fail [note]` | record adversarial verdict |
 | `exec [run\|config] [--parallel N]` | `run` (default) drives the loop with a backend; `config` prints the resolved executor config |

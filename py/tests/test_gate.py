@@ -260,3 +260,18 @@ def test_sweep_flake_probe_labels_but_never_absolves(tmp_path):
     (tmp_path / ".hb" / "dag.json").write_text(json.dumps(dag))
     gate.eval_gate(hb, "GDET")
     assert (tmp_path / "probes.txt").read_text().count("p") == 1
+
+
+def test_all_skips_parked_gate_even_if_armed(tmp_path):
+    # Retirement: an EVER-PASSED gate whose phase is parked leaves the regression sweep — and
+    # the skip is loud (returned in "parked" so callers must report it).
+    dag = two_phase_dag()
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    assert gate.run_gate(hb, "GATE_P0")["status"] == "passed"     # arm it
+    import json
+    dag["phases"][0]["parked"] = True
+    (tmp_path / ".hb" / "dag.json").write_text(json.dumps(dag))
+    r = gate.run_all(hb)
+    assert "GATE_P0" not in r["gates"]                 # not swept, despite being armed
+    assert r["parked"] == ["GATE_P0"]                  # and the skip is reported

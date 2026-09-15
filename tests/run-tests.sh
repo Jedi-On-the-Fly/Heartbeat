@@ -1743,6 +1743,24 @@ node -e "const fs=require('fs');const f='$H161/dag.json';const d=JSON.parse(fs.r
 check "T161.4 the probe is SWEEP-ONLY: a single-gate --check runs the cmd exactly once" \
   ': > "$P161/probes.txt"; bash "$H161/gate.sh" --check GCNT >/dev/null 2>&1; [ "$(grep -c "^p" "$P161/probes.txt")" -eq 1 ]'
 
+grp "T162 — park/unpark: retire a phase WITHOUT deleting it — resolver, audit, report, and the sweep all honor parked (hb + hb.js)"
+check "T162.1 python end-to-end: park by gate id, audit skip + reversibility, resolver skip, honest report, armed-gate retirement (park-phase.sh → PARK-PHASE-OK)" \
+  'bash "'"$GEX"'/park-phase.sh" 2>&1 | grep -q "PARK-PHASE-OK"'
+P162="$TMP/p162"; bash "$HB_SRC/plugin/bootstrap.sh" "$P162" >/dev/null 2>&1 </dev/null; H162="$P162/.hb"
+node -e "const fs=require('fs');const f='$H162/dag.json';const d={phases:[{id:'P0',gate_entry:null,gate_exit:'G0',tasks:[{id:'T1',title:'t',requires:[]}]},{id:'P9',gate_entry:null,gate_exit:'GP9',tasks:[{id:'T9',title:'future',requires:[]}]}],gates:{G0:{desc:'g',criteria:[{id:'c',cmd:'grep -q ok \"\$PROJECT_DIR/out.txt\"'}]},GP9:{desc:'unsound',criteria:[{id:'c9',cmd:'true'}]}}};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+node "$H162/hb.js" rebuild >/dev/null 2>&1
+check "T162.2 node: hb.js park accepts the GATE id and marks its phase parked in dag.json" \
+  'node "$H162/hb.js" park GP9 >/dev/null 2>&1 && python3 -c "import json,sys;d=json.load(open(\"$H162/dag.json\"));sys.exit(0 if [p for p in d[\"phases\"] if p[\"id\"]==\"P9\"][0].get(\"parked\") is True else 1)"'
+check "T162.3 node: audit SKIPS the parked hollow gate (exit 0, reported); unpark restores the error" \
+  'node "$HB_SRC/plugin/templates/hb-audit.js" "$H162/dag.json" >/dev/null 2>&1 && node "$HB_SRC/plugin/templates/hb-audit.js" "$H162/dag.json" 2>&1 | grep -qi parked && node "$H162/hb.js" unpark P9 >/dev/null 2>&1 && ! node "$HB_SRC/plugin/templates/hb-audit.js" "$H162/dag.json" >/dev/null 2>&1 && node "$H162/hb.js" park GP9 >/dev/null 2>&1'
+node "$H162/hb.js" start T1 >/dev/null 2>&1; printf 'ok\n' > "$P162/out.txt"; node "$H162/hb.js" done T1 >/dev/null 2>&1; bash "$H162/gate.sh" G0 >/dev/null 2>&1
+check "T162.4 node: resolver skips the parked phase — all_done reachable without it" \
+  'node "$H162/hb-next-task.js" "$H162/state.json" | grep -q all_done'
+check "T162.5 node: --all skips an ARMED parked gate loudly ('0 ever-passed' after parking P0)" \
+  'node "$H162/hb.js" park P0 >/dev/null 2>&1 && bash "$H162/gate.sh" --all 2>&1 | grep -q "re-verifying 0 ever-passed" && bash "$H162/gate.sh" --all 2>&1 | grep -qi "parked" && node "$H162/hb.js" unpark P0 >/dev/null 2>&1'
+check "T162.6 node: report shows parked honestly (parked list + excluded from the denominator)" \
+  'node "$H162/hb-report.js" "$H162" --json | python3 -c "import sys,json;r=json.load(sys.stdin);sys.exit(0 if r[\"parked\"]==[\"P9\"] and r[\"progress\"][\"total\"]==1 else 1)"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

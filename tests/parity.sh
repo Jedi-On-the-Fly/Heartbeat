@@ -98,6 +98,13 @@ proj_compare(){ # name events
 }
 proj_compare "mid" '{"event":"initialized"}
 {"event":"task_done","task":"P0T1"}'
+# parked parity: a parked P1 leaves the live surface — next=all_done once P0 completes, ready
+# excludes its tasks, and the progress denominator drops them — identically on both runtimes.
+DAG_PARKED='{"phases":[{"id":"P0","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"P0T1","requires":[]},{"id":"P0T2","requires":["P0T1"]}]},{"id":"P1","parked":true,"gate_entry":"G0","gate_exit":"G1","tasks":[{"id":"P1T1","requires":[]}]}],"gates":{"G0":{"criteria":[{"id":"c","cmd":"true"}]},"G1":{"criteria":[{"id":"c","cmd":"true"}]}}}'
+DAG="$DAG_PARKED" proj_compare "parked" '{"event":"initialized"}
+{"event":"task_done","task":"P0T1"}
+{"event":"task_done","task":"P0T2"}
+{"event":"gate_passed","gate":"G0"}'
 
 echo "── diagnose parity (inferred blocker) ──"
 diag_compare(){ # name events

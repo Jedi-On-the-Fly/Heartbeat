@@ -51,6 +51,8 @@ def main(argv=None):
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
     p = sub.add_parser("refuters"); p.add_argument("rest", nargs=argparse.REMAINDER); _add_dir(p)
     p = sub.add_parser("refute-prompt"); p.add_argument("gate"); _add_dir(p)
+    p = sub.add_parser("park"); p.add_argument("id"); p.add_argument("--reason", default=""); _add_dir(p)
+    p = sub.add_parser("unpark"); p.add_argument("id"); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
     p = sub.add_parser("exec"); p.add_argument("action", nargs="?", default="run"); p.add_argument("--parallel", type=int, default=0); _add_dir(p)
     p = sub.add_parser("mcp-serve"); p.add_argument("--http", action="store_true"); p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=0); p.add_argument("--allow-remote", action="store_true"); _add_dir(p)
@@ -88,7 +90,7 @@ def main(argv=None):
         if args.all:
             # Announce scope UP FRONT — a multi-minute silent sweep (the pre-push hook path) is
             # indistinguishable from a hung run — and report the elapsed total in the verdict.
-            armed, _planned = gatemod.armed_gates(hb)
+            armed, _planned, _parked = gatemod.armed_gates(hb)
             print(f"— re-verifying {len(armed)} ever-passed gate(s)…", flush=True)
             r = gatemod.run_all(hb)
             for g, res in r["gates"].items():
@@ -97,6 +99,8 @@ def main(argv=None):
                     print(f"✗ {g}: {res['failed']} failing criteria{fl}")
             if r["skipped"]:   # loud, never silent — a skipped gate must be visible in the sweep
                 print(f"— skipped {len(r['skipped'])} planned gate(s) (never passed): {' '.join(r['skipped'])}")
+            if r["parked"]:
+                print(f"— skipped {len(r['parked'])} parked gate(s): {' '.join(r['parked'])}")
             dsuf = f", {r['deduped']} deduped" if r.get("deduped") else ""
             fsuf = f", {r['flaky']} flaky" if r.get("flaky") else ""
             print(f"✅ ALL GATES PASS ({len(r['gates'])} gate(s) in {r['elapsed_s']}s{dsuf})" if r["ok"]
@@ -125,6 +129,34 @@ def main(argv=None):
         res = gatemod.run_gate(hb, args.gate, check=args.check, emit=_emit, progress=_progress)
         print(f"gate {args.gate}: {res['status']}")
         return 0 if res["status"] in ("passed", "review_pending", "would_pass") else 1
+    elif args.cmd in ("park", "unpark"):
+        # The CLI path for retiring a phase — no hand-editing, no deletion (deleting a gate
+        # dangles the phase's gate_exit; parking keeps every reference intact and reversible).
+        # Accepts a phase id OR a gate id (resolved to the phase carrying it as gate_exit).
+        dagpath = Path(hb) / "dag.json"
+        dag = st.read_dag(hb)
+        phases = dag.get("phases") or []
+        target = next((p for p in phases if p.get("id") == args.id), None) \
+            or next((p for p in phases if p.get("gate_exit") == args.id), None)
+        if target is None:
+            sys.stderr.write(f"unknown phase or gate: {args.id}\n")
+            return 2
+        if args.cmd == "park":
+            target["parked"] = True
+            if args.reason:
+                target["parked_reason"] = args.reason
+        else:
+            target.pop("parked", None)
+            target.pop("parked_reason", None)
+        dagpath.write_text(json.dumps(dag, indent=2))
+        gate_note = f" [gate: {target.get('gate_exit')}]" if target.get("gate_exit") else ""
+        if args.cmd == "park":
+            print(f"⏸ parked phase {target['id']}{gate_note} — out of the plan's live surface "
+                  f"(resolver, audit, report, and the --all sweep all skip it). Reverse with: hb unpark {target['id']}")
+        else:
+            print(f"▶ unparked phase {target['id']}{gate_note} — back in the plan "
+                  f"(re-audit before running: hb audit)")
+        return 0
     elif args.cmd == "lint":
         dag = json.loads(Path(args.dagfile).read_text()) if args.dagfile else st.read_dag(hb)
         r = lintmod.lint(dag)
@@ -151,6 +183,8 @@ def main(argv=None):
         icon = {"error": "✗", "warn": "⚠", "info": "·"}
         for f in r["findings"]:
             print(f"  {icon[f['severity']]} [{f['rule']}] {f['message']}")
+        if r.get("parked"):   # loud — a skipped phase must be visible in the audit
+            print(f"  ⏸ skipped {len(r['parked'])} parked phase(s): {' '.join(r['parked'])} (unpark to re-audit)")
         print(f"✗ {r['errors']} error(s), {r['warns']} warning(s) — fix hollow gates before running"
               if r["errors"] else f"✓ gates look behavioural ({r['warns']} warning(s))")
         refuted = False

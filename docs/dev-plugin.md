@@ -131,6 +131,7 @@ exactly that state.json read-modify-write; the append-only informational events 
 | `protocol [reason] [--md] [--oneline]` | reason→action map / one action / `PROTOCOL.md` |
 | `rebuild` | reproject from log |
 | `state` | print projection |
+| `park <PHASE\|GATE> [reason…]` / `unpark <PHASE\|GATE>` | retire a phase without deleting it (sets `parked` in dag.json; resolver/audit/report/sweep all skip it, loudly; reversible) |
 | `import` | seed log from a legacy `state.json` |
 
 `hb.js` is `require`-safe (CLI dispatch guarded by `require.main === module`); `tick.sh` requires it for `PROTOCOL`.

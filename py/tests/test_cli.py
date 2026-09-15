@@ -75,3 +75,24 @@ def test_gate_all_announces_scope_and_reports_elapsed(tmp_path, capsys):
     first = out.splitlines()[0]
     assert "re-verifying" in first and "ever-passed" in first   # scope announced FIRST
     assert "ALL GATES PASS" in out and "in " in out.rsplit("(", 1)[-1]
+
+
+def test_park_unpark_roundtrip_by_gate_id(tmp_path, capsys):
+    # hb park accepts a GATE id (resolved to the phase carrying it as gate_exit); unpark
+    # restores; an unknown id is refused. No hand-editing of dag.json required.
+    import json
+    proj = str(tmp_path / "proj")
+    cli.main(["init", proj])
+    dagp = tmp_path / "proj" / ".hb" / "dag.json"
+    first_gate = next(iter(json.loads(dagp.read_text())["gates"]))
+    rc, out = _run(capsys, "park", first_gate, "--reason", "abandoned", "--dir", proj)
+    assert rc == 0
+    d = json.loads(dagp.read_text())
+    target = next(p for p in d["phases"] if p.get("gate_exit") == first_gate)
+    assert target["parked"] is True and target["parked_reason"] == "abandoned"
+    rc, _ = _run(capsys, "unpark", target["id"], "--dir", proj)   # unpark by PHASE id
+    assert rc == 0
+    d = json.loads(dagp.read_text())
+    assert "parked" not in next(p for p in d["phases"] if p["id"] == target["id"])
+    rc, _ = _run(capsys, "park", "NOPE", "--dir", proj)
+    assert rc != 0

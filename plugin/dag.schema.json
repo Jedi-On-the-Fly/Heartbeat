@@ -50,6 +50,8 @@
           "desc": { "type": "string" },
           "gate_entry": { "type": ["string", "null"] },
           "gate_exit": { "type": ["string", "null"] },
+          "parked": { "type": "boolean", "description": "Out of the plan's live surface: the resolver never offers its tasks, audit skips its gate, the --all sweep skips it (even if armed), and report lists it as parked. Set via `hb park <PHASE|GATE>`; reversible with `hb unpark`. Parking, not deletion — deleting a gate dangles gate_exit." },
+          "parked_reason": { "type": "string" },
           "tasks": {
             "type": "array",
             "maxItems": 8,

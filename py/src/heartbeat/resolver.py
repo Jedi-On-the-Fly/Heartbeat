@@ -33,6 +33,14 @@ def _build_context(state, dag, hbdir):
                 task_status=task_status, leased=leased, gate_passed=gate_passed)
 
 
+def _live(phase):
+    # A parked phase is out of the plan's live surface: its tasks are never offered, it never
+    # produces gate_pending/review_pending, and all_done is computed without it. Note that
+    # gate_passed (in _build_context) is still computed over ALL phases — parking a completed
+    # phase must not re-block downstream phases whose gate_entry it satisfied.
+    return not phase.get("parked")
+
+
 def _eligible(task, ctx):
     if ctx["task_status"].get(task["id"], "pending") != "pending":
         return False
@@ -48,6 +56,8 @@ def ready_tasks(state, dag, hbdir, limit=0):
     ctx = _build_context(state, dag, hbdir)
     out = []
     for phase in ctx["phases"]:
+        if not _live(phase):
+            continue
         if phase["id"] in ctx["completed_phases"]:
             continue
         if phase.get("gate_entry") and phase["gate_entry"] not in ctx["gate_passed"]:
@@ -66,6 +76,8 @@ def resolve(state, dag, hbdir):
     phases = ctx["phases"]
     completed_phases = ctx["completed_phases"]
     for phase in phases:
+        if not _live(phase):
+            continue
         if phase["id"] in completed_phases:
             continue
         if phase.get("gate_entry") and phase["gate_entry"] not in ctx["gate_passed"]:
@@ -81,12 +93,14 @@ def resolve(state, dag, hbdir):
 
     if not phases:
         return None
-    if all(p["id"] in completed_phases for p in phases):
+    if all(p["id"] in completed_phases for p in phases if _live(p)):
         return {"type": "all_done"}
 
     def _scan(pred):
         found = []
         for phase in phases:
+            if not _live(phase):
+                continue
             if phase["id"] in completed_phases:
                 continue
             if phase.get("gate_entry") and phase["gate_entry"] not in ctx["gate_passed"]:

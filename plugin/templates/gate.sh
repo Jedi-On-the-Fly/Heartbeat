@@ -221,12 +221,16 @@ if [ "$ALL" = 1 ]; then
       if (!l.trim()) continue;
       try { const ev = JSON.parse(l); if (ev.event === 'gate_passed' && ev.gate) seen.add(ev.gate); } catch (e) {}
     }
+    // A parked phase's gate leaves the sweep entirely (retirement) — even if it was armed.
+    const parkedG = new Set((dag.phases || []).filter(p => p.parked && p.gate_exit).map(p => p.gate_exit));
     const all = Object.keys(dag.gates || {});
-    console.log(all.filter(g => seen.has(g)).join(' '));
-    console.log(all.filter(g => !seen.has(g)).join(' '));
+    console.log(all.filter(g => seen.has(g) && !parkedG.has(g)).join(' '));
+    console.log(all.filter(g => !seen.has(g) && !parkedG.has(g)).join(' '));
+    console.log(all.filter(g => parkedG.has(g)).join(' '));
   " "$DAG_FILE" "$EVENTS_FILE")
   GATES=$(printf '%s\n' "$LISTS" | sed -n 1p)
   PLANNED=$(printf '%s\n' "$LISTS" | sed -n 2p)
+  PARKED=$(printf '%s\n' "$LISTS" | sed -n 3p)
   # Announce scope UP FRONT — a multi-minute silent sweep (the pre-push hook path) is
   # indistinguishable from a hung run — and report the elapsed total in the verdict.
   set -- $GATES; NGATES=$#
@@ -240,6 +244,11 @@ if [ "$ALL" = 1 ]; then
   if [ -n "$PLANNED" ]; then
     set -- $PLANNED
     echo "— skipped $# planned gate(s) (never passed): $PLANNED"
+    echo ""
+  fi
+  if [ -n "$PARKED" ]; then
+    set -- $PARKED
+    echo "— skipped $# parked gate(s): $PARKED"
     echo ""
   fi
   DSUF=""; [ "$DEDUP_HITS" -gt 0 ] && DSUF=", $DEDUP_HITS deduped"

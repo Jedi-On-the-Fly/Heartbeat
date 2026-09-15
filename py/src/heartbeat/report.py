@@ -38,8 +38,11 @@ def build(hbdir):
     evs = st.read_events(hbdir)
     s = st.project(evs, dag)
     phases = dag.get("phases") or []
-    total = sum(len(p.get("tasks") or []) for p in phases)
-    done = len(s["completed_tasks"])
+    # A parked phase is out of the plan's live surface: excluded from the progress denominator
+    # (and numerator) but never hidden — it is listed in "parked" and flagged per-phase.
+    live = [p for p in phases if not p.get("parked")]
+    total = sum(len(p.get("tasks") or []) for p in live)
+    done = sum(1 for p in live for t in (p.get("tasks") or []) if t["id"] in s["completed_tasks"])
     return {
         "project": Path(hbdir).parent.name,
         "tasks_done": done,
@@ -47,11 +50,13 @@ def build(hbdir):
         "percent": int(100 * done / total + 0.5) if total else 0,  # 100*done/total then round-half-up == node Math.round (parity; op order matters for float)
         "current_phase": s["current_phase"],
         "completed_phases": s["completed_phases"],
+        "parked": [p["id"] for p in phases if p.get("parked")],
         "phases": [
             {"id": p["id"], "title": p.get("title", ""), "gate": p.get("gate_exit"),
              "done": sum(1 for t in (p.get("tasks") or []) if t["id"] in s["completed_tasks"]),
              "total": len(p.get("tasks") or []),
-             "complete": p["id"] in s["completed_phases"]}
+             "complete": p["id"] in s["completed_phases"],
+             "parked": bool(p.get("parked"))}
             for p in phases
         ],
         "refuters": refuter_impact(evs, dag),
@@ -63,8 +68,9 @@ def render(hbdir):
     out = [f"═══ HeartBeat Report — {r['project']} ═══",
            f"Progress: {r['tasks_done']}/{r['tasks_total']} tasks ({r['percent']}%)", "", "Phases:"]
     for p in r["phases"]:
-        mark = "✅" if p["complete"] else "  "
-        out.append(f"  {mark} {p['id']} {p['title']} — {p['done']}/{p['total']}  [gate: {p['gate']}]")
+        mark = "✅" if p["complete"] else ("⏸ " if p["parked"] else "  ")
+        suffix = "  (parked)" if p["parked"] else ""
+        out.append(f"  {mark} {p['id']} {p['title']} — {p['done']}/{p['total']}  [gate: {p['gate']}]{suffix}")
     imp = r["refuters"]
     if imp["caught"] or imp["cleared"]:
         out += ["", f"Refuter impact: caught {imp['caught']} hole(s) across {imp['caught'] + imp['cleared']} review(s)"]

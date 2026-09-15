@@ -73,11 +73,18 @@ def audit(dag):
     findings = []
     phases = dag.get("phases") or []
     gates = dag.get("gates") or {}
+    parked = []
 
     def F(sev, rule, phase, message, **extra):
         findings.append({"severity": sev, "rule": rule, "phase": phase, "message": message, **extra})
 
     for p in phases:
+        if p.get("parked"):
+            # A parked phase is out of the plan's live surface — its gate is not audited (an
+            # unsound-but-parked gate must not block audit-clean). The skip is returned in
+            # "parked" so callers report it; unpark re-audits (rule: audit-clean before run).
+            parked.append(p["id"])
+            continue
         tasks = p.get("tasks") or []
         if tasks and not p.get("gate_exit"):
             F("warn", "unguarded_phase", p["id"], f"phase {p['id']} has tasks but no gate_exit — its work is never verified")
@@ -127,4 +134,5 @@ def audit(dag):
 
     return {"findings": findings,
             "errors": sum(1 for f in findings if f["severity"] == "error"),
-            "warns": sum(1 for f in findings if f["severity"] == "warn")}
+            "warns": sum(1 for f in findings if f["severity"] == "warn"),
+            "parked": parked}

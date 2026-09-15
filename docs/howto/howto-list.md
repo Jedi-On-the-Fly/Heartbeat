@@ -77,6 +77,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Remove Non-Determinism from Gates | ✅ [write-fast-deterministic-gates.md](write-fast-deterministic-gates.md) — T54 |
 | Keep Gates Inside Their Phase | ✅ [writing-behavioral-gates.md](writing-behavioral-gates.md) (off-phase) — T53 |
 | Make Gates Re-Verifiable | ✅ [re-verify-completed-gates.md](re-verify-completed-gates.md) — T58 |
+| Park a Phase (retire a gate without deleting it) | ✅ [park-a-phase.md](park-a-phase.md) — T162 |
 | Add Refutation to a Sensitive Gate | ✅ [add-refutation-to-a-sensitive-gate.md](add-refutation-to-a-sensitive-gate.md) — T54 |
 | Cross-model Verification (a different model refutes) | ✅ [cross-model-verification.md](cross-model-verification.md) — T73 |
 | Benchmark Agents on the Same DAG | ✅ [benchmark-agents.md](benchmark-agents.md) — T74 |

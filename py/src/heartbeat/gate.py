@@ -182,19 +182,26 @@ def run_gate(hbdir, gate_id, check=False, emit=None, progress=None):
 
 
 def armed_gates(hbdir):
-    """Split defined gates into (armed, planned): armed = has a recorded gate_passed event.
-    Filter on the event log (truth), not the projection: gate_failed/review_failed reset the
-    projection's det flag, and a once-proven gate must stay armed through a recorded failure."""
+    """Split defined gates into (armed, planned, parked): armed = has a recorded gate_passed
+    event AND its phase is not parked. Filter on the event log (truth), not the projection:
+    gate_failed/review_failed reset the projection's det flag, and a once-proven gate must
+    stay armed through a recorded failure. A parked phase's gate leaves the sweep entirely
+    (retirement) — even if it was armed — and is returned separately so callers report it."""
+    dag = st.read_dag(hbdir)
     passed_ever = {e.get("gate") for e in st.read_events(hbdir) if e.get("event") == "gate_passed"}
-    gates = st.read_dag(hbdir).get("gates") or {}
-    return [g for g in gates if g in passed_ever], [g for g in gates if g not in passed_ever]
+    gates = dag.get("gates") or {}
+    parked_g = {p.get("gate_exit") for p in (dag.get("phases") or []) if p.get("parked") and p.get("gate_exit")}
+    armed = [g for g in gates if g in passed_ever and g not in parked_g]
+    planned = [g for g in gates if g not in passed_ever and g not in parked_g]
+    parked = [g for g in gates if g in parked_g]
+    return armed, planned, parked
 
 
 def run_all(hbdir, emit=None, progress=None):
     # Regression semantics: a gate that has EVER passed keeps acting as a gate (re-verified here);
     # a gate that has never passed — a drafted/planned future phase — has nothing to regress from
     # and is SKIPPED, loudly (returned in "skipped" so callers must report it, never hide it).
-    armed, skipped = armed_gates(hbdir)
+    armed, skipped, parked = armed_gates(hbdir)
     total_fail = 0
     report = {}
     memo = {}   # one sweep's dedup scope: byte-identical (cmd, effective timeout) runs once
@@ -203,7 +210,7 @@ def run_all(hbdir, emit=None, progress=None):
         res = eval_gate(hbdir, g, emit=emit, progress=progress, dedup=memo, probe=True)
         report[g] = res
         total_fail += res["failed"]
-    return {"ok": total_fail == 0, "gates": report, "skipped": skipped,
+    return {"ok": total_fail == 0, "gates": report, "skipped": skipped, "parked": parked,
             "deduped": sum(r["deduped"] for r in report.values()),
             "flaky": sum(r["flaky"] for r in report.values()),
             "elapsed_s": int(time.monotonic() - t0 + 0.5)}

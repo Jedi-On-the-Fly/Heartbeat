@@ -68,9 +68,17 @@ function audit(dag) {
   const findings = [];
   const phases = dag.phases || [];
   const gates = dag.gates || {};
+  const parked = [];
   const F = (severity, rule, phase, message, extra) => findings.push({ severity, rule, phase, message, ...(extra || {}) });
 
   for (const p of phases) {
+    if (p.parked) {
+      // A parked phase is out of the plan's live surface — its gate is not audited (an
+      // unsound-but-parked gate must not block audit-clean). The skip is returned in
+      // `parked` so callers report it; unpark re-audits (rule: audit-clean before run).
+      parked.push(p.id);
+      continue;
+    }
     const tasks = p.tasks || [];
     if (tasks.length && !p.gate_exit) {
       F('warn', 'unguarded_phase', p.id, `phase ${p.id} has tasks but no gate_exit — its work is never verified`);
@@ -120,6 +128,7 @@ function audit(dag) {
     findings,
     errors: findings.filter(f => f.severity === 'error').length,
     warns: findings.filter(f => f.severity === 'warn').length,
+    parked,
   };
 }
 
@@ -136,6 +145,8 @@ if (require.main === module) {
   if (asJson) { console.log(JSON.stringify(r)); process.exit(r.errors ? 1 : 0); }
   const icon = { error: '✗', warn: '⚠', info: '·' };
   for (const f of r.findings) console.log(`  ${icon[f.severity]} [${f.rule}] ${f.message}`);
+  if (r.parked.length)   // loud — a skipped phase must be visible in the audit
+    console.log(`  ⏸ skipped ${r.parked.length} parked phase(s): ${r.parked.join(' ')} (unpark to re-audit)`);
   console.log(r.errors
     ? `✗ ${r.errors} error(s), ${r.warns} warning(s) — this DAG has hollow gates; fix before running`
     : `✓ gates look behavioural (${r.warns} warning(s))`);

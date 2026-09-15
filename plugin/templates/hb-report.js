@@ -42,15 +42,20 @@ const phases = (dag.phases ?? []).map(p => {
   const ts = p.tasks ?? [];
   const d  = ts.filter(t => done.has(t.id)).length;
   const locked = !!(p.gate_entry && !gatePassed.has(p.gate_entry));
-  const status = cph.has(p.id) ? 'done'
+  const status = p.parked ? 'parked'
+    : cph.has(p.id) ? 'done'
     : locked ? 'locked'
     : (d > 0 || ts.some(t => active.has(t.id))) ? 'in_progress'
     : 'ready';
-  return { id: p.id, title: p.title ?? p.id, done: d, total: ts.length, status, gate_exit: p.gate_exit ?? null };
+  return { id: p.id, title: p.title ?? p.id, done: d, total: ts.length, status, gate_exit: p.gate_exit ?? null,
+           parked: !!p.parked };
 });
 
-const totalTasks = phases.reduce((a, p) => a + p.total, 0);
-const doneTasks  = phases.reduce((a, p) => a + p.done,  0);
+// A parked phase is out of the plan's live surface: excluded from the progress denominator
+// (and numerator) but never hidden — listed in `parked` and flagged per-phase.
+const livePhases = phases.filter(p => !p.parked);
+const totalTasks = livePhases.reduce((a, p) => a + p.total, 0);
+const doneTasks  = livePhases.reduce((a, p) => a + p.done,  0);
 
 const gates = {};
 for (const e of events) {
@@ -111,6 +116,7 @@ function refuterImpact(evs, d) {
 const report = {
   project: dag._meta?.project ?? path.basename(path.dirname(path.resolve(dir))),
   progress: { done: doneTasks, total: totalTasks, pct: totalTasks ? Math.round(100 * doneTasks / totalTasks) : 0 },
+  parked: phases.filter(p => p.parked).map(p => p.id),
   phases, gates, incidents,
   phase_durations: durations,
   task_durations: taskDurations,
@@ -123,7 +129,7 @@ if (asJson) { console.log(JSON.stringify(report, null, 2)); process.exit(0); }
 
 const hms = s => s >= 3600 ? `${Math.floor(s / 3600)}h${Math.floor((s % 3600) / 60)}m`
              : s >= 60   ? `${Math.floor(s / 60)}m${s % 60}s` : `${s}s`;
-const icon = { done: '✅', in_progress: '🔧', ready: '▶️ ', locked: '🔒' };
+const icon = { done: '✅', in_progress: '🔧', ready: '▶️ ', locked: '🔒', parked: '⏸ ' };
 
 console.log(`═══ HeartBeat Report — ${report.project} ═══`);
 console.log(`Progress: ${doneTasks}/${totalTasks} tasks (${report.progress.pct}%)`);

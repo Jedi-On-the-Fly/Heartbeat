@@ -57,3 +57,26 @@ def test_deadlock_dag_invalid(tmp_path):
     hb = make_hb(tmp_path, dag)
     r = resolver.resolve(state.reproject(hb), dag, hb)
     assert r.get("type") == "deadlock" and r["cause"] == "dag_invalid"
+
+
+def test_parked_phase_skipped_and_all_done_reachable(tmp_path):
+    # Issue: retiring a drafted phase meant hand-editing dag.json (and naive deletion dangles
+    # gate_exit). A phase with parked:true is out of the plan's live surface: its tasks are
+    # never offered and all_done is reachable without it.
+    from conftest import make_hb
+    from heartbeat import state, resolver
+    dag = {"phases": [
+        {"id": "P0", "gate_exit": "G0", "tasks": [{"id": "T1", "title": "t", "requires": []}]},
+        {"id": "P9", "parked": True, "gate_exit": "GP9",
+         "tasks": [{"id": "T9", "title": "future", "requires": []}]}],
+        "gates": {"G0": {"desc": "g", "criteria": [{"id": "c", "cmd": "true"}]},
+                  "GP9": {"desc": "p", "criteria": [{"id": "c", "cmd": "true"}]}}}
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    s = state.project(state.read_events(hb), dag)
+    ready = resolver.ready_tasks(s, dag, hb)
+    assert [t["id"] for t in ready] == ["T1"]          # T9 never offered
+    state.mutate(hb, {"event": "task_done", "task": "T1"})
+    state.mutate(hb, {"event": "gate_passed", "gate": "G0"})
+    s = state.project(state.read_events(hb), dag)
+    assert resolver.resolve(s, dag, hb) == {"type": "all_done"}   # P9 does not block the plan

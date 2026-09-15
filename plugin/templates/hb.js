@@ -601,6 +601,32 @@ switch (cmd) {
     break;
   }
 
+  case 'park':
+  case 'unpark': {
+    // The CLI path for retiring a phase — no hand-editing, no deletion (deleting a gate
+    // dangles the phase's gate_exit; parking keeps every reference intact and reversible).
+    // Accepts a phase id OR a gate id (resolved to the phase carrying it as gate_exit).
+    if (!arg1) die(`usage: hb ${cmd} <PHASE_ID|GATE_ID> [reason…]`);
+    const dag = readDag();
+    const phases = dag.phases || [];
+    const target = phases.find(p => p.id === arg1) || phases.find(p => p.gate_exit === arg1);
+    if (!target) die(`unknown phase or gate: ${arg1}`);
+    if (cmd === 'park') {
+      target.parked = true;
+      const reason = rest.join(' ').trim();
+      if (reason) target.parked_reason = reason;
+    } else {
+      delete target.parked;
+      delete target.parked_reason;
+    }
+    fs.writeFileSync(DAG, JSON.stringify(dag, null, 2));
+    const gateNote = target.gate_exit ? ` [gate: ${target.gate_exit}]` : '';
+    process.stdout.write(cmd === 'park'
+      ? `⏸ parked phase ${target.id}${gateNote} — out of the plan's live surface (resolver, audit, report, and the --all sweep all skip it). Reverse with: node .hb/hb.js unpark ${target.id}\n`
+      : `▶ unparked phase ${target.id}${gateNote} — back in the plan (re-audit before running: node .hb/hb-audit.js .hb/dag.json)\n`);
+    break;
+  }
+
   case 'import': {
     let legacy;
     try { legacy = JSON.parse(fs.readFileSync(STATE, 'utf8')); }
@@ -620,7 +646,7 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|refuters|refute-prompt|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|refuters|refute-prompt|import> [args]');
 }
 }
 
