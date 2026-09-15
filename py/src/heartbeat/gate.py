@@ -96,13 +96,23 @@ def run_gate(hbdir, gate_id, check=False):
 
 
 def run_all(hbdir):
+    # Regression semantics: a gate that has EVER passed keeps acting as a gate (re-verified here);
+    # a gate that has never passed — a drafted/planned future phase — has nothing to regress from
+    # and is SKIPPED, loudly (returned in "skipped" so callers must report it, never hide it).
+    # Filter on the event log (truth), not the projection: gate_failed/review_failed reset the
+    # projection's det flag, and a once-proven gate must stay armed through a recorded failure.
+    passed_ever = {e.get("gate") for e in st.read_events(hbdir) if e.get("event") == "gate_passed"}
     total_fail = 0
     report = {}
+    skipped = []
     for g in (st.read_dag(hbdir).get("gates") or {}):
+        if g not in passed_ever:
+            skipped.append(g)
+            continue
         res = eval_gate(hbdir, g)
         report[g] = res
         total_fail += res["failed"]
-    return {"ok": total_fail == 0, "gates": report}
+    return {"ok": total_fail == 0, "gates": report, "skipped": skipped}
 
 
 def _git(pd, *args, **kw):

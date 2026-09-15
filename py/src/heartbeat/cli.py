@@ -87,6 +87,11 @@ def main(argv=None):
     elif args.cmd == "gate":
         if args.all:
             r = gatemod.run_all(hb)
+            for g, res in r["gates"].items():
+                if res["failed"]:
+                    print(f"✗ {g}: {res['failed']} failing criteria")
+            if r["skipped"]:   # loud, never silent — a skipped gate must be visible in the sweep
+                print(f"— skipped {len(r['skipped'])} planned gate(s) (never passed): {' '.join(r['skipped'])}")
             print("✅ ALL GATES PASS" if r["ok"] else "❌ some gates would block")
             return 0 if r["ok"] else 1
         if not args.gate:

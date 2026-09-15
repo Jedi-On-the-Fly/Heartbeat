@@ -96,7 +96,7 @@ node <project-dir>/.hb/hb.js doctor
 To behaviourally **re-verify** that gates still pass (read-only, no state change):
 ```bash
 bash <project-dir>/.hb/gate.sh --check <GATE>   # one gate
-bash <project-dir>/.hb/gate.sh --all            # every gate (regression check)
+bash <project-dir>/.hb/gate.sh --all            # every ever-passed gate (regression check; planned gates skipped, reported)
 ```
 
 ### `/heartbeat lint <project-dir>`

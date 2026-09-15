@@ -9,12 +9,21 @@ honest.
 
 ```bash
 hb gate <GATE> --check     # re-run one gate read-only: would_pass / would_block
-hb gate --all              # re-run every gate; non-zero if any would block
+hb gate --all              # re-run every EVER-PASSED gate; non-zero if any would block
 ```
 
 `--check` runs the same criteria without recording anything — it never advances or blocks a
 phase, it just tells you whether the proof still holds. `--all` is the regression sweep: run
 it after a change that could invalidate earlier work.
+
+`--all` arms only gates with a recorded `gate_passed` event. A **planned** gate — a drafted
+future phase whose criteria name files that don't exist yet — has never passed, so it has
+nothing to regress from; the sweep skips it and says so
+(`— skipped N planned gate(s) (never passed): …`), never silently. This is what keeps drafting
+a DAG's future phases from failing the sweep (and, via the
+[pre-push guard](block-pushes-on-failing-gates.md), from blocking pushes on unrelated work).
+An explicit `hb gate <GATE> --check` still runs *any* gate, planned or not — a deliberate
+probe is not a regression sweep.
 
 ## Why it matters
 
@@ -34,8 +43,10 @@ Fix the work, or restore to the last good state
 
 [`gate-examples/gate-reverify.sh`](gate-examples/gate-reverify.sh) drives the real hb CLI:
 a completed gate re-verifies (`would_pass`, `--all` passes) and appends **no events**
-(read-only); then it regresses the artifact and shows re-verification catches it
-(`would_block`); restoring the artifact restores `would_pass`. Run it:
+(read-only); a drafted planned gate does **not** fail the sweep and its skip is reported;
+then it regresses the artifact and shows re-verification still catches it
+(`would_block` — the planned-skip never over-skips an armed gate); restoring the artifact
+restores `would_pass`. Run it:
 
 ```bash
 bash docs/howto/gate-examples/gate-reverify.sh   # -> REVERIFY-OK

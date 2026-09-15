@@ -46,7 +46,7 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T25 | DAG schema + per-task timing |
 | T26 | git init at bootstrap + commit-on-gate-pass |
 | T27 | `hb doctor` rot detection |
-| T28 | `gate.sh --check`/`--all` read-only |
+| T28 | `gate.sh --check`/`--all` read-only; `--all` skips never-passed (planned) gates loudly |
 | T29 | review no-progress → `review_stuck` |
 | T30 | rot detection wakes at tick |
 | T31 | pre-commit rot guard |

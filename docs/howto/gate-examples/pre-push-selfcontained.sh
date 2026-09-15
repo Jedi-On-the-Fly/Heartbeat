@@ -29,9 +29,12 @@ env -u PYTHONPATH PATH="$CLEAN" python3 -c 'import heartbeat' >/dev/null 2>&1 &&
 pn="$tmp/node"; mkdir -p "$pn"
 env -u HB_NO_GIT -u HB_NO_HOOK -u PYTHONPATH PATH="$CLEAN" bash "$ROOT/plugin/bootstrap.sh" "$pn" >/dev/null 2>&1 || fail "node bootstrap failed"
 [ -x "$pn/.git/hooks/pre-push" ] || fail "node: no pre-push hook installed"
-# fresh node seed (GATE_P1) fails --all → hook must block, using only the clean PATH
+# Arm a gate the honest way (--all re-verifies only EVER-PASSED gates; a fresh seed's gates are
+# planned and skipped): PASS GATE_P0 for real, then REGRESS it → hook must block, clean PATH only.
+env -u PYTHONPATH PATH="$CLEAN" bash "$pn/.hb/gate.sh" GATE_P0 >/dev/null 2>&1 || fail "node: seed GATE_P0 did not pass (needed to arm it for the sweep)"
+node -e "const fs=require('fs');const f='$pn/.hb/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GATE_P0.criteria=[{id:'r',desc:'regressed',cmd:'false'}];fs.writeFileSync(f,JSON.stringify(d,null,2))"
 if env -u HB_NO_HOOK -u PYTHONPATH PATH="$CLEAN" bash -c "cd '$pn' && .git/hooks/pre-push o u </dev/null" >/dev/null 2>&1; then
-  fail "node: self-contained hook did not block on a failing gate under a clean PATH"
+  fail "node: self-contained hook did not block on a regressed (ever-passed) gate under a clean PATH"
 fi
 env HB_NO_HOOK=1 PATH="$CLEAN" bash -c "cd '$pn' && .git/hooks/pre-push o u </dev/null" >/dev/null 2>&1 || fail "node: HB_NO_HOOK did not bypass"
 

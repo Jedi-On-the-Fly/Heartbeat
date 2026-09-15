@@ -390,8 +390,20 @@ check "T28.1 --check GATE_P0 (passes) → exit 0" 'bash "$H28/gate.sh" --check G
 check "T28.2 --check is READ-ONLY (no event added)" '[ "$(wc -l < "$H28/events.jsonl")" -eq "$E28" ]'
 node -e "const fs=require('fs');const f='$H28/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GATE_X={desc:'x',criteria:[{id:'x',desc:'no',cmd:'false'}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
 check "T28.3 --check failing gate → exit 1" '! bash "$H28/gate.sh" --check GATE_X >/dev/null 2>&1'
-check "T28.4 --all re-evaluates all gates read-only (no event)" \
+check "T28.4 --all re-verifies gates read-only (no event)" \
   'EB=$(wc -l < "$H28/events.jsonl"); bash "$H28/gate.sh" --all >/dev/null 2>&1; [ "$(wc -l < "$H28/events.jsonl")" -eq "$EB" ]'
+# Regression semantics: --all arms only gates with a recorded gate_passed — a PLANNED gate
+# (drafted, never passed: GATE_X here, cmd 'false') must not fail the sweep, and the skip is LOUD.
+check "T28.5 --all SKIPS a planned (never-passed) gate — exit 0 despite its failing cmd" \
+  'bash "$H28/gate.sh" --all >/dev/null 2>&1'
+check "T28.6 the planned-gate skip is reported, never silent" \
+  'bash "$H28/gate.sh" --all 2>&1 | grep -q "skipped .* planned"'
+node "$H28/hb.js" start P0T1 >/dev/null 2>&1; node "$H28/hb.js" done P0T1 >/dev/null 2>&1
+node "$H28/hb.js" start P0T2 >/dev/null 2>&1; node "$H28/hb.js" done P0T2 >/dev/null 2>&1
+bash "$H28/gate.sh" GATE_P0 >/dev/null 2>&1   # record a real pass → GATE_P0 is now ARMED
+node -e "const fs=require('fs');const f='$H28/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GATE_P0.criteria=[{id:'r',desc:'regressed',cmd:'false'}];fs.writeFileSync(f,JSON.stringify(d,null,2))"
+check "T28.7 an EVER-PASSED gate that regresses still fails --all (the filter never over-skips)" \
+  '! bash "$H28/gate.sh" --all >/dev/null 2>&1'
 
 grp "T29 — review no-progress → review_stuck (v1.6, thread 2)"
 P29="$TMP/p29"; bash "$HB_SRC/plugin/bootstrap.sh" "$P29" >/dev/null 2>&1 </dev/null; H29="$P29/.hb"

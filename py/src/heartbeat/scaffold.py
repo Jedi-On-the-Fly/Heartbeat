@@ -39,12 +39,12 @@ if ! command -v hb >/dev/null 2>&1; then
   echo "HeartBeat gate guard: hb not on PATH — skipping the pre-push gate check (install heartbeat-hb, or bypass with git push --no-verify)" >&2
   exit 0
 fi
-if ! hb gate --all --dir "$DIR" >/dev/null 2>&1; then
-  echo "✗ HeartBeat gate guard: push blocked — a gate no longer verifies." >&2
-  echo "  Re-verify: hb gate --all    ·    bypass: git push --no-verify" >&2
-  exit 1
-fi
-exit 0
+OUT="$(hb gate --all --dir "$DIR" 2>&1)" && exit 0
+echo "✗ HeartBeat gate guard: push blocked — a gate no longer verifies." >&2
+# Name the failing gate(s) — a blocked push must say WHICH claim regressed, not just that one did.
+printf '%s\\n' "$OUT" | grep '^✗ ' | sed 's/^/  /' >&2
+echo "  Re-verify: hb gate --all    ·    bypass: git push --no-verify" >&2
+exit 1
 """
 
 

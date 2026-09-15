@@ -45,8 +45,13 @@ else
   echo "  (hb not on PATH — python pre-push parity leg skipped; honest-skip covered by pre-push-selfcontained.sh)"
 fi
 
-# python BLOCK teeth: force a failing gate (the seed passes), then the hook MUST block — so a hollow
+# python BLOCK teeth: the sweep arms only EVER-PASSED gates (a planned gate has nothing to
+# regress from), so build the honest regression scenario — PASS the seed gate for real
+# (recording gate_passed), then regress its criterion; the hook MUST block — so a hollow
 # python hook (always exit 0) fails here, not just the node side.
+G0="$(python3 -c 'import json,sys; print(next(iter(json.load(open(sys.argv[1] + "/.hb/dag.json"))["gates"])))' "$pp")"
+( cd "$pp" && env PYTHONPATH="$ROOT/py/src" python3 -m heartbeat.cli gate "$G0" --dir "$pp" >/dev/null 2>&1 ) \
+  || fail "python: seed gate $G0 did not pass (needed to arm it for the regression sweep)"
 python3 - "$pp" <<'PY'
 import json, sys
 p = sys.argv[1] + "/.hb/dag.json"
@@ -55,7 +60,7 @@ next(iter(d["gates"].values()))["criteria"][0]["cmd"] = "false"
 json.dump(d, open(p, "w"))
 PY
 ( cd "$pp" && env PYTHONPATH="$ROOT/py/src" python3 -m heartbeat.cli gate --all --dir "$pp" >/dev/null 2>&1 ) \
-  && fail "python: forced-fail gate still passed gate --all"
-run_hook "$pp" && fail "python: hook allowed the push despite a failing gate"
+  && fail "python: a regressed EVER-PASSED gate still passed gate --all"
+run_hook "$pp" && fail "python: hook allowed the push despite a regressed gate"
 
 echo "PRE-PUSH-PARITY-OK"

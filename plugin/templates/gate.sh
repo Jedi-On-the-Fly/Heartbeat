@@ -5,7 +5,9 @@
 #   bash gate.sh <GATE_ID>            run a gate (side effects: log, reproject,
 #                                     commit+tag on pass, advance the phase)
 #   bash gate.sh --check <GATE_ID>    RE-VERIFY a gate read-only (no state change)
-#   bash gate.sh --all                RE-VERIFY every gate read-only (regression check)
+#   bash gate.sh --all                RE-VERIFY every ever-passed gate read-only
+#                                     (regression check; never-passed/planned gates
+#                                     are SKIPPED and reported — nothing to regress from)
 # Exit 0 = passed | 1 = blocked/failing | 2 = usage / unknown gate
 #
 # v1.5: --check / --all make a passed gate keep acting as a gate — you can re-run
@@ -112,11 +114,34 @@ while [ $# -gt 0 ]; do
 done
 GATE="${1:-}"; export GATE
 
-# ── --all: read-only re-verification of every gate ────────────────────────────
+# ── --all: read-only re-verification of every EVER-PASSED gate ────────────────
+# Regression semantics: a gate that has passed keeps acting as a gate; a gate that has never
+# passed — a drafted/planned future phase — has nothing to regress from and is SKIPPED, loudly.
+# Filter on the event log (truth), not state.json: gate_failed resets the projection's det flag,
+# and a once-proven gate must stay armed through a recorded failure.
 if [ "$ALL" = 1 ]; then
-  GATES=$(node -e "console.log(Object.keys(JSON.parse(require('fs').readFileSync(process.env.DAG_FILE,'utf8')).gates).join(' '))")
+  LISTS=$(node -e "
+    const fs = require('fs');
+    const dag = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    const seen = new Set();
+    let raw = ''; try { raw = fs.readFileSync(process.argv[2], 'utf8'); } catch (e) {}
+    for (const l of raw.split('\n')) {
+      if (!l.trim()) continue;
+      try { const ev = JSON.parse(l); if (ev.event === 'gate_passed' && ev.gate) seen.add(ev.gate); } catch (e) {}
+    }
+    const all = Object.keys(dag.gates || {});
+    console.log(all.filter(g => seen.has(g)).join(' '));
+    console.log(all.filter(g => !seen.has(g)).join(' '));
+  " "$DAG_FILE" "$EVENTS_FILE")
+  GATES=$(printf '%s\n' "$LISTS" | sed -n 1p)
+  PLANNED=$(printf '%s\n' "$LISTS" | sed -n 2p)
   TOTAL_FAIL=0
   for g in $GATES; do eval_gate "$g"; TOTAL_FAIL=$((TOTAL_FAIL + FAIL)); echo ""; done
+  if [ -n "$PLANNED" ]; then
+    set -- $PLANNED
+    echo "— skipped $# planned gate(s) (never passed): $PLANNED"
+    echo ""
+  fi
   if [ "$TOTAL_FAIL" -eq 0 ]; then echo "✅ ALL GATES PASS (read-only)"; exit 0
   else echo "❌ $TOTAL_FAIL failing criteria across gates (read-only)"; exit 1; fi
 fi

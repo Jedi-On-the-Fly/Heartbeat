@@ -107,7 +107,7 @@ Priority order (first match wins):
 |---|---|---|
 | `gate.sh <GATE>` | eval criteria; on pass append `gate_passed`, reproject, git snapshot, announce review if any; on fail append `gate_failed` | pass 0 / blocked 1 / unknown 2 |
 | `gate.sh --check <GATE>` | eval read-only, no state change | would-pass 0 / would-block 1 |
-| `gate.sh --all` | eval every gate read-only | 0 / 1 |
+| `gate.sh --all` | eval every **ever-passed** gate read-only (regression sweep); never-passed/planned gates are skipped and reported | 0 / 1 |
 
 Each criterion runs under `GATE_TIMEOUT_S` (timeout → fail). Criteria are transported from the node extractor to the bash consumer as `\x1f`-joined fields **terminated by `\x1e`** (record sep), read with `read -d $'\x1e'` — newline-safe, so a `cmd` may contain an embedded newline (e.g. a heredoc) without splitting into bogus records (T153). Git snapshot (unless `HB_NO_GIT` / `HB_GIT_AUTOCOMMIT=0`): `git add -A` → commit `--no-verify` (`heartbeat(<phase-id>): <title> [GATE]`) → force-tag the gate id. Restore a phase: `git reset --hard <GATE_ID>`.
 

@@ -3,16 +3,22 @@
 HeartBeat verifies work with gates, but a gate only helps if it's still *run*. Between commits, a gate
 can silently rot — a file it checks gets moved, a dependency changes, a doc drifts from the code it
 describes. The **pre-push gate guard** closes that window at the last safe moment: before anything leaves
-your machine, it re-verifies **every** gate and blocks the push if any no longer passes.
+your machine, it re-verifies **every ever-passed** gate and blocks the push if any no longer passes.
 
 ## What bootstrap installs
 
 Every HeartBeat project — bootstrapped by the node `bootstrap.sh` **or** the Python `hb init` — gets a
-`.git/hooks/pre-push` hook that, on `git push`, runs a **read-only re-verification of all gates**
-(`gate.sh --all` in a node project, `hb gate --all` in a Python one) and:
+`.git/hooks/pre-push` hook that, on `git push`, runs a **read-only re-verification of all ever-passed
+gates** (`gate.sh --all` in a node project, `hb gate --all` in a Python one) and:
 
-- **exits 0** (push proceeds) if every gate still verifies;
-- **exits 1** (push blocked) if any gate fails, printing which command to run to see the failure.
+- **exits 0** (push proceeds) if every such gate still verifies;
+- **exits 1** (push blocked) if any regressed, **naming the failing gate(s)** and printing which
+  command to run to see the failure.
+
+A gate that has **never passed** — a drafted future phase whose criteria name files that don't exist
+yet — is not part of the sweep: it has nothing to *regress* from, so planning work can never block a
+push. The sweep reports these skips loudly (`— skipped N planned gate(s) (never passed): …`) rather
+than hiding them, so "all gates pass" never overstates what was verified.
 
 It's the push-time complement to the existing **pre-commit rot guard** (which blocks a *commit* that
 deletes a file a completed gate depends on). Together: you can't commit a change that breaks a gate's
@@ -44,14 +50,17 @@ bash docs/howto/gate-examples/pre-push-hook-parity.sh    # -> PRE-PUSH-PARITY-OK
 bash docs/howto/gate-examples/pre-push-selfcontained.sh  # -> PRE-PUSH-SELFCONTAINED-OK (T122: hook is self-contained — tested as it runs)
 ```
 
-The proofs bootstrap throwaway projects and assert the hook blocks exactly when `gate.sh --all` /
-`hb gate --all` fails, leaves an existing hook alone, and honors `HB_NO_HOOK`. The two runtimes' hook
+The proofs bootstrap throwaway projects, arm a gate by passing it for real, and assert the hook blocks
+exactly when `gate.sh --all` / `hb gate --all` fails on a regressed ever-passed gate — while a planned
+(never-passed) gate never blocks (see
+[re-verify-completed-gates.md](re-verify-completed-gates.md)) — leaves an existing hook alone, and
+honors `HB_NO_HOOK`. The two runtimes' hook
 bodies differ (each calls its own gate tool), so parity is **behavioral** — the hook blocks iff a gate
 regresses — not byte-identical, as noted in [parity-notes.md](../../planning/parity-notes.md).
 
 The self-containment proof (T122) runs the hook under a **stripped toolchain PATH** — no `PYTHONPATH`, no
 `hb` on `PATH` — because a hook that only works with your shell's conveniences isn't self-contained: the
-node hook (`gate.sh --all`) must still block on a failing gate, and the Python hook must **skip with a
+node hook (`gate.sh --all`) must still block on a regressed gate, and the Python hook must **skip with a
 message** when `hb` is absent (not die on an import error). That proof derives the clean PATH from where
 `node`/`git`/`python3` actually live (they sit in a toolcache, not `/usr/bin`, on CI runners) — the
 portability trap catalogued in

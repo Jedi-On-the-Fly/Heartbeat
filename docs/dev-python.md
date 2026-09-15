@@ -56,7 +56,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | `tick` | one Stage-A tick → `{wakeAgent, data}` |
 | `next` | `resolve` result JSON |
 | `ready [N]` | runnable set JSON |
-| `gate <G> [--check] [--all]` | run/verify a gate; exit 1 if blocked |
+| `gate <G> [--check] [--all]` | run/verify a gate; exit 1 if blocked. `--all` sweeps only ever-passed gates (planned ones skipped, reported) |
 | `lint [dagfile] [--json]` | structural validation |
 | `audit [dagfile] [--json] [--agent]` | gate-quality audit; `--agent` adds backend refutation |
 | `report [--json]` | progress |
