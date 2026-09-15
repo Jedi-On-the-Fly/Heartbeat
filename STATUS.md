@@ -1,7 +1,31 @@
 # STATUS — HeartBeat
 
-**Version:** v1.29.7 (a sweep is never a black box: per-criterion durations, a TTY "running now" line, `--all` announces its scope up front, and the pre-push hook speaks before, during-failure, and after — a blocked push is no longer indistinguishable from a dead terminal)
+**Version:** v1.29.8 (`--all` dedupes byte-identical criteria within one sweep — a suite referenced by fifteen gates runs once, not fifteen times; every reuse loud, keyed on cmd + effective timeout)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.29.8 — sweep dedup: the same proof runs once, not once per gate
+
+`--all` re-ran a byte-identical criterion once per gate that referenced it. In a downstream
+project, 15 of 44 criteria were the identical `php "$PROJECT_DIR/tests/run.php"` — the sweep ran
+the same 10-second suite fifteen times, ~2.5 min of a ~3 min pre-push, to learn one bit.
+
+- **The fix.** Within one `--all` sweep, identical (`cmd`, **effective timeout**) pairs run once
+  and reuse the verdict. The key includes the effective timeout deliberately: a pass under a 60s
+  budget proves nothing about a 1s one, so the same `cmd` under a different `timeout_s` is *not*
+  deduped. node ≡ python.
+- **Loud, never silent.** Every reuse prints `(deduped, Ns)` with the original run's duration and
+  the verdict counts them (`✅ ALL GATES PASS (read-only: 12 gate(s) in 45s, 14 deduped)`); a
+  cached FAILURE still fails every referencing gate — the output tail is shown at the first
+  occurrence and later ones point back to it.
+- **Scoped to the sweep.** No cross-run cache to rot — the memo lives and dies inside one
+  read-only sweep. Soundness leans on the determinism contract the auditor already enforces
+  (`nondeterministic` / `side_effecting` criteria are flagged upstream).
+- **Portable.** bash-3.2 on node (parallel indexed arrays + linear scan — stock macOS has no
+  associative arrays). Single-gate and normal (event-recording) runs are byte-unchanged.
+- **Proof-driven.** T160.1–4 (single execution observed via a counter file; loud + counted reuse;
+  different-timeout not deduped; cached failure fans out to every gate) + two `test_gate.py`
+  cases — red before, green after. Node 407 / py 111 / parity OK.
+- Plugin/marketplace → 1.29.8, Python package → 0.19.7.
 
 ## v1.29.7 — progress + timing: slow ≠ hung, and the hook is never silent
 
