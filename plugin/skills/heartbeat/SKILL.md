@@ -48,7 +48,8 @@ phases). Otherwise write a fresh DAG.
   the gate's checklist, before the implementation tasks. Every file a gate `cmd`
   references must be produced by some task's description (⇒ no dangling-artifact warnings).
 - **Behavioral gates** — `criteria[].cmd`: one-line bash, exit 0 = pass, `$PROJECT_DIR`
-  available, deterministic <5s. Assert behavior (returns 200, row persisted, invariant
+  available, deterministic, within the gate timeout (60s default; a slow criterion sets its
+  own `timeout_s`). Assert behavior (returns 200, row persisted, invariant
   holds), not `test -f`. Prefer running code over grepping a source string: a gate that
   greps `def foo` passes on a hollow stub — instead **import and assert callable/shape**
   (`python3 -c "import m; assert callable(m.foo)"`) or exercise the entrypoint and check

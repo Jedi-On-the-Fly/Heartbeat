@@ -109,7 +109,7 @@ Priority order (first match wins):
 | `gate.sh --check <GATE>` | eval read-only, no state change | would-pass 0 / would-block 1 |
 | `gate.sh --all` | eval every **ever-passed** gate read-only (regression sweep); never-passed/planned gates are skipped and reported | 0 / 1 |
 
-Each criterion runs under `GATE_TIMEOUT_S` (timeout → fail). A failing criterion surfaces its `cmd` plus a bounded tail of its captured stdout+stderr (`GATE_OUT_LINES`, default 20, loud truncation marker) — captured to a temp file, not a command substitution, so a timed-out criterion's surviving children can't hold a pipe open past the kill (T157); a passing criterion's output is discarded. Criteria are transported from the node extractor to the bash consumer as `\x1f`-joined fields **terminated by `\x1e`** (record sep), read with `read -d $'\x1e'` — newline-safe, so a `cmd` may contain an embedded newline (e.g. a heredoc) without splitting into bogus records (T153). Git snapshot (unless `HB_NO_GIT` / `HB_GIT_AUTOCOMMIT=0`): `git add -A` → commit `--no-verify` (`heartbeat(<phase-id>): <title> [GATE]`) → force-tag the gate id. Restore a phase: `git reset --hard <GATE_ID>`.
+Each criterion runs under a timeout (timeout → fail): its own `timeout_s` from `dag.json` when set (the DAG outranks the environment), else `GATE_TIMEOUT_S` (default 60 — sized for a real test-suite criterion). An invalid `timeout_s` fails the criterion loudly at runtime (T158), never silently falls back. A failing criterion surfaces its `cmd` plus a bounded tail of its captured stdout+stderr (`GATE_OUT_LINES`, default 20, loud truncation marker) — captured to a temp file, not a command substitution, so a timed-out criterion's surviving children can't hold a pipe open past the kill (T157); a passing criterion's output is discarded. Criteria are transported from the node extractor to the bash consumer as `\x1f`-joined fields **terminated by `\x1e`** (record sep), read with `read -d $'\x1e'` — newline-safe, so a `cmd` may contain an embedded newline (e.g. a heredoc) without splitting into bogus records (T153). Git snapshot (unless `HB_NO_GIT` / `HB_GIT_AUTOCOMMIT=0`): `git add -A` → commit `--no-verify` (`heartbeat(<phase-id>): <title> [GATE]`) → force-tag the gate id. Restore a phase: `git reset --hard <GATE_ID>`.
 
 ## State CLI — `hb.js`
 
@@ -229,7 +229,7 @@ Copies templates into `.hb/` (incl. `executors/`), lints the seeded DAG, seeds `
 | `HEARTBEAT_STALE_S` | 180 | tick, hb-exec |
 | `STUCK_TICKS` | 3 | tick |
 | `HB_MAX_CONCURRENCY` | 1 | tick, hb-exec |
-| `GATE_TIMEOUT_S` | 5 | gate.sh |
+| `GATE_TIMEOUT_S` | 60 | gate.sh (per-criterion `timeout_s` in dag.json wins) |
 | `GATE_OUT_LINES` | 20 | gate.sh (failing-criterion output tail) |
 | `HB_ROT_CHECK` | 1 | tick |
 | `WATCH_PATHS` | (unset) | tick drift |

@@ -11,7 +11,10 @@ from pathlib import Path
 
 from . import state as st
 
-GATE_TIMEOUT_S = int(os.environ.get("GATE_TIMEOUT_S", "5"))
+# Default sized for a REAL criterion (a test suite, a build step) — 5s killed legitimate work.
+# A criterion sets its own budget with `timeout_s` in dag.json, which WINS over this default:
+# the DAG (versioned config) outranks the environment (a blunt global).
+GATE_TIMEOUT_S = int(os.environ.get("GATE_TIMEOUT_S", "60"))
 GATE_OUT_LINES = int(os.environ.get("GATE_OUT_LINES", "20"))   # tail of a FAILING criterion's output to surface
 
 
@@ -57,7 +60,20 @@ def eval_gate(hbdir, gate_id, timeout=None):
     lines = []
     results = []
     for c in criteria:
-        ok, out = _run_cmd(c.get("cmd", ""), hbdir, timeout)
+        eff = timeout
+        ts = c.get("timeout_s")
+        if ts is not None:
+            if isinstance(ts, int) and not isinstance(ts, bool) and ts >= 1:
+                eff = ts   # per-criterion budget WINS over the runner default
+            else:
+                # Invalid timeout_s is a LOUD runtime failure of the criterion (the
+                # zero-criteria-floor precedent) — never a silent fallback to the default.
+                lines.append(f"  ✗ [{c.get('id')}] {c.get('desc', '')}")
+                lines.append(f"      invalid timeout_s: {ts!r} (must be a positive integer)")
+                results.append({"id": c.get("id"), "cmd": c.get("cmd", ""), "exit": 1})
+                failed += 1
+                continue
+        ok, out = _run_cmd(c.get("cmd", ""), hbdir, eff)
         lines.append(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')}")
         if not ok:
             # Surface the WHY, not just the WHICH: the failing cmd (matches the node runner) and a

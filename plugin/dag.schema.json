@@ -29,7 +29,8 @@
               "properties": {
                 "id": { "type": "string" },
                 "desc": { "type": "string" },
-                "cmd": { "type": "string", "description": "One-line bash, exit 0 = pass. $PROJECT_DIR and $HB_DIR are available." }
+                "cmd": { "type": "string", "description": "One-line bash, exit 0 = pass. $PROJECT_DIR and $HB_DIR are available." },
+                "timeout_s": { "type": "integer", "minimum": 1, "description": "Per-criterion timeout in seconds — WINS over the runner default (GATE_TIMEOUT_S, 60). An invalid value fails the criterion loudly at runtime." }
               },
               "additionalProperties": false
             }

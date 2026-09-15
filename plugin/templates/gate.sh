@@ -24,9 +24,12 @@ DAG_FILE="$HB_DIR/dag.json"
 export DAG_FILE HB_DIR   # node -e reads these via process.env (not spliced into JS source)
 EVENTS_FILE="$HB_DIR/events.jsonl"
 
-# Each criterion runs under a timeout so a hanging cmd blocks the gate (✗) instead
-# of hanging. dag.json is TRUSTED input (criteria are eval'd) — one-line, <5s.
-GATE_TIMEOUT_S="${GATE_TIMEOUT_S:-5}"
+# Each criterion runs under a timeout so a hanging cmd blocks the gate (✗) instead of
+# hanging. dag.json is TRUSTED input (criteria are eval'd). The default is sized for a REAL
+# criterion (a test suite, a build step) — 5s killed legitimate work. A criterion sets its
+# own budget with `timeout_s` in dag.json, which WINS over this default: the DAG (versioned
+# config) outranks the environment (a blunt global).
+GATE_TIMEOUT_S="${GATE_TIMEOUT_S:-60}"
 # A FAILING criterion's captured output is surfaced as a bounded TAIL (the WHY, not just the
 # WHICH) — full output would bury the gate summary, so the cut is bounded and LOUD.
 GATE_OUT_LINES="${GATE_OUT_LINES:-20}"
@@ -39,13 +42,14 @@ trap 'rm -f "$CRIT_OUT" 2>/dev/null || true' EXIT
 if   command -v timeout  >/dev/null 2>&1; then TIMEOUT_BIN="timeout"
 elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN="gtimeout"
 else TIMEOUT_BIN=""; fi
-run_criterion() {
-  if [ -n "$TIMEOUT_BIN" ]; then "$TIMEOUT_BIN" "${GATE_TIMEOUT_S}s" bash -c "$1"; return $?; fi
+run_criterion() {   # $1 = cmd, $2 = timeout seconds (defaults to GATE_TIMEOUT_S)
+  local t="${2:-$GATE_TIMEOUT_S}"
+  if [ -n "$TIMEOUT_BIN" ]; then "$TIMEOUT_BIN" "${t}s" bash -c "$1"; return $?; fi
   # No timeout(1)/gtimeout (e.g. stock macOS ships no coreutils): apply a portable shell-level bound so a
   # hanging criterion still blocks the gate (kill → ✗) instead of running unbounded — parity with the
   # python runner (subprocess timeout). Background + poll + kill; </dev/null so the criterion can't read stdin.
   bash -c "$1" </dev/null &
-  local p=$! i=0 n=$(( GATE_TIMEOUT_S * 10 ))
+  local p=$! i=0 n=$(( t * 10 ))
   while kill -0 "$p" 2>/dev/null; do
     i=$((i + 1)); if [ "$i" -ge "$n" ]; then kill -9 "$p" 2>/dev/null; wait "$p" 2>/dev/null; return 124; fi
     sleep 0.1
@@ -74,8 +78,17 @@ eval_gate() {
   # -d $'\x1e'. This is immune to embedded newlines in a cmd/desc (e.g. a heredoc) — which a plain
   # newline-delimited `read` would split into bogus empty-CMD records that trivially "pass" (a false
   # gate). \x1e never appears in a shell command, and a multi-line cmd now runs verbatim.
-  while IFS=$'\x1f' read -r -d $'\x1e' ID DESC CMD; do
-    if run_criterion "$CMD" >"$CRIT_OUT" 2>&1; then
+  while IFS=$'\x1f' read -r -d $'\x1e' ID DESC TOUT CMD; do
+    # Per-criterion timeout_s (empty = use the default). Invalid is a LOUD runtime failure of
+    # the criterion (the zero-criteria-floor precedent) — never a silent fallback.
+    EFF_T="$GATE_TIMEOUT_S"
+    if [ -n "$TOUT" ]; then
+      case "$TOUT" in *[!0-9]*|0) EFF_T="";; *) EFF_T="$TOUT";; esac
+    fi
+    if [ -z "$EFF_T" ]; then
+      echo "  ✗ [$ID] $DESC"; echo "      invalid timeout_s: '$TOUT' (must be a positive integer)"
+      FAIL=$((FAIL + 1)); CRIT_EXITS="$CRIT_EXITS 1"
+    elif run_criterion "$CMD" "$EFF_T" >"$CRIT_OUT" 2>&1; then
       echo "  ✓ [$ID] $DESC"; PASS=$((PASS + 1)); CRIT_EXITS="$CRIT_EXITS 0"
     else
       echo "  ✗ [$ID] $DESC"; echo "      cmd: $CMD"
@@ -93,7 +106,8 @@ eval_gate() {
     fi
   done < <(node -e "
     const dag = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
-    for (const c of dag.gates[process.argv[2]].criteria) process.stdout.write([c.id, c.desc, c.cmd].join('\x1f') + '\x1e');
+    // timeout_s travels as the 3rd field; cmd stays LAST so it keeps swallowing any remainder.
+    for (const c of dag.gates[process.argv[2]].criteria) process.stdout.write([c.id, c.desc, c.timeout_s ?? '', c.cmd].join('\x1f') + '\x1e');
   " "$DAG_FILE" "$G")
   echo ""
   echo "=== $G: $PASS passed, $FAIL failed ==="

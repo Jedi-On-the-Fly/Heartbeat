@@ -1681,6 +1681,16 @@ check "T157.2 chatty output is TAILED (default 20) with a LOUD truncation marker
 check "T157.3 GATE_OUT_LINES tunes the tail (5 → +25 earlier)" \
   'o=$(GATE_OUT_LINES=5 bash "$H157/gate.sh" --check GATE_T 2>&1 || true); echo "$o" | grep -q "+25 earlier output lines" && ! echo "$o" | grep -q "line-25\$"'
 
+grp "T158 — gate timeout: a real-suite default (60s), per-criterion timeout_s override, invalid value fails LOUD"
+P158="$TMP/p158"; bash "$HB_SRC/plugin/bootstrap.sh" "$P158" >/dev/null 2>&1 </dev/null; H158="$P158/.hb"
+node -e "const fs=require('fs');const f='$H158/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GATE_REAL={desc:'r',criteria:[{id:'s',desc:'a real criterion (~6s) survives the default',cmd:'sleep 6'}]};d.gates.GATE_TS={desc:'t',criteria:[{id:'k',desc:'hang killed by its own 1s',timeout_s:1,cmd:'sleep 3'}]};d.gates.GATE_BADTS={desc:'b',criteria:[{id:'x',desc:'typo timeout',timeout_s:'abc',cmd:'true'}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+check "T158.1 the DEFAULT survives a real test-suite criterion (sleep 6 passes, no env override)" \
+  'env -u GATE_TIMEOUT_S bash "$H158/gate.sh" --check GATE_REAL >/dev/null 2>&1'
+check "T158.2 per-criterion timeout_s=1 kills its own hang (fast) even under a generous default" \
+  's=$(date +%s); ! GATE_TIMEOUT_S=30 bash "$H158/gate.sh" --check GATE_TS >/dev/null 2>&1 && [ $(( $(date +%s) - s )) -lt 10 ]'
+check "T158.3 an invalid timeout_s fails the criterion LOUD — a passing cmd cannot absolve it" \
+  'o=$(bash "$H158/gate.sh" --check GATE_BADTS 2>&1); rc=$?; [ "$rc" -ne 0 ] && echo "$o" | grep -q "invalid timeout_s"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

@@ -19,7 +19,9 @@ DAG='{"phases":[
   "G_PASS":{"desc":"p","criteria":[{"id":"c","desc":"d","cmd":"true"}]},
   "G_FAIL":{"desc":"f","criteria":[{"id":"c","desc":"d","cmd":"false"}]},
   "G_HOLLOW":{"desc":"h","criteria":[]},
-  "G_TIMEOUT":{"desc":"to","criteria":[{"id":"c","desc":"d","cmd":"sleep 2"}]}}}'
+  "G_TIMEOUT":{"desc":"to","criteria":[{"id":"c","desc":"d","cmd":"sleep 2"}]},
+  "G_CRIT_WIN":{"desc":"cw","criteria":[{"id":"c","desc":"per-criterion timeout_s beats the env default","timeout_s":5,"cmd":"sleep 2"}]},
+  "G_CRIT_BAD":{"desc":"cb","criteria":[{"id":"c","desc":"invalid timeout_s fails LOUD, cmd never absolves it","timeout_s":"abc","cmd":"true"}]}}}'
 printf '%s' "$DAG" > "$tmp/proj/.hb/dag.json"
 node "$tmp/proj/.hb/hb.js" rebuild >/dev/null 2>&1
 
@@ -37,4 +39,9 @@ cmp_gate G_PASS
 cmp_gate G_FAIL
 cmp_gate G_HOLLOW
 cmp_gate G_TIMEOUT
-echo "GATE-PARITY-OK: node ≡ python gate runner (pass / fail / hollow-floor / timeout)."
+cmp_gate G_CRIT_WIN   # criterion timeout_s=5 under env GATE_TIMEOUT_S=1: BOTH must pass (criterion wins)
+cmp_gate G_CRIT_BAD   # timeout_s "abc": BOTH must block (invalid timeout is a loud runtime failure)
+# And the direction of G_CRIT_WIN must be PASS (not merely agreeing on block):
+GATE_TIMEOUT_S=1 HB_NO_GIT=1 bash "$tmp/proj/.hb/gate.sh" --check G_CRIT_WIN >/dev/null 2>&1 \
+  || { echo "FAIL: G_CRIT_WIN blocked — per-criterion timeout_s did not override the env default"; exit 1; }
+echo "GATE-PARITY-OK: node ≡ python gate runner (pass / fail / hollow-floor / timeout / criterion-timeout override / invalid-timeout floor)."

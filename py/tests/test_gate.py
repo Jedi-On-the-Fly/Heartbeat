@@ -108,3 +108,40 @@ def test_failing_criterion_output_tail_truncated(tmp_path):
     assert "line-30" in text and "line-11" in text      # the tail is kept
     assert "line-10\n" not in text + "\n"               # earlier lines are cut
     assert "(+10 earlier output lines)" in text         # and the cut is LOUD
+
+
+def test_criterion_timeout_s_overrides_default(tmp_path):
+    # Issue: GATE_TIMEOUT_S (one global) killed any real criterion (a ~10s test suite) while
+    # authors had no per-criterion dial. dag.json now sets `timeout_s` per criterion, and it
+    # WINS over the runner default — the DAG (config) outranks the environment (blunt global).
+    dag = two_phase_dag()
+    dag["gates"]["GATE_P0"]["criteria"] = [
+        {"id": "slow", "desc": "needs 2s", "timeout_s": 5, "cmd": "sleep 2"}]
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    res = gate.eval_gate(hb, "GATE_P0", timeout=1)     # runner default of 1s would kill it
+    assert res["failed"] == 0                          # criterion's own 5s wins
+
+    dag["gates"]["GATE_P0"]["criteria"] = [
+        {"id": "hang", "desc": "hangs", "timeout_s": 1, "cmd": "sleep 3"}]
+    (tmp_path / ".hb" / "dag.json").write_text(__import__("json").dumps(dag))
+    res = gate.eval_gate(hb, "GATE_P0", timeout=30)    # generous default must NOT rescue it
+    assert res["failed"] == 1                          # criterion's own 1s kills it
+
+
+def test_invalid_timeout_s_fails_loud(tmp_path):
+    # An invalid timeout_s is a LOUD runtime failure of the criterion (the zero-criteria-floor
+    # precedent) — never a silent fallback to the default.
+    dag = two_phase_dag()
+    dag["gates"]["GATE_P0"]["criteria"] = [
+        {"id": "bad", "desc": "typo", "timeout_s": "abc", "cmd": "true"}]
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    res = gate.eval_gate(hb, "GATE_P0")
+    assert res["failed"] == 1                          # a passing cmd cannot absolve it
+    assert "invalid timeout_s" in "\n".join(res["lines"])
+
+
+def test_default_timeout_survives_a_real_suite():
+    # The default must be one a real test-suite criterion survives (60s), not 5s.
+    assert gate.GATE_TIMEOUT_S >= 60 or "GATE_TIMEOUT_S" in os.environ
