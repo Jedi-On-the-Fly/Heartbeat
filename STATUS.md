@@ -1,7 +1,31 @@
 # STATUS — HeartBeat
 
-**Version:** v1.29.4 (the regression sweep — `--all` and the pre-push guard — arms only **ever-passed** gates: drafting a future phase no longer blocks pushes, skips are reported loudly, and a blocked push names the failing gate)
+**Version:** v1.29.5 (a blocked gate now tells you WHY: a failing criterion's captured output is surfaced as a bounded, loudly-truncated tail on both runtimes — no more copying the cmd out to re-run it by hand)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.29.5 — failing criteria surface their output (the WHY, not just the WHICH)
+
+A blocked gate printed the failing criterion's id, desc, and cmd — and not one word of the actual
+error: `gate.sh` ran every criterion `>/dev/null 2>&1`, so every diagnosis began by copying the cmd
+out and re-running it by hand. The discard had a reason (a chatty test runner × 15 criteria would
+bury the gate summary), but the answer is a bounded tail, not silence. The python runner had already
+fixed half of this — it surfaced failing output, never mirrored to node — and printed the FULL
+output, the very bury-the-summary problem that motivated the discard.
+
+- **The fix.** On failure only, both runtimes print the criterion's `cmd` plus a TAIL of its captured
+  stdout+stderr — `GATE_OUT_LINES` (default 20) — with a **loud** truncation marker
+  (`… (+N earlier output lines)`), never a silent cut. A passing criterion's output stays quiet.
+  node ≡ python (python also gained the `cmd:` line).
+- **Capture-to-file, deliberately.** `$(…)` capture would re-introduce an unbounded hang: a timed-out
+  criterion's surviving grandchildren hold a command-substitution pipe open past the kill; a file has
+  no EOF wait.
+- **Portability held by the suite's own gates.** The first draft used `mktemp`/`wc`/`tail`/`sed`;
+  T156's coreutils-less curated PATH (the stock-macOS proof from v1.29.2) went red. Final: mktemp
+  with a `$$`-file fallback and a pure-bash tail (read-loop, no external tools).
+- **Proof-driven.** T157.1–3 (node: stderr surfaced, passing output quiet, tail + marker,
+  `GATE_OUT_LINES` tunes) and two `test_gate.py` cases (python, same semantics) — red before, green
+  after. Node 396 passed / py 103 / parity OK.
+- Plugin/marketplace → 1.29.5, Python package → 0.19.4.
 
 ## v1.29.4 — a planned gate is not an armed gate (regression-sweep filter)
 
