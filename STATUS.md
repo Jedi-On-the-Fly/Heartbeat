@@ -1,7 +1,34 @@
 # STATUS — HeartBeat
 
-**Version:** v1.29.8 (`--all` dedupes byte-identical criteria within one sweep — a suite referenced by fifteen gates runs once, not fifteen times; every reuse loud, keyed on cmd + effective timeout)
+**Version:** v1.29.9 (the flake probe: a sweep failure is re-run once and labeled FLAKY or reproduced — a transient failure is distinguishable from a real regression, and the verdict never changes)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.29.9 — the flake probe: flake ≠ regression, but both still block
+
+A transient failure was reported exactly like a real regression, and blocked the push either way
+with no signal (a downstream project saw one of 15 identical invocations fail once and never
+reproduce). The originally proposed note — "this criterion passed elsewhere in this run" — became
+structurally unavailable with v1.29.8's dedup: the identical cmd now runs *once* and its failure
+fans out to every referencing gate. So the discriminator is re-execution.
+
+- **The fix.** In a `--all` sweep, a failing criterion is re-run **once**. Pass on re-run →
+  labeled `FLAKY: failed (10s), then passed on re-run (10s) — still FAILED (a criterion must be
+  deterministic)`, counted in the verdict (`…, 1 flaky`), and surfaced by both pre-push hooks in
+  the block message. Fail again → the affirmative label `(failure reproduced on immediate
+  re-run)`. node ≡ python.
+- **The verdict never changes — fail-closed, by doctrine.** Observed nondeterminism is itself a
+  gate-contract violation: the probe is the *behavioral* complement of the auditor's static
+  `nondeterministic` rule, and a retry-then-pass would be the runner silently absolving a flaky
+  gate — the exact "auto-weaken" move the driver is forbidden. The probe labels; it never
+  absolves.
+- **Scoped and evidence-preserving.** Sweep-only (a single-gate `--check` runs the cmd exactly
+  once); the probe writes to a second capture file so the *first* failure's output tail — the
+  evidence — is preserved; the dedup memo carries the flaky flag so fanned-out reuses are
+  labeled too.
+- **Proof-driven.** T161.1–4 (flaky labeled + sweep still blocks; reproduced labeled; verdict
+  counts; probe is sweep-only) + T160.4 updated (a failing cmd now executes run + probe = 2) +
+  mirrored `test_gate.py` cases — red before, green after. Node 411 / py 112 / parity OK.
+- Plugin/marketplace → 1.29.9, Python package → 0.19.8.
 
 ## v1.29.8 — sweep dedup: the same proof runs once, not once per gate
 
