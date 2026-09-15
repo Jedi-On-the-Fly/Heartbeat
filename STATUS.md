@@ -1,7 +1,34 @@
 # STATUS — HeartBeat
 
-**Version:** v1.29.5 (a blocked gate now tells you WHY: a failing criterion's captured output is surfaced as a bounded, loudly-truncated tail on both runtimes — no more copying the cmd out to re-run it by hand)
+**Version:** v1.29.6 (gate timeouts sized for real work: 60s default and a per-criterion `timeout_s` in dag.json that wins over the environment — an invalid value fails the criterion loudly)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.29.6 — timeouts sized for real criteria (60s default, per-criterion `timeout_s`)
+
+`GATE_TIMEOUT_S` defaulted to **5s** — which kills any real criterion (a ~10s `php tests/run.php`
+run fails on every count), and authors had no per-criterion dial. Worse, pre-v1.29.2 the two
+failure modes pointed opposite ways *silently*: with `timeout`/`gtimeout` on PATH the 5s kill bit;
+without them criteria ran unbounded — so behavior depended on whether coreutils happened to be
+installed. (v1.29.2's portable bound closed the unbounded half; a downstream project still on an
+older per-project `gate.sh` reported exactly that pre-fix asymmetry — its gates passed *only
+because* coreutils was absent, and `brew install coreutils` would have broken every push.)
+
+- **The fix.** Default **60s**, both runtimes — sized for a real test-suite criterion. A criterion
+  sets its own budget with `timeout_s` in `dag.json` (schema'd, integer ≥ 1), and it **wins** over
+  `GATE_TIMEOUT_S`: the DAG (versioned config) outranks the environment (a blunt global). No
+  warning tier needed for a missing timeout binary — since v1.29.2 the shell-level bound gives
+  identical semantics either way.
+- **Loud floor.** An invalid `timeout_s` fails the criterion at runtime with
+  `invalid timeout_s: … (must be a positive integer)` — the zero-criteria-floor precedent; a
+  passing `cmd` cannot absolve it, and there is no silent fallback to the default.
+- **Transport.** `timeout_s` travels as the 3rd `\x1f` field; `cmd` stays last so it keeps
+  swallowing any remainder (the T153 newline-safety contract is untouched).
+- **Proof-driven.** T158.1–3 (default survives a real 6s criterion; a criterion's own 1s kills its
+  hang even under a generous default; invalid fails loud) + three `test_gate.py` cases +
+  `gate-parity.sh` gains G_CRIT_WIN / G_CRIT_BAD (override direction and invalid floor agree
+  across runtimes, T83) — red before, green after. All timeout-sensitive tests already pinned
+  `GATE_TIMEOUT_S` explicitly, so the default change broke none.
+- Plugin/marketplace → 1.29.6, Python package → 0.19.5.
 
 ## v1.29.5 — failing criteria surface their output (the WHY, not just the WHICH)
 

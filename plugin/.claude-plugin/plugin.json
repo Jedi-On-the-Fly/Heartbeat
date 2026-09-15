@@ -1,6 +1,6 @@
 {
   "name": "heartbeat",
-  "version": "1.29.5",
+  "version": "1.29.6",
   "description": "Tick-driven agent orchestration: a bash Stage A runs on a schedule and wakes the LLM (Stage B) only when real DAG work exists — phases, tasks, dependencies, and quality gates.",
   "author": {
     "name": "HeartBeat"
