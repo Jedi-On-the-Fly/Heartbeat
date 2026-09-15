@@ -1,7 +1,36 @@
 # STATUS — HeartBeat
 
-**Version:** v1.29.6 (gate timeouts sized for real work: 60s default and a per-criterion `timeout_s` in dag.json that wins over the environment — an invalid value fails the criterion loudly)
+**Version:** v1.29.7 (a sweep is never a black box: per-criterion durations, a TTY "running now" line, `--all` announces its scope up front, and the pre-push hook speaks before, during-failure, and after — a blocked push is no longer indistinguishable from a dead terminal)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.29.7 — progress + timing: slow ≠ hung, and the hook is never silent
+
+Two linked gaps. A multi-minute sweep printed nothing per-criterion as it went and never reported
+how long anything took — no way to tell "slow" from "hung" from inside the run (the python CLI was
+worse: it dumped all lines only after the whole gate finished). And the pre-push hook ran the entire
+sweep captured, printing only its final reason — for ~3 minutes a blocked push was indistinguishable
+from a dead terminal. Real pushes were killed on that assumption; each was working, and killing them
+yielded exit 144 and no explanation. The v1.29.6 default (60s) lengthened the worst-case silence,
+making this pair the necessary follow-up.
+
+- **Durations everywhere.** Every result line carries its elapsed time (`✓ [b] onesec (1s)`) — node
+  via bash's builtin `SECONDS` (portable to the coreutils-less T156 PATH), python via
+  `time.monotonic`. node ≡ python.
+- **A TTY sees what's running now.** A transient `⏳ [id] desc (≤60s)` line with the criterion's
+  budget, cleared before the result prints — piped/captured output (hooks, tests) never carries it,
+  pinned by T159.4.
+- **The sweep announces itself.** `--all`'s first line is `— re-verifying N ever-passed gate(s)…`
+  and its verdict reports the total (`✅ ALL GATES PASS (read-only: N gate(s) in Ss)`).
+- **The hook speaks at both ends.** Preamble *before* the sweep starts; the timed ✅ verdict
+  surfaced on success — completion is visible, never silent. The load-bearing proof matches the
+  field failure exactly: T117 runs the hook against a **hanging** stub sweep and requires the
+  preamble to already be visible mid-run.
+- **Python streams.** `eval_gate` gains `emit(line)` (lines as produced) and
+  `progress(id, desc, effective_timeout)` callbacks; the CLI wires both, so single-gate runs
+  stream and show the transient line on a TTY. Library callers (executor, MCP) are unchanged.
+- **Proof-driven.** T159.1–4 + the T117 dead-terminal/verdict additions (node), three cases across
+  `test_gate.py` / `test_cli.py` (python) — red before, green after. Node 403 / py 109 / parity OK.
+- Plugin/marketplace → 1.29.7, Python package → 0.19.6.
 
 ## v1.29.6 — timeouts sized for real criteria (60s default, per-criterion `timeout_s`)
 

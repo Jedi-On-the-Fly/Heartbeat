@@ -9,7 +9,7 @@
       "name": "heartbeat",
       "source": "./plugin",
       "description": "Tick-driven agent orchestration with DAG phases, tasks, and quality gates.",
-      "version": "1.29.6"
+      "version": "1.29.7"
     }
   ]
 }
