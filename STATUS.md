@@ -1,7 +1,54 @@
 # STATUS — HeartBeat
 
-**Version:** v1.30.0 (`hb park` / `hb unpark`: retire a phase without deleting it — resolver, audit, report, and the sweep all honor `parked`, loudly and reversibly)
+**Version:** v1.31.0 (refuter economics: `refute-prompt --json` routes the interactive refuter to the profile's model, review events record WHICH model reviewed, refuter impact breaks down per model — and the how-to says where the cheap model belongs and where it doesn't)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.31.0 — refuter economics: route the refuter, record the model, read the impact
+
+A downstream transcript showed three refutations burning ~540k tokens on the session's strongest
+model — because a profile's `model` binding reached only the exec dispatch (T147): an interactive
+host had **no machine-readable binding at all** (the composed prompt carries no model line), review
+events recorded reviewer/artifact/citations but **not which model reviewed**, and no how-to framed
+the economics. Built **the HeartBeat way**: planned as a gated DAG, plan refuted twice before a line
+of code (round 1 UNSOUND — 2 blocking + 9 findings, incl. a demonstrated-hollow exit-bar criterion
+and a factual error in the plan's own premise — round 2 SOUND), then driven tick-by-tick with every
+gate adversarially reviewed. Archive: [planning/refuter-economics/](planning/refuter-economics/).
+
+- **RE1 — the interactive last mile (T163).** `hb refute-prompt <gate> --json` emits
+  `{prompt, model, provider, panel, refute_if}` from the gate's resolved profile — `prompt`
+  byte-identical to the text compose (one compose, pinned for profiled AND profile-less), all null
+  with no profile, flag-order-safe. The skill + both PROTOCOL `review_pending` texts instruct the
+  host BOTH halves: spawn the refuter on the profile's model, record the verdict with `--model`.
+  Parity cases `refute-prompt:json` / `:json-order`.
+- **RE2 — model provenance (T164).** Review events carry `model` on both verdicts — CLI (both
+  runtimes), MCP tool argument, and the executors **auto-stamp** the resolved profile model
+  (config-derived); null when unknown, never fabricated. Hardened en route: the note must be ONE
+  quoted argument — a flag-shaped token inside an unquoted note *fabricated provenance and
+  truncated findings on both runtimes* (node loudly caught by review; python's argparse doing the
+  same quietly, caught by the fix's own proof). Refuter impact gains a per-model caught/cleared
+  breakdown — JSON and both text renders — with nulls bucketed under `(none)`, parity-pinned on a
+  mixed fixture.
+- **RE3 — the guide.** [tier-the-refuter.md](docs/howto/tier-the-refuter.md): bind the model per
+  profile, route by review KIND (plan refutation strong, gate-checklist cheap), verify by observing
+  the event, four honest limits (cheaper ≠ differently-failing; watch per-model impact; never
+  downgrade to buy a pass; the field's trust boundary — interactive/MCP `--model` is a self-report,
+  only the exec stamp is config-derived), deferrals loud (interactive panel fan-out;
+  `audit --agent` routing).
+- **The dogfood is the data.** The plan's own gates reviewed under the tiering: `correctness`
+  bound to a cheap model caught **two real defects** (the flag-order divergence; the provenance
+  fabrication), the strong `default` reviewer took the whole-feature gate and caught the guide
+  **overclaiming its own evidence** twice (fixed by making the claim true — the text renders gained
+  the breakdown — and the history honest). This repo's own impact report now shows it: RE1's cycle
+  in `(none)` (predates the flag — the ordering debt visible), RE2 stamped `sonnet`, RE3 stamped
+  `fable`. The three phase commits + `GATE_RE1/2/3` tags were written by HeartBeat at review
+  acceptance.
+- **Suite-level hardenings the exit bar forced.** `run-tests.sh` / `parity.sh` / `parity-fuzz.sh`
+  no longer inherit a calling gate's `HB_DIR`/`PROJECT_DIR` (a suite run inside a gate criterion —
+  the dogfood pattern — silently pointed dozens of fixtures at the calling project's `.hb`; the
+  incident also injected 182 foreign events into the plan's log, recovered forensically — see
+  `GATE_RE3.attempt.md`). `GROUPS-PASSED` membership now requires registered checks. `--selftest`
+  teeth on both new proofs; node 421 / py 115 / parity OK.
+- Plugin/marketplace → **1.31.0**, Python package → **0.21.0** (minor: new CLI surface + review-event field).
 
 ## v1.30.0 — park/unpark: a CLI path to retire a phase (minor: new command + DAG field)
 
