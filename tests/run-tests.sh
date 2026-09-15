@@ -1691,6 +1691,19 @@ check "T158.2 per-criterion timeout_s=1 kills its own hang (fast) even under a g
 check "T158.3 an invalid timeout_s fails the criterion LOUD — a passing cmd cannot absolve it" \
   'o=$(bash "$H158/gate.sh" --check GATE_BADTS 2>&1); rc=$?; [ "$rc" -ne 0 ] && echo "$o" | grep -q "invalid timeout_s"'
 
+grp "T159 — gate progress/timing: per-criterion durations, --all announces its scope up front, captured output stays clean"
+P159="$TMP/p159"; bash "$HB_SRC/plugin/bootstrap.sh" "$P159" >/dev/null 2>&1 </dev/null; H159="$P159/.hb"
+node -e "const fs=require('fs');const f='$H159/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GATE_TM={desc:'tm',criteria:[{id:'a',desc:'quick',cmd:'true'},{id:'b',desc:'onesec',cmd:'sleep 1'}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+bash "$H159/gate.sh" GATE_TM >/dev/null 2>&1   # arm it (records gate_passed) so --all sweeps it
+check "T159.1 every result line carries its duration — slow is distinguishable from hung" \
+  'o=$(bash "$H159/gate.sh" --check GATE_TM 2>&1); echo "$o" | grep -qE "✓ \[a\] .*\([0-9]+s\)" && echo "$o" | grep -qE "✓ \[b\] .*\([0-9]+s\)"'
+check "T159.2 --all announces its scope UP FRONT (first line: re-verifying N ever-passed gates)" \
+  'bash "$H159/gate.sh" --all 2>&1 | sed -n 1p | grep -qE "re-verifying [0-9]+ ever-passed"'
+check "T159.3 the --all verdict reports the total elapsed time" \
+  'bash "$H159/gate.sh" --all 2>&1 | grep -qE "ALL GATES PASS.*in [0-9]+s"'
+check "T159.4 captured (non-TTY) output carries NO transient progress marker — pipes and hooks stay clean" \
+  '! bash "$H159/gate.sh" --check GATE_TM 2>&1 | grep -q "⏳"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

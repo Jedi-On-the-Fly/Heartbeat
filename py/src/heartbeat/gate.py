@@ -7,6 +7,7 @@ appends gate_passed and (optionally) commits+tags a git restore point.
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from . import state as st
@@ -45,19 +46,30 @@ def _run_cmd(cmd, hbdir, timeout):
         return False, str(e)
 
 
-def eval_gate(hbdir, gate_id, timeout=None):
-    """Run the criteria; no side effects. Returns None for an unknown gate."""
+def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None):
+    """Run the criteria; no side effects. Returns None for an unknown gate.
+
+    Progress hooks (a multi-minute sweep must not be silent — "slow" and "hung" have to be
+    distinguishable from inside the run): `emit(line)` receives each output line AS PRODUCED,
+    and `progress(id, desc, effective_timeout_s)` fires before each criterion runs.
+    """
     timeout = GATE_TIMEOUT_S if timeout is None else timeout
     gate = (st.read_dag(hbdir).get("gates") or {}).get(gate_id)
     if gate is None:
         return None
+    lines = []
+
+    def _add(ln):
+        lines.append(ln)
+        if emit:
+            emit(ln)
+
     criteria = gate.get("criteria") or []
     if not criteria:
         # Hollow-gate floor: a zero-criteria gate proves nothing — refuse it at runtime.
-        return {"passed": 0, "failed": 1,
-                "lines": [f"  ✗ [--] gate {gate_id} has NO criteria — a gate must assert something"]}
+        _add(f"  ✗ [--] gate {gate_id} has NO criteria — a gate must assert something")
+        return {"passed": 0, "failed": 1, "lines": lines}
     passed = failed = 0
-    lines = []
     results = []
     for c in criteria:
         eff = timeout
@@ -68,35 +80,39 @@ def eval_gate(hbdir, gate_id, timeout=None):
             else:
                 # Invalid timeout_s is a LOUD runtime failure of the criterion (the
                 # zero-criteria-floor precedent) — never a silent fallback to the default.
-                lines.append(f"  ✗ [{c.get('id')}] {c.get('desc', '')}")
-                lines.append(f"      invalid timeout_s: {ts!r} (must be a positive integer)")
+                _add(f"  ✗ [{c.get('id')}] {c.get('desc', '')}")
+                _add(f"      invalid timeout_s: {ts!r} (must be a positive integer)")
                 results.append({"id": c.get("id"), "cmd": c.get("cmd", ""), "exit": 1})
                 failed += 1
                 continue
+        if progress:
+            progress(c.get("id"), c.get("desc", ""), eff)
+        t0 = time.monotonic()
         ok, out = _run_cmd(c.get("cmd", ""), hbdir, eff)
-        lines.append(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')}")
+        dt = int(time.monotonic() - t0 + 0.5)
+        _add(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')} ({dt}s)")
         if not ok:
             # Surface the WHY, not just the WHICH: the failing cmd (matches the node runner) and a
             # TAIL of its captured output — full output would bury the gate summary (a chatty test
             # runner), so the cut is bounded (GATE_OUT_LINES) and LOUD, never silent. A passing
             # criterion's output stays quiet.
-            lines.append(f"      cmd: {c.get('cmd', '')}")
+            _add(f"      cmd: {c.get('cmd', '')}")
             if out.strip():
                 tail = out.strip().splitlines()
                 extra = len(tail) - GATE_OUT_LINES
                 if extra > 0:
-                    lines.append(f"      … (+{extra} earlier output lines)")
+                    _add(f"      … (+{extra} earlier output lines)")
                     tail = tail[-GATE_OUT_LINES:]
                 for ln in tail:
-                    lines.append(f"      {ln}")
+                    _add(f"      {ln}")
         results.append({"id": c.get("id"), "cmd": c.get("cmd", ""), "exit": 0 if ok else 1})
         passed += 1 if ok else 0
         failed += 0 if ok else 1
     return {"passed": passed, "failed": failed, "lines": lines, "results": results}
 
 
-def run_gate(hbdir, gate_id, check=False):
-    res = eval_gate(hbdir, gate_id)
+def run_gate(hbdir, gate_id, check=False, emit=None, progress=None):
+    res = eval_gate(hbdir, gate_id, emit=emit, progress=progress)
     if res is None:
         return {"status": "unknown", "gate": gate_id}
     if check:
@@ -122,24 +138,29 @@ def run_gate(hbdir, gate_id, check=False):
     return res
 
 
-def run_all(hbdir):
+def armed_gates(hbdir):
+    """Split defined gates into (armed, planned): armed = has a recorded gate_passed event.
+    Filter on the event log (truth), not the projection: gate_failed/review_failed reset the
+    projection's det flag, and a once-proven gate must stay armed through a recorded failure."""
+    passed_ever = {e.get("gate") for e in st.read_events(hbdir) if e.get("event") == "gate_passed"}
+    gates = st.read_dag(hbdir).get("gates") or {}
+    return [g for g in gates if g in passed_ever], [g for g in gates if g not in passed_ever]
+
+
+def run_all(hbdir, emit=None, progress=None):
     # Regression semantics: a gate that has EVER passed keeps acting as a gate (re-verified here);
     # a gate that has never passed — a drafted/planned future phase — has nothing to regress from
     # and is SKIPPED, loudly (returned in "skipped" so callers must report it, never hide it).
-    # Filter on the event log (truth), not the projection: gate_failed/review_failed reset the
-    # projection's det flag, and a once-proven gate must stay armed through a recorded failure.
-    passed_ever = {e.get("gate") for e in st.read_events(hbdir) if e.get("event") == "gate_passed"}
+    armed, skipped = armed_gates(hbdir)
     total_fail = 0
     report = {}
-    skipped = []
-    for g in (st.read_dag(hbdir).get("gates") or {}):
-        if g not in passed_ever:
-            skipped.append(g)
-            continue
-        res = eval_gate(hbdir, g)
+    t0 = time.monotonic()
+    for g in armed:
+        res = eval_gate(hbdir, g, emit=emit, progress=progress)
         report[g] = res
         total_fail += res["failed"]
-    return {"ok": total_fail == 0, "gates": report, "skipped": skipped}
+    return {"ok": total_fail == 0, "gates": report, "skipped": skipped,
+            "elapsed_s": int(time.monotonic() - t0 + 0.5)}
 
 
 def _git(pd, *args, **kw):

@@ -62,3 +62,16 @@ def test_cli_diagnose_gate_blocked(tmp_path, capsys):
     cli.main(["gate", "GATE_P0", "--dir", proj])
     _, out = _run(capsys, "diagnose", "--dir", proj)
     assert "gate_blocked" in out
+
+
+def test_gate_all_announces_scope_and_reports_elapsed(tmp_path, capsys):
+    # Issue: the pre-push hook (which runs `hb gate --all`) was silent until the very end —
+    # a blocked push was indistinguishable from a dead terminal. The sweep now announces its
+    # scope up front and its verdict carries the elapsed total.
+    proj = str(tmp_path / "proj")
+    cli.main(["init", proj])
+    rc, out = _run(capsys, "gate", "--all", "--dir", proj)
+    assert rc == 0
+    first = out.splitlines()[0]
+    assert "re-verifying" in first and "ever-passed" in first   # scope announced FIRST
+    assert "ALL GATES PASS" in out and "in " in out.rsplit("(", 1)[-1]

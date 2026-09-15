@@ -26,6 +26,19 @@ stub(){ printf '#!/usr/bin/env bash\nexit %s\n' "$1" > "$proj/.hb/gate.sh"; chmo
 stub 1; run_hook "$proj" && fail "hook did NOT block when gate.sh --all failed"
 # (c) ALLOW on a passing gate re-verify
 stub 0; run_hook "$proj" || fail "hook blocked when gate.sh --all passed"
+# (d) NO DEAD-TERMINAL WINDOW: the hook must announce the sweep BEFORE running it. With a stub
+# that HANGS, the preamble must already be visible while the sweep is still running — a silent
+# multi-minute hook is indistinguishable from a hung push (real pushes were killed over this).
+printf '#!/usr/bin/env bash\nsleep 30\nexit 0\n' > "$proj/.hb/gate.sh"; chmod +x "$proj/.hb/gate.sh"
+hlog="$tmp/hook.out"; : > "$hlog"
+( cd "$proj" && bash .git/hooks/pre-push origin fake://x </dev/null >"$hlog" 2>&1 ) & hpid=$!
+sleep 2
+grep -q "re-verifying" "$hlog" || { kill -9 "$hpid" 2>/dev/null; fail "hook was SILENT while the sweep ran — the preamble must print BEFORE gate.sh --all starts"; }
+kill -9 "$hpid" 2>/dev/null; wait "$hpid" 2>/dev/null
+# (d2) success surfaces the sweep's timed verdict (visible completion, not a silent exit 0)
+printf '#!/usr/bin/env bash\necho "some criterion output"\necho "✅ ALL GATES PASS (read-only: 3 gate(s) in 7s)"\nexit 0\n' > "$proj/.hb/gate.sh"; chmod +x "$proj/.hb/gate.sh"
+vout="$( cd "$proj" && bash .git/hooks/pre-push origin fake://x </dev/null 2>&1 )" || fail "hook blocked on a passing sweep (verdict passthrough)"
+printf '%s' "$vout" | grep -q "ALL GATES PASS" || fail "hook success was silent — the timed ✅ verdict must be surfaced"
 # (e) HB_NO_HOOK bypass: even with a failing gate, it exits 0
 stub 1; run_hook "$proj" env HB_NO_HOOK=1 || fail "HB_NO_HOOK=1 did not bypass the hook"
 

@@ -39,7 +39,9 @@ if ! command -v hb >/dev/null 2>&1; then
   echo "HeartBeat gate guard: hb not on PATH — skipping the pre-push gate check (install heartbeat-hb, or bypass with git push --no-verify)" >&2
   exit 0
 fi
-OUT="$(hb gate --all --dir "$DIR" 2>&1)" && exit 0
+# Announce BEFORE the sweep — a silent multi-minute hook is indistinguishable from a hung push.
+echo "HeartBeat gate guard: re-verifying gates before push… (git push --no-verify skips)" >&2
+OUT="$(hb gate --all --dir "$DIR" 2>&1)" && { printf '%s\\n' "$OUT" | grep '^✅' >&2 || true; exit 0; }
 echo "✗ HeartBeat gate guard: push blocked — a gate no longer verifies." >&2
 # Name the failing gate(s) — a blocked push must say WHICH claim regressed, not just that one did.
 printf '%s\\n' "$OUT" | grep '^✗ ' | sed 's/^/  /' >&2

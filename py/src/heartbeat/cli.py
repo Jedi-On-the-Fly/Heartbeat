@@ -86,19 +86,40 @@ def main(argv=None):
         print(json.dumps(tickmod.tick(hb)))
     elif args.cmd == "gate":
         if args.all:
+            # Announce scope UP FRONT — a multi-minute silent sweep (the pre-push hook path) is
+            # indistinguishable from a hung run — and report the elapsed total in the verdict.
+            armed, _planned = gatemod.armed_gates(hb)
+            print(f"— re-verifying {len(armed)} ever-passed gate(s)…", flush=True)
             r = gatemod.run_all(hb)
             for g, res in r["gates"].items():
                 if res["failed"]:
                     print(f"✗ {g}: {res['failed']} failing criteria")
             if r["skipped"]:   # loud, never silent — a skipped gate must be visible in the sweep
                 print(f"— skipped {len(r['skipped'])} planned gate(s) (never passed): {' '.join(r['skipped'])}")
-            print("✅ ALL GATES PASS" if r["ok"] else "❌ some gates would block")
+            print(f"✅ ALL GATES PASS ({len(r['gates'])} gate(s) in {r['elapsed_s']}s)" if r["ok"]
+                  else f"❌ some gates would block ({r['elapsed_s']}s)")
             return 0 if r["ok"] else 1
         if not args.gate:
             sys.stderr.write("usage: hb gate <GATE> [--check]\n"); return 2
-        res = gatemod.run_gate(hb, args.gate, check=args.check)
-        for ln in res.get("lines", []):
-            print(ln)
+        # Stream lines as they are produced (not a dump after the gate finishes), and on a TTY
+        # show a transient "what is running now" line with its budget — cleared before the
+        # result prints, so piped/captured output never carries it.
+        tty = sys.stdout.isatty()
+        pend = {"on": False}
+
+        def _progress(cid, desc, eff):
+            if tty:
+                sys.stdout.write(f"  ⏳ [{cid}] {desc} (≤{eff}s)")
+                sys.stdout.flush()
+                pend["on"] = True
+
+        def _emit(ln):
+            if pend["on"]:
+                sys.stdout.write("\r\x1b[K")
+                pend["on"] = False
+            print(ln, flush=True)
+
+        res = gatemod.run_gate(hb, args.gate, check=args.check, emit=_emit, progress=_progress)
         print(f"gate {args.gate}: {res['status']}")
         return 0 if res["status"] in ("passed", "review_pending", "would_pass") else 1
     elif args.cmd == "lint":

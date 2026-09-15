@@ -11,7 +11,11 @@ Every HeartBeat project — bootstrapped by the node `bootstrap.sh` **or** the P
 `.git/hooks/pre-push` hook that, on `git push`, runs a **read-only re-verification of all ever-passed
 gates** (`gate.sh --all` in a node project, `hb gate --all` in a Python one) and:
 
-- **exits 0** (push proceeds) if every such gate still verifies;
+- **announces itself before the sweep starts** (`HeartBeat gate guard: re-verifying gates before
+  push…`) — a multi-minute silent hook is indistinguishable from a hung push, and pushes have
+  been killed over exactly that;
+- **exits 0** (push proceeds) if every such gate still verifies, surfacing the sweep's timed
+  verdict (`✅ ALL GATES PASS (read-only: N gate(s) in Ss)`) so completion is visible, not silent;
 - **exits 1** (push blocked) if any regressed, **naming the failing gate(s)** and printing which
   command to run to see the failure.
 

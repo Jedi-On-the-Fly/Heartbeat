@@ -88,10 +88,20 @@ eval_gate() {
     if [ -z "$EFF_T" ]; then
       echo "  ✗ [$ID] $DESC"; echo "      invalid timeout_s: '$TOUT' (must be a positive integer)"
       FAIL=$((FAIL + 1)); CRIT_EXITS="$CRIT_EXITS 1"
-    elif run_criterion "$CMD" "$EFF_T" >"$CRIT_OUT" 2>&1; then
-      echo "  ✓ [$ID] $DESC"; PASS=$((PASS + 1)); CRIT_EXITS="$CRIT_EXITS 0"
+      continue
+    fi
+    # TTY-only transient "what is running now" line (with its budget), cleared before the
+    # result prints — piped/captured output (hooks, tests) never carries it. Every result
+    # line carries its duration, so "slow" is distinguishable from "hung" mid-sweep.
+    [ -t 1 ] && printf '  ⏳ [%s] %s (≤%ss)' "$ID" "$DESC" "$EFF_T"
+    T0=$SECONDS
+    if run_criterion "$CMD" "$EFF_T" >"$CRIT_OUT" 2>&1; then RC=0; else RC=1; fi
+    DT=$((SECONDS - T0))
+    [ -t 1 ] && printf '\r\033[K'
+    if [ "$RC" -eq 0 ]; then
+      echo "  ✓ [$ID] $DESC (${DT}s)"; PASS=$((PASS + 1)); CRIT_EXITS="$CRIT_EXITS 0"
     else
-      echo "  ✗ [$ID] $DESC"; echo "      cmd: $CMD"
+      echo "  ✗ [$ID] $DESC (${DT}s)"; echo "      cmd: $CMD"
       if [ -s "$CRIT_OUT" ]; then
         # Pure-bash tail (no wc/tail/sed — they're absent on the coreutils-less PATH T156 exercises).
         OUT_LINES=()
@@ -169,15 +179,22 @@ if [ "$ALL" = 1 ]; then
   " "$DAG_FILE" "$EVENTS_FILE")
   GATES=$(printf '%s\n' "$LISTS" | sed -n 1p)
   PLANNED=$(printf '%s\n' "$LISTS" | sed -n 2p)
+  # Announce scope UP FRONT — a multi-minute silent sweep (the pre-push hook path) is
+  # indistinguishable from a hung run — and report the elapsed total in the verdict.
+  set -- $GATES; NGATES=$#
+  echo "— re-verifying $NGATES ever-passed gate(s)…"
+  echo ""
+  S0=$SECONDS
   TOTAL_FAIL=0
   for g in $GATES; do eval_gate "$g"; TOTAL_FAIL=$((TOTAL_FAIL + FAIL)); echo ""; done
+  T_ALL=$((SECONDS - S0))
   if [ -n "$PLANNED" ]; then
     set -- $PLANNED
     echo "— skipped $# planned gate(s) (never passed): $PLANNED"
     echo ""
   fi
-  if [ "$TOTAL_FAIL" -eq 0 ]; then echo "✅ ALL GATES PASS (read-only)"; exit 0
-  else echo "❌ $TOTAL_FAIL failing criteria across gates (read-only)"; exit 1; fi
+  if [ "$TOTAL_FAIL" -eq 0 ]; then echo "✅ ALL GATES PASS (read-only: $NGATES gate(s) in ${T_ALL}s)"; exit 0
+  else echo "❌ $TOTAL_FAIL failing criteria across gates (read-only; ${T_ALL}s)"; exit 1; fi
 fi
 
 # ── single gate ───────────────────────────────────────────────────────────────

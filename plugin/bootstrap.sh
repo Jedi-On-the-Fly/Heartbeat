@@ -177,7 +177,9 @@ if [ -z "${HB_NO_GIT:-}" ] && [ "$NO_GIT" != "1" ] && command -v git >/dev/null 
 [ -n "${HB_NO_HOOK:-}" ] && exit 0
 DIR="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 [ -x "$DIR/.hb/gate.sh" ] || exit 0
-OUT="$(bash "$DIR/.hb/gate.sh" --all 2>&1)" && exit 0
+# Announce BEFORE the sweep — a silent multi-minute hook is indistinguishable from a hung push.
+echo "HeartBeat gate guard: re-verifying gates before push… (git push --no-verify skips)"
+OUT="$(bash "$DIR/.hb/gate.sh" --all 2>&1)" && { printf '%s\n' "$OUT" | grep '^✅' || true; exit 0; }
 echo "✗ HeartBeat gate guard: push blocked — a gate no longer verifies."
 # Name the failing gate(s) — a blocked push must say WHICH claim regressed, not just that one did.
 printf '%s\n' "$OUT" | grep -E '^=== [^:]+: [0-9]+ passed, [1-9][0-9]* failed' | sed -e 's/^=== */  ✗ /' -e 's/ ===$//'

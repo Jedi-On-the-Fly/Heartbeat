@@ -145,3 +145,33 @@ def test_invalid_timeout_s_fails_loud(tmp_path):
 def test_default_timeout_survives_a_real_suite():
     # The default must be one a real test-suite criterion survives (60s), not 5s.
     assert gate.GATE_TIMEOUT_S >= 60 or "GATE_TIMEOUT_S" in os.environ
+
+
+def test_criterion_lines_carry_duration(tmp_path):
+    # Issue: a multi-minute sweep never reported how long anything took — no way to tell
+    # "slow" from "hung" from inside the run. Every result line now carries its duration.
+    import re
+    dag = two_phase_dag()
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    res = gate.run_gate(hb, "GATE_P0", check=True)
+    for ln in res["lines"]:
+        if ln.lstrip().startswith(("✓", "✗")):
+            assert re.search(r"\(\d+s\)$", ln), ln
+
+
+def test_eval_gate_streams_lines_and_reports_progress(tmp_path):
+    # eval_gate exposes progress: `emit` receives each line AS PRODUCED (the CLI streams
+    # instead of dumping everything after the gate finishes), and `progress` fires before
+    # each criterion runs with its effective budget — the "what is running now" signal.
+    dag = two_phase_dag()
+    dag["gates"]["GATE_P0"]["criteria"] = [
+        {"id": "c1", "desc": "one", "cmd": "true"},
+        {"id": "c2", "desc": "two", "timeout_s": 7, "cmd": "true"}]
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    seen, prog = [], []
+    res = gate.eval_gate(hb, "GATE_P0", emit=seen.append,
+                         progress=lambda cid, desc, eff: prog.append((cid, eff)))
+    assert seen == res["lines"]                      # every line was streamed
+    assert prog == [("c1", gate.GATE_TIMEOUT_S), ("c2", 7)]   # fired per criterion, with the WINNING budget
