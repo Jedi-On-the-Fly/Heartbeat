@@ -16,6 +16,11 @@ hb gate --all              # re-run every EVER-PASSED gate; non-zero if any woul
 phase, it just tells you whether the proof still holds. `--all` is the regression sweep: run
 it after a change that could invalidate earlier work.
 
+Within one sweep, byte-identical criteria — same `cmd` *and* same effective timeout — run once
+and reuse the verdict (a suite referenced by fifteen gates runs once, not fifteen times); every
+reuse is reported (`(deduped, Ns)`) and counted in the verdict, never silent. The dedup is
+scoped to the single read-only sweep, so there is no cache that can go stale between runs.
+
 `--all` arms only gates with a recorded `gate_passed` event. A **planned** gate — a drafted
 future phase whose criteria name files that don't exist yet — has never passed, so it has
 nothing to regress from; the sweep skips it and says so

@@ -46,12 +46,19 @@ def _run_cmd(cmd, hbdir, timeout):
         return False, str(e)
 
 
-def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None):
+def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None):
     """Run the criteria; no side effects. Returns None for an unknown gate.
 
     Progress hooks (a multi-minute sweep must not be silent — "slow" and "hung" have to be
     distinguishable from inside the run): `emit(line)` receives each output line AS PRODUCED,
     and `progress(id, desc, effective_timeout_s)` fires before each criterion runs.
+
+    `dedup` (a dict, supplied by run_all for one --all sweep) memoizes byte-identical
+    (cmd, effective_timeout) pairs so the same test suite referenced by 15 gates runs once,
+    not 15 times. Every reuse is reported ("deduped"), never silent; the key includes the
+    effective timeout because a pass under a 60s budget proves nothing about a 1s one.
+    Sound per the DAG contract (criteria are deterministic — the auditor flags the rest),
+    and scoped to a single read-only sweep: there is no cross-run cache to rot.
     """
     timeout = GATE_TIMEOUT_S if timeout is None else timeout
     gate = (st.read_dag(hbdir).get("gates") or {}).get(gate_id)
@@ -70,6 +77,7 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None):
         _add(f"  ✗ [--] gate {gate_id} has NO criteria — a gate must assert something")
         return {"passed": 0, "failed": 1, "lines": lines}
     passed = failed = 0
+    dedup_hits = 0
     results = []
     for c in criteria:
         eff = timeout
@@ -85,11 +93,25 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None):
                 results.append({"id": c.get("id"), "cmd": c.get("cmd", ""), "exit": 1})
                 failed += 1
                 continue
+        key = (c.get("cmd", ""), eff)
+        if dedup is not None and key in dedup:
+            ok, dt = dedup[key]
+            dedup_hits += 1
+            _add(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')} (deduped, {dt}s)")
+            if not ok:
+                _add(f"      cmd: {c.get('cmd', '')}")
+                _add("      (first failure of this cmd shown above)")
+            results.append({"id": c.get("id"), "cmd": c.get("cmd", ""), "exit": 0 if ok else 1})
+            passed += 1 if ok else 0
+            failed += 0 if ok else 1
+            continue
         if progress:
             progress(c.get("id"), c.get("desc", ""), eff)
         t0 = time.monotonic()
         ok, out = _run_cmd(c.get("cmd", ""), hbdir, eff)
         dt = int(time.monotonic() - t0 + 0.5)
+        if dedup is not None:
+            dedup[key] = (ok, dt)
         _add(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')} ({dt}s)")
         if not ok:
             # Surface the WHY, not just the WHICH: the failing cmd (matches the node runner) and a
@@ -108,7 +130,8 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None):
         results.append({"id": c.get("id"), "cmd": c.get("cmd", ""), "exit": 0 if ok else 1})
         passed += 1 if ok else 0
         failed += 0 if ok else 1
-    return {"passed": passed, "failed": failed, "lines": lines, "results": results}
+    return {"passed": passed, "failed": failed, "lines": lines, "results": results,
+            "deduped": dedup_hits}
 
 
 def run_gate(hbdir, gate_id, check=False, emit=None, progress=None):
@@ -154,12 +177,14 @@ def run_all(hbdir, emit=None, progress=None):
     armed, skipped = armed_gates(hbdir)
     total_fail = 0
     report = {}
+    memo = {}   # one sweep's dedup scope: byte-identical (cmd, effective timeout) runs once
     t0 = time.monotonic()
     for g in armed:
-        res = eval_gate(hbdir, g, emit=emit, progress=progress)
+        res = eval_gate(hbdir, g, emit=emit, progress=progress, dedup=memo)
         report[g] = res
         total_fail += res["failed"]
     return {"ok": total_fail == 0, "gates": report, "skipped": skipped,
+            "deduped": sum(r["deduped"] for r in report.values()),
             "elapsed_s": int(time.monotonic() - t0 + 0.5)}
 
 

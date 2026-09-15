@@ -1704,6 +1704,25 @@ check "T159.3 the --all verdict reports the total elapsed time" \
 check "T159.4 captured (non-TTY) output carries NO transient progress marker — pipes and hooks stay clean" \
   '! bash "$H159/gate.sh" --check GATE_TM 2>&1 | grep -q "⏳"'
 
+grp "T160 — --all dedupes byte-identical criteria (same cmd + same effective timeout): run once per sweep, reuse LOUDLY"
+P160="$TMP/p160"; bash "$HB_SRC/plugin/bootstrap.sh" "$P160" >/dev/null 2>&1 </dev/null; H160="$P160/.hb"
+node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const cmd='echo run >> \"\$PROJECT_DIR/runs.txt\"';d.gates.G0={desc:'0',criteria:[{id:'c',desc:'suite',cmd}]};d.gates.G1={desc:'1',criteria:[{id:'c',desc:'suite',cmd}]};d.gates.G2={desc:'2',criteria:[{id:'c',desc:'suite',cmd}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+for g in G0 G1 G2; do bash "$H160/gate.sh" "$g" >/dev/null 2>&1; done   # arm each (records gate_passed)
+: > "$P160/runs.txt"
+O160=$(bash "$H160/gate.sh" --all 2>&1)
+check "T160.1 a byte-identical cmd runs ONCE across 3 gates (counter file has 1 line, not 3)" \
+  '[ "$(grep -c "^run" "$P160/runs.txt")" -eq 1 ]'
+check "T160.2 every reuse is LOUD (2 deduped lines) and the verdict counts them" \
+  '[ "$(echo "$O160" | grep -c "deduped,")" -eq 2 ] && echo "$O160" | grep -q "2 deduped"'
+node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const c2='echo y >> \"\$PROJECT_DIR/two.txt\"';d.gates.G1.criteria=[{id:'c',desc:'suite',cmd:c2}];d.gates.G2.criteria=[{id:'c',desc:'suite',timeout_s:30,cmd:c2}];fs.writeFileSync(f,JSON.stringify(d,null,2))"
+: > "$P160/two.txt"
+check "T160.3 the same cmd under a DIFFERENT effective timeout is NOT deduped (both run)" \
+  'bash "$H160/gate.sh" --all >/dev/null 2>&1; [ "$(grep -c "^y" "$P160/two.txt")" -eq 2 ]'
+node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const fc='echo f >> \"\$PROJECT_DIR/f.txt\"; false';for (const g of ['G0','G1','G2']) d.gates[g].criteria=[{id:'c',desc:'suite',cmd:fc}];fs.writeFileSync(f,JSON.stringify(d,null,2))"
+: > "$P160/f.txt"
+check "T160.4 a cached FAILURE runs once but still fails EVERY referencing gate" \
+  '! bash "$H160/gate.sh" --all >/dev/null 2>&1 && [ "$(grep -c "^f" "$P160/f.txt")" -eq 1 ] && [ "$(bash "$H160/gate.sh" --all 2>&1 | grep -c "✗ \[c\]")" -eq 3 ]'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

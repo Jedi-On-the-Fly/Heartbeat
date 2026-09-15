@@ -57,6 +57,21 @@ run_criterion() {   # $1 = cmd, $2 = timeout seconds (defaults to GATE_TIMEOUT_S
   wait "$p"
 }
 
+# Sweep-scope dedup (--all only): byte-identical (cmd, effective timeout) pairs run ONCE per
+# sweep — 15 gates referencing the same 10s test suite must not run it 15 times to learn one
+# bit. Every reuse is reported ("deduped"), never silent; keyed on cmd AND effective timeout
+# (a pass under a 60s budget proves nothing about a 1s one). Sound per the DAG contract
+# (criteria are deterministic — the auditor flags the rest); no cross-run cache to rot.
+# bash-3.2-portable: parallel indexed arrays + linear scan (no associative arrays on stock macOS).
+_dedup_find() {   # $1 = key → sets DD_I on hit
+  local i=0
+  while [ "$i" -lt "${#DEDUP_KEYS[@]}" ]; do
+    [ "${DEDUP_KEYS[$i]}" = "$1" ] && { DD_I=$i; return 0; }
+    i=$((i + 1))
+  done
+  return 1
+}
+
 # eval_gate <GATE> — run the criteria, print ✓/✗, set PASS/FAIL globals. No side effects.
 eval_gate() {
   local -x G="$1"; PASS=0; FAIL=0; CRIT_EXITS=""   # CRIT_EXITS: per-criterion exit codes in dag order (provenance)
@@ -90,6 +105,18 @@ eval_gate() {
       FAIL=$((FAIL + 1)); CRIT_EXITS="$CRIT_EXITS 1"
       continue
     fi
+    KEY="$CMD"$'\x1f'"$EFF_T"
+    if [ "${DEDUP:-0}" = 1 ] && _dedup_find "$KEY"; then
+      RC="${DEDUP_EXITS[$DD_I]}"; DT="${DEDUP_DTS[$DD_I]}"; DEDUP_HITS=$((DEDUP_HITS + 1))
+      if [ "$RC" -eq 0 ]; then
+        echo "  ✓ [$ID] $DESC (deduped, ${DT}s)"; PASS=$((PASS + 1)); CRIT_EXITS="$CRIT_EXITS 0"
+      else
+        echo "  ✗ [$ID] $DESC (deduped, ${DT}s)"; echo "      cmd: $CMD"
+        echo "      (first failure of this cmd shown above)"
+        FAIL=$((FAIL + 1)); CRIT_EXITS="$CRIT_EXITS 1"
+      fi
+      continue
+    fi
     # TTY-only transient "what is running now" line (with its budget), cleared before the
     # result prints — piped/captured output (hooks, tests) never carries it. Every result
     # line carries its duration, so "slow" is distinguishable from "hung" mid-sweep.
@@ -98,6 +125,9 @@ eval_gate() {
     if run_criterion "$CMD" "$EFF_T" >"$CRIT_OUT" 2>&1; then RC=0; else RC=1; fi
     DT=$((SECONDS - T0))
     [ -t 1 ] && printf '\r\033[K'
+    if [ "${DEDUP:-0}" = 1 ]; then
+      DEDUP_KEYS+=("$KEY"); DEDUP_EXITS+=("$RC"); DEDUP_DTS+=("$DT")
+    fi
     if [ "$RC" -eq 0 ]; then
       echo "  ✓ [$ID] $DESC (${DT}s)"; PASS=$((PASS + 1)); CRIT_EXITS="$CRIT_EXITS 0"
     else
@@ -184,6 +214,7 @@ if [ "$ALL" = 1 ]; then
   set -- $GATES; NGATES=$#
   echo "— re-verifying $NGATES ever-passed gate(s)…"
   echo ""
+  DEDUP=1; DEDUP_KEYS=(); DEDUP_EXITS=(); DEDUP_DTS=(); DEDUP_HITS=0
   S0=$SECONDS
   TOTAL_FAIL=0
   for g in $GATES; do eval_gate "$g"; TOTAL_FAIL=$((TOTAL_FAIL + FAIL)); echo ""; done
@@ -193,8 +224,9 @@ if [ "$ALL" = 1 ]; then
     echo "— skipped $# planned gate(s) (never passed): $PLANNED"
     echo ""
   fi
-  if [ "$TOTAL_FAIL" -eq 0 ]; then echo "✅ ALL GATES PASS (read-only: $NGATES gate(s) in ${T_ALL}s)"; exit 0
-  else echo "❌ $TOTAL_FAIL failing criteria across gates (read-only; ${T_ALL}s)"; exit 1; fi
+  DSUF=""; [ "$DEDUP_HITS" -gt 0 ] && DSUF=", $DEDUP_HITS deduped"
+  if [ "$TOTAL_FAIL" -eq 0 ]; then echo "✅ ALL GATES PASS (read-only: $NGATES gate(s) in ${T_ALL}s${DSUF})"; exit 0
+  else echo "❌ $TOTAL_FAIL failing criteria across gates (read-only; ${T_ALL}s${DSUF})"; exit 1; fi
 fi
 
 # ── single gate ───────────────────────────────────────────────────────────────

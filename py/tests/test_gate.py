@@ -175,3 +175,55 @@ def test_eval_gate_streams_lines_and_reports_progress(tmp_path):
                          progress=lambda cid, desc, eff: prog.append((cid, eff)))
     assert seen == res["lines"]                      # every line was streamed
     assert prog == [("c1", gate.GATE_TIMEOUT_S), ("c2", 7)]   # fired per criterion, with the WINNING budget
+
+
+def test_all_dedupes_identical_criteria(tmp_path):
+    # Issue: 15 of 44 criteria byte-identical (`php tests/run.php`) → the sweep ran the same
+    # 10s suite 15 times to learn one bit. Byte-identical (cmd, effective-timeout) pairs now
+    # run ONCE per --all sweep — observed by a counter file — and every reuse is LOUD.
+    dag = {"phases": [
+        {"id": p, "gate_exit": g, "tasks": [{"id": f"T{p}", "title": "t", "requires": []}]}
+        for p, g in (("P0", "G0"), ("P1", "G1"), ("P2", "G2"))],
+        "gates": {g: {"desc": g, "criteria": [
+            {"id": "c", "desc": "suite", "cmd": 'echo run >> "$PROJECT_DIR/runs.txt"'}]}
+            for g in ("G0", "G1", "G2")}}
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    for g in ("G0", "G1", "G2"):
+        assert gate.run_gate(hb, g)["status"] == "passed"   # arm each (records gate_passed)
+    (tmp_path / "runs.txt").write_text("")                  # reset the counter pre-sweep
+    r = gate.run_all(hb)
+    assert r["ok"]
+    assert (tmp_path / "runs.txt").read_text().count("run") == 1   # ran ONCE, not 3×
+    assert r["deduped"] == 2
+    text = "\n".join(ln for res in r["gates"].values() for ln in res["lines"])
+    assert text.count("deduped") == 2                       # every reuse is loud, never silent
+
+
+def test_all_dedup_respects_timeout_and_failure(tmp_path):
+    # Same cmd under a DIFFERENT effective timeout is NOT deduped (a pass under 60s proves
+    # nothing about a 1s budget), and a cached FAILURE still fails every referencing gate.
+    cmd = 'echo x >> "$PROJECT_DIR/n.txt"'
+    dag = {"phases": [
+        {"id": p, "gate_exit": g, "tasks": [{"id": f"T{p}", "title": "t", "requires": []}]}
+        for p, g in (("P0", "GA"), ("P1", "GB"))],
+        "gates": {"GA": {"desc": "a", "criteria": [{"id": "a", "desc": "d", "cmd": cmd}]},
+                  "GB": {"desc": "b", "criteria": [{"id": "b", "desc": "d", "timeout_s": 30, "cmd": cmd}]}}}
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    for g in ("GA", "GB"):
+        gate.run_gate(hb, g)                                # arm both
+    (tmp_path / "n.txt").write_text("")
+    r = gate.run_all(hb)
+    assert (tmp_path / "n.txt").read_text().count("x") == 2   # different budget → both ran
+    assert r["deduped"] == 0
+    # cached failure: regress BOTH gates to one shared failing cmd
+    import json
+    fail_cmd = 'echo f >> "$PROJECT_DIR/f.txt"; false'
+    dag["gates"]["GA"]["criteria"][0]["cmd"] = fail_cmd
+    dag["gates"]["GB"]["criteria"][0] = {"id": "b", "desc": "d", "cmd": fail_cmd}
+    (tmp_path / ".hb" / "dag.json").write_text(json.dumps(dag))
+    r = gate.run_all(hb)
+    assert not r["ok"]
+    assert (tmp_path / "f.txt").read_text().count("f") == 1   # failing cmd also ran once
+    assert sum(res["failed"] for res in r["gates"].values()) == 2   # but BOTH gates fail

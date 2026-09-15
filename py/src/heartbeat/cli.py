@@ -96,8 +96,9 @@ def main(argv=None):
                     print(f"✗ {g}: {res['failed']} failing criteria")
             if r["skipped"]:   # loud, never silent — a skipped gate must be visible in the sweep
                 print(f"— skipped {len(r['skipped'])} planned gate(s) (never passed): {' '.join(r['skipped'])}")
-            print(f"✅ ALL GATES PASS ({len(r['gates'])} gate(s) in {r['elapsed_s']}s)" if r["ok"]
-                  else f"❌ some gates would block ({r['elapsed_s']}s)")
+            dsuf = f", {r['deduped']} deduped" if r.get("deduped") else ""
+            print(f"✅ ALL GATES PASS ({len(r['gates'])} gate(s) in {r['elapsed_s']}s{dsuf})" if r["ok"]
+                  else f"❌ some gates would block ({r['elapsed_s']}s{dsuf})")
             return 0 if r["ok"] else 1
         if not args.gate:
             sys.stderr.write("usage: hb gate <GATE> [--check]\n"); return 2
