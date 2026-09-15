@@ -1,7 +1,43 @@
 # STATUS — HeartBeat
 
-**Version:** v1.29.2 (portability: re-bootstrap no longer hangs on a silent-but-open stdin, and gate.sh bounds every criterion even with no `timeout(1)` — both surfaced on stock macOS, over v1.29.1)
+**Version:** v1.29.4 (the regression sweep — `--all` and the pre-push guard — arms only **ever-passed** gates: drafting a future phase no longer blocks pushes, skips are reported loudly, and a blocked push names the failing gate)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.29.4 — a planned gate is not an armed gate (regression-sweep filter)
+
+`gate.sh --all` / `hb gate --all` re-verified every gate **defined** in `dag.json`. DAGs are authored
+with future phases up front, so a gate was armed the moment its phase was drafted — its criteria name
+files that don't exist yet — and with the pre-push guard installed, that blocked every push on work
+unrelated to the change. Found live in a downstream project: a gate drafted, refuted as unsound, and
+parked blocked pushes from that day on, costing ~an hour to diagnose because the hook named no gate.
+The fresh seed template itself shipped with the mine armed (T122 relied on it).
+
+- **The gap.** A never-passed gate has nothing to *regress* from — including it in a regression check
+  is a category error the system's own words contradicted: the runner header ("--all make a **passed**
+  gate keep acting as a gate"), the how-to ("Re-verify **completed** gates"), and the hook ("a gate
+  **no longer** verifies").
+- **The fix.** `--all` arms only gates with a recorded `gate_passed` event — filtered on the **event
+  log** (truth), not the projection, so a once-proven gate stays armed through a recorded
+  `gate_failed`. The skip is **loud** (`— skipped N planned gate(s) (never passed): …`), never silent
+  — "all gates pass" never overstates coverage. An explicit `gate <G> --check` still probes any gate,
+  planned or not. Both pre-push hooks now **name the failing gate(s)** in the block message. Mirrored
+  node ≡ python.
+- **Proof-driven.** `gate-reverify.sh` gained the planned-gate case (skip + loud + an armed regressed
+  gate still caught — the filter never over-skips); T28.5–7 pin the node semantics; T118/T122 moved to
+  the honest pass-then-regress scenario. Red before, green after.
+- Plugin/marketplace → 1.29.4, Python package → 0.19.3.
+
+## v1.29.3 — rot-guard tokenizer: quote-aware literal stripping + unresolved-var rejection
+
+*(Backfilled note — this release shipped in `b57f7a7`/`944e908` without a STATUS entry.)* Two
+false-positive classes survived the tokenizer's filters, found live in a downstream project where they
+flagged every completed phase as rot and blocked all commits: a single-quoted grep/sed **literal**
+(`'@import "blocks/dock.css" …'`) is text the command searches *for*, yet slash tokens inside it were
+rot-checked as repo files; and an **unresolved variable** mid-token (`blocks/$n.css`) passed the
+extension check and rot-tripped on a path that never exists statically. Fix, node ≡ python: strip
+single-quoted spans before tokenizing — quote-aware, not a blind regex, so
+`"require('$PROJECT_DIR/f.js')"` still yields its path — and reject tokens still carrying `$`/`{`/`}`
+after `$PROJECT_DIR` stripping. Three `test_lint` cases pin the behaviors. Plugin/marketplace → 1.29.3.
 
 ## v1.29.2 — portability fixes from stock-macOS testing (no coreutils, silent-stdin callers)
 
