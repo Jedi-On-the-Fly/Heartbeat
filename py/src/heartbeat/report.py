@@ -84,6 +84,8 @@ def render(hbdir):
         for g in imp["gates"]:
             lens = g["profile"] or "(default prompt)"
             out.append(f"  {g['gate']} [{lens}]: caught {g['caught']}, cleared {g['cleared']}")
+            for m, mc in sorted((g.get("models") or {}).items()):
+                out.append(f"     · {m}: caught {mc['caught']}, cleared {mc['cleared']}")
             for f in g["findings"]:
                 out.append(f"     ✗ {(f.splitlines()[0] if f else '')[:100]}")
     return "\n".join(out)

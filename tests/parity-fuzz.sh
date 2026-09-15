@@ -15,6 +15,8 @@
 # tests/parity.sh uses, so the mutation self-test can point it at a deliberately-broken copy.
 # ══════════════════════════════════════════════════════════════════════════════
 set -u
+# Env hygiene: never inherit a calling gate's project pointers (same rule as run-tests.sh).
+unset HB_DIR PROJECT_DIR GATE G DAG_FILE EVENTS_FILE 2>/dev/null || true
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 command -v python3 >/dev/null 2>&1 || { echo "python3 absent — fuzz skipped"; exit 0; }
 command -v node    >/dev/null 2>&1 || { echo "node absent — fuzz skipped";    exit 0; }

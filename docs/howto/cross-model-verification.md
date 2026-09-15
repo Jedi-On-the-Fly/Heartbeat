@@ -53,4 +53,8 @@ What that proves is the **routing, distinctness, and provenance**. Whether a sec
 *catches more* is inherent to model diversity — real, but a property of the models you pick, not
 something this harness benchmarks for you. Pick a refuter that fails differently from your doer.
 
+The economic complement — binding a *cheaper* model per refuter profile, routing by review kind,
+and reading the per-model impact before trusting a downgrade — is
+[tier-the-refuter.md](tier-the-refuter.md).
+
 See [choose-a-backend.md](choose-a-backend.md) for the backend menu.

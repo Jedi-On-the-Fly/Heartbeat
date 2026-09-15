@@ -6,6 +6,12 @@
 # ══════════════════════════════════════════════════════════════════════════════
 set -uo pipefail
 
+# Env hygiene: when the suite runs INSIDE a gate criterion (the repo's own dogfood pattern),
+# gate.sh exports HB_DIR/PROJECT_DIR/GATE — and every test project's copied hb.js honors env
+# HB_DIR, silently pointing dozens of fixtures at the CALLING project's .hb. A suite must
+# never inherit a caller's project pointers.
+unset HB_DIR PROJECT_DIR GATE G DAG_FILE EVENTS_FILE 2>/dev/null || true
+
 HB_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 # v1.3: keep objective no-progress detection (#3) from tripping in tests that tick
 # repeatedly on a pending task without running an agent. The dedicated no-progress

@@ -159,6 +159,8 @@ if (report.refuters.caught || report.refuters.cleared) {
   console.log(''); console.log(`Refuter impact: caught ${report.refuters.caught} hole(s) across ${report.refuters.caught + report.refuters.cleared} review(s)`);
   for (const g of report.refuters.gates) {
     console.log(`  ${g.gate} [${g.profile || '(default prompt)'}]: caught ${g.caught}, cleared ${g.cleared}`);
+    for (const [m, mc] of Object.entries(g.models || {}).sort())
+      console.log(`     · ${m}: caught ${mc.caught}, cleared ${mc.cleared}`);
     for (const f of g.findings) console.log(`     ✗ ${(f.split('\n')[0] || '').slice(0, 100)}`);
   }
 }

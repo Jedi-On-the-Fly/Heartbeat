@@ -6,6 +6,10 @@
 # Usage: bash tests/parity.sh
 # ══════════════════════════════════════════════════════════════════════════════
 set -uo pipefail
+# Env hygiene: under a gate criterion, gate.sh exports HB_DIR/PROJECT_DIR — and the fixture
+# projects' copied hb.js honors env HB_DIR. A parity harness must never inherit a caller's
+# project pointers (same rule as run-tests.sh).
+unset HB_DIR PROJECT_DIR GATE G DAG_FILE EVENTS_FILE 2>/dev/null || true
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 command -v python3 >/dev/null 2>&1 || { echo "python3 absent — parity skipped"; exit 0; }
 FAIL=0

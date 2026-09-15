@@ -80,6 +80,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Park a Phase (retire a gate without deleting it) | ✅ [park-a-phase.md](park-a-phase.md) — T162 |
 | Add Refutation to a Sensitive Gate | ✅ [add-refutation-to-a-sensitive-gate.md](add-refutation-to-a-sensitive-gate.md) — T54 |
 | Cross-model Verification (a different model refutes) | ✅ [cross-model-verification.md](cross-model-verification.md) — T73 |
+| Tier the Refuter (economy without weakening the adversary) | ✅ [tier-the-refuter.md](tier-the-refuter.md) — T163/T164 |
 | Benchmark Agents on the Same DAG | ✅ [benchmark-agents.md](benchmark-agents.md) — T74 |
 | Extract a Verifiable-Reward Stream (`hb reward`) | ✅ [benchmark-agents.md](benchmark-agents.md) — T76 |
 | Detect Model Regression (`hb bench --baseline`) | ✅ [benchmark-agents.md](benchmark-agents.md) — T76 |
