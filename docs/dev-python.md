@@ -104,6 +104,10 @@ refute prompt from a resolved profile lives at the dispatch site.
   every refute surface uses (the executor's `review_pending`, and the interactive skill). No profile
   selected ⇒ EXACTLY today's prompt (backward-compat); else persona + the gate's BASE
   `review_questions` + the profile's EXTRA questions (**appended**, never replacing) + `review.prompt`.
+  `hb refute-prompt <gate> --json` adds the machine-readable binding for an interactive host —
+  `{prompt, model, provider, panel, refute_if}` with `prompt` byte-identical to the text compose and
+  all fields null when no profile (never fabricated) — so a spawner routes the refuter (and records
+  `--model`) without parsing prose (T163, `parity.sh refute-prompt:json`).
   A profile's `model`/`provider` route through the existing cross-model `refute_*` path
   (`gate_profile`). Unknown profile ⇒ raises ⇒ the executor fails **closed** (`review_error`). Shipped
   `hb refuters` lists profiles; both node ≡ python (T146/T147). Shared `tick.py` untouched.

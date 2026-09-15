@@ -45,7 +45,7 @@ const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0
 const PROTOCOL = {
   next_task:          'hb start <id> → do the work → hb done <id> (or hb fail <id> if you could not complete it). Never hand-edit state.json.',
   gate_pending:       'bash .hb/gate.sh <gate> — a pass advances the phase, UNLESS the gate has a review block (then a review is owed next).',
-  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?) — seed it with `node .hb/hb.js refute-prompt <gate>` (the composed refute prompt: the gate\'s profile persona + a falsification question per criterion + the review angle). Write its full attempt to a findings file, then: node .hb/hb.js review <gate> fail "<holes>"  OR  node .hb/hb.js review <gate> pass --artifact <findings-file> (a pass MUST cite the refuter\'s written attempt — no rubber-stamps).',
+  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?) — seed it with `node .hb/hb.js refute-prompt <gate>` (the composed refute prompt: the gate\'s profile persona + a falsification question per criterion + the review angle). Spawn the refuter ON the profile\'s model: read it via `node .hb/hb.js refute-prompt <gate> --json` (.model) and pass it to your agent-spawning tool; inherit the session model only when it is null. Write its full attempt to a findings file, then: node .hb/hb.js review <gate> fail "<holes>" --model <that model>  OR  node .hb/hb.js review <gate> pass --artifact <findings-file> --model <that model> (a pass MUST cite the refuter\'s written attempt — no rubber-stamps; --model records WHAT reviewed, so the per-model impact report has truth to count).',
   gate_blocked:       'Run: node .hb/hb.js diagnose — fix the ROOT cause (do NOT weaken the gate), then re-run bash .hb/gate.sh <gate>.',
   at_capacity:        'Nothing to do — max tasks already in flight. No action.',
   state_corrupted:    'node .hb/hb.js rebuild (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable.',
@@ -592,12 +592,36 @@ switch (cmd) {
   case 'refute-prompt': {
     // The ONE compose used by every refute surface — resolve the gate's profile and print the
     // composed refute prompt (backward-compat when no profile). Unknown profile → error (fail-closed).
-    if (!arg1) die('usage: hb refute-prompt <gate>');
-    const { composePrompt } = require('./refuter_profiles.js');
+    // --json: machine-readable binding for an INTERACTIVE host — json.prompt IS the text compose's
+    // bytes (one compose, no drift); model/provider/panel/refute_if from the resolved profile so the
+    // spawner can route the refuter without parsing prose. All null when no profile — never fabricated.
+    // Flag-order-safe parsing (a leading --json must never be consumed AS the gate name —
+    // that silently emitted a bogus text prompt with exit 0; caught by GATE_RE1's refuter).
+    const rpArgs = [arg1, ...rest].filter(Boolean);
+    const rpJson = rpArgs.includes('--json');
+    const rpGate = rpArgs.find(a => a !== '--json');
+    if (!rpGate) die('usage: hb refute-prompt <gate> [--json]');
+    const { composePrompt, gateProfile } = require('./refuter_profiles.js');
     let out;
-    try { out = composePrompt(HB_DIR, readDag(), arg1); }
+    try { out = composePrompt(HB_DIR, readDag(), rpGate); }
     catch (e) { die('refute-prompt: ' + e.message); }
-    process.stdout.write(out + '\n');
+    if (rpJson) {
+      let prof = null;
+      try {
+        const g = (readDag().gates || {})[rpGate] || {};
+        prof = gateProfile(HB_DIR, g.review || {});
+      } catch (e) { die('refute-prompt: ' + e.message); }
+      const v = (prof && prof.verdict) || {};
+      process.stdout.write(JSON.stringify({
+        prompt: out,
+        model: (prof && prof.model) ?? null,
+        provider: (prof && prof.provider) ?? null,
+        panel: v.panel ?? null,
+        refute_if: v.refute_if ?? null,
+      }) + '\n');
+    } else {
+      process.stdout.write(out + '\n');
+    }
     break;
   }
 

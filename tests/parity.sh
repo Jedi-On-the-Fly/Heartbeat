@@ -147,6 +147,15 @@ compose_case(){
   cmp "refute-prompt:composed" \
     "$(node "$d/.hb/hb.js" refute-prompt GATE_P0)" \
     "$(eval "$PY refute-prompt GATE_P0 --dir \"$d\"")"
+  # --json: the interactive model binding — same fields, same prompt bytes, node ≡ python
+  JNORM='import sys,json;d=json.load(sys.stdin);print(json.dumps([d["model"],d["provider"],d["panel"],d["refute_if"],d["prompt"]],ensure_ascii=False))'
+  cmp "refute-prompt:json" \
+    "$(node "$d/.hb/hb.js" refute-prompt GATE_P0 --json | python3 -c "$JNORM")" \
+    "$(eval "$PY refute-prompt GATE_P0 --json --dir \"$d\"" | python3 -c "$JNORM")"
+  # flag ORDER must not matter (GATE_RE1 refuter catch: node ate a leading --json as the gate)
+  cmp "refute-prompt:json-order" \
+    "$(node "$d/.hb/hb.js" refute-prompt --json GATE_P0 | python3 -c "$JNORM")" \
+    "$(eval "$PY refute-prompt --json GATE_P0 --dir \"$d\"" | python3 -c "$JNORM")"
   rm -rf "$d"
 }
 compose_case

@@ -1761,8 +1761,15 @@ check "T162.5 node: --all skips an ARMED parked gate loudly ('0 ever-passed' aft
 check "T162.6 node: report shows parked honestly (parked list + excluded from the denominator)" \
   'node "$H162/hb-report.js" "$H162" --json | python3 -c "import sys,json;r=json.load(sys.stdin);sys.exit(0 if r[\"parked\"]==[\"P9\"] and r[\"progress\"][\"total\"]==1 else 1)"'
 
-# Outcome marker: groups with zero failing checks (a coverage gate keys on this).
-_gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
+grp "T163 — interactive refuter model routing: refute-prompt --json binds the profile's model (both runtimes), one compose byte-pinned, spawn+record instructions present"
+check "T163.1 --json binding + one-compose byte pins + text contract + both instruction halves (refuter-model-routing.sh → REFUTER-MODEL-ROUTING-OK)" \
+  'bash "'"$GEX"'/refuter-model-routing.sh" 2>&1 | grep -q "REFUTER-MODEL-ROUTING-OK"'
+check "T163.2 teeth: model-key, byte-pin, instruction-grep, compose-contract each load-bearing (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/refuter-model-routing.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
+# Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
+# coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
+_gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "
 # H1: groups that registered but ran NO checks were skipped (a tool/dep was absent).
 _ran=0; _skipped=0
