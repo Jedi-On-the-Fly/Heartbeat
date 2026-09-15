@@ -1671,6 +1671,16 @@ check "T156.1 under a curated PATH lacking timeout/gtimeout, a sleep-past-GATE_T
 check "T156.2 the check has teeth: run_bounded flags a hang AND clears a quick cmd, and the curated PATH truly excludes timeout/gtimeout while keeping bash/node/sleep (gate-timeout-portable.sh --selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/gate-timeout-portable.sh" --selftest 2>/dev/null | grep -q "SELFTEST-OK"'
 
+grp "T157 — gate.sh surfaces a failing criterion's output (the WHY, not just the WHICH) — captured to file, tail-printed on failure only, loud truncation"
+P157="$TMP/p157"; bash "$HB_SRC/plugin/bootstrap.sh" "$P157" >/dev/null 2>&1 </dev/null; H157="$P157/.hb"
+node -e "const fs=require('fs');const f='$H157/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GATE_D={desc:'d',criteria:[{id:'q',desc:'quiet pass',cmd:'echo QUIET-OK'},{id:'b',desc:'boom',cmd:'echo BOOM-DETAIL >&2; false'}]};d.gates.GATE_T={desc:'t',criteria:[{id:'c',desc:'chatty',cmd:'i=1; while [ \$i -le 30 ]; do echo line-\$i; i=\$((i+1)); done; false'}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+check "T157.1 failing criterion's stderr is surfaced; a PASSING criterion's output stays quiet" \
+  'o=$(bash "$H157/gate.sh" --check GATE_D 2>&1 || true); echo "$o" | grep -q "BOOM-DETAIL" && ! echo "$o" | grep -q "QUIET-OK"'
+check "T157.2 chatty output is TAILED (default 20) with a LOUD truncation marker; early lines cut" \
+  'o=$(bash "$H157/gate.sh" --check GATE_T 2>&1 || true); echo "$o" | grep -q "line-30" && echo "$o" | grep -q "+10 earlier output lines" && ! echo "$o" | grep -q "line-10\$"'
+check "T157.3 GATE_OUT_LINES tunes the tail (5 → +25 earlier)" \
+  'o=$(GATE_OUT_LINES=5 bash "$H157/gate.sh" --check GATE_T 2>&1 || true); echo "$o" | grep -q "+25 earlier output lines" && ! echo "$o" | grep -q "line-25\$"'
+
 # Outcome marker: groups with zero failing checks (a coverage gate keys on this).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && _gp="$_gp $g"; done
 echo "GROUPS-PASSED:$_gp "

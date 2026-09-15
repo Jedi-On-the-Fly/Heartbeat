@@ -77,3 +77,34 @@ def test_behavioral_gate_reads_real_file(tmp_path):
     assert gate.run_gate(hb, "GATE_P0", check=True)["status"] == "would_block"
     (tmp_path / "out.txt").write_text("ok\n")
     assert gate.run_gate(hb, "GATE_P0", check=True)["status"] == "would_pass"
+
+
+def test_failing_criterion_output_surfaced(tmp_path):
+    # Issue: a blocked gate printed WHICH criterion failed but never WHY — the criterion's
+    # output was swallowed, so every diagnosis began by re-running the cmd by hand.
+    dag = two_phase_dag()
+    dag["gates"]["GATE_P0"]["criteria"] = [
+        {"id": "q", "desc": "quiet pass", "cmd": "echo QUIET-OK"},
+        {"id": "b", "desc": "boom", "cmd": "echo BOOM-DETAIL >&2; false"}]
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    res = gate.run_gate(hb, "GATE_P0", check=True)
+    text = "\n".join(res["lines"])
+    assert "BOOM-DETAIL" in text        # the WHY is surfaced (stderr captured too)
+    assert "cmd:" in text               # and the failing cmd (matches the node runner)
+    assert "QUIET-OK" not in text       # a PASSING criterion's output stays quiet
+
+
+def test_failing_criterion_output_tail_truncated(tmp_path):
+    # The surfaced output is a TAIL (GATE_OUT_LINES, default 20) with a LOUD truncation
+    # marker — a chatty test runner must not bury the gate summary (the original reason
+    # the output was discarded), and a silent cut would misreport what the criterion said.
+    dag = two_phase_dag()
+    dag["gates"]["GATE_P0"]["criteria"] = [
+        {"id": "c", "desc": "chatty", "cmd": 'i=1; while [ $i -le 30 ]; do echo "line-$i"; i=$((i+1)); done; false'}]
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    text = "\n".join(gate.run_gate(hb, "GATE_P0", check=True)["lines"])
+    assert "line-30" in text and "line-11" in text      # the tail is kept
+    assert "line-10\n" not in text + "\n"               # earlier lines are cut
+    assert "(+10 earlier output lines)" in text         # and the cut is LOUD

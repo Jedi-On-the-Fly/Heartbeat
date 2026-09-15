@@ -27,6 +27,15 @@ EVENTS_FILE="$HB_DIR/events.jsonl"
 # Each criterion runs under a timeout so a hanging cmd blocks the gate (✗) instead
 # of hanging. dag.json is TRUSTED input (criteria are eval'd) — one-line, <5s.
 GATE_TIMEOUT_S="${GATE_TIMEOUT_S:-5}"
+# A FAILING criterion's captured output is surfaced as a bounded TAIL (the WHY, not just the
+# WHICH) — full output would bury the gate summary, so the cut is bounded and LOUD.
+GATE_OUT_LINES="${GATE_OUT_LINES:-20}"
+# Capture to a FILE, not $(…): a timed-out criterion's surviving grandchildren would hold a
+# command-substitution pipe open past the kill (an unbounded hang); a file has no EOF wait.
+# mktemp may be absent (the coreutils-less PATH T156 exercises) — fall back to a $$-named file.
+if command -v mktemp >/dev/null 2>&1; then CRIT_OUT="$(mktemp "${TMPDIR:-/tmp}/hb-gate-out.XXXXXX")"
+else CRIT_OUT="${TMPDIR:-/tmp}/hb-gate-out.$$"; : > "$CRIT_OUT"; fi
+trap 'rm -f "$CRIT_OUT" 2>/dev/null || true' EXIT
 if   command -v timeout  >/dev/null 2>&1; then TIMEOUT_BIN="timeout"
 elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN="gtimeout"
 else TIMEOUT_BIN=""; fi
@@ -66,10 +75,21 @@ eval_gate() {
   # newline-delimited `read` would split into bogus empty-CMD records that trivially "pass" (a false
   # gate). \x1e never appears in a shell command, and a multi-line cmd now runs verbatim.
   while IFS=$'\x1f' read -r -d $'\x1e' ID DESC CMD; do
-    if run_criterion "$CMD" >/dev/null 2>&1; then
+    if run_criterion "$CMD" >"$CRIT_OUT" 2>&1; then
       echo "  ✓ [$ID] $DESC"; PASS=$((PASS + 1)); CRIT_EXITS="$CRIT_EXITS 0"
     else
-      echo "  ✗ [$ID] $DESC"; echo "      cmd: $CMD"; FAIL=$((FAIL + 1)); CRIT_EXITS="$CRIT_EXITS 1"
+      echo "  ✗ [$ID] $DESC"; echo "      cmd: $CMD"
+      if [ -s "$CRIT_OUT" ]; then
+        # Pure-bash tail (no wc/tail/sed — they're absent on the coreutils-less PATH T156 exercises).
+        OUT_LINES=()
+        while IFS= read -r _l || [ -n "$_l" ]; do OUT_LINES+=("$_l"); done < "$CRIT_OUT"
+        N=${#OUT_LINES[@]}; START=0
+        if [ "$N" -gt "$GATE_OUT_LINES" ]; then
+          echo "      … (+$((N - GATE_OUT_LINES)) earlier output lines)"; START=$((N - GATE_OUT_LINES))
+        fi
+        i=$START; while [ "$i" -lt "$N" ]; do echo "      ${OUT_LINES[$i]}"; i=$((i + 1)); done
+      fi
+      FAIL=$((FAIL + 1)); CRIT_EXITS="$CRIT_EXITS 1"
     fi
   done < <(node -e "
     const dag = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));

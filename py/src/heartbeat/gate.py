@@ -12,6 +12,7 @@ from pathlib import Path
 from . import state as st
 
 GATE_TIMEOUT_S = int(os.environ.get("GATE_TIMEOUT_S", "5"))
+GATE_OUT_LINES = int(os.environ.get("GATE_OUT_LINES", "20"))   # tail of a FAILING criterion's output to surface
 
 
 def _project_dir(hbdir):
@@ -58,10 +59,20 @@ def eval_gate(hbdir, gate_id, timeout=None):
     for c in criteria:
         ok, out = _run_cmd(c.get("cmd", ""), hbdir, timeout)
         lines.append(f"  {'✓' if ok else '✗'} [{c.get('id')}] {c.get('desc', '')}")
-        if not ok and out.strip():
-            # surface the failing criterion's output (was swallowed) so a blocked gate is diagnosable
-            for ln in out.strip().splitlines():
-                lines.append(f"      {ln}")
+        if not ok:
+            # Surface the WHY, not just the WHICH: the failing cmd (matches the node runner) and a
+            # TAIL of its captured output — full output would bury the gate summary (a chatty test
+            # runner), so the cut is bounded (GATE_OUT_LINES) and LOUD, never silent. A passing
+            # criterion's output stays quiet.
+            lines.append(f"      cmd: {c.get('cmd', '')}")
+            if out.strip():
+                tail = out.strip().splitlines()
+                extra = len(tail) - GATE_OUT_LINES
+                if extra > 0:
+                    lines.append(f"      … (+{extra} earlier output lines)")
+                    tail = tail[-GATE_OUT_LINES:]
+                for ln in tail:
+                    lines.append(f"      {ln}")
         results.append({"id": c.get("id"), "cmd": c.get("cmd", ""), "exit": 0 if ok else 1})
         passed += 1 if ok else 0
         failed += 0 if ok else 1
