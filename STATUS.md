@@ -1,7 +1,41 @@
 # STATUS — HeartBeat
 
-**Version:** v1.29.9 (the flake probe: a sweep failure is re-run once and labeled FLAKY or reproduced — a transient failure is distinguishable from a real regression, and the verdict never changes)
+**Version:** v1.30.0 (`hb park` / `hb unpark`: retire a phase without deleting it — resolver, audit, report, and the sweep all honor `parked`, loudly and reversibly)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.30.0 — park/unpark: a CLI path to retire a phase (minor: new command + DAG field)
+
+There was no CLI path to retire or park a gate — it meant hand-editing `dag.json` under time
+pressure, and naive deletion dangles `gate_exit` (phases reference it; `lint` catches exactly
+that). A downstream project invented an undocumented placeholder-and-tripwire pattern instead.
+Two clarifications ship with the feature: the "mutate state only via the CLI" rule governs
+`events.jsonl`/`state.json`, *not* the plan — `dag.json` is meant to be edited; and since v1.29.4
+a planned gate no longer blocks pushes, so what parking actually solves is the resolver frontier
+(a drafted phase's tasks keep being offered; `all_done` never fires), audit-clean (a refuted gate
+keeps failing `hb audit`, and rule 3 blocks the DAG), and armed-gate retirement.
+
+- **The command.** `hb park <PHASE|GATE> [--reason …]` / `hb unpark` (python) and
+  `node .hb/hb.js park/unpark` (node). A gate id resolves to the phase carrying it as
+  `gate_exit`; unknown ids are refused; `parked: true` (+ `parked_reason`) is set on the phase —
+  nothing is deleted, everything is reversible. Schema'd.
+- **The semantics.** Resolver: tasks never offered, no `gate_pending`/`review_pending`,
+  `all_done` computed without it — while `gate_passed` still counts *all* phases, so parking a
+  completed phase never re-blocks downstream `gate_entry` references. Audit: the phase's gate is
+  skipped (an unsound-but-parked gate no longer blocks audit-clean), reported
+  `⏸ skipped N parked phase(s) … (unpark to re-audit)` — unpark restores the findings, the debt
+  returns with the phase. Sweep: `--all` retires even an **armed** parked gate, loudly. Report:
+  listed under `parked`, marked ⏸, excluded from the progress denominator — never silently gone.
+- **Loud, reversible, rule-preserving.** Every skip is reported; no new audit rule (the skip is a
+  summary note, keeping the rule-completeness meta-test contract intact); parking is the safe
+  atomic move the placeholder-and-tripwire improvisation was reaching for.
+- **Proof-driven.** New how-to [park-a-phase.md](docs/howto/park-a-phase.md) gated by
+  `park-phase.sh` (T162.1: park by gate id, audit skip + reversibility, resolver skip, honest
+  report, armed retirement, unknown-id refusal) + node twins T162.2–6 + 3 python tests + `parked`
+  parity cases (`next`/`ready`/`report`) in `parity.sh` — red before, green after. The first
+  suite run caught a missing brace in T162's own fixture (the fixture never wrote; park correctly
+  refused the unknown gate; four checks cascaded) — fixed and re-verified in the exact harness.
+  Node 417 / py 115 / parity OK.
+- Plugin/marketplace → **1.30.0**, Python package → **0.20.0**.
 
 ## v1.29.9 — the flake probe: flake ≠ regression, but both still block
 
