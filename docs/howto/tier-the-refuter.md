@@ -89,7 +89,7 @@ bash docs/howto/gate-examples/refuter-model-provenance.sh   # -> REFUTER-PROVENA
 Their build history is the argument in miniature: both phases' gate reviews ran on a
 profile-bound cheap model, which caught two real defects (a flag-order parse divergence and
 a provenance-fabrication hole) that were fixed at the root and pinned red-first. The
-impact trail is honest about its own bootstrap: the *first* catch predates the `--model`
-flag and sits in the `(none)` bucket — the ordering debt, visible in the log — while every
-later verdict is stamped. That unstamped first entry is the feature's own argument for why
+impact trail is honest about its own bootstrap: the *first review cycle* predates the
+`--model` flag, so its catch and clearing pass sit in the `(none)` bucket — the ordering
+debt, visible in the log — while every later verdict is stamped. That unstamped first entry is the feature's own argument for why
 the field exists.

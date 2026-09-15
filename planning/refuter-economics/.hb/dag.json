@@ -1,0 +1,117 @@
+{
+  "project": "refuter-economics",
+  "_meta": "Close the refuter-economics gap surfaced by a downstream transcript: three refutations ran ~540k tokens on the session's strongest model because (a) the INTERACTIVE surface has no machine-readable model binding at all — profile.model reaches the exec dispatch (T147), but the composed refute prompt carries NO model line (the `model:` serialization exists only in a profile's SKILL.md rendering; round-1 refutation corrected this premise), so an interactive host has nothing to act on and refuters inherit the parent model; (b) review events record reviewer/artifact/citations but NOT which model reviewed, so 'is the cheaper refuter catching as much?' is unanswerable from the log; (c) no how-to frames model tiering — cross-model-verification.md argues capability DIVERSITY (correctness), not economy, and the honest limit (cheaper is not automatically differently-failing) is undocumented. Three phases: RE1 closes the interactive last mile (`hb refute-prompt --json` emitting {prompt, model, provider, panel, refute_if} + skill/PROTOCOL review_pending text instructing the host BOTH halves: SPAWN the refuter on the profile's model, and RECORD the verdict with `hb review … --model <that model>` — the TEXT compose stays byte-identical, protecting the T147 byte-parity contract); RE2 records model provenance on review events (exec path auto-stamps the resolved profile.model / HB_REFUTE_MODEL; interactive AND MCP get a `model` argument — mcp_server's review tool schema included; review FAIL events carry it too; absent model recorded as null, never fabricated) and extends refuter-impact with a per-model catch/cleared breakdown — the repo's chosen HONEST measurement, catches-from-truth, extended with the capability axis; RE3 ships the gated how-to (tier by review KIND: plan refutation stays strong, gate-checklist reviews may go cheap — with an honest-limit section covering: cheaper ≠ differently-failing, watch per-model impact before trusting a downgrade, never downgrade to buy a pass, and the TRUST BOUNDARY of the field itself: an interactive/MCP `--model` is the recording actor's self-report while only the exec auto-stamp is config-derived). Deliberately deferred, so the limit is loud: interactive panel FAN-OUT (--json emits panel+refute_if so a host CAN aggregate, but instructing N spawns is out of scope this wave) and `audit --agent` model routing (plan refutation stays on the strong model by convention; no mechanism yet — its spend stays outside the impact report). Constraints held throughout: node ≡ python on every shared surface (compose --json, review event shape, impact summary — each gets a parity case, with a fixture MIXING null and named models to pin the null-key serialization trap), review-artifact Sev-1 rot checks and the four review-pass guards are untouched, no new audit rule. Dogfood, wired not claimed: this project's .hb/refuters/correctness.json binds model 'sonnet' (plan prep, done before RE1 runs), so GATE_RE1/RE2 reviews route cheap, while GATE_RE3's default profile stays unbound and inherits the strong session model — the tiering itself, and the plan-level refutation ran strong (round 1: UNSOUND, 2 blocking + 9 weakening findings, all folded in; artifact in .hb/reviews/).",
+  "phases": [
+    {
+      "id": "RE1",
+      "title": "Interactive model routing — the last mile (refute-prompt --json + spawn instruction)",
+      "gate_entry": null,
+      "gate_exit": "GATE_RE1",
+      "tasks": [
+        {
+          "id": "re1a",
+          "title": "Spec-first: author the routing proof (RED before re1b)",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/refuter-model-routing.sh (prints REFUTER-MODEL-ROUTING-OK). Assert, driving BOTH runtimes: (1) `hb refute-prompt <gate> --json` / `node .hb/hb.js refute-prompt <gate> --json` emit {prompt, model, provider, panel, refute_if} with model/provider/verdict fields taken from the gate's review.profile; (2) a profile-less gate yields model:null and json.prompt byte-identical to the text compose (backward-compat); (3) json.prompt is byte-identical to the text compose for the PROFILED fixture too — one compose, no drift, pinned in bytes, not piece-presence; (4) the TEXT output of refute-prompt is BYTE-UNCHANGED by this feature (protects the T147 node≡python byte-parity contract); (5) node --json ≡ python --json on the same project, with and without a profile; (6) the skill's review_pending row and PROTOCOL text instruct the host BOTH halves — spawn the refuter on the profile's model (Agent tool) AND record the verdict with `review … --model <that model>` (prose-integrity greps for both sentences in plugin/skills/heartbeat/SKILL.md AND in both runtimes' PROTOCOL review_pending action text — protocol.py and hb.js; the instructions, not just the data). --selftest proves each assertion individually load-bearing (mutate: drop the model key, perturb the profiled json.prompt, perturb the text compose, remove each skill sentence → each must go RED). RED before re1b exists."
+        },
+        {
+          "id": "re1b",
+          "title": "Implement --json in both runtimes + the spawn instruction in skill/PROTOCOL",
+          "requires": ["re1a"],
+          "description": "py cli.py `refute-prompt <gate> [--json]` and node hb.js twin: --json emits {prompt, model, provider, panel, refute_if} built from the SAME compose_prompt/profile resolve the text path uses — the json.prompt IS the text compose's bytes (one compose, enforced by re1a assertion 3, not convention). Text path byte-unchanged. Update plugin/skills/heartbeat/SKILL.md review_pending row + the PROTOCOL review_pending action text (BOTH runtimes' protocol tables — reason KEYS unchanged, action text is runtime-specific by design) to instruct BOTH halves: read the profile's model via refute-prompt --json and pass it to the Agent tool when spawning the refuter (inherit the session model only when the profile declares none), AND record the verdict with `review <gate> pass|fail … --model <that model>` so the log carries what actually reviewed (the flag itself lands in RE2; the instruction text ships here and is asserted by re1a assertion 6 — writing instructions for a flag one phase early is acceptable spec-first debt, closed by GATE_RE2)."
+        },
+        {
+          "id": "re1c",
+          "title": "Wire the proof (suite + parity case + docs current-state)",
+          "requires": ["re1b"],
+          "description": "Wire refuter-model-routing.sh into tests/run-tests.sh as group T163 (the group RUNS the proof and greps its marker) + --selftest check; add the dev-tests.md row; add a tests/parity.sh case labeled exactly `refute-prompt:json` comparing --json output node≡python; record the --json surface in planning/parity-notes.md under the token `refute-prompt --json`; dev-plugin.md/dev-python.md refute-prompt rows updated current-state. ALSO (round-2 NEW-2): harden run-tests.sh so GROUPS-PASSED membership requires the group to have REGISTERED checks (_GCHECKS), not merely zero failures — a zero-check/dep-skipped group must not read as PASSED, which is what makes re3z's GROUPS-PASSED enforcement non-gameable. Note: GATE_RE1's re1z greps are wiring HINTS only (a source grep is satisfiable by a comment — the repo's own catalogued weakness); the RUN-enforcement is re1x/re1y at this gate plus re3z's GROUPS-PASSED assertion at the exit bar."
+        }
+      ]
+    },
+    {
+      "id": "RE2",
+      "title": "Model provenance on review events + per-model refuter impact",
+      "gate_entry": "GATE_RE1",
+      "gate_exit": "GATE_RE2",
+      "tasks": [
+        {
+          "id": "re2a",
+          "title": "Spec-first: author the provenance proof (RED before re2b)",
+          "requires": [],
+          "description": "Author docs/howto/gate-examples/refuter-model-provenance.sh (prints REFUTER-PROVENANCE-OK). Assert, both runtimes: (1) `hb review <gate> pass --artifact f --model sonnet` (and the node hb.js twin) records model:'sonnet' on the review_passed event — and FAIL verdicts carry it too (the catch side of impact needs it); (2) omitting --model records model:null — reported honestly, never fabricated (the bench.py precedent); (3) the automated exec refute path auto-stamps the resolved profile.model (or HB_REFUTE_MODEL) on the review event with NO operator flag — run it via a stub backend, don't grep source; (4) the MCP review tool accepts a model argument and it reaches the event (mcp_server.py — MCP is a first-class review surface); (5) refuter-impact (`hb report`) breaks down caught/cleared per model per lens on a fixture MIXING null and named models — the null-key serialization trap (JS 'null' vs python None) is exactly where the runtimes would diverge — node ≡ python on the summary; (6) the four review-pass guards (artifact, substance, citation, distinct actor) still refuse on BOTH runtimes post-change (a node hb.js guard-refusal case in this proof — refutation-demo.sh is python-only), and the doctor Sev-1 artifact-rot check is behaviorally unchanged. --selftest proves recording, null-honesty, auto-stamp, MCP pass-through, and the mixed-model impact each load-bearing. RED before re2b."
+        },
+        {
+          "id": "re2b",
+          "title": "Implement: --model on review, exec auto-stamp, per-model impact (both runtimes)",
+          "requires": ["re2a"],
+          "description": "review_policy.accept_review gains model=None recorded on the review_passed event (py) and the hb.js review twin mirrors it (its splice-based arg parsing gains --model safely); cli.py/hb.js accept --model on pass AND fail; mcp_server.py review tool schema gains an optional model passed through to accept_review/the fail event. executor.py refute path passes the resolved r_model into the recorded verdict event; hb-exec.js mirrors. report.refuter_impact (py) and refuterImpact (hb-report.js) gain a per-model breakdown per gate with a null-safe key convention chosen ONCE and mirrored (the JS-'null'-vs-python-None trap). Tokens are deliberately NOT recorded: HeartBeat is host-agnostic and cannot observe them; a self-reported count from the untrusted side would be bookkeeping dressed as evidence — and the same trust boundary applies to the interactive/MCP model flag itself (a self-report), which is why RE3's guide must state it; only the exec auto-stamp is config-derived."
+        },
+        {
+          "id": "re2c",
+          "title": "Wire the proof (suite + refuter-impact parity update + docs)",
+          "requires": ["re2b"],
+          "description": "Wire refuter-model-provenance.sh into tests/run-tests.sh as group T164 (marker + --selftest) + dev-tests.md row; update the tests/parity.sh refuter-impact case for the model-extended summary with the MIXED null/named fixture (both sides identical); parity-notes.md records the surfaces under the exact token `review-event model field`; dev-plugin.md/dev-python.md review/report rows current-state. Existing suites must stay green: T-groups pinning review events and impact output (T32.2, T33.4, T45, T152) are updated in the SAME change if their fixtures pin the old shape."
+        }
+      ]
+    },
+    {
+      "id": "RE3",
+      "title": "Gated how-to: tier the refuter (economy without weakening the adversary)",
+      "gate_entry": "GATE_RE2",
+      "gate_exit": "GATE_RE3",
+      "tasks": [
+        {
+          "id": "re3a",
+          "title": "Author docs/howto/tier-the-refuter.md claiming only what the proofs show",
+          "requires": [],
+          "description": "The guide: profiles are the economic dial — bind model per refuter profile (`\"model\": \"sonnet\"` in .hb/refuters/<name>.json), reaching BOTH the exec dispatch (T147) and, via refute-prompt --json + the skill instruction, the interactive spawn (RE1's proof). Route by review KIND: plan refutation (audit --agent, design reading) stays on the strong model; gate-checklist reviews (explicit brief, grep-and-report) may go cheap. Verify the routing took effect — observe the review event's model field (RE2), do not guess. MUST contain an 'Honest limit' section covering FOUR limits: cheaper is not automatically differently-failing — a downgraded refuter can be a subset-failing one; watch the per-model impact report (catches from truth; misses invisible by definition) before trusting a downgrade; never downgrade to make a pass cheaper to obtain; and the field's trust boundary — an interactive/MCP --model is the recording actor's SELF-REPORT while only the exec auto-stamp is config-derived, so per-model impact from interactive runs is bookkeeping, not evidence. Also state the deliberate deferrals (interactive panel fan-out; audit --agent routing — plan-refutation spend stays outside the impact report). Cross-link cross-model-verification.md (capability diversity) and spend-the-model-only-on-work.md (when, not which)."
+        },
+        {
+          "id": "re3b",
+          "title": "Gate the doc + index it + full-suite green",
+          "requires": ["re3a"],
+          "description": "prose-check.sh passes on the new guide (links resolve, only real hb commands); add it to docs/howto/howto-list.md (index-coverage T124); cross-links added in cross-model-verification.md. Then the whole-feature exit bar: full node suite ALL GREEN, py suite green, parity.sh PARITY OK — the T-groups added in RE1/RE2 run inside them."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_RE1": {
+      "desc": "refute-prompt --json emits the profile's model/provider in both runtimes; text compose byte-unchanged; skill/PROTOCOL instruct the spawner to honor it — proven, wired, parity-cased.",
+      "review": {
+        "profile": "correctness",
+        "prompt": "Refute that RE1 is done. Does refuter-model-routing.sh go RED without --json (spec-first, teeth)? Is the TEXT compose truly byte-unchanged (run the old and new refute-prompt on a fixture and diff — the T147 byte-parity contract must not have silently moved)? Does --json come from the SAME compose/resolve path (one compose — or is it a second implementation that can drift)? Does the skill AND both runtimes' PROTOCOL review_pending text instruct the host BOTH halves — spawn on the profile's model AND record with --model — or does it merely mention the model exists? Do node and python --json agree on a project WITH a profile and WITHOUT one? Is the parity case wired and would it actually fail on a divergence? Was the GROUPS-PASSED zero-check hardening (re1c) actually applied to run-tests.sh? End SOUND or UNSOUND. NOTE to this gate's reviewer: record YOUR verdict WITHOUT --model — the flag lands in RE2; the instruction you are verifying is for post-RE2 hosts (round-2 refutation NEW-1: py argparse would refuse it loudly, node would swallow it into the note)."
+      },
+      "criteria": [
+        { "id": "re1x", "desc": "the routing proof passes (both runtimes, --json + byte-compat + skill instruction)", "timeout_s": 120, "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-model-routing.sh\" 2>&1 | grep -q 'REFUTER-MODEL-ROUTING-OK'" },
+        { "id": "re1y", "desc": "teeth: each assertion individually load-bearing (--selftest)", "timeout_s": 180, "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-model-routing.sh\" --selftest 2>&1 | grep -q 'SELFTEST-OK'" },
+        { "id": "re1z", "desc": "wiring hints recorded (source greps — run-enforcement is re1x/re1y here + re3z's GROUPS-PASSED at the exit bar): suite group, dev-tests row, a NEW parity case labeled refute-prompt:json, parity-notes token", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'refuter-model-routing.sh' tests/run-tests.sh && grep -q 'refuter-model-routing' docs/dev-tests.md && grep -q 'refute-prompt:json' tests/parity.sh && grep -qi 'refute-prompt --json' planning/parity-notes.md" }
+      ]
+    },
+    "GATE_RE2": {
+      "desc": "Review events carry the reviewing model (flagged interactively, auto-stamped on exec); impact reports catch/cleared per model; guards and rot checks untouched — proven, wired, parity-updated.",
+      "review": {
+        "profile": "correctness",
+        "prompt": "Refute that RE2 is done. Does the proof go RED pre-implementation? Is a missing model recorded as null — or does anything fabricate/default it? Does the EXEC path stamp the model with no operator involvement (run it, don't grep the source)? Do review FAIL events carry the model (the catch side of impact needs it)? Are the four review-pass guards and the doctor Sev-1 artifact check byte-unchanged (run their existing proofs)? Is the refuter-impact parity case updated on BOTH sides — and would the old fixture have caught the new field, or was parity silently narrowed? End SOUND or UNSOUND."
+      },
+      "criteria": [
+        { "id": "re2x", "desc": "the provenance proof passes (record + null-honesty + auto-stamp + per-model impact, both runtimes)", "timeout_s": 120, "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-model-provenance.sh\" 2>&1 | grep -q 'REFUTER-PROVENANCE-OK'" },
+        { "id": "re2y", "desc": "teeth: recording, null-honesty, auto-stamp, impact each load-bearing (--selftest)", "timeout_s": 180, "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-model-provenance.sh\" --selftest 2>&1 | grep -q 'SELFTEST-OK'" },
+        { "id": "re2z", "desc": "review-guard + artifact-rot regressions still green (the untouched invariants, re-run not asserted)", "timeout_s": 300, "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/refutation-demo.sh\" 2>&1 | grep -q 'REFUTATION-GUARDS-OK' && bash \"$PROJECT_DIR/docs/howto/gate-examples/refuter-impact.sh\" 2>&1 | grep -q 'REFUTER-IMPACT-OK'" },
+        { "id": "re2w", "desc": "wiring hints recorded: suite group, dev-tests row, the DISTINCTIVE parity-notes token (the generic review/model grep matched pre-implementation — round-1 finding), and the record-side --model instruction present in the skill text", "cmd": "cd \"$PROJECT_DIR\" && grep -q 'refuter-model-provenance.sh' tests/run-tests.sh && grep -q 'refuter-model-provenance' docs/dev-tests.md && grep -q 'review-event model field' planning/parity-notes.md && grep -q -- '--model' plugin/skills/heartbeat/SKILL.md" }
+      ]
+    },
+    "GATE_RE3": {
+      "desc": "tier-the-refuter.md ships gated (prose-clean, indexed, honest-limit present, claims backed by the RE1/RE2 proofs) and the whole feature exits on full green suites + parity.",
+      "review": {
+        "profile": "default",
+        "prompt": "Refute that RE3 is done — and that the FEATURE is done. Does the guide claim anything the RE1/RE2 proofs do not show (overclaim hunt: does it promise token savings it cannot know, or imply the cheap refuter is equivalent)? Is the Honest limit section real — ALL FOUR limits: cheaper ≠ differently-failing; watch per-model impact; never downgrade to buy a pass; and the trust boundary (interactive/MCP --model is a self-report, only the exec auto-stamp is config-derived) — plus the stated deferrals (panel fan-out, audit --agent) — or decorative? Is it indexed and prose-clean? Do the full suites actually pass — run them, do not trust the gate's own green. Finally the plan-level question: do the three phases together actually close the transcript's three gaps as scoped? End SOUND or UNSOUND."
+      },
+      "criteria": [
+        { "id": "re3x", "desc": "the guide is prose-clean and indexed (behavioral: run the checkers)", "timeout_s": 120, "cmd": "bash \"$PROJECT_DIR/docs/howto/gate-examples/prose-check.sh\" \"$PROJECT_DIR/docs/howto/tier-the-refuter.md\" 2>&1 | grep -q 'ALL-PROSE-OK' && bash \"$PROJECT_DIR/docs/howto/gate-examples/index-coverage.sh\" 2>&1 | grep -q 'INDEX-COVERAGE-OK'" },
+        { "id": "re3y", "desc": "the honest-limit is REAL: all four limits present (incl. the self-report trust boundary), the deferrals stated, and the guide cites the wired proofs (claims carry their evidence)", "cmd": "cd \"$PROJECT_DIR\" && grep -qi 'honest limit' docs/howto/tier-the-refuter.md && grep -qiE 'self-report|trust boundary' docs/howto/tier-the-refuter.md && grep -qi 'deferr' docs/howto/tier-the-refuter.md && grep -q 'refuter-model-routing.sh' docs/howto/tier-the-refuter.md && grep -q 'refuter-model-provenance.sh' docs/howto/tier-the-refuter.md" },
+        { "id": "re3z", "desc": "feature exit bar: full node suite ALL GREEN with T163+T164 in GROUPS-PASSED (run-enforcement of the wiring), parity OK, and the py suite green by EXIT CODE (round-1 fix: a passed-count grep matches failing runs too)", "timeout_s": 900, "cmd": "cd \"$PROJECT_DIR\" && o=$(bash tests/run-tests.sh 2>&1) && echo \"$o\" | grep -q 'ALL GREEN' && echo \"$o\" | grep -q 'GROUPS-PASSED:.* T163 ' && echo \"$o\" | grep -q 'GROUPS-PASSED:.* T164 ' && bash tests/parity.sh 2>&1 | grep -q 'PARITY OK' && (cd py && PYTHONPATH=src .venv/bin/python -m pytest -q >/dev/null 2>&1)" }
+      ]
+    }
+  }
+}
