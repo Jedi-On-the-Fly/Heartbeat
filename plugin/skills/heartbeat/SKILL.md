@@ -75,9 +75,24 @@ node <project-dir>/.hb/hb-viz.js   <project-dir>/.hb            # renders the ca
 Then **refute the plan** before proposing: spawn a skeptical reviewer (Agent tool) — or,
 in the Python port, `hb audit --agent` — told to prove the DAG *won't* truly verify the
 work (gates that assert the wrong behaviour, phases with no real coverage, missing
-`requires`). Fold its concerns back into the DAG. Only propose once **lint + audit are
-clean AND the refuter comes back SOUND**. Present the phases/gates + the lint/audit/viz
-results + the refutation verdict, then get sign-off before running.
+`requires`). Fold its concerns back into the DAG. **The plan refutation itself stays on
+the strong (session) model — it is critical design reading.**
+
+Then **propose the refuter tiering** for the run ahead — the economics are declared once,
+per lens, at plan time: list the profiles the gates' `review.profile`s name
+(`node .hb/hb.js refuters` / `ls .hb/refuters/`), and for gate-checklist lenses
+(correctness/security-style reviews of built work) propose binding a **cheaper model** —
+`"model": "sonnet"` in `.hb/refuters/<name>.json` — while leaving `default` unbound so
+plan-level and whole-feature reviews inherit the session model. Write the agreed bindings
+into the profile files as part of sign-off; the `review_pending` flow then routes and
+records automatically (`refute-prompt --json` → spawn → `review … --model`). Never propose
+a downgrade to make passes cheaper to obtain, and point the user at the per-model impact in
+`hb report` as the check that the cheap lens still catches — the full argument and honest
+limits are in [tier-the-refuter.md](../../../docs/howto/tier-the-refuter.md).
+
+Only propose once **lint + audit are clean AND the refuter comes back SOUND**. Present the
+phases/gates + the lint/audit/viz results + the refutation verdict + the proposed refuter
+tiering, then get sign-off before running.
 
 ### `/heartbeat status <project-dir>`
 ```bash

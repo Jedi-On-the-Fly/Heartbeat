@@ -32,6 +32,23 @@ That one field routes **both** refute surfaces:
   hb review <GATE> fail "<holes>" --model sonnet
   ```
 
+## Hosts other than Claude Code (Codex, OpenCode, anything driving over MCP)
+
+The `--json` binding is host-neutral data; whether an *interactive* host can act on it
+depends on whether its agent-spawning tool takes a model parameter. Where it can't, use the
+path that works on every host because HeartBeat controls it itself: the **automated exec
+refute**. The executor's dispatch exports the resolved profile model as `HB_EXEC_MODEL`
+for the refute call, and the `codex` / `opencode` backends pass it straight through as
+`-m <model>` — so
+
+```bash
+HB_REFUTE_BACKEND=codex hb exec run --dir <project>     # refutes run on codex, doer unchanged
+```
+
+routes reviews to a different CLI agent *and* honors the profile's model, with the verdict
+auto-stamped. That is also the strongest form of tiering: a different **vendor**, not just
+a smaller sibling — capability diversity and economy in one move.
+
 ## Route by review kind, not by price alone
 
 - **Plan refutation** (`hb audit --agent`, or refuting a DAG before it runs) is critical
