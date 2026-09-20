@@ -1,7 +1,35 @@
 # STATUS — HeartBeat
 
-**Version:** v1.31.0 (refuter economics: `refute-prompt --json` routes the interactive refuter to the profile's model, review events record WHICH model reviewed, refuter impact breaks down per model — and the how-to says where the cheap model belongs and where it doesn't)
+**Version:** v1.31.1 (gate stdin immunity: a criterion that reads stdin can no longer eat its successors — the silent fail-open skip a field report caught is fixed on both branches, mirrored in python, and mutation-pinned so a regression turns the suite red)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.31.1 — gate stdin immunity: the slurper that ate the gate
+
+A field report (a downstream project running v1.31.0) caught the sharpest defect yet: `eval_gate`
+streams criteria into its `while read` loop **over stdin**, and `run_criterion`'s PRIMARY
+(`timeout(1)`) branch ran criteria **without redirecting stdin** — so any criterion that reads
+stdin (`docker compose exec -T`, `psql`, `ssh`, anything slurping) consumed the remaining criteria
+records. Those criteria were never executed, never reported, never counted: the gate printed
+`N passed, 0 failed` and **passed** on partial evidence — silent, fail-open, and
+position-dependent (everything after the first slurper was lost; reordering a DAG silently changed
+which safety properties were enforced). The bitter detail: the v1.29.2 fallback branch always
+carried `</dev/null` *with a comment naming the exact hazard* — the guard lived in the branch that
+almost never runs, while the branch that runs wherever coreutils exists was open. The reporter's
+real 5-criterion gate ran 3 and passed; their archived 16-criterion gate would have run 1.
+
+- **The fix.** The reporter's one-line local patch, upstreamed verbatim: `</dev/null` on the
+  `timeout(1)` branch too — both branches now match.
+- **Python mirrored.** `_run_cmd` gains `stdin=DEVNULL`: python never streamed criteria over stdin
+  (no record-eating) but inherited the *caller's* stdin — nondeterministic input, or a hang on a
+  TTY. One contract on both runtimes: a criterion sees EOF, period.
+- **Proof-driven, with the reporter's "option 3" built in stronger.** `gate-stdin-immune.sh`
+  (T165) reproduced the bug red-first (2 of 3 evaluated, would pass), pins all-criteria-evaluated
+  + block + count honesty on both runtimes — and its `--selftest` strips the guard from a copy and
+  **requires the skip to reappear**, so a plugin refresh that loses the redirect turns the suite
+  red instead of silently reverting. `gate-parity.sh` gains `G_SLURP` (both runtimes must block —
+  pre-fix, node passed while python blocked: a real divergence, now contractual); `test_gate.py`
+  pins EOF-not-caller-stdin.
+- Node 423 / py 116 / parity OK. Plugin/marketplace → **1.31.1**, Python package → **0.21.1**.
 
 ## v1.31.0 — refuter economics: route the refuter, record the model, read the impact
 
