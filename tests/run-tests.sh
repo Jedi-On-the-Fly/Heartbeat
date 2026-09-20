@@ -1779,6 +1779,12 @@ check "T164.1 recording + null-honesty + auto-stamp + MCP + mixed-model impact +
 check "T164.2 teeth: recording, null-honesty, and impact checks load-bearing (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/refuter-model-provenance.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
+grp "T165 — gate integrity: criteria are IMMUNE to stdin slurpers — a criterion that reads stdin cannot eat its successors (field report: silent fail-open skip)"
+check "T165.1 a gate [true, slurper, false] evaluates ALL criteria and BLOCKS on both runtimes; python criteria see EOF, never the caller's stdin (gate-stdin-immune.sh → GATE-STDIN-IMMUNE-OK)" \
+  'bash "'"$GEX"'/gate-stdin-immune.sh" 2>&1 | grep -q "GATE-STDIN-IMMUNE-OK"'
+check "T165.2 teeth: stripping the </dev/null guard on a copy makes the skip REAPPEAR and be caught (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/gate-stdin-immune.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

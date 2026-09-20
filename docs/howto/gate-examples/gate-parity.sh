@@ -21,7 +21,8 @@ DAG='{"phases":[
   "G_HOLLOW":{"desc":"h","criteria":[]},
   "G_TIMEOUT":{"desc":"to","criteria":[{"id":"c","desc":"d","cmd":"sleep 2"}]},
   "G_CRIT_WIN":{"desc":"cw","criteria":[{"id":"c","desc":"per-criterion timeout_s beats the env default","timeout_s":5,"cmd":"sleep 2"}]},
-  "G_CRIT_BAD":{"desc":"cb","criteria":[{"id":"c","desc":"invalid timeout_s fails LOUD, cmd never absolves it","timeout_s":"abc","cmd":"true"}]}}}'
+  "G_CRIT_BAD":{"desc":"cb","criteria":[{"id":"c","desc":"invalid timeout_s fails LOUD, cmd never absolves it","timeout_s":"abc","cmd":"true"}]},
+  "G_SLURP":{"desc":"sl","criteria":[{"id":"s1","desc":"slurps stdin","cmd":"cat >/dev/null"},{"id":"s2","desc":"must still run and fail","cmd":"false"}]}}}'
 printf '%s' "$DAG" > "$tmp/proj/.hb/dag.json"
 node "$tmp/proj/.hb/hb.js" rebuild >/dev/null 2>&1
 
@@ -41,7 +42,10 @@ cmp_gate G_HOLLOW
 cmp_gate G_TIMEOUT
 cmp_gate G_CRIT_WIN   # criterion timeout_s=5 under env GATE_TIMEOUT_S=1: BOTH must pass (criterion wins)
 cmp_gate G_CRIT_BAD   # timeout_s "abc": BOTH must block (invalid timeout is a loud runtime failure)
+cmp_gate G_SLURP      # a slurping criterion must not eat its successor: BOTH must block on s2
+GATE_TIMEOUT_S=1 HB_NO_GIT=1 bash "$tmp/proj/.hb/gate.sh" --check G_SLURP >/dev/null 2>&1 \
+  && { echo "FAIL: G_SLURP passed — the slurper ate the failing criterion (stdin leak)"; exit 1; }
 # And the direction of G_CRIT_WIN must be PASS (not merely agreeing on block):
 GATE_TIMEOUT_S=1 HB_NO_GIT=1 bash "$tmp/proj/.hb/gate.sh" --check G_CRIT_WIN >/dev/null 2>&1 \
   || { echo "FAIL: G_CRIT_WIN blocked — per-criterion timeout_s did not override the env default"; exit 1; }
-echo "GATE-PARITY-OK: node ≡ python gate runner (pass / fail / hollow-floor / timeout / criterion-timeout override / invalid-timeout floor)."
+echo "GATE-PARITY-OK: node ≡ python gate runner (pass / fail / hollow-floor / timeout / criterion-timeout override / invalid-timeout floor / stdin-slurper immunity)."

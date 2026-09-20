@@ -275,3 +275,24 @@ def test_all_skips_parked_gate_even_if_armed(tmp_path):
     r = gate.run_all(hb)
     assert "GATE_P0" not in r["gates"]                 # not swept, despite being armed
     assert r["parked"] == ["GATE_P0"]                  # and the skip is reported
+
+
+def test_criteria_run_with_stdin_devnull(tmp_path):
+    # Field report (issue 09): gate.sh's timeout(1) branch ran criteria with INHERITED stdin,
+    # so a slurping criterion (docker exec -T, psql) ate the remaining criteria records —
+    # never run, never counted, gate passed on partial evidence. Python doesn't stream
+    # criteria over stdin, but mirrors the contract: a criterion sees EOF, never the
+    # caller's stdin.
+    dag = two_phase_dag()
+    dag["gates"]["GATE_P0"]["criteria"] = [
+        {"id": "s1", "desc": "slurper completes instantly on /dev/null", "cmd": "cat >/dev/null"},
+        {"id": "s2", "desc": "must still run and fail", "cmd": "false"}]
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    res = gate.eval_gate(hb, "GATE_P0", timeout=5)
+    assert res["passed"] == 1 and res["failed"] == 1     # both ran; the slurper ate nothing
+    dag["gates"]["GATE_P0"]["criteria"] = [{"id": "r", "desc": "read sees EOF", "cmd": "read -r x"}]
+    import json
+    (tmp_path / ".hb" / "dag.json").write_text(json.dumps(dag))
+    res = gate.eval_gate(hb, "GATE_P0", timeout=5)
+    assert res["failed"] == 1                            # EOF, not the caller's stdin

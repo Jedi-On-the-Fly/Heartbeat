@@ -44,7 +44,14 @@ elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN="gtimeout"
 else TIMEOUT_BIN=""; fi
 run_criterion() {   # $1 = cmd, $2 = timeout seconds (defaults to GATE_TIMEOUT_S)
   local t="${2:-$GATE_TIMEOUT_S}"
-  if [ -n "$TIMEOUT_BIN" ]; then "$TIMEOUT_BIN" "${t}s" bash -c "$1"; return $?; fi
+  # </dev/null on BOTH branches: eval_gate streams the criteria into its `while read` loop
+  # via stdin, so a criterion that reads stdin (docker compose exec -T, psql, ssh, anything
+  # slurping) would EAT the remaining criteria records — never run, never reported, never
+  # counted: the gate printed "N passed, 0 failed" and PASSED on partial evidence (silent,
+  # fail-open, position-dependent). The fallback below always guarded this; the timeout(1)
+  # branch — the one that runs wherever coreutils exists — did not. Field report: a 5-criterion
+  # gate ran 3 and passed; a 16-criterion gate would have run 1. Python mirrors (stdin=DEVNULL).
+  if [ -n "$TIMEOUT_BIN" ]; then "$TIMEOUT_BIN" "${t}s" bash -c "$1" </dev/null; return $?; fi
   # No timeout(1)/gtimeout (e.g. stock macOS ships no coreutils): apply a portable shell-level bound so a
   # hanging criterion still blocks the gate (kill → ✗) instead of running unbounded — parity with the
   # python runner (subprocess timeout). Background + poll + kill; </dev/null so the criterion can't read stdin.

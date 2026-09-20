@@ -39,7 +39,11 @@ def _run_cmd(cmd, hbdir, timeout):
     # is genuinely absent (documented divergence). Capture output so a blocked gate is diagnosable.
     shell = shutil.which("bash") or "/bin/sh"
     try:
+        # stdin=DEVNULL mirrors gate.sh (</dev/null on both branches): a gate is non-interactive
+        # by contract — a slurping criterion (psql, ssh, docker exec -T) must see EOF, never the
+        # caller's stdin (nondeterministic input, or a hang until the timeout on a TTY).
         r = subprocess.run([shell, "-c", cmd], cwd=_project_dir(hbdir), env=_env(hbdir),
+                           stdin=subprocess.DEVNULL,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
         return r.returncode == 0, (r.stdout or b"").decode("utf-8", "replace")
     except Exception as e:
