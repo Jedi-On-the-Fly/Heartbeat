@@ -197,6 +197,11 @@ function dispatch(cmd, mode, payload, taskId, heartbeatMs, cwd, extraEnv) {
       let json = null; try { json = JSON.parse(line); } catch (e) {}
       resolve({ code, json, raw: out });
     });
+    // A backend that doesn't drain stdin (e.g. a tiny script that only reads argv) closes the
+    // pipe before we finish writing → an EPIPE 'error' on child.stdin. Unhandled, it crashes the
+    // driver (a flaky "no review_passed" — the payload write raced the child's exit). The payload
+    // is best-effort; swallow EPIPE (the child chose not to read it) and re-throw anything else.
+    child.stdin.on('error', (e) => { if (!e || e.code !== 'EPIPE') throw e; });
     child.stdin.write(JSON.stringify(payload));
     child.stdin.end();
   });
