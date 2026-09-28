@@ -70,24 +70,31 @@ def doctor(hbdir):
     # — its git tag. Node twin: doctor() in hb.js; lines are identical.
     from . import anchors
     if anchors.read_anchor(hbdir, "_start") is not None:
-        acc = {}
+        # acc: the gate's LAST acceptance event; rpf: a restore_point_failed that follows it.
+        acc, rpf = {}, {}
         for e in st.read_events(hbdir):
             g = e.get("gate")
+            ev = e.get("event")
             rev = bool((gates.get(g) or {}).get("review"))
-            if e.get("event") == "review_passed" and rev:
+            if (ev == "review_passed" and rev) or (ev == "gate_passed" and not rev):
                 acc[g] = e
-            elif e.get("event") == "review_failed":
+                rpf.pop(g, None)
+            elif ev == "review_failed":
                 acc.pop(g, None)
-            elif e.get("event") == "gate_passed" and not rev and g not in acc:
-                acc[g] = e
+                rpf.pop(g, None)
+            elif ev == "restore_point_failed" and g in acc:
+                rpf[g] = e
+        git_ok = bool(shutil.which("git"))   # absent ⇒ tag state unknown ⇒ tag checks skipped
         for g in gates:
             e = acc.get(g)
             if not e:
                 continue
             if anchors.read_anchor(hbdir, g) is None:
                 problems.append(f"{g} accepted but has no acceptance anchor (.hb/anchors/{g}.json) — hb changed cannot report its phase")
-            if (e.get("git") or {}).get("autocommit") is True:
-                tagged = shutil.which("git") and subprocess.run(
+            if g in rpf:
+                problems.append(f"{g} accepted but its restore point failed (git {rpf[g].get('step')}) — no tag certifies the accepted state")
+            elif git_ok and (e.get("git") or {}).get("autocommit") is True:
+                tagged = subprocess.run(
                     ["git", "-C", str(pd), "rev-parse", "-q", "--verify", f"refs/tags/{g}"],
                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
                 if not tagged:

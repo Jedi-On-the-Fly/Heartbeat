@@ -4,9 +4,12 @@
 # {gate, step, error} event — never swallowed. 'Nothing to commit' is not a failure;
 # HB_NO_GIT=1 / HB_GIT_AUTOCOMMIT=0 / no repo skip git quietly (the acceptance anchor is still
 # written). The acceptance event records the git policy in force as git:{autocommit:bool}.
-# `hb doctor` flags a gate accepted after anchors existed (a _start anchor is present) that has no
+# A failed add/commit SKIPS the tag (a tag on the pre-phase HEAD would make `git reset --hard <GATE>`
+# silently discard the phase's work). `hb doctor` flags a gate whose LAST acceptance is followed by a
+# restore_point_failed, and a gate accepted after anchors existed (a _start anchor is present) that has no
 # acceptance anchor, and — when its recorded policy was autocommit-on — no tag; it never flags a
-# pending gate or a project whose history predates anchors (no _start). Both runtimes; the doctor
+# pending gate or a project whose history predates anchors (no _start), and never reports a missing
+# tag when git itself is absent from PATH (tag state unknown). Both runtimes; the doctor
 # lines are identical node ≡ python. Prints RESTORE-POINTS-OK.
 # `--selftest` (1) perturbs the real observations and proves the checker rejects each, and (2) runs
 # this proof against MUTANT copies of the real code (a swallowed tag failure, a missing policy
@@ -65,13 +68,13 @@ import json, sys
 evs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
 print(json.dumps([{k: e.get(k) for k in ("event", "gate", "step", "git")} for e in evs
                   if e.get("event") in ("gate_passed", "review_passed", "restore_point_failed")]))' "$1/.hb/events.jsonl"; }
-doctor_lines() { hb "$1" "$2" doctor 2>&1 | grep -E 'no acceptance anchor|no git tag' | sed 's/^ *//' ; }
+doctor_lines() { hb "$1" "$2" doctor 2>&1 | grep -E 'no acceptance anchor|no git tag|restore point failed' | sed 's/^ *//' ; }
 
 # case <rt> <name> → one JSON observation {name, rt, stderr, events, anchor, doctor[]}
 obs_case() {
   local rt="$1" name="$2" p err="" env=()
   case "$name" in
-    tag-fail|commit-fail|nothing-to-commit|clean|review-tag-fail|doctor-*) p="$(mkproject "$rt" git "$([ "$name" = nothing-to-commit ] && echo ign)")";;
+    tag-fail|commit-fail|nothing-to-commit|clean|review-tag-fail|review-commit-fail|reaccept-tag-fail|doctor-*) p="$(mkproject "$rt" git "$([ "$name" = nothing-to-commit ] && echo ign)")";;
     no-repo) p="$(mkproject "$rt" nogit)";;
     no-git-env|autocommit-off) p="$(mkproject "$rt" git)";;
   esac
@@ -84,12 +87,23 @@ obs_case() {
   esac
   case "$name" in
     review-tag-fail) accept "$rt" "$p" G0 >/dev/null; chmod a-w "$p/.git/refs/tags"; err="$(accept "$rt" "$p" G1)";;
+    review-commit-fail) accept "$rt" "$p" G0 >/dev/null; git -C "$p" config commit.gpgsign true; git -C "$p" config gpg.program false
+      err="$(accept "$rt" "$p" G1)";;
+    reaccept-tag-fail) accept "$rt" "$p" G0 >/dev/null; printf 'more\n' >> "$p/a.txt"; git -C "$p" tag -d G0 >/dev/null 2>&1
+      chmod a-w "$p/.git/refs/tags"; err="$(hb "$rt" "$p" gate G0 2>&1 >/dev/null)";;   # the LAST acceptance's restore point fails
     *) err="$(accept "$rt" "$p" G0)";;
   esac
   local anc=false; [ -f "$p/.hb/anchors/G0.json" ] && anc=true
+  chmod u+w "$p/.git/refs/tags" 2>/dev/null || true
+  local tagged=false; git -C "$p" rev-parse -q --verify refs/tags/G0 >/dev/null 2>&1 && tagged=true
+  local tagged1=false; git -C "$p" rev-parse -q --verify refs/tags/G1 >/dev/null 2>&1 && tagged1=true
   local dl=""
   case "$name" in
-    clean) dl="$(doctor_lines "$rt" "$p")";;
+    clean|tag-fail|commit-fail|review-tag-fail|review-commit-fail|reaccept-tag-fail) dl="$(doctor_lines "$rt" "$p")";;
+    doctor-no-git-on-path) git -C "$p" tag -d G0 >/dev/null 2>&1
+      local nb="$work/nogitbin"; mkdir -p "$nb"; ln -sf "$(command -v node)" "$nb/node"; ln -sf "$(command -v python3)" "$nb/python3"
+      ln -sf "$(command -v bash)" "$nb/bash"
+      dl="$(PATH="$nb" hb "$rt" "$p" doctor 2>&1 | grep -E 'no acceptance anchor|no git tag|restore point failed|hb doctor:' | sed 's/^ *//')";;
     doctor-no-anchor) rm -f "$p/.hb/anchors/G0.json"; dl="$(doctor_lines "$rt" "$p")";;
     doctor-no-tag) git -C "$p" tag -d G0 >/dev/null 2>&1; dl="$(doctor_lines "$rt" "$p")";;
     doctor-legacy) rm -f "$p/.hb/anchors/_start.json" "$p/.hb/anchors/G0.json"; git -C "$p" tag -d G0 >/dev/null 2>&1; dl="$(doctor_lines "$rt" "$p")";;
@@ -99,16 +113,16 @@ obs_case() {
   esac
   unset HB_NO_GIT HB_GIT_AUTOCOMMIT
   chmod u+w "$p/.git/refs/tags" 2>/dev/null || true
-  python3 - "$name" "$rt" "$err" "$(events "$p")" "$anc" "$dl" <<'EOF'
+  python3 - "$name" "$rt" "$err" "$(events "$p")" "$anc" "$dl" "$tagged" "$tagged1" <<'EOF'
 import json, sys
-name, rt, err, evs, anc, dl = sys.argv[1:7]
-print(json.dumps({"name": name, "rt": rt, "stderr": err, "events": json.loads(evs), "anchor": anc == "true",
+name, rt, err, evs, anc, dl, tagged, tagged1 = sys.argv[1:9]
+print(json.dumps({"name": name, "rt": rt, "stderr": err, "events": json.loads(evs), "anchor": anc == "true", "tagged": tagged == "true", "tagged1": tagged1 == "true",
                   "doctor": [l for l in dl.splitlines() if l.strip()]}))
 EOF
   chmod -R u+w "$p" 2>/dev/null; rm -rf "$p"
 }
 
-NAMES="tag-fail commit-fail nothing-to-commit no-repo no-git-env autocommit-off review-tag-fail clean doctor-no-anchor doctor-no-tag doctor-legacy doctor-pending"
+NAMES="tag-fail commit-fail nothing-to-commit no-repo no-git-env autocommit-off review-tag-fail review-commit-fail reaccept-tag-fail clean doctor-no-anchor doctor-no-tag doctor-legacy doctor-pending doctor-no-git-on-path"
 
 CHECK='
 import json, sys
@@ -131,6 +145,14 @@ def check(all_obs):
         elif name == "commit-fail":
             if not any(e["step"] == "commit" and e["gate"] == "G0" for e in rpf): return k + ": commit failure not recorded as restore_point_failed(step=commit)"
             if "restore point" not in o["stderr"] or "commit" not in o["stderr"]: return k + ": commit failure not reported on stderr"
+            if o["tagged"]: return k + ": tagged the PRE-phase HEAD after a failed commit (git reset --hard G0 would discard the phase)"
+            if any(e["step"] == "tag" for e in rpf): return k + ": tag attempted after a failed commit"
+        elif name == "review-commit-fail":
+            if not any(e["step"] == "commit" and e["gate"] == "G1" for e in rpf): return k + ": review-pass commit failure not recorded"
+            if o["tagged1"]: return k + ": review pass tagged the PRE-phase HEAD after a failed commit"
+            if not any("G1" in l and "restore point failed" in l for l in o["doctor"]): return k + ": doctor missed the failed review-pass commit"
+        elif name == "reaccept-tag-fail":
+            if not any(e["step"] == "tag" and e["gate"] == "G0" for e in rpf): return k + ": the re-acceptance tag failure not recorded"
         elif name == "review-tag-fail":
             if not any(e["step"] == "tag" and e["gate"] == "G1" for e in rpf): return k + ": review-pass tag failure not recorded"
             if "restore point" not in o["stderr"]: return k + ": review-pass tag failure not reported on stderr"
@@ -140,7 +162,14 @@ def check(all_obs):
         d = o["doctor"]
         if name == "doctor-no-anchor" and not any("G0" in l and "no acceptance anchor" in l for l in d): return k + ": doctor missed the accepted gate without an anchor"
         if name == "doctor-no-tag" and not any("G0" in l and "no git tag" in l for l in d): return k + ": doctor missed the accepted gate without a tag"
-        if name in ("clean", "doctor-legacy", "doctor-pending", "autocommit-off") and d: return k + ": doctor flagged a healthy/legacy/pending/opted-out project: " + str(d)
+        if name in ("tag-fail", "commit-fail", "reaccept-tag-fail") and not any("G0" in l and "restore point failed" in l for l in d):
+            return k + ": doctor missed the failed restore point of the LAST acceptance: " + str(d)
+        if name == "review-tag-fail" and not any("G1" in l and "restore point failed" in l for l in d): return k + ": doctor missed the failed review-pass restore point"
+        if name == "doctor-no-git-on-path":
+            if not any("hb doctor:" in l for l in d): return k + ": doctor did not run to its verdict with git absent from PATH: " + str(d)
+            if any("no git tag" in l for l in d): return k + ": doctor claimed a missing tag with git absent from PATH"
+            d = [l for l in d if "hb doctor:" not in l]
+        if name in ("clean", "doctor-legacy", "doctor-pending", "autocommit-off", "doctor-no-git-on-path") and d: return k + ": doctor flagged a healthy/legacy/pending/opted-out project: " + str(d)
     for name in set(n for _, n in by):
         n, p = by.get(("node", name)), by.get(("py", name))
         if not n or not p: return "missing runtime for " + name
@@ -150,6 +179,7 @@ def check(all_obs):
     return None
 '
 
+NAMES="${RP_CASES:-$NAMES}"   # a mutant run (selftest) may restrict the cases it concerns
 obs_file="$work/all.json"
 { echo '['; first=1
   for rt in node py; do for nm in $NAMES; do [ $first = 1 ] || echo ','; first=0; obs_case "$rt" "$nm"; done; done
@@ -179,21 +209,38 @@ m("doctor misses anchor",    lambda: find("node", "doctor-no-anchor").__setitem_
 m("doctor flags legacy",     lambda: find("py", "doctor-legacy")["doctor"].append("G0 accepted but has no acceptance anchor"))
 m("doctor parity drift",     lambda: find("py", "doctor-no-tag").__setitem__("doctor", find("py", "doctor-no-tag")["doctor"] + ["extra"]))
 EOF
-  mutant() { # <label> <file> <old> <new>
+  # mutant <label> <file> <old> <new> <cases> <expected failure fragment>: the proof, restricted to the
+  # cases the mutation concerns (speed), must go RED — and for the EXPECTED reason (never vacuously).
+  mutant() {
     local m="$work/mut"; rm -rf "$m"; mkdir -p "$m/docs/howto" "$m/py"
     cp -r "$ROOT/plugin" "$m/"; cp -r "$ROOT/py/src" "$m/py/"; cp -r "$ROOT/docs/howto/gate-examples" "$m/docs/howto/"
     python3 -c 'import sys; p, a, b = sys.argv[1:4]; s = open(p).read(); sys.exit(1) if s.count(a) != 1 else open(p, "w").write(s.replace(a, b))' \
       "$m/$2" "$3" "$4" || fail "selftest: mutant '$1' did not apply (the code moved — update the mutant)"
-    if bash "$m/docs/howto/gate-examples/restore-points.sh" >/dev/null 2>&1; then fail "selftest: mutant '$1' still passes — not load-bearing"; fi
+    local out; if out="$(RP_CASES="$5" bash "$m/docs/howto/gate-examples/restore-points.sh" 2>&1)"; then fail "selftest: mutant '$1' still passes — not load-bearing"; fi
+    case "$out" in *"$6"*) ;; *) fail "selftest: mutant '$1' failed for the WRONG reason: $out";; esac
     echo "  mutant caught: $1"
   }
-  mutant "gate.sh tag failure swallowed" plugin/templates/gate.sh 'then restore_point_failed "$1" tag "$(echo "$err" | tail -1)"; fi' 'then :; fi'
-  mutant "gate.sh nothing-to-commit treated as a failure" plugin/templates/gate.sh '  if ! git -C "$PROJECT_DIR" diff --cached --quiet >/dev/null 2>&1; then' '  if true; then'
-  mutant "python review-pass policy field dropped" py/src/heartbeat/review_policy.py '          "git": {"autocommit": _g.git_policy(hb)}}' '          }'
+  mutant "gate.sh tag failure swallowed" plugin/templates/gate.sh 'then restore_point_failed "$1" tag "$(echo "$err" | tail -1)"; fi' 'then :; fi' \
+    tag-fail "tag failure not recorded"
+  mutant "gate.sh nothing-to-commit treated as a failure" plugin/templates/gate.sh '  if ! git -C "$PROJECT_DIR" diff --cached --quiet >/dev/null 2>&1; then' '  if true; then' \
+    nothing-to-commit "spurious restore_point_failed"
+  mutant "python review-pass policy field dropped" py/src/heartbeat/review_policy.py '          "git": {"autocommit": _g.git_policy(hb)}}' '          }' \
+    review-tag-fail "acceptance event has no git"
   mutant "python commit failure swallowed" py/src/heartbeat/gate.py '        if err:
-            failed("commit", err)' '        pass'
-  mutant "node doctor anchor check removed" plugin/templates/hb.js "      if (!readAnchor(g)) problems.push(" "      if (false) problems.push("
-  mutant "python doctor flags legacy history" py/src/heartbeat/doctor.py '    if anchors.read_anchor(hbdir, "_start") is not None:' '    if True:'
+            return failed("commit", err)' '        pass' \
+    commit-fail "commit failure not recorded"
+  mutant "node doctor anchor check removed" plugin/templates/hb.js "      if (!readAnchor(g)) problems.push(" "      if (false) problems.push(" \
+    doctor-no-anchor "doctor missed the accepted gate without an anchor"
+  mutant "node tags after a failed commit" plugin/templates/hb.js "    if (err) return failed('commit', err);" "    if (err) failed('commit', err);" \
+    review-commit-fail "review pass tagged the PRE-phase HEAD"
+  mutant "gate.sh tags after a failed commit" plugin/templates/gate.sh 'restore_point_failed "$1" commit "$(echo "$err" | tail -1)"; reproject; return 0; fi' 'restore_point_failed "$1" commit "$(echo "$err" | tail -1)"; fi' \
+    commit-fail "tagged the PRE-phase HEAD"
+  mutant "python doctor ignores a restore failure after the last acceptance" py/src/heartbeat/doctor.py '            elif ev == "restore_point_failed" and g in acc:' '            elif False:' \
+    reaccept-tag-fail "doctor missed the failed restore point of the LAST acceptance"
+  mutant "node doctor ignores git absent from PATH" plugin/templates/hb.js "      else if (gitOk && e.git && e.git.autocommit === true) {" "      else if (e.git && e.git.autocommit === true) {" \
+    doctor-no-git-on-path "doctor claimed a missing tag with git absent"
+  mutant "python doctor flags legacy history" py/src/heartbeat/doctor.py '    if anchors.read_anchor(hbdir, "_start") is not None:' '    if True:' \
+    doctor-legacy "doctor flagged a healthy/legacy"
   echo "SELFTEST-OK"; exit 0
 fi
 
@@ -201,6 +248,6 @@ python3 - "$obs_file" <<EOF || exit 1
 $CHECK
 bad = check(json.load(open(sys.argv[1])))
 if bad: print("FAIL: " + bad, file=sys.stderr); sys.exit(1)
-print("restore points: 12 cases × 2 runtimes hold")
+print("restore points: 15 cases × 2 runtimes hold")
 print("RESTORE-POINTS-OK")
 EOF

@@ -297,18 +297,22 @@ function doctor() {
   // every ACCEPTED gate (review gate: last review verdict is a pass; review-less: a gate_passed) must
   // have its acceptance anchor, and — if its recorded policy was autocommit-on — its git tag.
   if (readAnchor('_start')) {
-    const acc = {};
+    // acc: the gate's LAST acceptance event; rpf: a restore_point_failed that follows it.
+    const acc = {}, rpf = {};
     for (const e of readEvents()) {
       const rev = !!((gates[e.gate] || {}).review);
-      if (e.event === 'review_passed' && rev) acc[e.gate] = e;
-      else if (e.event === 'review_failed') delete acc[e.gate];
-      else if (e.event === 'gate_passed' && !rev && !acc[e.gate]) acc[e.gate] = e;
+      if ((e.event === 'review_passed' && rev) || (e.event === 'gate_passed' && !rev)) { acc[e.gate] = e; delete rpf[e.gate]; }
+      else if (e.event === 'review_failed') { delete acc[e.gate]; delete rpf[e.gate]; }
+      else if (e.event === 'restore_point_failed' && acc[e.gate]) rpf[e.gate] = e;
     }
+    let gitOk = true;   // git absent from PATH ⇒ tag state unknown ⇒ tag checks skipped (never a false alarm)
+    try { require('child_process').execFileSync('git', ['--version'], { stdio: 'ignore' }); } catch (x) { gitOk = false; }
     for (const g of Object.keys(gates)) {
       const e = acc[g];
       if (!e) continue;
       if (!readAnchor(g)) problems.push(`${g} accepted but has no acceptance anchor (.hb/anchors/${g}.json) — hb changed cannot report its phase`);
-      if (e.git && e.git.autocommit === true) {
+      if (rpf[g]) problems.push(`${g} accepted but its restore point failed (git ${rpf[g].step}) — no tag certifies the accepted state`);
+      else if (gitOk && e.git && e.git.autocommit === true) {
         let tagged = false;
         try { require('child_process').execFileSync('git', ['-C', PROJECT_DIR, 'rev-parse', '-q', '--verify', `refs/tags/${g}`], { stdio: 'ignore' }); tagged = true; } catch (x) {}
         if (!tagged) problems.push(`${g} accepted with autocommit on but has no git tag ${g} — no restore point`);
@@ -407,12 +411,14 @@ function gitSnapshot(gate, msg) {
     process.stderr.write(`⚠ restore point for ${gate}: git ${step} failed — ${error}\n`);
     mutate({ event: 'restore_point_failed', gate, step, error });
   };
+  // A failed add/commit returns BEFORE tagging: a tag on the pre-phase HEAD would make the
+  // documented restore (git reset --hard <GATE>) silently discard the phase's work.
   let err = run(['-C', PROJECT_DIR, 'add', '-A']);
-  if (err) failed('add', err);
+  if (err) return failed('add', err);
   // Nothing staged ⇒ nothing to commit: not a failure (the tag then marks the current HEAD).
   if (run(['-C', PROJECT_DIR, 'diff', '--cached', '--quiet']) !== null) {
     err = run(['-c', 'user.name=HeartBeat', '-c', 'user.email=heartbeat@local', '-C', PROJECT_DIR, 'commit', '-q', '--no-verify', '-m', msg]);
-    if (err) failed('commit', err);
+    if (err) return failed('commit', err);
   }
   err = run(['-C', PROJECT_DIR, 'tag', '-f', gate]);
   if (err) failed('tag', err);

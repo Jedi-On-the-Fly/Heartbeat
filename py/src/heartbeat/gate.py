@@ -258,14 +258,16 @@ def _git_snapshot(hbdir, gate_id):
         sys.stderr.write(f"⚠ restore point for {gate_id}: git {step} failed — {error}\n")
         st.mutate(hbdir, {"event": "restore_point_failed", "gate": gate_id, "step": step, "error": error})
 
+    # A failed add/commit returns BEFORE tagging: a tag on the pre-phase HEAD would make the
+    # documented restore (git reset --hard <GATE>) silently discard the phase's work.
     err = run("-C", pd, "add", "-A")
     if err:
-        failed("add", err)
+        return failed("add", err)
     if run("-C", pd, "diff", "--cached", "--quiet") is not None:   # something staged
         err = run("-c", "user.name=HeartBeat", "-c", "user.email=heartbeat@local",
                   "-C", pd, "commit", "--no-verify", "-q", "-m", msg)
         if err:
-            failed("commit", err)
+            return failed("commit", err)
     err = run("-C", pd, "tag", "-f", gate_id)
     if err:
         failed("tag", err)

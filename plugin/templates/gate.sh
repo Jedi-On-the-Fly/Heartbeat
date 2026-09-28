@@ -204,13 +204,15 @@ git_snapshot() {   # snapshot the phase on gate pass → git restore point (v1.4
   " "$DAG_FILE" "$1" 2>/dev/null)
   [ -n "$MSG" ] || MSG="heartbeat: $1 passed"
   local err
-  if ! err=$(git -C "$PROJECT_DIR" add -A 2>&1); then restore_point_failed "$1" add "$(echo "$err" | tail -1)"; fi
+  # A failed add/commit returns BEFORE tagging: a tag on the pre-phase HEAD would make the
+  # documented restore (git reset --hard <GATE>) silently discard the phase's work.
+  if ! err=$(git -C "$PROJECT_DIR" add -A 2>&1); then restore_point_failed "$1" add "$(echo "$err" | tail -1)"; reproject; return 0; fi
   # Nothing staged ⇒ nothing to commit: not a failure (the tag then marks the current HEAD).
   if ! git -C "$PROJECT_DIR" diff --cached --quiet >/dev/null 2>&1; then
     # --no-verify: internal snapshots bypass the rot pre-commit hook (avoids a
     # pre-existing rot blocking this gate's own snapshot → loop deadlock).
     if ! err=$(git -c user.name='HeartBeat' -c user.email='heartbeat@local' \
-        -C "$PROJECT_DIR" commit -q --no-verify -m "$MSG" 2>&1); then restore_point_failed "$1" commit "$(echo "$err" | tail -1)"; fi
+        -C "$PROJECT_DIR" commit -q --no-verify -m "$MSG" 2>&1); then restore_point_failed "$1" commit "$(echo "$err" | tail -1)"; reproject; return 0; fi
   fi
   if ! err=$(git -C "$PROJECT_DIR" tag -f "$1" 2>&1); then restore_point_failed "$1" tag "$(echo "$err" | tail -1)"; fi
   reproject
