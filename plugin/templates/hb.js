@@ -601,7 +601,9 @@ const ANSWER_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp
 // NO platform normalisation (NFKC tables differ between the node and python Unicode versions — a
 // refuter catch): full-width ASCII is folded by explicit arithmetic, and STYLED letters (mathematical,
 // enclosed, letterlike, legacy-computing blocks — fixed ranges) are refused outright (ANSWER_STYLED).
-const ANSWER_STYLED = /[\u2100-\u214f\u2460-\u24ff\u{1cc00}-\u{1cebf}\u{1d400}-\u{1d7ff}\u{1f100}-\u{1f1ff}]/u;
+// (™ U+2122, ℹ U+2139, circled/parenthesized NUMBERS U+2460–249B and regional-indicator flags U+1F1E6–1F1FF
+// are ordinary report symbols and stay allowed; Roman-numeral letter forms U+2160–2188 are refused)
+const ANSWER_STYLED = /[\u2100-\u2121\u2123-\u2138\u213a-\u214f\u2160-\u2188\u249c-\u24ff\u{1cc00}-\u{1cebf}\u{1d400}-\u{1d7ff}\u{1f100}-\u{1f1e5}]/u;
 function foldWidth(t) { return t.replace(/[\uff01-\uff5e]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, ' '); }
 function answerText(body, commentMode) {
   let t = foldWidth(String(body));
@@ -629,11 +631,15 @@ function checkAnswers(body, required) {
   const req = new Set(required), seen = {}, errors = [], counts = { violated: 0, not_reproduced: 0, na: 0 };
   const FMT = require('./refuter_profiles.js').ANSWER_FORMAT;
   // 0. styled letters are refused outright (no version-dependent folding)
-  if (ANSWER_STYLED.test(String(body))) errors.push('the artifact uses styled letters (mathematical, enclosed, letterlike or legacy-computing symbols) — write plain text');
+  // checked on the raw text AND after entity decoding (&#x1D415; is a styled letter too)
+  if (ANSWER_STYLED.test(String(body)) || ANSWER_STYLED.test(answerText(body, 'keep'))) errors.push('the artifact uses styled letters (mathematical, enclosed, letterlike or legacy-computing symbols) — write plain text');
   // 1. the word, anywhere: with comment text kept AND with comments removed (a word split by one rejoins)
   let wordLines = 0;
   for (const mode of ['keep', 'drop'])
     for (const line of answerText(body, mode).split(ANSWER_BREAKS)) if (squashLetters(line.replace(ANSWER_CTRL, '')).includes('violated')) wordLines++;
+  // an unclosed comment hides everything after it when rendered — say so (instead of "no answer line")
+  if (/<!--(?![\s\S]*-->)/.test(String(body).replace(/`[^`\n]*`/g, m => m.replace(/<!--/g, '<!- -').replace(/-->/g, '- ->'))))
+    errors.push('the artifact has an unclosed <!-- — everything after it is hidden when rendered: close the comment or remove it');
   // 2. the answers, from the visible text
   let looseId = 0;
   for (const raw of answerText(body, 'drop').split(ANSWER_BREAKS)) {

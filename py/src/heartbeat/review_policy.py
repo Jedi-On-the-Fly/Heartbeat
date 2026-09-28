@@ -172,7 +172,8 @@ _ANSWER_ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'", 
 
 # NO platform normalisation (== node; unicodedata / ICU versions differ): explicit full-width fold, and
 # STYLED letters (fixed ranges) refused outright.
-_ANSWER_STYLED = re.compile("[\u2100-\u214f\u2460-\u24ff\U0001cc00-\U0001cebf\U0001d400-\U0001d7ff\U0001f100-\U0001f1ff]")
+# (™, ℹ, circled/parenthesized numbers and flags stay allowed; Roman-numeral letter forms refused — == node)
+_ANSWER_STYLED = re.compile("[\u2100-\u2121\u2123-\u2138\u213a-\u214f\u2160-\u2188\u249c-\u24ff\U0001cc00-\U0001cebf\U0001d400-\U0001d7ff\U0001f100-\U0001f1e5]")
 
 
 def _fold_width(t):
@@ -212,10 +213,15 @@ def check_answers(body, required):
     from .refuter_profiles import ANSWER_FORMAT
     req, seen, errors = set(required), {}, []
     counts = {"violated": 0, "not_reproduced": 0, "na": 0}
-    if _ANSWER_STYLED.search(str(body)):
+    # checked on the raw text AND after entity decoding (== node)
+    if _ANSWER_STYLED.search(str(body)) or _ANSWER_STYLED.search(_answer_text(body, "keep")):
         errors.append("the artifact uses styled letters (mathematical, enclosed, letterlike or legacy-computing symbols) — write plain text")
     word_lines = sum(1 for mode in ("keep", "drop") for line in _ANSWER_BREAKS.split(_answer_text(body, mode))
                      if "violated" in _squash_letters(_ANSWER_CTRL.sub("", line)))
+    # an unclosed comment hides everything after it when rendered — say so (== node)
+    neutral = re.sub(r"`[^`\n]*`", lambda m: m.group(0).replace("<!--", "<!- -").replace("-->", "- ->"), str(body))
+    if re.search(r"<!--(?![\s\S]*-->)", neutral):
+        errors.append("the artifact has an unclosed <!-- — everything after it is hidden when rendered: close the comment or remove it")
     loose_id = 0
     for raw in _ANSWER_BREAKS.split(_answer_text(body, "drop")):
         l = re.sub(r"[*`_]", "", _ANSWER_CTRL.sub("", raw)).strip(" \t")

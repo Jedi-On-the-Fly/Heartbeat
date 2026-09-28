@@ -198,5 +198,17 @@
 [
 "armenian_o",
 "Constraint P1 is VIօLATED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"entity_styled_word",
+"Constraint P1 is &#x1D415;&#x1D408;&#x1D40E;&#x1D40B;&#x1D400;&#x1D413;&#x1D404;&#x1D403;\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"roman_numeral_i",
+"Constraint P1 is VⅠOLATED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"bare_comment_hides",
+"Notes <!-- draft\nP1: NOT-REPRODUCED — probe ran"
 ]
 ]
