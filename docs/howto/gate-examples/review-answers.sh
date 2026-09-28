@@ -144,6 +144,9 @@ EXPECT = {
 def check(obs):
     by = {o["rt"]: o for o in obs}
     for rt, o in by.items():
+        fx = o.get("fixtures") or {}
+        if fx.get("edges"): return rt + ": fixtures: hostile answer sets ACCEPTED: " + ",".join(fx["edges"])
+        if fx.get("legit"): return rt + ": fixtures: honest answer sets REFUSED: " + ",".join(fx["legit"])
         for name, (rc, frag) in EXPECT.items():
             got = o["v"].get(name)
             if got is None: return rt + ": case " + name + " did not run"
@@ -165,8 +168,29 @@ def check(obs):
     return None
 '
 
+# the parser itself on the pinned hostile / honest fixtures (both runtimes): every hostile set refused,
+# every honest layout accepted
+fixtures() {
+  local FX="$ROOT/tests/fixtures/review-answers"
+  node -e 'const h=require(process.argv[1]);const fs=require("fs");const r={};for(const k of ["edges","legit"]){const cs=JSON.parse(fs.readFileSync(process.argv[2]+"/"+k+".json","utf8"));r[k]=cs.filter(([n,b])=>(k==="edges")===(h.checkAnswers(b,["P1"]).errors.length===0)).map(([n])=>n);}console.log(JSON.stringify(r))' "$ROOT/plugin/templates/hb.js" "$FX" > "$work/fx.node"
+  python3 -c 'import json,sys;from heartbeat.review_policy import check_answers;r={}
+for k in ("edges","legit"):
+    cs=json.load(open(sys.argv[1]+"/"+k+".json",encoding="utf-8"));r[k]=[n for n,b in cs if (k=="edges")==(not check_answers(b,["P1"])[0])]
+print(json.dumps(r))' "$FX" > "$work/fx.py"
+}
+fixtures
+
 obs_file="$work/obs.json"
 { echo '['; scenario node; echo ','; scenario py; echo ']'; } > "$obs_file"
+python3 - "$obs_file" "$work/fx.node" "$work/fx.py" <<'EOF'
+import json, sys
+o = json.load(open(sys.argv[1]))
+for rt, f in (("node", sys.argv[2]), ("py", sys.argv[3])):
+    try: fx = json.load(open(f))
+    except Exception: fx = {"edges": ["UNREADABLE"], "legit": ["UNREADABLE"]}
+    next(x for x in o if x["rt"] == rt)["fixtures"] = fx
+json.dump(o, open(sys.argv[1], "w"))
+EOF
 [ -n "${HB_PROOF_DUMP:-}" ] && cp "$obs_file" "$HB_PROOF_DUMP"
 
 if [ "${1:-}" = "--selftest" ]; then
@@ -192,30 +216,39 @@ EOF
   mutant() { # <label> <file> <old> <new> <expected failure fragment>
     local m="$work/mut"; rm -rf "$m"; mkdir -p "$m/docs/howto" "$m/py"
     cp -r "$ROOT/plugin" "$m/"; cp -r "$ROOT/py/src" "$m/py/"; cp -r "$ROOT/docs/howto/gate-examples" "$m/docs/howto/"
+    mkdir -p "$m/tests/fixtures"; cp -r "$ROOT/tests/fixtures/review-answers" "$m/tests/fixtures/"
     python3 -c 'import sys; p, a, b = sys.argv[1:4]; s = open(p).read(); sys.exit(1) if s.count(a) != 1 else open(p, "w").write(s.replace(a, b))' \
       "$m/$2" "$3" "$4" || fail "selftest: mutant '$1' did not apply (the code moved — update the mutant)"
     local out; if out="$(bash "$m/docs/howto/gate-examples/review-answers.sh" 2>&1)"; then fail "selftest: mutant '$1' still passes — not load-bearing"; fi
-    case "$out" in *"$5"*) ;; *) fail "selftest: mutant '$1' failed for the WRONG reason: $out";; esac
+    local frag hit=0; IFS='|' read -ra frags <<< "$5"   # alternatives: any listed reason is the expected one
+    for frag in "${frags[@]}"; do case "$out" in *"$frag"*) hit=1;; esac; done
+    [ "$hit" = 1 ] || fail "selftest: mutant '$1' failed for the WRONG reason: $out"
     echo "  mutant caught: $1"
   }
   mutant "node accepts a VIOLATED answer" plugin/templates/hb.js "    if (st === 'VIOLATED') { counts.violated++; errors.push(" "    if (st === 'VIOLATED') { counts.violated++; if (0) errors.push(" \
-    "node: violated-md"
-  mutant "python ignores markdown decoration" py/src/heartbeat/review_policy.py '        l = re.sub(r"[*`_]", "", _ANSWER_INVISIBLE.sub("", _ANSWER_CTRL.sub("", _ANSWER_ANSI.sub("", raw)))).strip(" \t")' '        l = raw.strip()' \
-    "py: violated-md"
+    "node: violated-md|node: fixtures"
+  mutant "python ignores markdown decoration" py/src/heartbeat/review_policy.py '        l = re.sub(r"[*`_]", "", _ANSWER_CTRL.sub("", raw)).strip(" \t")' '        l = raw.strip()' \
+    "py: violated-md|py: fixtures"
   mutant "node free review not required" plugin/templates/hb.js "      if (prof && prof.free_review) {" "      if (false) {" \
-    "node: free-missing"
+    "node: free-missing|node: fixtures"
   mutant "python counts an old-cycle free review" py/src/heartbeat/review_policy.py '            ok = any(i > start and e.get("event") == "free_review_recorded"' '            ok = any(e.get("event") == "free_review_recorded"' \
-    "py: free-old"
+    "py: free-old|py: fixtures"
   mutant "node free reviewer may be the pass reviewer" plugin/templates/hb.js "                                              norm(e.actor || '') !== norm(reviewer));" "                                              true);" \
-    "node: free-same"
+    "node: free-same|node: fixtures"
   mutant "python accepts a missing id" py/src/heartbeat/review_policy.py '            errors.append(f"{cid} has no answer line ({ANSWER_FORMAT})")' '            pass' \
-    "py: missing-id"
+    "py: missing-id|py: fixtures"
   mutant "node doctor skips the answers re-check" plugin/templates/hb.js "      if (!Array.isArray(e.constraint_ids)) continue;" "      continue;" \
-    "node: doctor missed an edited review artifact"
+    "node: doctor missed an edited review artifact|node: fixtures"
+  mutant "python word check dropped" py/src/heartbeat/review_policy.py '    if word_lines and not counts["violated"]:' '    if False:' \
+    "py: fixtures: hostile answer sets ACCEPTED|py: fixtures"
+  mutant "node reads comments out of the word check" plugin/templates/hb.js "  for (const line of answerText(body, true).split(ANSWER_BREAKS))" "  for (const line of answerText(body, false).split(ANSWER_BREAKS))" \
+    "node: fixtures: hostile answer sets ACCEPTED|node: fixtures"
+  mutant "python reads comments out of the word check" py/src/heartbeat/review_policy.py '    word_lines = sum(1 for line in _ANSWER_BREAKS.split(_answer_text(body, True))' '    word_lines = sum(1 for line in _ANSWER_BREAKS.split(_answer_text(body, False))' \
+    "py: fixtures: hostile answer sets ACCEPTED|py: fixtures"
   mutant "python pass without a recorded set" py/src/heartbeat/review_policy.py '        if not recorded:
             return 1, "", (f"review pass refused on {gate}: no gate-time' '        if False:
             return 1, "", (f"review pass refused on {gate}: no gate-time' \
-    "py: no-record"
+    "py: no-record|py: fixtures"
   echo "SELFTEST-OK"; exit 0
 fi
 

@@ -582,39 +582,55 @@ function reviewCycle(dag, gate) {
 //   <ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>
 // Markdown-insensitive (list bullets, quotes, headings, *, _, ` are ignored) and case-insensitive on the
 // status. Prose that merely mentions an id is not an answer. Twin: review_policy.check_answers.
-// EXPLICIT rules, identical in both runtimes (JS and python primitives disagree on line breaks, trim
-// sets and Unicode case folding — refuter catches). Each line: split on ANY line break; terminal escape
-// sequences, control characters and invisible characters removed; markdown emphasis removed; list
-// markers (-, *, +, >, #, "1.", "2)") removed; matched on an ASCII-only lowercased copy (no regex case
-// folding). The rule is by CONTENT, not by shape: a line that says "violated" is refused unless it is a
-// well-formed non-VIOLATED answer, and a line naming a constraint id with a status must be well-formed —
-// so a violation can never sit in the artifact, in any layout, next to a clean answer.
+// EXPLICIT rules, identical in both runtimes (refuter catches, three rounds). Two layers:
+// 1. THE WORD. The whole artifact is normalised — NFKC; HTML entities decoded; <br> is a line break;
+//    tags and comment MARKERS removed (comment text kept); escape/control/invisible characters removed;
+//    Cyrillic/Greek look-alikes folded (ANSWER_CONFUSABLES) — and any line whose letters, squashed
+//    together, contain "violated" refuses the pass, evidence included. The word is reserved for
+//    VIOLATED answers, so no layout, spelling or markup can put a violation next to a clean answer.
+// 2. THE ANSWERS, parsed strictly from the VISIBLE text (comments removed): one line per id,
+//    `<ID>: NOT-REPRODUCED | N/A — <evidence or reason>` (ASCII-only lowercased copy — no regex case
+//    folding); an answer-shaped line with a malformed status, or a line naming an id with a status that is
+//    not well-formed, is refused.
 const ANSWER_BREAKS = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/;
 const ANSWER_INVISIBLE = /[​-‏⁠-⁤﻿­᠎͏؜]/g;
 const ANSWER_ANSI = /\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b[@-_]/g;
 const ANSWER_CTRL = /[\x00-\x08\x0b-\x1f\x7f]/g;
+const ANSWER_CONFUSABLES = {"\u0410": "a", "\u0412": "b", "\u0415": "e", "\u041a": "k", "\u041c": "m", "\u041d": "h", "\u041e": "o", "\u0420": "p", "\u0421": "c", "\u0422": "t", "\u0425": "x", "\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0440": "p", "\u0441": "c", "\u0443": "y", "\u0445": "x", "\u0456": "i", "\u0458": "j", "\u0455": "s", "\u0501": "d", "\u0406": "i", "\u0408": "j", "\u0405": "s", "\u04cf": "l", "\u0500": "d", "\u04ae": "y", "\u04af": "y", "\u04c0": "l", "\u051b": "q", "\u051d": "w", "\u0391": "a", "\u0392": "b", "\u0395": "e", "\u0396": "z", "\u0397": "h", "\u0399": "i", "\u039a": "k", "\u039c": "m", "\u039d": "n", "\u039f": "o", "\u03a1": "p", "\u03a4": "t", "\u03a5": "y", "\u03a7": "x", "\u03bf": "o", "\u03bd": "v", "\u03b9": "i", "\u03b1": "a", "\u03ba": "k", "\u03c1": "p", "\u03c4": "t", "\u03c5": "u", "\u0131": "i", "\u017f": "s", "\u2113": "l", "\u01c0": "l", "\u0251": "a", "\u0261": "g", "\u1d20": "v", "\u1d05": "d", "\u1d07": "e", "\u1d1b": "t", "\u1d0f": "o"};
+const ANSWER_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+function answerText(body, keepComments) {
+  let t = String(body).normalize('NFKC');
+  t = t.replace(/&#([0-9]{1,7});|&#[xX]([0-9a-fA-F]{1,6});|&([a-zA-Z]+);/g, (m, d, h, n) => {
+    const cp = d ? parseInt(d, 10) : h ? parseInt(h, 16) : null;
+    if (cp !== null) return cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : '';
+    return Object.prototype.hasOwnProperty.call(ANSWER_ENTITIES, n.toLowerCase()) ? ANSWER_ENTITIES[n.toLowerCase()] : m;
+  });
+  t = t.replace(/<br[ \t]*\/?>/gi, '\n');
+  t = keepComments ? t.replace(/<!--|-->/g, ' ') : t.replace(/<!--[\s\S]*?-->/g, '');
+  t = t.replace(/<\/?[a-zA-Z][^<>]*>/g, '');
+  return t.replace(ANSWER_ANSI, '').replace(ANSWER_INVISIBLE, '').normalize('NFKC');
+}
+function squashLetters(s) {
+  let o = '';
+  for (const c of s) { const f = ANSWER_CONFUSABLES[c] || c; if (/^[A-Za-z]$/.test(f)) o += f.toLowerCase(); }
+  return o;
+}
 function checkAnswers(body, required) {
   const req = new Set(required), seen = {}, errors = [], counts = { violated: 0, not_reproduced: 0, na: 0 };
   const FMT = require('./refuter_profiles.js').ANSWER_FORMAT;
-  let loose = 0, looseId = 0, inComment = false;
-  for (const raw of String(body).split(ANSWER_BREAKS)) {
-    // an HTML comment is invisible when rendered: an answer inside one is refused (a violation inside
-    // one is refused by the content rule below, like anywhere else)
-    const commented = inComment || raw.includes('<!--');
-    if (raw.includes('<!--')) inComment = !/<!--[\s\S]*-->/.test(raw.slice(raw.lastIndexOf('<!--')));
-    else if (inComment && raw.includes('-->')) inComment = false;
-    const l = raw.replace(ANSWER_ANSI, '').replace(ANSWER_CTRL, '').replace(ANSWER_INVISIBLE, '').replace(/[*`_]/g, '')
-      .replace(/^[ \t]+|[ \t]+$/g, '').replace(/^(?:[\t >+#-]+|[0-9]+[.)][ \t]+)+/, '');
+  // 1. the word, anywhere (comment text included)
+  let wordLines = 0;
+  for (const line of answerText(body, true).split(ANSWER_BREAKS)) if (squashLetters(line.replace(ANSWER_CTRL, '')).includes('violated')) wordLines++;
+  // 2. the answers, from the visible text
+  let looseId = 0;
+  for (const raw of answerText(body, false).split(ANSWER_BREAKS)) {
+    const l = raw.replace(ANSWER_CTRL, '').replace(/[*`_]/g, '').replace(/^[ \t]+|[ \t]+$/g, '').replace(/^(?:[\t >+#-]+|[0-9]+[.)][ \t]+)+/, '');
     const lo = l.replace(/[A-Z]/g, c => c.toLowerCase());   // ASCII-only: no regex case folding
     const m = /^([pg][0-9]+)[ \t]*[:：][ \t]*(violated|not-reproduced|not reproduced|n\/a)(?=$|[ \t—–:,.;])(.*)$/.exec(lo);
     const head = /^([pg][0-9]+)[ \t]*[:：]/.exec(lo);
-    if (head && (!m || commented)) {   // shaped like an answer but malformed (or hidden in a comment): refused
-      errors.push(`${head[1].toUpperCase()} has an answer-shaped line that is not a visible, well-formed answer (${FMT})`);
-      continue;
-    }
+    if (head && !m) { errors.push(`${head[1].toUpperCase()} has an answer-shaped line that is not a well-formed answer (${FMT})`); continue; }
     if (!m) {
-      if (/(^|[^a-z0-9])violated([^a-z0-9]|$)/.test(lo)) loose++;
-      else if (/(^|[^a-z0-9])[pg][0-9]+([^0-9]|$)/.test(lo) && /(not[- ]?reproduced|n\/a)/.test(lo)) looseId++;
+      if (/(^|[^a-z0-9])[pg][0-9]+([^0-9]|$)/.test(lo) && /(not[- ]?reproduced|n\/a)/.test(lo)) looseId++;
       continue;
     }
     const id = m[1].toUpperCase(), st = m[2].toUpperCase().replace(' ', '-');
@@ -627,7 +643,7 @@ function checkAnswers(body, required) {
     else if (st === 'N/A') counts.na++;
     else counts.not_reproduced++;
   }
-  if (loose) errors.push(`the artifact says VIOLATED outside a well-formed answer line (${loose} line(s)) — a violation is a finding: record it with hb review <gate> fail "<finding>"; otherwise answer each id exactly (${FMT})`);
+  if (wordLines && !counts.violated) errors.push(`the artifact uses the word "violated" outside a VIOLATED answer (${wordLines} line(s)) — the word is reserved: if a constraint is violated, record the finding with hb review <gate> fail "<finding>"; otherwise say what held instead`);
   if (looseId) errors.push(`a line names a constraint id with a status but is not a well-formed answer (${looseId} line(s)) — answer each id exactly (${FMT})`);
   for (const id of required) if (!seen[id]) errors.push(`${id} has no answer line (${FMT})`);
   return { errors, counts };

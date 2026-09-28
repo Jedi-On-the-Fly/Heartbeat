@@ -157,15 +157,43 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
                f"cites: {', '.join(cited[:3])})"), ""
 
 
-# EXPLICIT rules, identical to hb.js checkAnswers (see there): every line break, escape sequences /
-# control / invisible characters removed, list markers removed, ASCII-only case folding, and a rule by
-# CONTENT — a line saying "violated" outside a well-formed non-VIOLATED answer is refused, and a line
-# naming a constraint id with a status must be well-formed.
+# EXPLICIT rules, identical to hb.js checkAnswers (see there): 1. THE WORD — the whole artifact
+# normalised (NFKC, entities, <br>, tags and comment markers, escape/control/invisible characters,
+# confusables) and any line whose squashed letters contain "violated" refuses the pass, evidence
+# included; 2. THE ANSWERS parsed strictly from the visible text.
 _ANSWER_BREAKS = re.compile(r"\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]")
 _ANSWER_INVISIBLE = re.compile(r"[​-‏⁠-⁤﻿­᠎͏؜]")
 _ANSWER_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-_]")
 _ANSWER_CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 _ANSWER_TEXT = re.compile(r"[^ \t   -   　⠀ㅤﾠᅟᅠ]")
+_ANSWER_CONFUSABLES = {"\u0410": "a", "\u0412": "b", "\u0415": "e", "\u041a": "k", "\u041c": "m", "\u041d": "h", "\u041e": "o", "\u0420": "p", "\u0421": "c", "\u0422": "t", "\u0425": "x", "\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0440": "p", "\u0441": "c", "\u0443": "y", "\u0445": "x", "\u0456": "i", "\u0458": "j", "\u0455": "s", "\u0501": "d", "\u0406": "i", "\u0408": "j", "\u0405": "s", "\u04cf": "l", "\u0500": "d", "\u04ae": "y", "\u04af": "y", "\u04c0": "l", "\u051b": "q", "\u051d": "w", "\u0391": "a", "\u0392": "b", "\u0395": "e", "\u0396": "z", "\u0397": "h", "\u0399": "i", "\u039a": "k", "\u039c": "m", "\u039d": "n", "\u039f": "o", "\u03a1": "p", "\u03a4": "t", "\u03a5": "y", "\u03a7": "x", "\u03bf": "o", "\u03bd": "v", "\u03b9": "i", "\u03b1": "a", "\u03ba": "k", "\u03c1": "p", "\u03c4": "t", "\u03c5": "u", "\u0131": "i", "\u017f": "s", "\u2113": "l", "\u01c0": "l", "\u0251": "a", "\u0261": "g", "\u1d20": "v", "\u1d05": "d", "\u1d07": "e", "\u1d1b": "t", "\u1d0f": "o"}
+_ANSWER_ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'", "nbsp": " "}
+
+
+def _answer_text(body, keep_comments):
+    import unicodedata
+    t = unicodedata.normalize("NFKC", str(body))
+
+    def ent(m):
+        d, h, n = m.group(1), m.group(2), m.group(3)
+        if d or h:
+            cp = int(d, 10) if d else int(h, 16)
+            return chr(cp) if cp <= 0x10FFFF and not (0xD800 <= cp <= 0xDFFF) else ""
+        return _ANSWER_ENTITIES.get(n.lower(), m.group(0))
+    t = re.sub(r"&#([0-9]{1,7});|&#[xX]([0-9a-fA-F]{1,6});|&([a-zA-Z]+);", ent, t)
+    t = re.sub(r"<br[ \t]*/?>", "\n", t, flags=re.I)
+    t = re.sub(r"<!--|-->", " ", t) if keep_comments else re.sub(r"<!--.*?-->", "", t, flags=re.S)
+    t = re.sub(r"</?[a-zA-Z][^<>]*>", "", t)
+    return unicodedata.normalize("NFKC", _ANSWER_INVISIBLE.sub("", _ANSWER_ANSI.sub("", t)))
+
+
+def _squash_letters(s):
+    out = []
+    for c in s:
+        f = _ANSWER_CONFUSABLES.get(c, c)
+        if len(f) == 1 and ("a" <= f <= "z" or "A" <= f <= "Z"):
+            out.append(f.lower())
+    return "".join(out)
 
 
 def check_answers(body, required):
@@ -174,27 +202,20 @@ def check_answers(body, required):
     from .refuter_profiles import ANSWER_FORMAT
     req, seen, errors = set(required), {}, []
     counts = {"violated": 0, "not_reproduced": 0, "na": 0}
-    loose = loose_id = 0
-    in_comment = False
-    for raw in _ANSWER_BREAKS.split(str(body)):
-        # an HTML comment is invisible when rendered: an answer inside one is refused (== node)
-        commented = in_comment or "<!--" in raw
-        if "<!--" in raw:
-            in_comment = not re.search(r"<!--.*-->", raw[raw.rindex("<!--"):], re.S)
-        elif in_comment and "-->" in raw:
-            in_comment = False
-        l = re.sub(r"[*`_]", "", _ANSWER_INVISIBLE.sub("", _ANSWER_CTRL.sub("", _ANSWER_ANSI.sub("", raw)))).strip(" \t")
+    word_lines = sum(1 for line in _ANSWER_BREAKS.split(_answer_text(body, True))
+                     if "violated" in _squash_letters(_ANSWER_CTRL.sub("", line)))
+    loose_id = 0
+    for raw in _ANSWER_BREAKS.split(_answer_text(body, False)):
+        l = re.sub(r"[*`_]", "", _ANSWER_CTRL.sub("", raw)).strip(" \t")
         l = re.sub(r"^(?:[\t >+#-]+|[0-9]+[.)][ \t]+)+", "", l)
         lo = "".join(c.lower() if "A" <= c <= "Z" else c for c in l)   # ASCII-only: no regex case folding
         m = re.match(r"^([pg][0-9]+)[ \t]*[:：][ \t]*(violated|not-reproduced|not reproduced|n/a)(?=$|[ \t—–:,.;])(.*)$", lo)
         head = re.match(r"^([pg][0-9]+)[ \t]*[:：]", lo)
-        if head and (not m or commented):   # shaped like an answer but malformed (or hidden in a comment)
-            errors.append(f"{head.group(1).upper()} has an answer-shaped line that is not a visible, well-formed answer ({ANSWER_FORMAT})")
+        if head and not m:
+            errors.append(f"{head.group(1).upper()} has an answer-shaped line that is not a well-formed answer ({ANSWER_FORMAT})")
             continue
         if not m:
-            if re.search(r"(^|[^a-z0-9])violated([^a-z0-9]|$)", lo):
-                loose += 1
-            elif re.search(r"(^|[^a-z0-9])[pg][0-9]+([^0-9]|$)", lo) and re.search(r"(not[- ]?reproduced|n/a)", lo):
+            if re.search(r"(^|[^a-z0-9])[pg][0-9]+([^0-9]|$)", lo) and re.search(r"(not[- ]?reproduced|n/a)", lo):
                 loose_id += 1
             continue
         cid, stt = m.group(1).upper(), m.group(2).upper().replace(" ", "-", 1)
@@ -215,9 +236,9 @@ def check_answers(body, required):
             counts["na"] += 1
         else:
             counts["not_reproduced"] += 1
-    if loose:
-        errors.append(f'the artifact says VIOLATED outside a well-formed answer line ({loose} line(s)) — a violation is a finding: '
-                      f'record it with hb review <gate> fail "<finding>"; otherwise answer each id exactly ({ANSWER_FORMAT})')
+    if word_lines and not counts["violated"]:
+        errors.append(f'the artifact uses the word "violated" outside a VIOLATED answer ({word_lines} line(s)) — the word is reserved: '
+                      f'if a constraint is violated, record the finding with hb review <gate> fail "<finding>"; otherwise say what held instead')
     if loose_id:
         errors.append(f"a line names a constraint id with a status but is not a well-formed answer ({loose_id} line(s)) — "
                       f"answer each id exactly ({ANSWER_FORMAT})")

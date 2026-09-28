@@ -296,7 +296,8 @@ def compose_prompt(hbdir, dag, gate, free=False):
     parts.append("\n".join(lines))
     parts.append("Answer format — one line per id, exactly:\n  " + ANSWER_FORMAT + "\n"
                  "VIOLATED = you reproduced the violation (cite the command and its output); NOT-REPRODUCED = you tried "
-                 "and could not (cite the probe you ran); N/A = the constraint does not apply to this phase (say why).")
+                 "and could not (cite the probe you ran); N/A = the constraint does not apply to this phase (say why). "
+                 "The word \"violated\" is reserved for a VIOLATED answer — anywhere else, say what held instead.")
     parts.append("## Triage rule\n" + TRIAGE_RULE + ": if you find a real, exploitable defect outside the constraints, "
                  "report it and end with REFUTED.")
     return "\n\n".join(parts)

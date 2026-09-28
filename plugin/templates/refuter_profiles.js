@@ -267,7 +267,8 @@ function composePrompt(hbdir, dag, gate, opts) {
   parts.push(lines.join("\n"));
   parts.push("Answer format — one line per id, exactly:\n  " + ANSWER_FORMAT + "\n" +
     "VIOLATED = you reproduced the violation (cite the command and its output); NOT-REPRODUCED = you tried and could not " +
-    "(cite the probe you ran); N/A = the constraint does not apply to this phase (say why).");
+    "(cite the probe you ran); N/A = the constraint does not apply to this phase (say why). The word \"violated\" is reserved " +
+    "for a VIOLATED answer — anywhere else, say what held instead.");
   parts.push("## Triage rule\n" + TRIAGE_RULE + ": if you find a real, exploitable defect outside the constraints, report it and end with REFUTED.");
   return parts.join("\n\n");
 }

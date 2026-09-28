@@ -24,10 +24,6 @@
 "P1: N/A reason here"
 ],
 [
-"nbsp_lead",
-" P1: N/A — reason"
-],
-[
 "cyrillic_P",
 "Р1: VIOLATED — x\nP1: N/A — reason"
 ],
@@ -126,5 +122,53 @@
 [
 "prose_status",
 "P1 was not reproduced in my tests\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"word_in_evidence",
+"P1: NOT-REPRODUCED — the limit is never violated by the probe"
+],
+[
+"same_line",
+"P1: NOT-REPRODUCED — probe; P1: VIOLATED — a.txt shows 1"
+],
+[
+"br_split",
+"P1: NOT-REPRODUCED — probe<br>P1: VIOLATED — a.txt shows 1"
+],
+[
+"entity",
+"Constraint P1 is VIOL&#65;TED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"hex_entity",
+"Constraint P1 is VIOL&#x41;TED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"cyrillic_o",
+"Constraint P1 is VIОLATED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"fullwidth_word",
+"Constraint P1 is ＶＩＯＬＡＴＥＤ\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"tag_split",
+"Constraint P1 is VIO<b></b>LATED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"comment_split",
+"Constraint P1 is VIO<!-- -->LATED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"spaced",
+"Constraint P1 is V I O L A T E D\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"inside_comment",
+"<!--\nP1: VIOLATED — x\n-->\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"prose_nothing_violated",
+"Summary: nothing was violated.\nP1: NOT-REPRODUCED — probe ran"
 ]
 ]
