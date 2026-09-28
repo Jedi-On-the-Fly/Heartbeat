@@ -34,6 +34,8 @@ function renderSkill(name, description, profile) {
   if (profile.model) lines.push("model: " + profile.model);
   if (profile.provider) lines.push("provider: " + profile.provider);
   if (profile.author_model) lines.push("author_model: " + profile.author_model);
+  if (profile.free_review === true) lines.push("free_review: true");
+  if (profile.free_model) lines.push("free_model: " + profile.free_model);
   const v = profile.verdict || {};
   if (v.panel) {
     lines.push("panel: " + String(v.panel));
@@ -86,7 +88,19 @@ function normalize(d) {
     provider: d.provider !== undefined ? d.provider : null,
     verdict: d.verdict !== undefined ? d.verdict : null,
     author_model: d.author_model !== undefined ? d.author_model : null,
+    free_review: toBool(d.free_review),
+    free_model: d.free_model !== undefined ? d.free_model : null,
   };
+}
+
+// free_review coercion — ONE rule in both runtimes (python twin: _to_bool). A SKILL-format value is a
+// plain string, so 'false' must not read as truthy: true/'true'/'yes'/'1'/'on' (any case, trimmed) and
+// non-zero numbers are true; everything else (absent, null, 'false', 'no', '0', 'off', '') is false.
+function toBool(v) {
+  if (v === true || v === false) return v;
+  if (typeof v === 'number') return v !== 0;
+  if (typeof v === 'string') return ['true', 'yes', '1', 'on'].includes(v.trim().toLowerCase());
+  return false;
 }
 
 // Ordered profile directories — first match wins; project profiles SHADOW shipped ones. RL inserts
@@ -145,7 +159,9 @@ function parseSkill(text) {
   }
   return { persona, questions, model: fm.model === undefined ? null : fm.model,
            provider: fm.provider === undefined ? null : fm.provider, verdict,
-           author_model: fm.author_model === undefined ? null : fm.author_model };
+           author_model: fm.author_model === undefined ? null : fm.author_model,
+           free_review: fm.free_review === undefined ? false : fm.free_review,
+           free_model: fm.free_model === undefined ? null : fm.free_model };
 }
 
 function loadFromDirs(hbdir, name) {
@@ -219,7 +235,54 @@ function gateProfile(hbdir, review) {
   return resolve(hbdir, name || null);
 }
 
-function composePrompt(hbdir, dag, gate) {
+function composePrompt(hbdir, dag, gate, opts) {
+  const base = composeBase(hbdir, dag, gate);
+  const free = !!(opts && opts.free);
+  const cs = (((((dag || {}).gates) || {})[gate] || {}).review || {}).constraints;
+  const constrained = Array.isArray(cs) && cs.length > 0;
+  if (!constrained) {
+    if (free) throw new Error(gate + " has no plan-time constraints — the free review is part of the constraint-first review of a constrained gate");
+    return base;   // an unconstrained gate: byte-identical to the pre-constraint compose
+  }
+  // Constraint-first review context (the change list; the gate-time set of THIS review cycle).
+  const hbjs = require('./hb.js');
+  const parts = [base, changeBlock(hbjs, gate)];
+  if (free) {
+    parts.push("## Free review\nYou are the FREE reviewer: there is deliberately no constraint list. Look in breadth for anything " +
+      "that makes this phase wrong or unsafe — including outside what the plan names. " + TRIAGE_RULE + ".");
+    return parts.join("\n\n");
+  }
+  const all = cs.slice().sort(byId).concat(hbjs.recordedConstraints(gate).slice().sort(byId));
+  const lines = ["## Constraints to answer — every id, one line each"];
+  for (const c of all) {
+    lines.push("  - " + c.id + ": " + c.claim);
+    lines.push("      subjects: " + (c.subjects || []).join(", "));
+    lines.push("      violated if: " + c.violation);
+  }
+  parts.push(lines.join("\n"));
+  parts.push("Answer format — one line per id, exactly:\n  " + ANSWER_FORMAT + "\n" +
+    "VIOLATED = you reproduced the violation (cite the command and its output); NOT-REPRODUCED = you tried and could not " +
+    "(cite the probe you ran); N/A = the constraint does not apply to this phase (say why).");
+  parts.push("## Triage rule\n" + TRIAGE_RULE + ": if you find a real, exploitable defect outside the constraints, report it and end with REFUTED.");
+  return parts.join("\n\n");
+}
+const ANSWER_FORMAT = "<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>";
+const TRIAGE_RULE = "An exploitable side finding means REFUTED, whatever the scope";
+// Stable order within a kind: by the number after the letter (P2 before P10).
+const byId = (a, b) => parseInt(String(a.id).slice(1), 10) - parseInt(String(b.id).slice(1), 10);
+function changeBlock(hbjs, gate) {
+  let ch = null, why = null;
+  try { ch = hbjs.changed(gate); } catch (e) { why = e.message; }
+  const L = [ch ? "## What this phase changed (" + ch.base + " → " + ch.target + ")" : "## What this phase changed"];
+  if (!ch) L.push("  (unavailable: " + why + ")");
+  else {
+    for (const [k, t] of [["A", ch.added], ["M", ch.modified], ["D", ch.deleted]]) for (const p of t) L.push("  " + k + " " + hbjs.safePath(p));
+    if (!ch.added.length && !ch.modified.length && !ch.deleted.length) L.push("  (no changes)");
+  }
+  return L.join("\n");
+}
+// The pre-constraint compose (profile persona + base questions + extras + review.prompt).
+function composeBase(hbdir, dag, gate) {
   const g = (((dag || {}).gates) || {})[gate] || {};
   const review = g.review || {};
   const prompt = review.prompt || ("Refute that " + gate + " is truly complete.");
@@ -235,4 +298,4 @@ function composePrompt(hbdir, dag, gate) {
   return parts.join("\n\n");
 }
 
-module.exports = { resolve, composePrompt, gateProfile, aggregateVerdict, parseSkill, renderSkill, scaffold, DEFAULT_PERSONA, searchDirs, normalize };
+module.exports = { resolve, composePrompt, gateProfile, toBool, ANSWER_FORMAT, TRIAGE_RULE, aggregateVerdict, parseSkill, renderSkill, scaffold, DEFAULT_PERSONA, searchDirs, normalize };

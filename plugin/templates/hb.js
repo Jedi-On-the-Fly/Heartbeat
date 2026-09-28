@@ -564,6 +564,21 @@ function reviewCycle(dag, gate) {
 function safePath(p) { return /[\x00-\x1f\x7f]/.test(p) ? JSON.stringify(p) : p; }
 // A gate id used as a file name must stay inside .hb/constraints/.
 const SAFE_GATE_ID = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
+// The gate-time set recorded in THIS review cycle (empty when none). Refuses a set whose bytes no
+// longer match its constraints_recorded event (fail closed: the review's targets were altered).
+function recordedConstraints(gate) {
+  const dag = readDag();
+  const cyc = reviewCycle(dag, gate);
+  if (!cyc.recorded) return [];
+  let ev = null;
+  for (const e of cyc.events) if (e.event === 'constraints_recorded' && e.gate === gate) ev = e;
+  let raw;
+  try { raw = fs.readFileSync(path.join(HB_DIR, 'constraints', `${gate}.json`)); }
+  catch (e) { throw new Error(`the recorded constraints of ${gate} are missing (.hb/constraints/${gate}.json)`); }
+  if (require('crypto').createHash('sha256').update(raw).digest('hex') !== ev.sha256)
+    throw new Error(`the recorded constraints of ${gate} changed since recording (sha256 mismatch) — refusing to compose against altered targets`);
+  return JSON.parse(raw.toString('utf8'));
+}
 function composeAuthorPrompt(dag, gate) {
   const ph = (dag.phases || []).find(p => p.gate_exit === gate) || { id: '?', tasks: [] };
   const gv = (dag.gates || {})[gate] || {};
@@ -605,6 +620,10 @@ function composeAuthorPrompt(dag, gate) {
   L.push(`  hb constraints ${gate} --record <file.json>`);
   return L.join('\n');
 }
+
+// Exported BEFORE the CLI dispatch: refuter_profiles.js requires this module while hb.js is running
+// as the CLI (a circular require sees only what is already assigned).
+module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath };
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 // v1.7: guard the dispatch so hb.js is safely requirable (the tick requires it to
@@ -934,11 +953,12 @@ switch (cmd) {
     // that silently emitted a bogus text prompt with exit 0; caught by GATE_RE1's refuter).
     const rpArgs = [arg1, ...rest].filter(Boolean);
     const rpJson = rpArgs.includes('--json');
-    const rpGate = rpArgs.find(a => a !== '--json');
-    if (!rpGate) die('usage: hb refute-prompt <gate> [--json]');
+    const rpFree = rpArgs.includes('--free');
+    const rpGate = rpArgs.find(a => a !== '--json' && a !== '--free');
+    if (!rpGate) die('usage: hb refute-prompt <gate> [--json] [--free]');
     const { composePrompt, gateProfile } = require('./refuter_profiles.js');
     let out;
-    try { out = composePrompt(HB_DIR, readDag(), rpGate); }
+    try { out = composePrompt(HB_DIR, readDag(), rpGate, { free: rpFree }); }
     catch (e) { die('refute-prompt: ' + e.message); }
     if (rpJson) {
       let prof = null;
@@ -953,6 +973,9 @@ switch (cmd) {
         provider: (prof && prof.provider) ?? null,
         panel: v.panel ?? null,
         refute_if: v.refute_if ?? null,
+        author_model: (prof && prof.author_model) ?? null,
+        free_review: !!(prof && prof.free_review),
+        free_model: (prof && prof.free_model) ?? null,
       }) + '\n');
     } else {
       process.stdout.write(out + '\n');
@@ -1009,4 +1032,3 @@ switch (cmd) {
 }
 }
 
-module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock };
