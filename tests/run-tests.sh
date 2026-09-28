@@ -1793,6 +1793,12 @@ check "T166.2 teeth: perturbing the real observations (dropped untracked file, l
 check "T166.3 unconstrained refute-prompt text/--json and review verdicts are byte-identical to the pre-1.32 golden fixtures (golden-unconstrained.sh → GOLDEN-UNCONSTRAINED-OK)" \
   'bash "'"$HB_SRC"'/tests/golden-unconstrained.sh" 2>&1 | grep -q "GOLDEN-UNCONSTRAINED-OK"'
 
+grp "T167 — loud restore points: a failed commit/tag at gate acceptance is reported + recorded (restore_point_failed), the git policy rides the acceptance event, doctor flags accepted gates missing their anchor/tag"
+check "T167.1 tag/commit failures (review-less + review pass) reported on stderr and recorded; nothing-to-commit / no repo / HB_NO_GIT / autocommit-off stay quiet; git:{autocommit} recorded; doctor flags a missing anchor/tag, never legacy or pending gates; node ≡ python (restore-points.sh → RESTORE-POINTS-OK)" \
+  'bash "'"$GEX"'/restore-points.sh" 2>&1 | grep -q "RESTORE-POINTS-OK"'
+check "T167.2 teeth: perturbed observations AND mutated copies of the real code (swallowed failures, dropped policy field, doctor checks removed / over-broad) all go RED (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/restore-points.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done
