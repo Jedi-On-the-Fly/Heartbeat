@@ -80,6 +80,6 @@ def refute(payload):
                   "You are a skeptical adversarial reviewer. End with exactly one token: REFUTED or CLEAR.")
         out = model.invoke(prompt)
         text = getattr(out, "content", str(out))
-        return {"refuted": verdict_refuted(str(text)), "findings": str(text)[:500]}
+        return {"refuted": verdict_refuted(str(text)), "findings": str(text)[:20000]}
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

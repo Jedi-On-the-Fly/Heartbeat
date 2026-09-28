@@ -2,7 +2,7 @@
 """HeartBeat executor backend: Ollama (local models, https://ollama.com).
 
 Wire protocol (shared by every HeartBeat backend):
-    driver -> backend:  argv[1] = "execute" | "refute" ; stdin = payload JSON
+    driver -> backend:  argv[1] = "execute" | "refute" | "author" ; stdin = payload JSON
     backend -> driver:  ONE JSON object on stdout
         execute -> {"ok": bool,      "summary":  str}
         refute  -> {"refuted": bool, "findings": str}
@@ -22,10 +22,17 @@ there is nothing to pip-install; degrades to protocol-valid JSON if the server i
 Config: HB_EXEC_MODEL / OLLAMA_MODEL (default qwen2.5:7b-instruct),
         OLLAMA_HOST (default http://localhost:11434).
 """
+import re
 import sys, os, json, urllib.request, urllib.error
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _fileblocks import write_blocks
 
+
+try:
+    from _fileblocks import author_reply
+except Exception:
+    def author_reply(text):
+        return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
     import re as _r
@@ -56,6 +63,17 @@ def generate(prompt, timeout=180):
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "execute"
+    # Constraint-first review: `author` runs the refute path on the author prompt, then converts the
+    # reply to {"ok", "constraints"} (fail-closed). Any other unknown mode is REFUSED — it must never
+    # fall through to execute (which writes files).
+    global emit
+    if mode not in ("execute", "refute", "author"):
+        emit({"error": f"unsupported mode {mode!r} (execute | refute | author)"})
+        return
+    if mode == "author":
+        _emit_raw = emit
+        emit = lambda obj: _emit_raw(author_reply((obj or {}).get("findings", "") if isinstance(obj, dict) else ""))  # noqa: E731
+        mode = "refute"
     try:
         payload = json.load(sys.stdin)
     except Exception:
@@ -70,7 +88,7 @@ def main():
                   'short reason, then END with exactly one token: REFUTED (you found a hole) or CLEAR.')
         try:
             out = generate(prompt)
-            emit({"refuted": _verdict(out), "findings": out[:500]})
+            emit({"refuted": _verdict(out), "findings": out[:20000]})
         except (urllib.error.URLError, OSError) as e:
             emit({"refuted": False, "findings": f"ollama unreachable ({e})"})
         return

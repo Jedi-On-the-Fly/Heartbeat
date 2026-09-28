@@ -845,7 +845,7 @@ grp "T57 — portability / conformance / diagnose howto proofs (docs/howto)"
 if command -v python3 >/dev/null 2>&1; then
   check "T57.1 the same DAG completes under different backends; coupling detected" \
     'bash "'"$GEX"'/portability-selftest.sh" 2>&1 | grep -q "PORTABILITY-OK"'
-  check "T57.2 every shipped adapter conforms; non-conformant backends rejected" \
+  check "T57.2 every shipped adapter (python + shell) conforms in execute/refute/author and refuses unknown modes; non-conformant backends rejected" \
     'bash "'"$GEX"'/backend-conformance.sh" 2>&1 | grep -q "BACKEND-CONFORMANCE-OK"'
   check "T57.3 diagnose names the specific cause of a blocked project" \
     'bash "'"$GEX"'/diagnose-accuracy.sh" 2>&1 | grep -q "DIAGNOSE-ACCURACY-OK"'
@@ -1822,6 +1822,12 @@ check "T171.1 18 verdicts (missing / prose-only / duplicate / unknown / VIOLATED
   'bash "'"$GEX"'/review-answers.sh" 2>&1 | grep -q "REVIEW-ANSWERS-OK"'
 check "T171.2 teeth: perturbed observations and eight reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/review-answers.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
+grp "T172 — hb exec runs the constraint-first review unattended: author → record → constrained refute (each panelist checked) → free → enforced pass; per-role models; refusals recorded, never a crash; node ≡ python"
+check "T172.1 6 scenarios × 2 executors: happy / VIOLATED / malformed author / default model / panel / unconstrained (exec-constrained-review.sh → EXEC-CONSTRAINED-REVIEW-OK)" \
+  'bash "'"$GEX"'/exec-constrained-review.sh" 2>&1 | grep -q "EXEC-CONSTRAINED-REVIEW-OK"'
+check "T172.2 teeth: perturbed observations and seven reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/exec-constrained-review.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).

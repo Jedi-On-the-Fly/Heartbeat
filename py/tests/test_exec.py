@@ -191,3 +191,25 @@ def test_context_hook_absent_by_default(tmp_path, monkeypatch):
     monkeypatch.delenv("HB_EXEC_CONTEXT_CMD", raising=False)
     ctx = executor.assemble_context(hb, {"id": "P0T1", "phase": "P0", "title": "t"})
     assert "<<HB-CONTEXT>>" not in ctx                      # byte-unchanged when unconfigured
+
+
+def test_inprocess_author_mode_and_unknown_mode(monkeypatch, tmp_path):
+    from heartbeat import executor, backends
+    from heartbeat.backends._fileblocks import author_reply
+
+    class Fake:
+        @staticmethod
+        def refute(p):
+            return {"refuted": False, "findings": 'here:\n```json\n[{"id":"G1","claim":"c","subjects":["a"],"violation":"v"}]\n```'}
+
+        @staticmethod
+        def execute(p):
+            raise AssertionError("an unknown mode must never fall through to execute")
+
+    monkeypatch.setattr(backends, "get", lambda name: Fake)
+    cfg = {"backend": "ollama", "cmd": None, "heartbeat_s": 60}
+    (tmp_path / ".hb").mkdir()
+    r = executor.dispatch(cfg, "author", {"prompt": "x"}, str(tmp_path / ".hb"), None)
+    assert r == {"ok": True, "constraints": [{"id": "G1", "claim": "c", "subjects": ["a"], "violation": "v"}]}
+    assert "error" in executor.dispatch(cfg, "bogus", {}, str(tmp_path / ".hb"), None)
+    assert author_reply("no list here")["ok"] is False

@@ -35,3 +35,24 @@ def write_blocks(text, cwd=None):
             f.write("\n".join(parts))
         written.append(os.path.relpath(dest, cwd))
     return written
+
+
+def author_reply(text):
+    """The constraint author's reply → {"ok": true, "constraints": [...]} from the FIRST JSON array of
+    objects in the model's text (a ```json fence first, else first '[' .. last ']'); anything else →
+    {"ok": false, "error": ...} so the driver escalates (fail-closed). Twin of the node extractor in
+    the shell adapters."""
+    import json as _json
+    text = text or ""
+    cands = re.findall(r"```(?:json)?\s*(\[.*?\])\s*```", text, re.S)
+    i, j = text.find("["), text.rfind("]")
+    if i != -1 and j > i:
+        cands.append(text[i:j + 1])
+    for c in cands:
+        try:
+            v = _json.loads(c)
+        except ValueError:
+            continue
+        if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+            return {"ok": True, "constraints": v}
+    return {"ok": False, "error": "no JSON array of constraints in the author's reply: " + text[:200]}

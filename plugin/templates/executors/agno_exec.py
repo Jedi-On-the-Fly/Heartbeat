@@ -2,7 +2,7 @@
 """HeartBeat executor backend: Agno (https://github.com/agno-agi/agno).
 
 Wire protocol (shared by every HeartBeat backend):
-    driver -> backend:  argv[1] = "execute" | "refute" ; stdin = payload JSON
+    driver -> backend:  argv[1] = "execute" | "refute" | "author" ; stdin = payload JSON
     backend -> driver:  ONE JSON object on stdout
         execute -> {"ok": bool,      "summary":  str}
         refute  -> {"refuted": bool, "findings": str}
@@ -16,8 +16,15 @@ tools (agno.tools.file.FileTools) so it writes into the current directory itself
 Provider: HB_EXEC_PROVIDER = anthropic (default) | ollama.
 Model:    HB_EXEC_MODEL (default: claude-sonnet-4-6, or qwen2.5:7b-instruct for ollama).
 """
+import re
 import sys, os, json
 
+
+try:
+    from _fileblocks import author_reply
+except Exception:
+    def author_reply(text):
+        return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
     import re as _r
@@ -50,6 +57,17 @@ def make_model(provider, model_id):
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "execute"
+    # Constraint-first review: `author` runs the refute path on the author prompt, then converts the
+    # reply to {"ok", "constraints"} (fail-closed). Any other unknown mode is REFUSED — it must never
+    # fall through to execute (which writes files).
+    global emit
+    if mode not in ("execute", "refute", "author"):
+        emit({"error": f"unsupported mode {mode!r} (execute | refute | author)"})
+        return
+    if mode == "author":
+        _emit_raw = emit
+        emit = lambda obj: _emit_raw(author_reply((obj or {}).get("findings", "") if isinstance(obj, dict) else ""))  # noqa: E731
+        mode = "refute"
     try:
         payload = json.load(sys.stdin)
     except Exception:
@@ -75,7 +93,7 @@ def main():
         try:
             r = reviewer.run(prompt)
             text = getattr(r, "content", str(r))
-            emit({"refuted": _verdict(text), "findings": text[:500]})
+            emit({"refuted": _verdict(text), "findings": text[:20000]})
         except Exception as e:
             emit({"refuted": False, "findings": f"reviewer error: {e}"})
         return

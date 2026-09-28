@@ -147,7 +147,14 @@ def dispatch(cfg, mode, payload, hbdir, task_id, cwd=None, model=None, provider=
             mod = backends.get(cfg["backend"])
             p = dict(payload)
             p["cwd"] = cwd
-            return mod.execute(p) if mode == "execute" else mod.refute(p)
+            if mode == "execute":
+                return mod.execute(p)
+            if mode == "refute":
+                return mod.refute(p)
+            if mode == "author":   # the gate-time constraint author: the backend's review call, reply → JSON array
+                from .backends._fileblocks import author_reply
+                return author_reply((mod.refute(p) or {}).get("findings", ""))
+            return {"error": f"unsupported mode {mode!r} (execute | refute | author)"}   # never falls through to execute
     finally:
         for k, old in saved.items():
             if old is None:

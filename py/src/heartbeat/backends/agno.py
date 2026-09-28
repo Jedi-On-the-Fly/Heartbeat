@@ -44,6 +44,6 @@ def refute(payload):
     try:
         r = agent.run(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd with REFUTED or CLEAR.')
         text = getattr(r, "content", str(r))
-        return {"refuted": verdict_refuted(text), "findings": text[:500]}
+        return {"refuted": verdict_refuted(text), "findings": text[:20000]}
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

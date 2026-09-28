@@ -55,6 +55,6 @@ def refute(payload):
     try:
         r = subprocess.run(_cmd(prompt, cwd), cwd=cwd, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=600)
-        return {"refuted": verdict_refuted(r.stdout), "findings": r.stdout[:500]}
+        return {"refuted": verdict_refuted(r.stdout), "findings": r.stdout[:20000]}
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

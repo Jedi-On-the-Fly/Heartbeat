@@ -59,4 +59,4 @@ def refute(payload):
                     f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}')
     except Exception as e:
         return {"error": f"autogen unavailable ({e})"}
-    return {"refuted": verdict_refuted(str(text)), "findings": str(text)[:500]}
+    return {"refuted": verdict_refuted(str(text)), "findings": str(text)[:20000]}

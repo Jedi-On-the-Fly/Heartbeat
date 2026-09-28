@@ -33,7 +33,7 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 | `report.py` | `build(hbdir)`, `render(hbdir)`, `refuter_impact(events, dag)` | JSON shape differs from node (progress-only parity); the refuter-impact summary (catches/clears per gate + `review.profile` lens, from the event log) is a node≡python shared surface (T152) |
 | `scaffold.py` | `init(project_dir, force)` | `hb init`; `DEFAULT_DAG`, `DEFAULT_EXECUTOR` |
 | `protocol.py` | `PROTOCOL`, `render_md()` | reason keys = plugin; action text cites `hb` console |
-| `executor.py` | `run(hbdir)`, `config(hbdir)`, `dispatch(...)`, `assemble_context`, in-process + subprocess dispatch, worktree parallel | pluggable Stage B |
+| `executor.py` | `run(hbdir)`, `config(hbdir)`, `dispatch(...)`, `assemble_context`, `_constrained_review`, in-process + subprocess dispatch, worktree parallel | pluggable Stage B; a CONSTRAINED gate runs the constraint-first pipeline (twin of `constrainedReview`, T172); in-process dispatch handles `execute` / `refute` / `author` (the backend's review call → `_fileblocks.author_reply`) and refuses any other mode |
 | `backends/` | in-process backend registry | see below |
 | `adapters/code/` | `deplint`, `codegraph_map` (+ `resolve_task_symbols`), `codegraph_context`, `codegraph_discover`, `deplint_accept`, `codegraph_exclude_hb`, `codegraph_coverage` | domain adapter — a parity surface with `plugin/adapters/code/*.js` (node ≡ python; T94/T98/T100/T106). `python3 -m heartbeat.adapters.code.deplint …` |
 | `adapters/docs/` | `docs_map`, `docs_context` (`js_trim`) | docs domain adapter — parity with `plugin/adapters/docs/*.js` (T95). Node-free; usable as a `context_cmd` with zero Node (T96) |

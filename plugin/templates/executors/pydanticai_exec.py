@@ -2,8 +2,15 @@
 """HeartBeat executor backend: pydantic-ai.
 Wire: argv[1]=execute|refute ; stdin=payload JSON ; stdout=ONE JSON line.
 Provider HB_EXEC_PROVIDER=openai|ollama. save_file tool + FILE-block fallback."""
+import re
 import sys, os, json
 
+
+try:
+    from _fileblocks import author_reply
+except Exception:
+    def author_reply(text):
+        return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
     import re as _r
@@ -62,12 +69,23 @@ def do_refute(payload):
         return {"refuted": False, "findings": f"pydantic-ai unavailable ({e})"}
     try:
         text = _text(agent.run_sync(f'{payload.get("prompt","Refute.")}\n\nContext:\n{ctx}'))
-        return {"refuted": _verdict(text), "findings": text[:500]}
+        return {"refuted": _verdict(text), "findings": text[:20000]}
     except Exception as e:
         return {"refuted": False, "findings": f"reviewer error: {e}"}
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "execute"
+    # Constraint-first review: `author` runs the refute path on the author prompt, then converts the
+    # reply to {"ok", "constraints"} (fail-closed). Any other unknown mode is REFUSED — it must never
+    # fall through to execute (which writes files).
+    global emit
+    if mode not in ("execute", "refute", "author"):
+        emit({"error": f"unsupported mode {mode!r} (execute | refute | author)"})
+        return
+    if mode == "author":
+        _emit_raw = emit
+        emit = lambda obj: _emit_raw(author_reply((obj or {}).get("findings", "") if isinstance(obj, dict) else ""))  # noqa: E731
+        mode = "refute"
     try: payload = json.load(sys.stdin)
     except Exception: payload = {}
     emit(do_refute(payload) if mode == "refute" else do_execute(payload))

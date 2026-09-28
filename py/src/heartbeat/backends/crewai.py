@@ -48,6 +48,6 @@ def refute(payload):
                 agent=rev, expected_output="REFUTED or CLEAR.")
     try:
         out = str(Crew(agents=[rev], tasks=[task], verbose=False).kickoff())
-        return {"refuted": verdict_refuted(out), "findings": out[:500]}
+        return {"refuted": verdict_refuted(out), "findings": out[:20000]}
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

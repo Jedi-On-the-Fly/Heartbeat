@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """HeartBeat executor backend: LangGraph.
 
-Wire protocol: argv[1] = execute|refute ; stdin = payload JSON ; stdout = ONE JSON line
+Wire protocol: argv[1] = execute|refute|author ; stdin = payload JSON ; stdout = ONE JSON line
     execute -> {"ok": bool, "summary": str}   refute -> {"refuted": bool, "findings": str}
 
 One task == one LangGraph ReAct agent run with a save_file tool; refute is a skeptical
 model call. Provider HB_EXEC_PROVIDER = anthropic (default) | ollama | openai. Any
 ===FILE=== blocks are honored as a fallback. Degrades if langgraph/langchain is absent.
 """
+import re
 import sys, os, json
 
+
+try:
+    from _fileblocks import author_reply
+except Exception:
+    def author_reply(text):
+        return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
     import re as _r
@@ -98,13 +105,24 @@ def do_refute(payload):
         out = model.invoke(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\n'
                            "You are a skeptical adversarial reviewer. End with REFUTED or CLEAR.")
         text = getattr(out, "content", str(out))
-        return {"refuted": _verdict(str(text)), "findings": str(text)[:500]}
+        return {"refuted": _verdict(str(text)), "findings": str(text)[:20000]}
     except Exception as e:
         return {"refuted": False, "findings": f"reviewer error: {e}"}
 
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "execute"
+    # Constraint-first review: `author` runs the refute path on the author prompt, then converts the
+    # reply to {"ok", "constraints"} (fail-closed). Any other unknown mode is REFUSED — it must never
+    # fall through to execute (which writes files).
+    global emit
+    if mode not in ("execute", "refute", "author"):
+        emit({"error": f"unsupported mode {mode!r} (execute | refute | author)"})
+        return
+    if mode == "author":
+        _emit_raw = emit
+        emit = lambda obj: _emit_raw(author_reply((obj or {}).get("findings", "") if isinstance(obj, dict) else ""))  # noqa: E731
+        mode = "refute"
     try:
         payload = json.load(sys.stdin)
     except Exception:
