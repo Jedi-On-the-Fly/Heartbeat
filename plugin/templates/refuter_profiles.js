@@ -112,21 +112,24 @@ function searchDirs(hbdir) {
 
 // Parse an agent-SKILL-format refuter (frontmatter + persona body + `## Checklist`) into a raw profile
 // dict. Python twin: parse_skill. SHARED minimal line-parser (NOT YAML) so node ≡ python.
+// ONE whitespace rule for the SKILL format in both runtimes: ASCII only (" \t\n\r\f\v"). JS trim() and
+// python strip() disagree on \ufeff / \x1c-\x1f / \x85, which split parsed values (and free_review).
+const aTrim = (s) => String(s).replace(/^[ \t\n\r\f\v]+|[ \t\n\r\f\v]+$/g, '');
 function parseSkill(text) {
   let lines = text.split("\n");
   if (lines.length && lines[0][0] === "﻿") lines[0] = lines[0].slice(1);
   lines = lines.map(l => l.endsWith("\r") ? l.slice(0, -1) : l);
   const fm = {};
   let bodyStart = 0;
-  if (lines.length && lines[0].trim() === "---") {
+  if (lines.length && aTrim(lines[0]) === "---") {
     let close = null;
-    for (let i = 1; i < lines.length; i++) if (lines[i].trim() === "---") { close = i; break; }
+    for (let i = 1; i < lines.length; i++) if (aTrim(lines[i]) === "---") { close = i; break; }
     if (close !== null) {
       for (const l of lines.slice(1, close)) {
-        if (l.trim() === "" || !l.includes(":")) continue;
+        if (aTrim(l) === "" || !l.includes(":")) continue;
         const ci = l.indexOf(":");
-        const k = l.slice(0, ci).trim().toLowerCase();
-        let v = l.slice(ci + 1).trim();
+        const k = aTrim(l.slice(0, ci)).toLowerCase();
+        let v = aTrim(l.slice(ci + 1));
         if (v.length >= 2 && v[0] === v[v.length - 1] && (v[0] === '"' || v[0] === "'")) v = v.slice(1, -1);
         fm[k] = v;
       }
@@ -135,15 +138,15 @@ function parseSkill(text) {
   }
   const bl = lines.slice(bodyStart);
   let idx = null;
-  for (let i = 0; i < bl.length; i++) if (bl[i].trim().toLowerCase() === "## checklist") { idx = i; break; }
+  for (let i = 0; i < bl.length; i++) if (aTrim(bl[i]).toLowerCase() === "## checklist") { idx = i; break; }
   let persona, questions = [];
-  if (idx === null) { persona = bl.join("\n").trim(); }
+  if (idx === null) { persona = aTrim(bl.join("\n")); }
   else {
-    persona = bl.slice(0, idx).join("\n").trim();
+    persona = aTrim(bl.slice(0, idx).join("\n"));
     for (const l of bl.slice(idx + 1)) {
-      const ls = l.trim();
+      const ls = aTrim(l);
       if (ls.startsWith("## ")) break;
-      if (ls[0] === "-" || ls[0] === "*") questions.push(ls.slice(1).trim());
+      if (ls[0] === "-" || ls[0] === "*") questions.push(aTrim(ls.slice(1)));
     }
   }
   let verdict = null;

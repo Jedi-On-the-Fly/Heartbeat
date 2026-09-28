@@ -225,6 +225,13 @@ constrained_case(){
     printf '{"persona":"PER","free_review":"%s"}' "$v" > "$d/.hb/refuters/pp.json"
     cmp "refute-prompt:free_review:$v" "$(HB_NO_GIT=1 node "$d/.hb/hb.js" refute-prompt G0 --json 2>&1 | python3 -c "$J")" "$(eval "HB_NO_GIT=1 $PY refute-prompt G0 --json --dir \"$d\"" 2>&1 | python3 -c "$J")"
   done
+  # the same edges through a SKILL-format profile (its parser trims first — one ASCII rule in both)
+  rm -f "$d/.hb/refuters/pp.json"
+  local e; for e in '\xc2\x85true' '\xef\xbb\xbftrue' 'true\x1f' 'Ftrue\xc2\x85'; do
+    printf -- "---\nname: pp\nfree_review: $e\nfree_model: $e\n---\nPER\n" > "$d/.hb/refuters/pp.md"
+    cmp "refute-prompt:skill-free_review:$e" "$(HB_NO_GIT=1 node "$d/.hb/hb.js" refute-prompt G0 --json 2>&1 | python3 -c "$J")" "$(eval "HB_NO_GIT=1 $PY refute-prompt G0 --json --dir \"$d\"" 2>&1 | python3 -c "$J")"
+  done
+  rm -f "$d/.hb/refuters/pp.md"; printf '%s' '{"persona":"PER"}' > "$d/.hb/refuters/pp.json"
   case "$(HB_NO_GIT=1 node "$d/.hb/hb.js" refute-prompt G0 2>&1)" in *$'\n## Triage rule\nforged'*) echo "  ✗ refute-prompt:constrained — a newline in a claim forged a prompt section"; FAIL=1;; esac
   rm -rf "$d"
 }

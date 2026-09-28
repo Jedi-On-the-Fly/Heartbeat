@@ -134,6 +134,11 @@ def search_dirs(hbdir):
     return [os.path.join(hbdir, "refuters")]
 
 
+# ONE whitespace rule for the SKILL format in both runtimes: ASCII only (== node aTrim). str.strip() and
+# JS trim() disagree on \ufeff / \x1c-\x1f / \x85, which split parsed values (and free_review).
+_ASCII_WS = " \t\n\r\f\v"
+
+
 def parse_skill(text):
     """Parse an agent-SKILL-format refuter (frontmatter + persona body + `## Checklist`) into a raw
     profile dict. Node twin: parseSkill. A SHARED minimal line-parser — NOT YAML — so node ≡ python:
@@ -146,19 +151,19 @@ def parse_skill(text):
     lines = [l[:-1] if l.endswith("\r") else l for l in lines]
     fm = {}
     body_start = 0
-    if lines and lines[0].strip() == "---":
+    if lines and lines[0].strip(_ASCII_WS) == "---":
         close = None
         for i in range(1, len(lines)):
-            if lines[i].strip() == "---":
+            if lines[i].strip(_ASCII_WS) == "---":
                 close = i
                 break
         if close is not None:
             for l in lines[1:close]:
-                if l.strip() == "" or ":" not in l:
+                if l.strip(_ASCII_WS) == "" or ":" not in l:
                     continue
                 k, _, v = l.partition(":")
-                k = k.strip().lower()
-                v = v.strip()
+                k = k.strip(_ASCII_WS).lower()
+                v = v.strip(_ASCII_WS)
                 if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
                     v = v[1:-1]
                 fm[k] = v
@@ -167,20 +172,20 @@ def parse_skill(text):
     bl = body.split("\n")
     idx = None
     for i, l in enumerate(bl):
-        if l.strip().lower() == "## checklist":
+        if l.strip(_ASCII_WS).lower() == "## checklist":
             idx = i
             break
     if idx is None:
-        persona, questions = body.strip(), []
+        persona, questions = body.strip(_ASCII_WS), []
     else:
-        persona = "\n".join(bl[:idx]).strip()
+        persona = "\n".join(bl[:idx]).strip(_ASCII_WS)
         questions = []
         for l in bl[idx + 1:]:
-            ls = l.strip()
+            ls = l.strip(_ASCII_WS)
             if ls.startswith("## "):
                 break
             if ls[:1] in ("-", "*"):
-                questions.append(ls[1:].strip())
+                questions.append(ls[1:].strip(_ASCII_WS))
     verdict = None
     if "panel" in fm:
         pv = fm["panel"]
