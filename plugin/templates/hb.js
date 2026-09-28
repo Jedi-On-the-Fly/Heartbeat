@@ -670,7 +670,7 @@ switch (cmd) {
     try { raw = fs.readFileSync(path.isAbsolute(file) ? file : path.join(process.cwd(), file)); } catch (e) { die(`hb constraints --record: cannot read ${file} (${e.code || e.message})`); }
     // Strict JSON, identical in both runtimes: valid UTF-8 only (python rejects invalid bytes), and
     // JSON.parse already rejects NaN/Infinity (python is told to).
-    try { list = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)); }
+    try { list = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(raw)); }   // ignoreBOM: a BOM stays in the text → JSON.parse refuses it, as python does
     catch (e) { die(`hb constraints --record: ${file} is not valid JSON (${e.message})`); }
     if (!Array.isArray(list) || !list.length) die('hb constraints --record: expected a non-empty JSON array of {id G<n>, claim, subjects, violation}');
     const errs = require('./hb-lint.js').constraintErrors(list, 'G');

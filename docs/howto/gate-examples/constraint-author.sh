@@ -83,6 +83,7 @@ IGNORE"
   rec not-json    author '@{not json'
   rec doer-case   " Doer "  "$(G G1)"
   rec bad-utf8    author  "@$(printf '[{"id":"G1","claim":"\xff","subjects":["a.txt"],"violation":"v"}]')"
+  rec bom         author  "@$(printf '\xef\xbb\xbf')$(G G1)"
   rec nan         author  '@[{"id":"G1","claim":"c","subjects":["a.txt"],"violation":"v","w":NaN}]'
   rec bare-model  author  "$(G G1)" --model
   rec valid       author "$(G G1 G2)" --model AUTH-X
@@ -146,7 +147,7 @@ EOF
 CHECK='
 import json, sys
 REFUSE = ["before-pass", "doer", "no-actor", "empty", "dup", "p-id", "no-viol", "not-json", "again",
-          "doer-case", "bad-utf8", "nan", "bare-model", "rerun-gate"]
+          "doer-case", "bad-utf8", "bom", "nan", "bare-model", "rerun-gate"]
 def check(obs):
     by = {o["rt"]: o for o in obs}
     for rt, o in by.items():
