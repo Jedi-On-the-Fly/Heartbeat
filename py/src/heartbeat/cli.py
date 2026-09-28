@@ -52,6 +52,7 @@ def main(argv=None):
     p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail"]); p.add_argument("note", nargs="?"); p.add_argument("--artifact"); p.add_argument("--model"); _add_dir(p)
     p = sub.add_parser("evidence"); p.add_argument("gate"); _add_dir(p)
     p = sub.add_parser("changed"); p.add_argument("gate"); p.add_argument("--json", action="store_true"); _add_dir(p)
+    p = sub.add_parser("constraints"); p.add_argument("gate"); p.add_argument("--prompt", action="store_true"); p.add_argument("--json", action="store_true"); p.add_argument("--record"); p.add_argument("--model"); _add_dir(p)
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
     p = sub.add_parser("refuters"); p.add_argument("rest", nargs=argparse.REMAINDER); _add_dir(p)
     p = sub.add_parser("refute-prompt"); p.add_argument("gate"); p.add_argument("--json", action="store_true"); _add_dir(p)
@@ -239,6 +240,33 @@ def main(argv=None):
         rc, out, err = review_policy.accept_review(hb, args.gate, args.verdict,
                                                    artifact=args.artifact, note=args.note,
                                                    model=args.model)
+        if out:
+            print(out)
+        if err:
+            sys.stderr.write(err + "\n")
+        return rc
+    elif args.cmd == "constraints":
+        from . import constraints as cons
+        dag = st.read_dag(hb)
+        if not args.prompt and not args.record:
+            sys.stderr.write("usage: hb constraints <gate> --prompt [--json] | --record <file.json> [--model <m>]\n"); return 1
+        if not cons.plan_constraints(dag, args.gate):
+            sys.stderr.write(f"hb constraints: {args.gate} has no plan-time constraints (review.constraints) — "
+                             "constraint-first review applies to constrained gates only\n"); return 1
+        if args.prompt:
+            prompt = cons.compose_author_prompt(hb, dag, args.gate)
+            if args.json:
+                from . import refuter_profiles as rprof
+                try:
+                    prof = rprof.gate_profile(str(hb), ((dag.get("gates") or {}).get(args.gate) or {}).get("review") or {})
+                except Exception as e:  # noqa: BLE001 — unknown profile: fail closed, like refute-prompt
+                    sys.stderr.write(f"hb constraints: {e}\n"); return 1
+                print(json.dumps({"gate": args.gate, "prompt": prompt, "model": (prof or {}).get("author_model")},
+                                 ensure_ascii=False, separators=(",", ":")))
+            else:
+                print(prompt)
+            return 0
+        rc, out, err = cons.record(hb, dag, args.gate, args.record, model=args.model)
         if out:
             print(out)
         if err:

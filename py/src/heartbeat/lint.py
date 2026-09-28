@@ -77,7 +77,6 @@ def _check_constraints(dag, errors):
     """Plan-time constraints of a gate's adversarial review: gates.<G>.review.constraints =
     [{id P<n>, claim, subjects:[…], violation}]. G<n> ids are reserved for the constraints
     authored at review time. Twin: hb-lint.js checkConstraints (messages verbatim)."""
-    import re
     gates = dag.get("gates") or {}
     for g in gates:
         gv = gates[g] if isinstance(gates[g], dict) else {}
@@ -94,26 +93,42 @@ def _check_constraints(dag, errors):
         if not isinstance(cs, list):
             errors.append(f"[{g}] review.constraints must be a list of {{id, claim, subjects, violation}}")
             continue
-        seen = set()
-        for i, c in enumerate(cs):
-            is_obj = isinstance(c, dict)
-            cid = c.get("id") if is_obj else None
-            label = cid if isinstance(cid, str) and cid else f"#{i + 1}"
-            if not is_obj:
-                errors.append(f"[{g}] constraint {label}: must be an object {{id, claim, subjects, violation}}")
-                continue
-            if not isinstance(cid, str) or not re.fullmatch(r"P[0-9]+", cid):
-                errors.append(f"[{g}] constraint {label}: id must be P<n> (plan-time; G<n> ids are reserved for gate-time constraints)")
-            elif cid in seen:
-                errors.append(f"[{g}] constraint {cid}: duplicate id in this gate")
-            else:
-                seen.add(cid)
-            for f in ("claim", "violation"):
-                if not isinstance(c.get(f), str) or not c[f].strip(_ASCII_WS):
-                    errors.append(f"[{g}] constraint {label}: {f} must be a non-empty string")
-            subj = c.get("subjects")
-            if not isinstance(subj, list) or not subj or any(not isinstance(x, str) or not x.strip(_ASCII_WS) for x in subj):
-                errors.append(f"[{g}] constraint {label}: subjects must be a non-empty list of non-empty strings (the files/areas it covers)")
+        for m in constraint_errors(cs, "P"):
+            errors.append(f"[{g}] {m}")
+
+
+_CONSTRAINT_ID_RULE = {
+    "P": "id must be P<n> (plan-time; G<n> ids are reserved for gate-time constraints)",
+    "G": "id must be G<n> (gate-time; P<n> ids belong to the plan)",
+}
+
+
+def constraint_errors(cs, kind):
+    """Validate one constraint list; kind "P" (plan-time, in dag.json) or "G" (gate-time, recorded
+    by `hb constraints --record`). Messages carry no gate prefix. Twin: hb-lint.js constraintErrors."""
+    import re
+    out, seen = [], set()
+    id_re = r"G[0-9]+" if kind == "G" else r"P[0-9]+"
+    for i, c in enumerate(cs):
+        is_obj = isinstance(c, dict)
+        cid = c.get("id") if is_obj else None
+        label = cid if isinstance(cid, str) and cid else f"#{i + 1}"
+        if not is_obj:
+            out.append(f"constraint {label}: must be an object {{id, claim, subjects, violation}}")
+            continue
+        if not isinstance(cid, str) or not re.fullmatch(id_re, cid):
+            out.append(f"constraint {label}: {_CONSTRAINT_ID_RULE[kind]}")
+        elif cid in seen:
+            out.append(f"constraint {cid}: duplicate id in this gate")
+        else:
+            seen.add(cid)
+        for f in ("claim", "violation"):
+            if not isinstance(c.get(f), str) or not c[f].strip(_ASCII_WS):
+                out.append(f"constraint {label}: {f} must be a non-empty string")
+        subj = c.get("subjects")
+        if not isinstance(subj, list) or not subj or any(not isinstance(x, str) or not x.strip(_ASCII_WS) for x in subj):
+            out.append(f"constraint {label}: subjects must be a non-empty list of non-empty strings (the files/areas it covers)")
+    return out
 
 
 def _check_placeholders(dag, warnings):

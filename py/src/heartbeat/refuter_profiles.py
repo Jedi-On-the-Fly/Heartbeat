@@ -48,6 +48,8 @@ def render_skill(name, description, profile):
         lines.append("model: " + profile["model"])
     if profile.get("provider"):
         lines.append("provider: " + profile["provider"])
+    if profile.get("author_model"):
+        lines.append("author_model: " + profile["author_model"])
     v = profile.get("verdict") or {}
     if v.get("panel"):
         lines.append("panel: " + str(v["panel"]))
@@ -103,6 +105,7 @@ def _normalize(d):
         "model": d.get("model"),
         "provider": d.get("provider"),
         "verdict": d.get("verdict"),
+        "author_model": d.get("author_model"),
     }
 
 
@@ -170,7 +173,7 @@ def parse_skill(text):
             raise ValueError("panel value out of range: %r" % pv)
         verdict = {"panel": iv, "refute_if": fm.get("refute_if", "majority")}
     return {"persona": persona, "questions": questions, "model": fm.get("model"),
-            "provider": fm.get("provider"), "verdict": verdict}
+            "provider": fm.get("provider"), "verdict": verdict, "author_model": fm.get("author_model")}
 
 
 def _load_from_dirs(hbdir, name):

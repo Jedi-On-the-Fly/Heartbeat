@@ -163,11 +163,11 @@ EOF
     case "$out" in *"$5"*) ;; *) fail "selftest: mutant '$1' failed for the WRONG reason: $out";; esac
     echo "  mutant caught: $1"
   }
-  mutant "node duplicate-id check removed" plugin/templates/hb-lint.js "      else if (seen.has(c.id)) errors.push(" "      else if (false) errors.push(" \
+  mutant "node duplicate-id check removed" plugin/templates/hb-lint.js "    else if (seen.has(c.id)) out.push(" "    else if (false) out.push(" \
     "dup-id: malformed constraints not a lint ERROR"
-  mutant "python subjects check removed" py/src/heartbeat/lint.py '            if not isinstance(subj, list) or not subj' '            if False and not subj' \
+  mutant "python subjects check removed" py/src/heartbeat/lint.py '        if not isinstance(subj, list) or not subj' '        if False and not subj' \
     "py/bad-subjects: malformed constraints not a lint ERROR"
-  mutant "python accepts G-ids at plan time" py/src/heartbeat/lint.py 're.fullmatch(r"P[0-9]+", cid)' 're.fullmatch(r"[PG][0-9]+", cid)' \
+  mutant "python accepts G-ids at plan time" py/src/heartbeat/lint.py 'id_re = r"G[0-9]+" if kind == "G" else r"P[0-9]+"' 'id_re = r"[PG][0-9]+"' \
     "py/bad-id: malformed constraints not a lint ERROR"
   mutant "node gate-level constraints ignored" plugin/templates/hb-lint.js "    if (Object.prototype.hasOwnProperty.call(gv, 'constraints'))" "    if (false)" \
     "node/gate-level: malformed constraints not a lint ERROR"

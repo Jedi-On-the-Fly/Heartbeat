@@ -101,6 +101,9 @@ def doctor(hbdir):
             if not tagged:
                 problems.append(f"{g} accepted with autocommit on but has no git tag {g} — no restore point")
 
+    from . import constraints as cons
+    problems.extend(cons.doctor_problems(hbdir))
+
     return {"problems": problems, "notes": notes}
 
 
