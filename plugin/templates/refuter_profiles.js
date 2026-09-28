@@ -99,7 +99,8 @@ function normalize(d) {
 function toBool(v) {
   if (v === true || v === false) return v;
   if (typeof v === 'number') return v !== 0;
-  if (typeof v === 'string') return ['true', 'yes', '1', 'on'].includes(v.trim().toLowerCase());
+  // ASCII whitespace only — JS trim() and python strip() disagree on \ufeff / \x1c-\x1f / \x85.
+  if (typeof v === 'string') return ['true', 'yes', '1', 'on'].includes(v.replace(/^[ \t\n\r\f\v]+|[ \t\n\r\f\v]+$/g, '').toLowerCase());
   return false;
 }
 
@@ -255,9 +256,10 @@ function composePrompt(hbdir, dag, gate, opts) {
   const all = cs.slice().sort(byId).concat(hbjs.recordedConstraints(gate).slice().sort(byId));
   const lines = ["## Constraints to answer — every id, one line each"];
   for (const c of all) {
-    lines.push("  - " + c.id + ": " + c.claim);
-    lines.push("      subjects: " + (c.subjects || []).join(", "));
-    lines.push("      violated if: " + c.violation);
+    // Constraint text is shown on ONE line: a newline in a claim could forge a prompt section.
+    lines.push("  - " + c.id + ": " + hbjs.safePath(String(c.claim)));
+    lines.push("      subjects: " + (c.subjects || []).map(s => hbjs.safePath(String(s))).join(", "));
+    lines.push("      violated if: " + hbjs.safePath(String(c.violation)));
   }
   parts.push(lines.join("\n"));
   parts.push("Answer format — one line per id, exactly:\n  " + ANSWER_FORMAT + "\n" +

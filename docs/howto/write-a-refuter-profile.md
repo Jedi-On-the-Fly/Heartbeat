@@ -61,7 +61,7 @@ A profile is a JSON file under `.hb/refuters/<name>.json`:
 The three model fields are free-form strings passed through verbatim — whatever names your harness
 understands; unset means "use the session's / backend's default", never a substituted name.
 `free_review` is a boolean; in SKILL format write `free_review: true` (`false`, `no`, `0`, `off` and
-absence all mean false, identically in both runtimes).
+absence all mean false, identically in both runtimes; only ASCII whitespace around the value is ignored).
 
 The `//` comments above are for this guide only — a real `.hb/refuters/<name>.json` is parsed as
 plain JSON (`JSON.parse` / `json.load`), which has no comments, so strip them in your own file.

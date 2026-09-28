@@ -596,9 +596,9 @@ function composeAuthorPrompt(dag, gate) {
   L.push('');
   L.push('## Plan-time constraints (fixed at plan time — do not repeat them)');
   for (const c of planConstraints(dag, gate)) {
-    L.push(`  - ${c.id}: ${c.claim}`);
-    L.push(`      subjects: ${(c.subjects || []).join(', ')}`);
-    L.push(`      violated if: ${c.violation}`);
+    L.push(`  - ${c.id}: ${safePath(String(c.claim))}`);   // one line: a newline cannot forge a section
+    L.push(`      subjects: ${(c.subjects || []).map(s => safePath(String(s))).join(', ')}`);
+    L.push(`      violated if: ${safePath(String(c.violation))}`);
   }
   L.push('');
   let ch = null, why = null;

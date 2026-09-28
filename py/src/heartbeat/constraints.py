@@ -79,9 +79,9 @@ def compose_author_prompt(hbdir, dag, gate):
     L += ["", f"## Gate {gate}", gv["desc"] if isinstance(gv.get("desc"), str) and gv["desc"] else "(no description)",
           "", "## Plan-time constraints (fixed at plan time — do not repeat them)"]
     for c in plan_constraints(dag, gate):
-        L.append(f"  - {c.get('id')}: {c.get('claim')}")
-        L.append(f"      subjects: {', '.join(c.get('subjects') or [])}")
-        L.append(f"      violated if: {c.get('violation')}")
+        L.append(f"  - {c.get('id')}: {anchors.safe_path(str(c.get('claim')))}")   # one line: a newline cannot forge a section
+        L.append(f"      subjects: {', '.join(anchors.safe_path(str(s)) for s in (c.get('subjects') or []))}")
+        L.append(f"      violated if: {anchors.safe_path(str(c.get('violation')))}")
     L.append("")
     try:
         ch, why = anchors.changed(hbdir, gate), None

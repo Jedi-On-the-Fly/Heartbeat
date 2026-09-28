@@ -106,7 +106,7 @@ def _to_bool(v):
     if isinstance(v, (int, float)):
         return v != 0
     if isinstance(v, str):
-        return v.strip().lower() in ("true", "yes", "1", "on")
+        return v.strip(" \t\n\r\f\v").lower() in ("true", "yes", "1", "on")   # ASCII only: == node
     return False
 
 
@@ -265,6 +265,7 @@ def compose_prompt(hbdir, dag, gate, free=False):
     constraint id (P then G, the gate-time set of THIS review cycle) + the per-id answer format + the
     triage rule; `free=True` composes the unconstrained breadth review instead (no constraint block).
     """
+    from . import anchors
     from . import constraints as cons
     base = _compose_base(hbdir, dag, gate)
     cs = cons.plan_constraints(dag, gate)
@@ -283,9 +284,10 @@ def compose_prompt(hbdir, dag, gate, free=False):
     allc = sorted(cs, key=by_id) + sorted(cons.recorded_constraints(hbdir, dag, gate), key=by_id)
     lines = ["## Constraints to answer — every id, one line each"]
     for c in allc:
-        lines.append("  - %s: %s" % (c.get("id"), c.get("claim")))
-        lines.append("      subjects: " + ", ".join(c.get("subjects") or []))
-        lines.append("      violated if: %s" % c.get("violation"))
+        # Constraint text is shown on ONE line: a newline in a claim could forge a prompt section.
+        lines.append("  - %s: %s" % (c.get("id"), anchors.safe_path(str(c.get("claim")))))
+        lines.append("      subjects: " + ", ".join(anchors.safe_path(str(s)) for s in (c.get("subjects") or [])))
+        lines.append("      violated if: %s" % anchors.safe_path(str(c.get("violation"))))
     parts.append("\n".join(lines))
     parts.append("Answer format — one line per id, exactly:\n  " + ANSWER_FORMAT + "\n"
                  "VIOLATED = you reproduced the violation (cite the command and its output); NOT-REPRODUCED = you tried "

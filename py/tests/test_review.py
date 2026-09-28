@@ -52,3 +52,5 @@ def test_free_review_coercion_is_explicit():
     from heartbeat.refuter_profiles import _to_bool
     assert [_to_bool(v) for v in (True, "true", " YES ", "1", "on", 2)] == [True] * 6
     assert [_to_bool(v) for v in (False, None, "false", "no", "0", "off", "", 0, [])] == [False] * 9
+    # ASCII whitespace only (== node): unicode edges are NOT stripped
+    assert [_to_bool(v) for v in ("\ufefftrue", "true\u001f", "\u0085true", "\ttrue\n")] == [False, False, False, True]
