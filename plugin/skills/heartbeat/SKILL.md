@@ -69,7 +69,8 @@ phases). Otherwise write a fresh DAG.
   the phase promises, `subjects` the files/areas it covers, `violation` the concrete
   observation that would break it. Ids are `P1…Pn` (`G…` is reserved for constraints written
   at review time). `hb-lint` rejects malformed ones; `hb-audit` warns `unconstrained_review`
-  on a review gate without any.
+  on a review gate without any. The review of such a gate is constraint-first — see
+  [constraint-first-review.md](../../../docs/howto/constraint-first-review.md).
 - **No hardcoded values/counts** — derive from source/registry. Validate the shape
   against `<project-dir>/.hb/dag.schema.json`.
 
@@ -89,8 +90,12 @@ Then **propose the refuter tiering** for the run ahead — the economics are dec
 per lens, at plan time: list the profiles the gates' `review.profile`s name
 (`node .hb/hb.js refuters` / `ls .hb/refuters/`), and for gate-checklist lenses
 (correctness/security-style reviews of built work) propose binding a **cheaper model** —
-`"model": "sonnet"` in `.hb/refuters/<name>.json` — while leaving `default` unbound so
-plan-level and whole-feature reviews inherit the session model. Write the agreed bindings
+`"model": "<a cheaper model your harness understands>"` in `.hb/refuters/<name>.json` — while
+leaving `default` unbound so plan-level and whole-feature reviews inherit the session model. For
+constraint-first gates, also propose `author_model` (the strongest model available — the author's
+constraints are what the review is held to), and for security gates `"free_review": true` with a
+`free_model` different from the refuter's. Model names are free-form strings passed through
+verbatim; an unset field means the session's / backend's default. Write the agreed bindings
 into the profile files as part of sign-off; the `review_pending` flow then routes and
 records automatically (`refute-prompt --json` → spawn → `review … --model`). Never propose
 a downgrade to make passes cheaper to obtain, and point the user at the per-model impact in
@@ -317,7 +322,7 @@ When woken by a tick (`data.reason` present), act by reason:
 |---|---|
 | `next_task` | `node .hb/hb.js start <id>` → do the work → `node .hb/hb.js done <id>` (or `fail <id>` if you couldn't complete it). No hand-edited JSON. |
 | `gate_pending` | `bash .hb/gate.sh <data.next_task.gate>`. A pass advances the phase — UNLESS the gate has a `review` block, in which case an adversarial review is owed (next). |
-| `review_pending` | The deterministic gate passed; now **spawn a second, skeptical agent** (Agent tool) told to *refute* that the phase is truly complete — hollow tests, criteria not really met, faked outputs. **Seed that agent with `node .hb/hb.js refute-prompt <gate>`** — the SAME compose the automated path uses, so an interactive refutation honors the gate's `review.profile` (persona + the falsification checklist + the profile's extra questions); with no profile it is exactly today's prompt. **Spawn the refuter ON the profile's model**: read `node .hb/hb.js refute-prompt <gate> --json` and pass its `.model` to the Agent tool's model parameter (inherit the session model only when null) — a checklist refutation rarely needs the most expensive model, and the profile is where that economy is declared. **Write its attempt to a findings file**, then `node .hb/hb.js review <gate> fail "<holes>" --model <that model>` (found holes → `gate_blocked`) or `node .hb/hb.js review <gate> pass --artifact <file> --model <that model>` (couldn't refute) — **record `--model` with the verdict** so the log carries what actually reviewed and the per-model impact report has truth to count. A pass **requires** a substantive artifact that cites the phase and comes from a different actor than the doer — no rubber-stamps. |
+| `review_pending` | The deterministic gate passed. **Constraint-first gate** (its review has plan-time `constraints`): first get the gate-time constraints — `node .hb/hb.js constraints <gate> --prompt` (its `--json` `.model` is the profile's `author_model`), hand it to an agent that did NOT do the phase's work, save its JSON array and `HB_ACTOR=<author> node .hb/hb.js constraints <gate> --record <file.json>`; the refute prompt then lists every id and the answer format, and the refuter must answer each id on its own line (`<ID>: VIOLATED \| NOT-REPRODUCED \| N/A — <evidence or reason>`); when the profile sets `free_review`, also run `refute-prompt <gate> --free` with another agent (its `free_model`) and record `node .hb/hb.js review <gate> free --artifact <file>` under that agent's identity — see [constraint-first-review.md](../../../docs/howto/constraint-first-review.md). For every gate: now **spawn a second, skeptical agent** (Agent tool) told to *refute* that the phase is truly complete — hollow tests, criteria not really met, faked outputs. **Seed that agent with `node .hb/hb.js refute-prompt <gate>`** — the SAME compose the automated path uses, so an interactive refutation honors the gate's `review.profile` (persona + the falsification checklist + the profile's extra questions); with no profile it is exactly today's prompt. **Spawn the refuter ON the profile's model**: read `node .hb/hb.js refute-prompt <gate> --json` and pass its `.model` to the Agent tool's model parameter (inherit the session model only when null) — a checklist refutation rarely needs the most expensive model, and the profile is where that economy is declared. **Write its attempt to a findings file**, then `node .hb/hb.js review <gate> fail "<holes>" --model <that model>` (found holes → `gate_blocked`) or `node .hb/hb.js review <gate> pass --artifact <file> --model <that model>` (couldn't refute) — **record `--model` with the verdict** so the log carries what actually reviewed and the per-model impact report has truth to count. A pass **requires** a substantive artifact that cites the phase and comes from a different actor than the doer — no rubber-stamps. |
 | `gate_blocked` | `node .hb/hb.js diagnose` → shows which criteria fail + attempts; fix the ROOT cause (never weaken the gate), re-run `bash .hb/gate.sh <gate>`. |
 | `at_capacity` | Nothing to do — max tasks already in flight (or the only ready task is leased). The tick handled it; no wake. |
 | `state_corrupted` | `node .hb/hb.js rebuild` (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable. |
