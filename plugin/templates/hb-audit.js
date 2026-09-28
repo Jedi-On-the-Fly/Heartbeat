@@ -111,8 +111,10 @@ function audit(dag) {
       F('error', 'hollow_gate', p.id,
         `gate ${p.gate_exit} has NO behavioural criterion — phase ${p.id} passes without proving its work`,
         { gate: p.gate_exit });
+    // "Has a review" = the review value is an object (a non-array dict — the same test both
+    // runtimes use); any other shape is a lint error, never a crash here.
     const rv = (gates[p.gate_exit] || {}).review;
-    if (rv && !(Array.isArray(rv.constraints) && rv.constraints.length))
+    if (rv !== null && typeof rv === 'object' && !Array.isArray(rv) && !(Array.isArray(rv.constraints) && rv.constraints.length))
       F('warn', 'unconstrained_review', p.id,
         `gate ${p.gate_exit} has an adversarial review but no plan-time constraints — the refuter's target is implicit (add review.constraints)`,
         { gate: p.gate_exit });

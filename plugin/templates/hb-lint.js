@@ -80,6 +80,10 @@ function lint(dag) {
   return { errors, warnings };
 }
 
+// "Non-blank" with ONE explicit whitespace set (ASCII " \t\n\r\f\v") — JS trim() and python strip()
+// disagree on \ufeff / \x1c-\x1f / \x85, and the two lints must return identical errors.
+const blankFree = (s) => /[^ \t\n\r\f\v]/.test(s);
+
 // Plan-time constraints of a gate's adversarial review: gates.<G>.review.constraints =
 // [{id P<n>, claim, subjects:[…], violation}]. Each is a falsifiable claim the refuter must answer.
 // G<n> ids are reserved for the constraints authored at review time. Twin: lint.py _check_constraints.
@@ -90,7 +94,11 @@ function checkConstraints(dag, errors) {
     if (Object.prototype.hasOwnProperty.call(gv, 'constraints'))
       errors.push(`[${g}] constraints belong in review.constraints (the plan-time constraints of the gate's adversarial review)`);
     const rv = gv.review;
-    if (!rv || typeof rv !== 'object' || !Object.prototype.hasOwnProperty.call(rv, 'constraints')) continue;
+    // A review must be a NON-EMPTY object: node's truthiness and python's bool() disagree on {} / [],
+    // so any other shape would make the runtimes disagree on whether the gate owes a review.
+    if (rv !== undefined && rv !== null && (typeof rv !== 'object' || Array.isArray(rv) || !Object.keys(rv).length))
+      errors.push(`[${g}] review must be a non-empty object ({prompt, profile?, constraints?})`);
+    if (!rv || typeof rv !== 'object' || Array.isArray(rv) || !Object.prototype.hasOwnProperty.call(rv, 'constraints')) continue;
     const cs = rv.constraints;
     if (!Array.isArray(cs)) { errors.push(`[${g}] review.constraints must be a list of {id, claim, subjects, violation}`); continue; }
     const seen = new Set();
@@ -103,8 +111,8 @@ function checkConstraints(dag, errors) {
       else if (seen.has(c.id)) errors.push(`[${g}] constraint ${c.id}: duplicate id in this gate`);
       else seen.add(c.id);
       for (const f of ['claim', 'violation'])
-        if (typeof c[f] !== 'string' || !c[f].trim()) errors.push(`[${g}] constraint ${label}: ${f} must be a non-empty string`);
-      if (!Array.isArray(c.subjects) || !c.subjects.length || c.subjects.some(x => typeof x !== 'string' || !x.trim()))
+        if (typeof c[f] !== 'string' || !blankFree(c[f])) errors.push(`[${g}] constraint ${label}: ${f} must be a non-empty string`);
+      if (!Array.isArray(c.subjects) || !c.subjects.length || c.subjects.some(x => typeof x !== 'string' || !blankFree(x)))
         errors.push(`[${g}] constraint ${label}: subjects must be a non-empty list of non-empty strings (the files/areas it covers)`);
     });
   }

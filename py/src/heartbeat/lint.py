@@ -68,6 +68,11 @@ def lint(dag):
     return {"errors": errors, "warnings": warnings}
 
 
+# "Non-blank" with ONE explicit whitespace set — str.strip() and JS trim() disagree on \ufeff /
+# \x1c-\x1f / \x85, and the two lints must return identical errors (twin: blankFree).
+_ASCII_WS = " \t\n\r\f\v"
+
+
 def _check_constraints(dag, errors):
     """Plan-time constraints of a gate's adversarial review: gates.<G>.review.constraints =
     [{id P<n>, claim, subjects:[…], violation}]. G<n> ids are reserved for the constraints
@@ -79,6 +84,10 @@ def _check_constraints(dag, errors):
         if "constraints" in gv:
             errors.append(f"[{g}] constraints belong in review.constraints (the plan-time constraints of the gate's adversarial review)")
         rv = gv.get("review")
+        # A review must be a NON-EMPTY dict: python's bool() and node's truthiness disagree on {} / [],
+        # so any other shape would make the runtimes disagree on whether the gate owes a review.
+        if rv is not None and (not isinstance(rv, dict) or not rv):
+            errors.append(f"[{g}] review must be a non-empty object ({{prompt, profile?, constraints?}})")
         if not isinstance(rv, dict) or "constraints" not in rv:
             continue
         cs = rv["constraints"]
@@ -100,10 +109,10 @@ def _check_constraints(dag, errors):
             else:
                 seen.add(cid)
             for f in ("claim", "violation"):
-                if not isinstance(c.get(f), str) or not c[f].strip():
+                if not isinstance(c.get(f), str) or not c[f].strip(_ASCII_WS):
                     errors.append(f"[{g}] constraint {label}: {f} must be a non-empty string")
             subj = c.get("subjects")
-            if not isinstance(subj, list) or not subj or any(not isinstance(x, str) or not x.strip() for x in subj):
+            if not isinstance(subj, list) or not subj or any(not isinstance(x, str) or not x.strip(_ASCII_WS) for x in subj):
                 errors.append(f"[{g}] constraint {label}: subjects must be a non-empty list of non-empty strings (the files/areas it covers)")
 
 

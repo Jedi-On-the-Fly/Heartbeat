@@ -68,6 +68,20 @@ def build_case(seed):
         g = {"criteria": [{"id": "c", "cmd": "true"}]}
         if r.chance():
             g["review"] = {"prompt": "refute P%d" % i}
+            # plan-time constraints (CR0): absent, well-formed, or one of the malformed shapes
+            # lint must reject identically in both runtimes (incl. the whitespace-set edge cases)
+            k = r.rand(6)
+            ok = {"id": "P1", "claim": "c", "subjects": ["s"], "violation": "v"}
+            if k == 1:
+                g["review"]["constraints"] = [ok, dict(ok, id="P2")]
+            elif k == 2:
+                g["review"]["constraints"] = [ok, ok]                          # duplicate id
+            elif k == 3:
+                g["review"]["constraints"] = [dict(ok, id="G1"), dict(ok, claim="\ufeff"), dict(ok, violation="\x85")]
+            elif k == 4:
+                g["review"]["constraints"] = [dict(ok, subjects=[]), None, "P3"]
+            elif k == 5:
+                g["review"]["constraints"] = {"id": "P1"}                   # not a list
         gates[gate] = g
     dag = {"phases": phases, "gates": gates}
 

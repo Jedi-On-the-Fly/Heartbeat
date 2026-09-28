@@ -47,11 +47,15 @@ cases = {
   "bad-subjects":     dag(lambda d: d["gates"]["G0"]["review"].__setitem__("constraints", [C("P1", subjects="src/a.py")])),
   "empty-subjects":   dag(lambda d: d["gates"]["G0"]["review"].__setitem__("constraints", [C("P1", subjects=[])])),
   "gate-level":       dag(lambda d: d["gates"]["G0"].__setitem__("constraints", [C("P1")])),
+  "review-not-object": dag(lambda d: d["gates"]["G0"].__setitem__("review", True)),
+  "review-empty":     dag(lambda d: d["gates"]["G0"].__setitem__("review", {})),
+  "odd-whitespace":   dag(lambda d: d["gates"]["G0"]["review"].__setitem__("constraints", [C("P1", claim="\ufeff"), C("P2", violation="\x85")])),
+  "extra-key":        dag(lambda d: d["gates"]["G0"]["review"].__setitem__("constraints", [C("P1", note="free text")])),
 }
 for k, v in cases.items():
     json.dump(v, open(os.path.join(out, k + ".json"), "w"))
 EOF
-CASES="no-constraints valid same-id-2-gates not-a-list not-an-object bad-id dup-id missing-claim empty-violation bad-subjects empty-subjects gate-level"
+CASES="no-constraints valid same-id-2-gates not-a-list not-an-object bad-id dup-id missing-claim empty-violation bad-subjects empty-subjects gate-level review-not-object review-empty odd-whitespace extra-key"
 
 observe() { # <case> → {case, node:{lint, audit}, py:{lint, audit}, schema}
   local c="$1" f="$work/$1.json"
@@ -94,7 +98,9 @@ EOF
 CHECK='
 import json, sys, re
 BAD = {"not-a-list": None, "not-an-object": None, "bad-id": "G1", "dup-id": "P1", "missing-claim": "P1",
-       "empty-violation": "P1", "bad-subjects": "P1", "empty-subjects": "P1", "gate-level": None}
+       "empty-violation": "P1", "bad-subjects": "P1", "empty-subjects": "P1", "gate-level": None,
+       "review-not-object": None, "review-empty": None}
+# a review value that is not a non-empty object: a lint error in BOTH runtimes, and never an audit crash
 def check(obs):
     by = {o["case"]: o for o in obs}
     for c, o in by.items():
@@ -108,17 +114,17 @@ def check(obs):
                 if BAD[c] and not any(BAD[c] in e for e in cerr): return k + ": the error does not name the id " + BAD[c]
             else:
                 if L["errors"] or L["rc"] != 0: return k + ": a well-formed DAG does not lint clean: " + str(L["errors"])
-            if A["errors"] not in (0, None) and c in ("no-constraints", "valid", "same-id-2-gates"): return k + ": audit errors on a sound DAG"
+            if A["errors"] not in (0, None) and c in ("no-constraints", "valid", "same-id-2-gates", "extra-key", "odd-whitespace"): return k + ": audit errors on a sound DAG"
             unc = A["findings"]
             if c == "no-constraints":
                 if unc != [["warn", "unconstrained_review", "G0"]]: return k + ": unconstrained review gate G0 not WARNED exactly once (G1 has no review): " + str(unc)
-            if c in ("valid",):
+            if c in ("valid", "extra-key", "odd-whitespace"):
                 if unc: return k + ": constrained gate still warned unconstrained_review"
             if c == "same-id-2-gates" and unc: return k + ": both gates constrained, still warned"
         if o["node"] != o["py"]: return "parity: " + c + " node " + json.dumps(o["node"]) + " vs py " + json.dumps(o["py"])
         if not o["schema_structural"]: return "schema: review.constraints (array of {id, claim, subjects, violation}) missing from plugin/dag.schema.json"
         if o["schema_valid"] is not None:
-            if c in ("valid", "no-constraints", "same-id-2-gates") and o["schema_valid"] is not True: return "schema: " + c + " rejected by dag.schema.json"
+            if c in ("valid", "no-constraints", "same-id-2-gates", "extra-key") and o["schema_valid"] is not True: return "schema: " + c + " rejected by dag.schema.json"
             if c in ("not-a-list", "not-an-object", "missing-claim", "bad-subjects", "gate-level") and o["schema_valid"] is not False: return "schema: " + c + " accepted by dag.schema.json"
     return None
 '
@@ -167,8 +173,14 @@ EOF
     "node/gate-level: malformed constraints not a lint ERROR"
   mutant "node warning made an error" plugin/templates/hb-audit.js "      F('warn', 'unconstrained_review', p.id," "      F('error', 'unconstrained_review', p.id," \
     "audit errors on a sound DAG"
-  mutant "python warning dropped" py/src/heartbeat/audit.py '        if rv and not (isinstance(rv.get("constraints"), list) and rv["constraints"]):' '        if False:' \
+  mutant "python warning dropped" py/src/heartbeat/audit.py '        if isinstance(rv, dict) and not (isinstance(rv.get("constraints"), list) and rv["constraints"]):' '        if False:' \
     "py/no-constraints: unconstrained review gate G0 not WARNED"
+  mutant "python audit crashes on a non-object review" py/src/heartbeat/audit.py '        if isinstance(rv, dict) and not' '        if rv and not' \
+    "py/review-not-object: lint/audit output unparseable"
+  mutant "node trims a different whitespace set" plugin/templates/hb-lint.js "const blankFree = (s) => /[^ \\t\\n\\r\\f\\v]/.test(s);" "const blankFree = (s) => !!s.trim();" \
+    "node/odd-whitespace: a well-formed DAG does not lint clean"
+  mutant "python accepts an empty review object" py/src/heartbeat/lint.py '        if rv is not None and (not isinstance(rv, dict) or not rv):' '        if rv is not None and not isinstance(rv, dict):' \
+    "py/review-empty: malformed constraints not a lint ERROR"
   mutant "schema lacks constraints" plugin/dag.schema.json '              "constraints": {' '              "constraintz": {' \
     "schema: review.constraints"
   echo "SELFTEST-OK"; exit 0
@@ -178,6 +190,6 @@ python3 - "$obs_file" <<EOF || exit 1
 $CHECK
 bad = check(json.load(open(sys.argv[1])))
 if bad: print("FAIL: " + bad, file=sys.stderr); sys.exit(1)
-print("constraints schema: 12 cases × lint + audit × 2 runtimes hold")
+print("constraints schema: 16 cases × lint + audit × 2 runtimes hold")
 print("CONSTRAINTS-SCHEMA-OK")
 EOF
