@@ -14,6 +14,7 @@
  *   hb rebuild                 replay events.jsonl → state.json (sync / recover)
  *   hb state                   print the projected state (no write)
  *   hb import                  seed the log from an existing state.json (migration)
+ *   hb changed <gate> [--json] what the phase exiting <gate> changed (anchors, below)
  *
  * State-mutating events: initialized, task_started, task_done, task_failed,
  * gate_passed, gate_failed. All other events are audit-only (ignored by the
@@ -367,6 +368,86 @@ function diagnose(reason) {
   return out.join('\n');
 }
 
+// ── Anchors: HeartBeat's own record of the tree at plan start and at each gate acceptance ──
+// .hb/anchors/<name>.json = {gate, ts, commit, files:{path:sha256}}. Listing: inside a git
+// worktree `git ls-files -co --exclude-standard` (read-only: HB_NO_GIT only disables writes);
+// outside git a walk that skips ANCHOR_SKIP dirs at any depth. .hb/ and .git/ are never listed;
+// only regular files are hashed. `hb changed` diffs two anchors (or an anchor vs the live tree).
+const ANCHORS = path.join(HB_DIR, 'anchors');
+const ANCHOR_SKIP = new Set(['.hb', '.git', 'node_modules', '__pycache__', '.venv']);
+function inGitWorktree() {
+  try {
+    return require('child_process').execFileSync('git', ['-C', PROJECT_DIR, 'rev-parse', '--is-inside-work-tree'],
+      { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() === 'true';
+  } catch (e) { return false; }
+}
+function listProjectFiles() {
+  const hbRel = path.relative(PROJECT_DIR, HB_DIR).split(path.sep).join('/');
+  let rels = [];
+  if (inGitWorktree()) {
+    const out = require('child_process').execFileSync('git', ['-C', PROJECT_DIR, 'ls-files', '-co', '--exclude-standard', '-z'],
+      { stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 28 }).toString();
+    rels = out.split('\0').filter(Boolean);
+  } else {
+    const walk = (rel) => {
+      let ents = [];
+      try { ents = fs.readdirSync(path.join(PROJECT_DIR, rel), { withFileTypes: true }); } catch (e) { return; }
+      for (const d of ents) {
+        const r = rel ? rel + '/' + d.name : d.name;
+        if (d.isDirectory()) { if (!ANCHOR_SKIP.has(d.name)) walk(r); }
+        else rels.push(r);
+      }
+    };
+    walk('');
+  }
+  const files = {};
+  for (const r of rels.sort()) {
+    if (r === hbRel || r.startsWith(hbRel + '/') || r.split('/')[0] === '.git') continue;
+    const abs = path.join(PROJECT_DIR, r);
+    let st;
+    try { st = fs.lstatSync(abs); } catch (e) { continue; }   // tracked but deleted from the worktree
+    if (!st.isFile()) continue;
+    files[r] = require('crypto').createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
+  }
+  return files;
+}
+function writeAnchor(name) {
+  let commit = null;
+  if (inGitWorktree()) {
+    try { commit = require('child_process').execFileSync('git', ['-C', PROJECT_DIR, 'rev-parse', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || null; } catch (e) {}
+  }
+  const a = { gate: name, ts: nowIso(), commit, files: listProjectFiles() };
+  fs.mkdirSync(ANCHORS, { recursive: true });
+  atomicWrite(path.join(ANCHORS, `${name}.json`), JSON.stringify(a, null, 2) + '\n');
+  return a;
+}
+// Report, never swallow: an anchor that silently fails to write would make `changed` lie later.
+function tryAnchor(name) {
+  try { writeAnchor(name); return true; }
+  catch (e) { process.stderr.write(`⚠ anchor ${name} not recorded: ${e.message}\n`); return false; }
+}
+function readAnchor(name) {
+  try { return JSON.parse(fs.readFileSync(path.join(ANCHORS, `${name}.json`), 'utf8')); } catch (e) { return null; }
+}
+// changed(gate) → {gate, base, target, added, modified, deleted}: the phase's entry anchor (its
+// gate_entry's, or _start) vs the gate's own anchor once accepted, else the live working tree.
+function changed(gate) {
+  const phase = (readDag().phases || []).find(p => p.gate_exit === gate);
+  if (!phase) throw new Error(`no phase exits through gate ${gate}`);
+  const base = phase.gate_entry || '_start';
+  const from = readAnchor(base);
+  if (!from) throw new Error(`no entry anchor '${base}' for ${gate} (recorded at the first task start / the entry gate's acceptance)`);
+  const own = readAnchor(gate);
+  const to = own ? own.files : listProjectFiles();
+  const a = from.files || {};
+  const out = { gate, base, target: own ? gate : 'worktree', added: [], modified: [], deleted: [] };
+  for (const p of Object.keys(to).sort()) {
+    if (!(p in a)) out.added.push(p); else if (a[p] !== to[p]) out.modified.push(p);
+  }
+  for (const p of Object.keys(a).sort()) if (!(p in to)) out.deleted.push(p);
+  return out;
+}
+
 // ── CLI ───────────────────────────────────────────────────────────────────────
 // v1.7: guard the dispatch so hb.js is safely requirable (the tick requires it to
 // read PROTOCOL). Without this, require() would run the switch → default → exit.
@@ -380,8 +461,29 @@ switch (cmd) {
     fs.mkdirSync(LEASES, { recursive: true });
     try { fs.mkdirSync(path.join(LEASES, arg1)); } catch (e) { /* idempotent: tick may have leased it */ }
     mutate({ event: 'task_started', task: arg1 });
+    // The plan's start anchor: taken on the first LIVE task_started only (never on rebuild/import).
+    if (!readAnchor('_start') && readEvents().filter(e => e.event === 'task_started').length === 1) tryAnchor('_start');
     process.stdout.write(`started ${arg1}\n`);
     break;
+
+  case 'anchor':
+    // Internal: gate.sh records a review-less gate's acceptance anchor through this.
+    if (!arg1) die('usage: hb anchor <gate>');
+    if (!tryAnchor(arg1)) process.exit(1);
+    break;
+
+  case 'changed': {
+    const asJson = rest.includes('--json') || arg1 === '--json';
+    const gate = arg1 === '--json' ? rest[0] : arg1;
+    if (!gate) die('usage: hb changed <gate> [--json]');
+    let c;
+    try { c = changed(gate); } catch (e) { die(`hb changed: ${e.message}`); }
+    if (asJson) { process.stdout.write(JSON.stringify(c) + '\n'); break; }
+    process.stdout.write(`changes in the phase exiting ${gate} (${c.base} → ${c.target}):\n`);
+    for (const [k, t] of [['A', c.added], ['M', c.modified], ['D', c.deleted]]) for (const p of t) process.stdout.write(`  ${k} ${p}\n`);
+    if (!c.added.length && !c.modified.length && !c.deleted.length) process.stdout.write('  (no changes)\n');
+    break;
+  }
 
   case 'done':
     if (!arg1) die('usage: hb done <taskId>');
@@ -492,6 +594,7 @@ switch (cmd) {
         try { cp.execFileSync('git', ['-C', PROJECT_DIR, 'tag', '-f', gate], { stdio: 'ignore' }); } catch (e) {}
       }
     }
+    tryAnchor(gate);   // acceptance anchor — after the restore point, so its commit is the accepted HEAD
     process.stdout.write(`review pass ${gate} (backed by reviews/${gate}.md, ${body.trim().length} chars, cites: ${cited.slice(0, 3).join(', ')})\n`);
     break;
   }
@@ -685,7 +788,7 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|refuters|refute-prompt|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|refuters|refute-prompt|changed|import> [args]');
 }
 }
 

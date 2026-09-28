@@ -316,6 +316,7 @@ if [ "$FAIL" -eq 0 ]; then
     exit 0
   fi
   git_snapshot "$GATE"
+  node "$HB_DIR/hb.js" anchor "$GATE" >/dev/null || true   # acceptance anchor (hb.js reports a failure on stderr)
   echo "✅ GATE PASSED — proceed to next phase."
   exit 0
 else
