@@ -8,6 +8,7 @@
  *   - dependency cycle
  *   - gate_entry / gate_exit referencing an undefined gate
  *   - gate_entry that is no phase's gate_exit (phase locked forever)
+ *   - malformed plan-time constraints (gates.<G>.review.constraints)
  * Warnings (exit 0):
  *   - phase > 8 tasks (context-loss risk)
  *   - gate defined but never referenced
@@ -75,7 +76,38 @@ function lint(dag) {
 
   checkPlaceholders(dag, warnings);
   checkGateArtifacts(dag, warnings);
+  checkConstraints(dag, errors);
   return { errors, warnings };
+}
+
+// Plan-time constraints of a gate's adversarial review: gates.<G>.review.constraints =
+// [{id P<n>, claim, subjects:[…], violation}]. Each is a falsifiable claim the refuter must answer.
+// G<n> ids are reserved for the constraints authored at review time. Twin: lint.py _check_constraints.
+function checkConstraints(dag, errors) {
+  const gates = dag.gates ?? {};
+  for (const g of Object.keys(gates)) {
+    const gv = gates[g] || {};
+    if (Object.prototype.hasOwnProperty.call(gv, 'constraints'))
+      errors.push(`[${g}] constraints belong in review.constraints (the plan-time constraints of the gate's adversarial review)`);
+    const rv = gv.review;
+    if (!rv || typeof rv !== 'object' || !Object.prototype.hasOwnProperty.call(rv, 'constraints')) continue;
+    const cs = rv.constraints;
+    if (!Array.isArray(cs)) { errors.push(`[${g}] review.constraints must be a list of {id, claim, subjects, violation}`); continue; }
+    const seen = new Set();
+    cs.forEach((c, i) => {
+      const isObj = c !== null && typeof c === 'object' && !Array.isArray(c);
+      const label = isObj && typeof c.id === 'string' && c.id ? c.id : `#${i + 1}`;
+      if (!isObj) { errors.push(`[${g}] constraint ${label}: must be an object {id, claim, subjects, violation}`); return; }
+      if (typeof c.id !== 'string' || !/^P[0-9]+$/.test(c.id))
+        errors.push(`[${g}] constraint ${label}: id must be P<n> (plan-time; G<n> ids are reserved for gate-time constraints)`);
+      else if (seen.has(c.id)) errors.push(`[${g}] constraint ${c.id}: duplicate id in this gate`);
+      else seen.add(c.id);
+      for (const f of ['claim', 'violation'])
+        if (typeof c[f] !== 'string' || !c[f].trim()) errors.push(`[${g}] constraint ${label}: ${f} must be a non-empty string`);
+      if (!Array.isArray(c.subjects) || !c.subjects.length || c.subjects.some(x => typeof x !== 'string' || !x.trim()))
+        errors.push(`[${g}] constraint ${label}: subjects must be a non-empty list of non-empty strings (the files/areas it covers)`);
+    });
+  }
 }
 
 // v1.4 (#1): warn if the DAG still carries bootstrap-skeleton text — catches

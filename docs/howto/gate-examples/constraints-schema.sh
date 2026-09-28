@@ -148,15 +148,29 @@ m("warning is an error",      lambda: get("no-constraints")["py"]["audit"].__set
 m("parity drift",             lambda: get("missing-claim")["py"]["lint"]["errors"].append("[G0] constraint P1: extra"))
 m("schema lacks constraints", lambda: get("valid").__setitem__("schema_structural", False))
 EOF
-  mutant() { # <label> <file> <old> <new>
+  mutant() { # <label> <file> <old> <new> <expected failure fragment> — RED, for the EXPECTED reason
     local m="$work/mut"; rm -rf "$m"; mkdir -p "$m/docs/howto" "$m/py"
     cp -r "$ROOT/plugin" "$m/"; cp -r "$ROOT/py/src" "$m/py/"; cp -r "$ROOT/docs/howto/gate-examples" "$m/docs/howto/"
     python3 -c 'import sys; p, a, b = sys.argv[1:4]; s = open(p).read(); sys.exit(1) if s.count(a) != 1 else open(p, "w").write(s.replace(a, b))' \
       "$m/$2" "$3" "$4" || fail "selftest: mutant '$1' did not apply (the code moved — update the mutant)"
-    if bash "$m/docs/howto/gate-examples/constraints-schema.sh" >/dev/null 2>&1; then fail "selftest: mutant '$1' still passes — not load-bearing"; fi
+    local out; if out="$(bash "$m/docs/howto/gate-examples/constraints-schema.sh" 2>&1)"; then fail "selftest: mutant '$1' still passes — not load-bearing"; fi
+    case "$out" in *"$5"*) ;; *) fail "selftest: mutant '$1' failed for the WRONG reason: $out";; esac
     echo "  mutant caught: $1"
   }
-  MUTANTS_HERE
+  mutant "node duplicate-id check removed" plugin/templates/hb-lint.js "      else if (seen.has(c.id)) errors.push(" "      else if (false) errors.push(" \
+    "dup-id: malformed constraints not a lint ERROR"
+  mutant "python subjects check removed" py/src/heartbeat/lint.py '            if not isinstance(subj, list) or not subj' '            if False and not subj' \
+    "py/bad-subjects: malformed constraints not a lint ERROR"
+  mutant "python accepts G-ids at plan time" py/src/heartbeat/lint.py 're.fullmatch(r"P[0-9]+", cid)' 're.fullmatch(r"[PG][0-9]+", cid)' \
+    "py/bad-id: malformed constraints not a lint ERROR"
+  mutant "node gate-level constraints ignored" plugin/templates/hb-lint.js "    if (Object.prototype.hasOwnProperty.call(gv, 'constraints'))" "    if (false)" \
+    "node/gate-level: malformed constraints not a lint ERROR"
+  mutant "node warning made an error" plugin/templates/hb-audit.js "      F('warn', 'unconstrained_review', p.id," "      F('error', 'unconstrained_review', p.id," \
+    "audit errors on a sound DAG"
+  mutant "python warning dropped" py/src/heartbeat/audit.py '        if rv and not (isinstance(rv.get("constraints"), list) and rv["constraints"]):' '        if False:' \
+    "py/no-constraints: unconstrained review gate G0 not WARNED"
+  mutant "schema lacks constraints" plugin/dag.schema.json '              "constraints": {' '              "constraintz": {' \
+    "schema: review.constraints"
   echo "SELFTEST-OK"; exit 0
 fi
 

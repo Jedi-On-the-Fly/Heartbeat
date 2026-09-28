@@ -111,6 +111,11 @@ function audit(dag) {
       F('error', 'hollow_gate', p.id,
         `gate ${p.gate_exit} has NO behavioural criterion — phase ${p.id} passes without proving its work`,
         { gate: p.gate_exit });
+    const rv = (gates[p.gate_exit] || {}).review;
+    if (rv && !(Array.isArray(rv.constraints) && rv.constraints.length))
+      F('warn', 'unconstrained_review', p.id,
+        `gate ${p.gate_exit} has an adversarial review but no plan-time constraints — the refuter's target is implicit (add review.constraints)`,
+        { gate: p.gate_exit });
 
     const taskText = tasks.map(t => `${t.title || ''} ${t.description || ''}`).join(' ').toLowerCase();
     const paths = new Set();
