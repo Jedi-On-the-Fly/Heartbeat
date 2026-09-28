@@ -46,3 +46,9 @@ def test_agent_review_run_returns_verdict(tmp_path, monkeypatch, stub):
            "gates": {"G": {"criteria": [{"id": "c", "cmd": "grep -q ok f"}]}}}
     rr = review.run(tmp_path, dag)
     assert rr["refuted"] is True and "auth" in rr["concerns"].lower()
+
+
+def test_free_review_coercion_is_explicit():
+    from heartbeat.refuter_profiles import _to_bool
+    assert [_to_bool(v) for v in (True, "true", " YES ", "1", "on", 2)] == [True] * 6
+    assert [_to_bool(v) for v in (False, None, "false", "no", "0", "off", "", 0, [])] == [False] * 9

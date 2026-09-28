@@ -1811,6 +1811,12 @@ check "T169.1 prompt carries tasks/gate/P-constraints/hb changed + the no-bug-hu
 check "T169.2 teeth: perturbed observations and seven reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/constraint-author.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
+grp "T170 — constrained refute prompt: change list + every id (P then G of this cycle) + answer format + triage rule; --free; profile free_review/free_model/author_model; unconstrained untouched; node ≡ python"
+check "T170.1 constrained (with and without profile) / free / new cycle / tampered / unconstrained / SKILL coercion (constrained-refute.sh → CONSTRAINED-REFUTE-OK)" \
+  'bash "'"$GEX"'/constrained-refute.sh" 2>&1 | grep -q "CONSTRAINED-REFUTE-OK"'
+check "T170.2 teeth: perturbed observations and seven reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/constrained-refute.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

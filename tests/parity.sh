@@ -206,6 +206,23 @@ author_case(){  # the author prompt bytes (incl. the hb changed list) + a record
 }
 author_case
 
+echo "── constrained refute-prompt parity ──"
+constrained_case(){
+  local d; d=$(mktemp -d); mkdir -p "$d/.hb/refuters"
+  cp "$ROOT/plugin/templates/"*.js "$d/.hb/"
+  printf '%s' '{"phases":[{"id":"P0","title":"t","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"t0","title":"w"}]}],"gates":{"G0":{"desc":"gd","review":{"prompt":"RP","profile":"pp","constraints":[{"id":"P2","claim":"c2 é","subjects":["a.txt"],"violation":"v2"},{"id":"P1","claim":"c1","subjects":["a.txt","b"],"violation":"v1"}]},"criteria":[{"id":"c","cmd":"true"}]}}}' > "$d/.hb/dag.json"
+  printf '%s' '{"persona":"PER","questions":["q"],"free_review":"yes","free_model":"FM"}' > "$d/.hb/refuters/pp.json"
+  printf '%s\n' '{"event":"initialized"}' > "$d/.hb/events.jsonl"; printf '1\n' > "$d/a.txt"
+  HB_NO_GIT=1 node "$d/.hb/hb.js" start t0 >/dev/null 2>&1; printf '2\n' > "$d/a.txt"
+  cmp "refute-prompt:constrained" "$(HB_NO_GIT=1 node "$d/.hb/hb.js" refute-prompt G0 2>&1)" "$(eval "HB_NO_GIT=1 $PY refute-prompt G0 --dir \"$d\"" 2>&1)"
+  cmp "refute-prompt:free" "$(HB_NO_GIT=1 node "$d/.hb/hb.js" refute-prompt G0 --free 2>&1)" "$(eval "HB_NO_GIT=1 $PY refute-prompt G0 --free --dir \"$d\"" 2>&1)"
+  local J='import sys,json;d=json.load(sys.stdin);print(json.dumps([d.get(k) for k in ("model","author_model","free_review","free_model","prompt")],ensure_ascii=False))'
+  cmp "refute-prompt:constrained-json" "$(HB_NO_GIT=1 node "$d/.hb/hb.js" refute-prompt G0 --json 2>&1 | python3 -c "$J")" "$(eval "HB_NO_GIT=1 $PY refute-prompt G0 --json --dir \"$d\"" 2>&1 | python3 -c "$J")"
+  case "$(HB_NO_GIT=1 node "$d/.hb/hb.js" refute-prompt G0 2>&1)" in *"  - P1: c1"*"  - P2: c2"*"M a.txt"*|*"M a.txt"*"  - P1: c1"*"  - P2: c2"*) ;; *) echo "  ✗ refute-prompt:constrained — node prompt lacks the ordered constraint block / change list"; FAIL=1;; esac
+  rm -rf "$d"
+}
+constrained_case
+
 echo "── panel aggregation parity ──"
 # aggregateVerdict must agree node ≡ python across rules and verdict mixes
 NODE_AGG='const {aggregateVerdict}=require(process.argv[1]);const cases=[["majority",[true,false,false]],["majority",[true,true,false]],["any",[false,false,true]],["any",[false,false,false]],["all",[true,true,true]],["all",[true,true,false]]];console.log(cases.map(([r,v])=>r+":"+aggregateVerdict(v,r)).join(","))'

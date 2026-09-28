@@ -51,9 +51,17 @@ A profile is a JSON file under `.hb/refuters/<name>.json`:
   ],
   "model": "claude-opus-4-8",             // optional — route the refute to a distinct model
   "provider": "anthropic",                // optional
-  "verdict": { "panel": 3, "refute_if": "majority" }   // optional — a perspective-diverse panel
+  "verdict": { "panel": 3, "refute_if": "majority" },  // optional — a perspective-diverse panel
+  "author_model": "…",                    // optional — constraint-first review: the gate-time author's model
+  "free_review": true,                    // optional — also require an unconstrained (free) review
+  "free_model": "…"                       // optional — the free reviewer's model
 }
 ```
+
+The three model fields are free-form strings passed through verbatim — whatever names your harness
+understands; unset means "use the session's / backend's default", never a substituted name.
+`free_review` is a boolean; in SKILL format write `free_review: true` (`false`, `no`, `0`, `off` and
+absence all mean false, identically in both runtimes).
 
 The `//` comments above are for this guide only — a real `.hb/refuters/<name>.json` is parsed as
 plain JSON (`JSON.parse` / `json.load`), which has no comments, so strip them in your own file.
@@ -132,6 +140,14 @@ node .hb/hb.js refute-prompt GATE_P3      # or: hb refute-prompt GATE_P3 (python
 With a profile it composes **persona + the gate's base falsification checklist + the profile's extra
 questions + the gate's `review.prompt`**. The one command is what the automated executor *and* an
 interactive refuter both use, so every surface honors the profile identically (T147).
+
+**On a constrained gate** (one with plan-time `review.constraints`), the same command appends the
+constraint-first block: the phase's change list (`hb changed`), every constraint id — plan-time `P…`
+then the gate-time `G…` set recorded in this review cycle — the per-id answer format
+(`<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>`) and the triage rule (an exploitable
+side finding means REFUTED, whatever the scope). `refute-prompt <gate> --free` composes the
+unconstrained breadth review instead (no constraint list). An unconstrained gate's prompt is exactly
+what it was (T170).
 
 **Coverage-narrowing caution.** A profile's questions are **appended** to the deterministic base
 checklist — they never replace it. A narrow single-lens profile still gets the full base coverage, so
