@@ -1,0 +1,2 @@
+rc=1
+review pass: artifact finding.md does not reference the phase under review (it cites nothing real; expected one of: GATE_NP, out.txt, np1, NP).

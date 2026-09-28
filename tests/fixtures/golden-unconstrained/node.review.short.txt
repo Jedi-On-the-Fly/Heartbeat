@@ -1,0 +1,2 @@
+rc=1
+review pass: artifact finding.md is too thin (10 chars) to be a real refutation attempt — a rubber-stamp is not a review.

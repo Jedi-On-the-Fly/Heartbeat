@@ -1,0 +1,2 @@
+rc=0
+review pass GATE_NP (backed by reviews/GATE_NP.md, 130 chars, cites: GATE_NP, out.txt, np1)

@@ -1,0 +1,2 @@
+rc=1
+review pass: reviewer 'doer' also executed this phase's work — a self-review is not adversarial (set a different HB_ACTOR).

@@ -1,0 +1,2 @@
+rc=1
+review pass requires --artifact <findings-file>: the refuter's written attempt (a pass must cite evidence, not just assert one).
