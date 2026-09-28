@@ -1785,6 +1785,14 @@ check "T165.1 a gate [true, slurper, false] evaluates ALL criteria and BLOCKS on
 check "T165.2 teeth: stripping the </dev/null guard on a copy makes the skip REAPPEAR and be caught (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/gate-stdin-immune.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
+grp "T166 — gate anchors: HeartBeat records the tree at the first start and at each gate acceptance; hb changed sees uncommitted + untracked work; unconstrained review surfaces frozen"
+check "T166.1 _start via CLI/MCP/exec, acceptance anchors (never while a review is owed), changed pending vs accepted, git + no-git, node ≡ python (gate-anchors.sh → GATE-ANCHORS-OK)" \
+  'bash "'"$GEX"'/gate-anchors.sh" 2>&1 | grep -q "GATE-ANCHORS-OK"'
+check "T166.2 teeth: perturbing the real observations (dropped untracked file, leaked ignored file, missing anchor, parity drift…) is caught (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/gate-anchors.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+check "T166.3 unconstrained refute-prompt text/--json and review verdicts are byte-identical to the pre-1.32 golden fixtures (golden-unconstrained.sh → GOLDEN-UNCONSTRAINED-OK)" \
+  'bash "'"$HB_SRC"'/tests/golden-unconstrained.sh" 2>&1 | grep -q "GOLDEN-UNCONSTRAINED-OK"'
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

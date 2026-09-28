@@ -254,5 +254,32 @@ impact_case(){
 }
 impact_case
 
+echo "── anchors / hb changed parity ──"
+anchors_case(){  # <git|nogit>: same tree → same manifest (path set + hashes) and same change list
+  local mode="$1" d; d=$(mktemp -d); mkdir -p "$d/.hb" "$d/sub" "$d/node_modules/m"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" "$d/.hb/"
+  printf '%s' '{"phases":[{"id":"P0","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"T1"}]}],"gates":{"G0":{"criteria":[{"id":"c","cmd":"true"}]}}}' > "$d/.hb/dag.json"
+  printf '%s\n' '{"event":"initialized"}' > "$d/.hb/events.jsonl"
+  printf 'a\n' > "$d/a.txt"; printf 'b\n' > "$d/b.txt"; printf 'é\n' > "$d/sub/é.txt"; printf 'x\n' > "$d/node_modules/m/i.js"
+  if [ "$mode" = git ]; then printf 'ign.txt\n' > "$d/.gitignore"; printf 'i\n' > "$d/ign.txt"
+    git -C "$d" init -q && git -C "$d" add -A && git -C "$d" -c user.name=t -c user.email=t@t commit -qm b; fi
+  HB_NO_GIT=1 node "$d/.hb/hb.js" start T1 >/dev/null 2>&1
+  printf 'a2\n' > "$d/a.txt"; rm -f "$d/b.txt"; printf 'n\n' > "$d/new.txt"
+  local MF='import sys,json;print(json.dumps(json.load(open(sys.argv[1]))["files"],sort_keys=True,ensure_ascii=False))'
+  HB_NO_GIT=1 node "$d/.hb/hb.js" anchor NODE_A >/dev/null 2>&1
+  PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c 'import sys;from heartbeat import anchors;anchors.write_anchor(sys.argv[1],"PY_A")' "$d/.hb"
+  cmp "anchors:manifest:$mode" "$(python3 -c "$MF" "$d/.hb/anchors/NODE_A.json")" "$(python3 -c "$MF" "$d/.hb/anchors/PY_A.json")"
+  # guard: two identical ERRORS must not read as parity — the node side must be a real report
+  case "$(HB_NO_GIT=1 node "$d/.hb/hb.js" changed G0 --json 2>&1)" in
+    *'"added":["new.txt"]'*'"modified":["a.txt"]'*'"deleted":["b.txt"]'*) ;;
+    *) echo "  ✗ anchors:changed:$mode — node report is not the expected change list"; FAIL=1;;
+  esac
+  cmp "anchors:changed:$mode" \
+    "$(HB_NO_GIT=1 node "$d/.hb/hb.js" changed G0 --json 2>&1)" \
+    "$(eval "HB_NO_GIT=1 $PY changed G0 --json --dir \"$d\"" 2>&1)"
+  rm -rf "$d"
+}
+anchors_case git; anchors_case nogit
+
 echo ""
 [ "$FAIL" -eq 0 ] && { echo "✅ PARITY OK — node ≡ python"; exit 0; } || { echo "❌ PARITY DIVERGENCE"; exit 1; }

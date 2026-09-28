@@ -133,6 +133,10 @@ exactly that state.json read-modify-write; the append-only informational events 
 | `state` | print projection |
 | `park <PHASE\|GATE> [reason…]` / `unpark <PHASE\|GATE>` | retire a phase without deleting it (sets `parked` in dag.json; resolver/audit/report/sweep all skip it, loudly; reversible) |
 | `import` | seed log from a legacy `state.json` |
+| `changed <gate> [--json]` | what the phase exiting `<gate>` changed: added/modified/deleted between its entry anchor and the gate's own anchor once accepted, else the live tree (anchors below) |
+| `anchor <gate>` | internal — `gate.sh` records a review-less gate's acceptance anchor through it |
+
+**Anchors** — HeartBeat's own record of the tree, independent of git tags: `.hb/anchors/<name>.json` = `{gate, ts, commit, files:{path:sha256}}`. `_start` is written on the first LIVE `task_started` (`hb start`; `hb-exec` shells out to it — never on `rebuild`/`import`); `<GATE>` on acceptance (a review-less pass in `gate.sh`, or `review pass`), after the restore-point commit, so `commit` is the accepted HEAD (`null` outside git). Listing: inside a git worktree `git ls-files -co --exclude-standard` (read-only — `HB_NO_GIT` only disables writes), so uncommitted and untracked work is seen and ignored files are not; outside git a walk skipping `.hb .git node_modules __pycache__ .venv` at any depth. `.hb/` and `.git/` are never listed; only regular files are hashed. A phase's entry anchor is its `gate_entry`'s, or `_start`. A write failure is reported on stderr, never swallowed. Parity: `anchors:manifest` / `anchors:changed` (git + no-git); T166.
 
 `hb.js` is `require`-safe (CLI dispatch guarded by `require.main === module`); `tick.sh` requires it for `PROTOCOL`.
 
