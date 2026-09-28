@@ -24,8 +24,8 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 |---|---|---|
 | `state.py` | `project(events, dag)`, `read_events/read_dag/read_state`, `reproject`, `append_event`, `mutate`, `with_wlock`, `acquire_lease/release_lease`, `now_iso` | projector = plugin parity |
 | `resolver.py` | `resolve(state, dag, hbdir)`, `ready_tasks(...limit)` | same return shapes as `hb-next-task.js` |
-| `lint.py` | `lint(dag)` → `{errors, warnings}`, `extract_paths(cmd)` | errors match plugin verbatim |
-| `audit.py` | `audit(dag)` → `{findings, errors, warns}`, `classify(cmd)`, `is_nondet(cmd)` | ruleset = plugin verbatim |
+| `lint.py` | `lint(dag)` → `{errors, warnings}`, `extract_paths(cmd)` | errors match plugin verbatim (incl. `_check_constraints` — plan-time review constraints; T168) |
+| `audit.py` | `audit(dag)` → `{findings, errors, warns}`, `classify(cmd)`, `is_nondet(cmd)` | ruleset = plugin verbatim (incl. the `unconstrained_review` warning) |
 | `review.py` | `build_prompt(dag, det)`, `run(hbdir, dag)` → `{det, refuted, concerns}` | agent DAG refutation via a backend |
 | `gate.py` | `eval_gate(hbdir, gate, timeout)`, `run_gate(hbdir, gate, check)`, `run_all(hbdir)` | criteria via `subprocess(shell=True)` |
 | `tick.py` | `tick(hbdir)` → `{wakeAgent, data}` | Stage A; priority order = plugin |

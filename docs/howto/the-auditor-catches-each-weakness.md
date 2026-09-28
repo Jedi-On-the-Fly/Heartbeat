@@ -22,6 +22,8 @@ warn or info (the full semantics and exact severities live in the auditor itself
 | `nondeterministic` | a criterion touching `$RANDOM` / network / time |
 | `side_effecting` | a criterion that writes its own evidence |
 | `gate_offphase` | a gate referencing files no task in the phase mentions |
+| `control_char` | a criterion carrying a `\x1e`/`\x1f` byte that would corrupt the gate runner's transport |
+| `unconstrained_review` | a review gate with no plan-time `review.constraints` — the refuter's target is implicit (a warning) |
 
 ## Proof
 
@@ -32,7 +34,7 @@ generates a minimal must-trip DAG and asserts that rule fires; finally it assert
 behavioral DAG trips **none** of them (no false alarms). Run it:
 
 ```bash
-bash docs/howto/gate-examples/audit-rules-check.sh   # -> AUDIT-RULES-PROVEN:8
+bash docs/howto/gate-examples/audit-rules-check.sh   # -> AUDIT-RULES-PROVEN:10
 ```
 
 This is the auditor's analogue of the parity self-test

@@ -21,6 +21,7 @@ gen(){ case "$1" in
   nondeterministic)echo '{"phases":[{"id":"P","gate_exit":"G","tasks":[{"id":"T","title":"x"}]}],"gates":{"G":{"criteria":[{"id":"c","cmd":"[ $((RANDOM % 2)) -eq 0 ]"}]}}}';;
   side_effecting)  echo '{"phases":[{"id":"P","gate_exit":"G","tasks":[{"id":"T","title":"make out.txt"}]}],"gates":{"G":{"criteria":[{"id":"c","cmd":"echo ok > \"$PROJECT_DIR/out.txt\"; grep -q ok \"$PROJECT_DIR/out.txt\""}]}}}';;
   gate_offphase)   echo '{"phases":[{"id":"P","gate_exit":"G","tasks":[{"id":"T","title":"x"}]}],"gates":{"G":{"criteria":[{"id":"c","cmd":"grep -q ok \"$PROJECT_DIR/orphan.txt\""}]}}}';;
+  unconstrained_review) echo '{"phases":[{"id":"P","gate_exit":"G","tasks":[{"id":"T","title":"write out.txt"}]}],"gates":{"G":{"review":{"prompt":"refute P"},"criteria":[{"id":"c","cmd":"grep -q ok \"$PROJECT_DIR/out.txt\""}]}}}';;
   control_char)    echo '{"phases":[{"id":"P","gate_exit":"G","tasks":[{"id":"T","title":"x"}]}],"gates":{"G":{"criteria":[{"id":"c","cmd":"grep -q ok f\u001ftrue"}]}}}';;
   *) echo "";;
 esac; }

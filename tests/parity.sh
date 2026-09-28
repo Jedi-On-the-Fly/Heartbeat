@@ -42,6 +42,13 @@ for f in good hollow; do
   cmp "lint:$f" "$(l_node "$ROOT/tests/fixtures/audit/$f.json")" "$(l_py "$ROOT/tests/fixtures/audit/$f.json")"
 done
 
+# plan-time review constraints: every lint error (verbatim, sorted) and the unconstrained_review warning
+cmp "constraints:lint" "$(l_node "$ROOT/tests/fixtures/audit/constraints.json")" "$(l_py "$ROOT/tests/fixtures/audit/constraints.json")"
+cmp "constraints:audit" "$(a_node "$ROOT/tests/fixtures/audit/constraints.json")" "$(a_py "$ROOT/tests/fixtures/audit/constraints.json")"
+case "$(l_node "$ROOT/tests/fixtures/audit/constraints.json")" in   # guard: identical EMPTY lists must not read as parity
+  *'reserved for gate-time'*'duplicate id'*) ;; *) echo "  ✗ constraints:lint — node found no constraint errors"; FAIL=1;;
+esac
+
 echo "── state projection parity ──"
 DAG='{"phases":[{"id":"P0","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"P0T1","requires":[]},{"id":"P0T2","requires":["P0T1"]}]},{"id":"P1","gate_entry":"G0","gate_exit":"G1","tasks":[{"id":"P1T1","requires":[]}]}],"gates":{"G0":{"criteria":[{"id":"c","cmd":"true"}]},"G1":{"review":{"prompt":"r"},"criteria":[{"id":"c","cmd":"true"}]}}}'
 state_case(){ # name events

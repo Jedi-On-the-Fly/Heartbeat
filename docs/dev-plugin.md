@@ -150,7 +150,7 @@ exactly that state.json read-modify-write; the append-only informational events 
 
 ## Lint — `hb-lint.js`
 
-Errors (exit 1): duplicate task ID; `requires` non-existent; dependency cycle; undefined gate; `gate_entry` that is no phase's `gate_exit`. Warnings (exit 0): phase > 8 tasks; gate defined-but-unreferenced; skeleton/placeholder text; gate cmd referencing a path no task produces (`extractPaths` heuristic). `extractPaths(cmd)` strips `$PROJECT_DIR`/`$HB_DIR` and state files.
+Errors (exit 1): duplicate task ID; `requires` non-existent; dependency cycle; undefined gate; `gate_entry` that is no phase's `gate_exit`; malformed plan-time constraints (`checkConstraints`: `gates.<G>.review.constraints` must be a list of `{id P<n>, claim, subjects[], violation}` — non-empty strings, ids unique within the gate, `G<n>` reserved for review-time constraints; `constraints` placed on the gate itself is an error). Every message names the gate and the id (or `#n`). Warnings (exit 0): phase > 8 tasks; gate defined-but-unreferenced; skeleton/placeholder text; gate cmd referencing a path no task produces (`extractPaths` heuristic). `extractPaths(cmd)` strips `$PROJECT_DIR`/`$HB_DIR` and state files.
 
 ## Audit
 
@@ -163,6 +163,7 @@ Errors (exit 1): duplicate task ID; `requires` non-existent; dependency cycle; u
 | `unguarded_phase` | warn | phase has tasks, no `gate_exit` |
 | `nondeterministic` | warn | a criterion touches network/time |
 | `gate_offphase` | warn | gate references files no task in the phase mentions |
+| `unconstrained_review` | warn | a live phase's exit gate has a `review` block but no plan-time `review.constraints` — the refuter's target is implicit |
 | `control_char` | error | a criterion cmd/desc contains a `\x1e`/`\x1f` byte (would corrupt the gate runner's record transport) |
 | `vacuous` / `existence` | info | per-criterion, when not the sole behavioral one |
 

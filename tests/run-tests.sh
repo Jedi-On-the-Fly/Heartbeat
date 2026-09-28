@@ -1799,6 +1799,12 @@ check "T167.1 tag/commit failures (review-less + review pass) reported on stderr
 check "T167.2 teeth: perturbed observations AND mutated copies of the real code (swallowed failures, dropped policy field, doctor checks removed / over-broad) all go RED (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/restore-points.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
+grp "T168 — plan-time review constraints: lint validates gates.<G>.review.constraints, audit warns unconstrained_review, schema knows them; node ≡ python"
+check "T168.1 well-formed lints clean + schema-valid; malformed = lint ERROR naming gate+id; unconstrained review gate WARNED (never an error); node ≡ python (constraints-schema.sh → CONSTRAINTS-SCHEMA-OK)" \
+  'bash "'"$GEX"'/constraints-schema.sh" 2>&1 | grep -q "CONSTRAINTS-SCHEMA-OK"'
+check "T168.2 teeth: perturbed observations and seven reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/constraints-schema.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

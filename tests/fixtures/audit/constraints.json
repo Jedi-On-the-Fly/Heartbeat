@@ -1,0 +1,134 @@
+{
+ "phases": [
+  {
+   "id": "P0",
+   "title": "p0",
+   "gate_entry": null,
+   "gate_exit": "G0",
+   "tasks": [
+    {
+     "id": "t0",
+     "title": "build src/a.py"
+    }
+   ]
+  },
+  {
+   "id": "P1",
+   "title": "p1",
+   "gate_entry": "G0",
+   "gate_exit": "G1",
+   "tasks": [
+    {
+     "id": "t1",
+     "title": "build src/a.py"
+    }
+   ]
+  },
+  {
+   "id": "P2",
+   "title": "p2",
+   "gate_entry": "G1",
+   "gate_exit": "G2",
+   "tasks": [
+    {
+     "id": "t2",
+     "title": "build src/a.py"
+    }
+   ]
+  }
+ ],
+ "gates": {
+  "G0": {
+   "desc": "malformed",
+   "review": {
+    "prompt": "r",
+    "constraints": [
+     {
+      "id": "P1",
+      "claim": "claim P1",
+      "subjects": [
+       "src/a.py"
+      ],
+      "violation": "counter-example P1"
+     },
+     {
+      "id": "P1",
+      "claim": "claim P1",
+      "subjects": [
+       "src/a.py"
+      ],
+      "violation": "counter-example P1"
+     },
+     {
+      "id": "G2",
+      "claim": "claim G2",
+      "subjects": [
+       "src/a.py"
+      ],
+      "violation": "counter-example G2"
+     },
+     {
+      "id": "P3",
+      "claim": "claim P3",
+      "subjects": [],
+      "violation": "counter-example P3"
+     },
+     {
+      "id": "P4"
+     },
+     "P5"
+    ]
+   },
+   "criteria": [
+    {
+     "id": "c",
+     "cmd": "grep -q ok \"$PROJECT_DIR/src/a.py\""
+    }
+   ]
+  },
+  "G1": {
+   "desc": "unconstrained review",
+   "review": {
+    "prompt": "r"
+   },
+   "constraints": [
+    {
+     "id": "P1",
+     "claim": "claim P1",
+     "subjects": [
+      "src/a.py"
+     ],
+     "violation": "counter-example P1"
+    }
+   ],
+   "criteria": [
+    {
+     "id": "c",
+     "cmd": "grep -q ok \"$PROJECT_DIR/src/a.py\""
+    }
+   ]
+  },
+  "G2": {
+   "desc": "constrained",
+   "review": {
+    "prompt": "r",
+    "constraints": [
+     {
+      "id": "P1",
+      "claim": "claim P1",
+      "subjects": [
+       "src/a.py"
+      ],
+      "violation": "counter-example P1"
+     }
+    ]
+   },
+   "criteria": [
+    {
+     "id": "c",
+     "cmd": "grep -q ok \"$PROJECT_DIR/src/a.py\""
+    }
+   ]
+  }
+ }
+}

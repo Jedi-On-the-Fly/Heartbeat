@@ -63,6 +63,13 @@ phases). Otherwise write a fresh DAG.
   test and check its real result.
 - **Adversarial review** on sensitive gates — add `"review": { "prompt": "Refute that
   this phase is done: …" }` so a second agent must fail to refute before it advances.
+- **Plan-time constraints on every review gate** — give the review explicit targets:
+  `"review": { …, "constraints": [{ "id": "P1", "claim": "…", "subjects": ["src/…"],
+  "violation": "…" }] }`. Each is requirement-level and falsifiable: `claim` is the property
+  the phase promises, `subjects` the files/areas it covers, `violation` the concrete
+  observation that would break it. Ids are `P1…Pn` (`G…` is reserved for constraints written
+  at review time). `hb-lint` rejects malformed ones; `hb-audit` warns `unconstrained_review`
+  on a review gate without any.
 - **No hardcoded values/counts** — derive from source/registry. Validate the shape
   against `<project-dir>/.hb/dag.schema.json`.
 

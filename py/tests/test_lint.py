@@ -70,3 +70,15 @@ def test_extract_paths_rejects_unresolved_vars_anywhere():
     assert lint.extract_paths('cmp "$PROJECT_DIR/blocks/$n.css" "$SRC/blocks/$n.css"') == set()
     paths = lint.extract_paths('S="${SRC:-/opt/kit}"; cmp "$S/blocks/dock.css" "$PROJECT_DIR/vendor/dock.css"')
     assert paths == {"vendor/dock.css"}
+
+
+def test_plan_time_constraints_validated():
+    ok = {"id": "P1", "claim": "c", "subjects": ["a.py"], "violation": "v"}
+    dag = {"phases": [{"id": "P0", "gate_entry": None, "gate_exit": "G0", "tasks": [{"id": "t"}]}],
+           "gates": {"G0": {"review": {"prompt": "r", "constraints": [ok, dict(ok), {**ok, "id": "G2"}]},
+                            "criteria": [{"id": "c", "cmd": "true"}]}}}
+    errs = lint.lint(dag)["errors"]
+    assert "[G0] constraint P1: duplicate id in this gate" in errs
+    assert any("constraint G2: id must be P<n>" in e for e in errs)
+    dag["gates"]["G0"]["review"]["constraints"] = [ok]
+    assert lint.lint(dag)["errors"] == []
