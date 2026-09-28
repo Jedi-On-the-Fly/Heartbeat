@@ -548,15 +548,22 @@ function phaseDoers(dag, gate, events) {
   for (const e of events) if (e.event === 'task_done' && ids.has(e.task) && e.actor && e.actor !== 'unknown') doers.add(e.actor);
   return doers;
 }
-// The current review cycle of <gate>: pending (review owed) + whether a set was recorded in it.
+// The current review cycle of <gate>: pending (review owed) + whether a set was recorded in it. A
+// cycle starts after the gate's last REVIEW VERDICT — re-running the gate while the review is owed
+// (a new gate_passed) must NOT start a new cycle, or a second author could re-record a weaker set.
 function reviewCycle(dag, gate) {
   const events = readEvents();
   const pending = (project(events, dag).pending_reviews || []).includes(gate);
-  let lastPass = -1;
-  events.forEach((e, i) => { if (e.event === 'gate_passed' && e.gate === gate) lastPass = i; });
-  const recorded = events.some((e, i) => i > lastPass && e.event === 'constraints_recorded' && e.gate === gate);
+  let start = -1;
+  events.forEach((e, i) => { if ((e.event === 'review_failed' || e.event === 'review_passed') && e.gate === gate) start = i; });
+  const recorded = events.some((e, i) => i > start && e.event === 'constraints_recorded' && e.gate === gate);
   return { pending, recorded, events };
 }
+// A path shown to an agent: control characters (a newline in a file name) would let a doer forge
+// prompt sections, so such a path is rendered JSON-quoted. Twin: anchors.safe_path.
+function safePath(p) { return /[\x00-\x1f\x7f]/.test(p) ? JSON.stringify(p) : p; }
+// A gate id used as a file name must stay inside .hb/constraints/.
+const SAFE_GATE_ID = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 function composeAuthorPrompt(dag, gate) {
   const ph = (dag.phases || []).find(p => p.gate_exit === gate) || { id: '?', tasks: [] };
   const gv = (dag.gates || {})[gate] || {};
@@ -584,7 +591,7 @@ function composeAuthorPrompt(dag, gate) {
   L.push(ch ? `## What this phase changed (${ch.base} → ${ch.target})` : '## What this phase changed');
   if (!ch) L.push(`  (unavailable: ${why})`);
   else {
-    for (const [k, t] of [['A', ch.added], ['M', ch.modified], ['D', ch.deleted]]) for (const p of t) L.push(`  ${k} ${p}`);
+    for (const [k, t] of [['A', ch.added], ['M', ch.modified], ['D', ch.deleted]]) for (const p of t) L.push(`  ${k} ${safePath(p)}`);
     if (!ch.added.length && !ch.modified.length && !ch.deleted.length) L.push('  (no changes)');
   }
   L.push('');
@@ -652,26 +659,39 @@ switch (cmd) {
       break;
     }
     const file = val('--record');
-    if (!file) die('hb constraints: --record needs <file.json>');
+    if (!file || file.startsWith('--')) die('hb constraints: --record needs <file.json>');
+    if (cArgs.includes('--model') && (val('--model') === undefined || val('--model').startsWith('--')))
+      die('hb constraints: --model needs a value');
     const model = val('--model') ?? null;
+    if (!SAFE_GATE_ID.test(gate)) die(`hb constraints --record: gate id '${gate}' is not usable as a file name`);
     const actor = process.env.HB_ACTOR;
-    const cyc = reviewCycle(dag, gate);
-    if (!cyc.pending) die(`hb constraints --record: ${gate} is not awaiting review — record after its deterministic pass (review_pending)`);
-    if (cyc.recorded) die(`hb constraints --record: a constraint set is already recorded for ${gate} in this review cycle — it is write-once until the review verdict`);
-    if (!actor || actor === 'unknown') die('hb constraints --record: set HB_ACTOR to the author\'s identity (the author must not have done this phase\'s work)');
-    if (phaseDoers(dag, gate, cyc.events).has(actor))
-      die(`hb constraints --record: '${actor}' did this phase's work — the constraint author must be a different actor`);
+    const norm = (a) => String(a).trim().toLowerCase();
     let raw, list;
     try { raw = fs.readFileSync(path.isAbsolute(file) ? file : path.join(process.cwd(), file)); } catch (e) { die(`hb constraints --record: cannot read ${file} (${e.code || e.message})`); }
-    try { list = JSON.parse(raw.toString('utf8')); } catch (e) { die(`hb constraints --record: ${file} is not valid JSON (${e.message})`); }
+    // Strict JSON, identical in both runtimes: valid UTF-8 only (python rejects invalid bytes), and
+    // JSON.parse already rejects NaN/Infinity (python is told to).
+    try { list = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)); }
+    catch (e) { die(`hb constraints --record: ${file} is not valid JSON (${e.message})`); }
     if (!Array.isArray(list) || !list.length) die('hb constraints --record: expected a non-empty JSON array of {id G<n>, claim, subjects, violation}');
     const errs = require('./hb-lint.js').constraintErrors(list, 'G');
     if (errs.length) die('hb constraints --record: ' + errs.join('; '));
-    const dir = path.join(HB_DIR, 'constraints');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, `${gate}.json`), raw);
-    const sha256 = require('crypto').createHash('sha256').update(raw).digest('hex');
-    mutate({ event: 'constraints_recorded', gate, ids: list.map(c => c.id), sha256, actor, model });
+    // Check-then-write under ONE write lock: two concurrent records cannot both see "not recorded".
+    const verdict = withWlock(() => {
+      const cyc = reviewCycle(dag, gate);
+      if (!cyc.pending) return `hb constraints --record: ${gate} is not awaiting review — record after its deterministic pass (review_pending)`;
+      if (cyc.recorded) return `hb constraints --record: a constraint set is already recorded for ${gate} in this review cycle — it is write-once until the review verdict`;
+      if (!actor || norm(actor) === 'unknown') return 'hb constraints --record: set HB_ACTOR to the author\'s identity (the author must not have done this phase\'s work)';
+      if ([...phaseDoers(dag, gate, cyc.events)].some(d => norm(d) === norm(actor)))
+        return `hb constraints --record: '${actor}' did this phase's work — the constraint author must be a different actor`;
+      const dir = path.join(HB_DIR, 'constraints');
+      fs.mkdirSync(dir, { recursive: true });
+      atomicWrite(path.join(dir, `${gate}.json`), raw);   // tmp + rename: replaces a planted symlink, never writes through it
+      const sha256 = require('crypto').createHash('sha256').update(raw).digest('hex');
+      appendEvent({ event: 'constraints_recorded', gate, ids: list.map(c => c.id), sha256, actor, model });
+      reproject();
+      return null;
+    });
+    if (verdict) die(verdict);
     process.stdout.write(`constraints recorded for ${gate}: ${list.map(c => c.id).join(', ')} (.hb/constraints/${gate}.json)\n`);
     break;
   }
@@ -684,7 +704,7 @@ switch (cmd) {
     try { c = changed(gate); } catch (e) { die(`hb changed: ${e.message}`); }
     if (asJson) { process.stdout.write(JSON.stringify(c) + '\n'); break; }
     process.stdout.write(`changes in the phase exiting ${gate} (${c.base} → ${c.target}):\n`);
-    for (const [k, t] of [['A', c.added], ['M', c.modified], ['D', c.deleted]]) for (const p of t) process.stdout.write(`  ${k} ${p}\n`);
+    for (const [k, t] of [['A', c.added], ['M', c.modified], ['D', c.deleted]]) for (const p of t) process.stdout.write(`  ${k} ${safePath(p)}\n`);
     if (!c.added.length && !c.modified.length && !c.deleted.length) process.stdout.write('  (no changes)\n');
     break;
   }

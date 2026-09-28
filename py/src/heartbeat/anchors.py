@@ -22,6 +22,12 @@ from . import state as st
 ANCHOR_SKIP = {".hb", ".git", "node_modules", "__pycache__", ".venv"}
 
 
+def safe_path(p):
+    """A path shown to an agent: control characters (a newline in a file name) would let a doer forge
+    prompt sections, so such a path is rendered JSON-quoted (== JS JSON.stringify). Twin: safePath."""
+    return json.dumps(p, ensure_ascii=False) if any(ord(c) < 0x20 or ord(c) == 0x7f for c in p) else p
+
+
 def _anchors_dir(hbdir):
     return Path(hbdir) / "anchors"
 

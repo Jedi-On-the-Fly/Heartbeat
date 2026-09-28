@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 from . import anchors
@@ -30,12 +31,18 @@ def phase_doers(dag, gate, events):
 
 
 def review_cycle(hbdir, dag, gate):
+    """A cycle starts after the gate's last REVIEW VERDICT — re-running the gate while the review is
+    owed (a new gate_passed) must NOT start a new cycle, or a second author could re-record a weaker set."""
     events = st.read_events(hbdir)
     pending = gate in (st.project(events, dag).get("pending_reviews") or [])
-    last_pass = max((i for i, e in enumerate(events) if e.get("event") == "gate_passed" and e.get("gate") == gate), default=-1)
-    recorded = any(i > last_pass and e.get("event") == "constraints_recorded" and e.get("gate") == gate
+    start = max((i for i, e in enumerate(events)
+                 if e.get("event") in ("review_failed", "review_passed") and e.get("gate") == gate), default=-1)
+    recorded = any(i > start and e.get("event") == "constraints_recorded" and e.get("gate") == gate
                    for i, e in enumerate(events))
     return pending, recorded, events
+
+
+SAFE_GATE_ID = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
 
 
 def compose_author_prompt(hbdir, dag, gate):
@@ -69,7 +76,7 @@ def compose_author_prompt(hbdir, dag, gate):
     else:
         for k, t in (("A", ch["added"]), ("M", ch["modified"]), ("D", ch["deleted"])):
             for p in t:
-                L.append(f"  {k} {p}")
+                L.append(f"  {k} {anchors.safe_path(p)}")
         if not (ch["added"] or ch["modified"] or ch["deleted"]):
             L.append("  (no changes)")
     L += ["", "## Your output", "A JSON array, ids G1..Gn in order:",
@@ -82,25 +89,23 @@ def compose_author_prompt(hbdir, dag, gate):
     return "\n".join(L)
 
 
+def _no_constant(c):
+    raise ValueError(f"{c} is not valid JSON")   # NaN/Infinity: node's JSON.parse rejects them too
+
+
 def record(hbdir, dag, gate, file, model=None):
-    """Returns (rc, out, err)."""
+    """Returns (rc, out, err). Check-then-write happens under ONE write lock, so two concurrent
+    records cannot both see "not recorded"."""
+    if not SAFE_GATE_ID.fullmatch(gate):
+        return 1, "", f"hb constraints --record: gate id '{gate}' is not usable as a file name"
     actor = os.environ.get("HB_ACTOR")
-    pending, recorded, events = review_cycle(hbdir, dag, gate)
-    if not pending:
-        return 1, "", f"hb constraints --record: {gate} is not awaiting review — record after its deterministic pass (review_pending)"
-    if recorded:
-        return 1, "", (f"hb constraints --record: a constraint set is already recorded for {gate} in this review cycle "
-                       "— it is write-once until the review verdict")
-    if not actor or actor == "unknown":
-        return 1, "", "hb constraints --record: set HB_ACTOR to the author's identity (the author must not have done this phase's work)"
-    if actor in phase_doers(dag, gate, events):
-        return 1, "", f"hb constraints --record: '{actor}' did this phase's work — the constraint author must be a different actor"
+    norm = lambda a: str(a).strip().lower()  # noqa: E731
     try:
         raw = Path(file).read_bytes()
     except OSError as e:
         return 1, "", f"hb constraints --record: cannot read {file} ({e.strerror or e})"
     try:
-        lst = json.loads(raw.decode("utf-8"))
+        lst = json.loads(raw.decode("utf-8"), parse_constant=_no_constant)
     except (ValueError, UnicodeDecodeError) as e:
         return 1, "", f"hb constraints --record: {file} is not valid JSON ({e})"
     if not isinstance(lst, list) or not lst:
@@ -108,12 +113,30 @@ def record(hbdir, dag, gate, file, model=None):
     errs = lintmod.constraint_errors(lst, "G")
     if errs:
         return 1, "", "hb constraints --record: " + "; ".join(errs)
-    d = Path(hbdir) / "constraints"
-    d.mkdir(parents=True, exist_ok=True)
-    (d / f"{gate}.json").write_bytes(raw)
     ids = [c["id"] for c in lst]
-    st.mutate(hbdir, {"event": "constraints_recorded", "gate": gate, "ids": ids,
-                      "sha256": hashlib.sha256(raw).hexdigest(), "actor": actor, "model": model})
+
+    def _locked():
+        pending, recorded, events = review_cycle(hbdir, dag, gate)
+        if not pending:
+            return f"hb constraints --record: {gate} is not awaiting review — record after its deterministic pass (review_pending)"
+        if recorded:
+            return (f"hb constraints --record: a constraint set is already recorded for {gate} in this review cycle "
+                    "— it is write-once until the review verdict")
+        if not actor or norm(actor) == "unknown":
+            return "hb constraints --record: set HB_ACTOR to the author's identity (the author must not have done this phase's work)"
+        if any(norm(d) == norm(actor) for d in phase_doers(dag, gate, events)):
+            return f"hb constraints --record: '{actor}' did this phase's work — the constraint author must be a different actor"
+        d = Path(hbdir) / "constraints"
+        d.mkdir(parents=True, exist_ok=True)
+        st.atomic_write_bytes(d / f"{gate}.json", raw)   # tmp + rename: replaces a planted symlink
+        st.append_event(hbdir, {"event": "constraints_recorded", "gate": gate, "ids": ids,
+                                "sha256": hashlib.sha256(raw).hexdigest(), "actor": actor, "model": model})
+        st.reproject(hbdir)
+        return None
+
+    err = st.with_wlock(hbdir, _locked)
+    if err:
+        return 1, "", err
     return 0, f"constraints recorded for {gate}: {', '.join(ids)} (.hb/constraints/{gate}.json)", ""
 
 

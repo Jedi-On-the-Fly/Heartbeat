@@ -177,6 +177,13 @@ def atomic_write(path, data):
     os.replace(tmp, path)
 
 
+def atomic_write_bytes(path, data):
+    path = Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
+
+
 def append_event(hbdir, ev):
     ev.setdefault("ts", now_iso())
     ev.setdefault("actor", os.environ.get("HB_ACTOR", "unknown"))   # identity for adversarial review

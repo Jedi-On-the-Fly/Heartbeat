@@ -284,7 +284,7 @@ def main(argv=None):
         print(f"changes in the phase exiting {args.gate} ({c['base']} → {c['target']}):")
         for k, t in (("A", c["added"]), ("M", c["modified"]), ("D", c["deleted"])):
             for p in t:
-                print(f"  {k} {p}")
+                print(f"  {k} {anchors.safe_path(p)}")
         if not (c["added"] or c["modified"] or c["deleted"]):
             print("  (no changes)")
         return 0
