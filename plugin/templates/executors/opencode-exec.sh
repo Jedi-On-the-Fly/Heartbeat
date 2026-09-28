@@ -38,13 +38,13 @@ if [ -n "${HB_EXEC_MODEL:-}" ]; then mdl=(-m "${HB_EXEC_MODEL}"); fi
 
 # The gate-time constraint AUTHOR: a read-only model call whose reply must carry a JSON array.
 if [ "$mode" = author ]; then
-  opencode run "${mdl[@]}" "$(field .prompt)" </dev/null 2>/dev/null | author_json
+  opencode run ${mdl[@]+"${mdl[@]}"} "$(field .prompt)" </dev/null 2>/dev/null | author_json
   exit 0
 fi
 
 if [ "$mode" = refute ]; then
   rp="$(field .prompt)"
-  ans="$(opencode run --format json "${mdl[@]}" "You are a SKEPTICAL adversarial reviewer for a HeartBeat phase gate.
+  ans="$(opencode run --format json ${mdl[@]+"${mdl[@]}"} "You are a SKEPTICAL adversarial reviewer for a HeartBeat phase gate.
 ${rp}
 
 Context:
@@ -58,7 +58,7 @@ Do not modify files. Hunt for a real hole: a hollow test, a criterion not truly 
     printf '{"refuted":false,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 20000 | jstr)"
   fi
 else
-  if opencode run --format json "${mdl[@]}" "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.
+  if opencode run --format json ${mdl[@]+"${mdl[@]}"} "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.
 
 ${ctx}" </dev/null >/tmp/hb-exec-opencode.$$.log 2>&1; then
     echo '{"ok":true,"summary":"opencode completed the task"}'

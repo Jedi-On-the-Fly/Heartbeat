@@ -202,7 +202,7 @@ Wire protocol — driver spawns `bash -c "<cmd> <mode>"`, mode ∈ `execute|refu
 |---|---|
 | `execute` | `{"ok": bool, "summary": str}` |
 | `refute` | `{"refuted": bool, "findings": str}` (payload `review: "free"` = the free review; findings up to 20 000 chars) |
-| `author` | `{"ok": bool, "constraints": [...]}` — the gate-time constraint author (read-only model call; the python adapters extract the first JSON array via `_fileblocks.author_reply`, the shell adapters via an inline node extractor) |
+| `author` | `{"ok": bool, "constraints": [...]}` — the gate-time constraint author (every adapter passes the role's model, `HB_EXEC_MODEL`, to its CLI: `claude --model`, `codex -m`, `opencode -m`; none when unset — T57.2) (read-only model call; the python adapters extract the first JSON array via `_fileblocks.author_reply`, the shell adapters via an inline node extractor) |
 | anything else | `{"error": "unsupported mode …"}` — never falls through to execute (T57.2 conformance) |
 
 `defaultCmd`: `claude-code`→`claude-exec.sh`, `codex`→`codex-exec.sh`, `opencode`→`opencode-exec.sh`; each framework/local backend → its `<name>_exec.py` under `executors/` (`agno` `crewai` `ollama` `langgraph` `openai_agents` `autogen` `smolagents` `pydanticai`); else the string is the command. Backends never touch `state.json`/`gate.sh`.

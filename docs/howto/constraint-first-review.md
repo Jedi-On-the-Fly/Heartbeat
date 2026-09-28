@@ -103,7 +103,8 @@ HB_ACTOR=refute-agent node .hb/hb.js review GATE_API pass --artifact refute.md -
 The pass is refused, with the id and the fix named, when a gate-time set was not recorded in
 this cycle, an id has no answer line (prose that mentions an id is not an answer), an id is
 answered twice or is unknown, an answer is VIOLATED, a NOT-REPRODUCED has no evidence or an N/A
-no reason, or the profile's free review is missing. The accepted pass records how many answers of
+no reason, the word "violated" appears anywhere outside a VIOLATED answer (it is reserved — say
+what held instead), or the profile's free review is missing. The accepted pass records how many answers of
 each kind it carried; `hb doctor` re-checks them against the stored artifact.
 
 The same sequence runs unattended under `hb exec`: the driver dispatches the author (backend mode

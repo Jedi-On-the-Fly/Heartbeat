@@ -35,17 +35,19 @@ fi
 prov=()
 if [ "${HB_EXEC_PROVIDER:-}" = "oss" ]; then
   prov=(--oss --local-provider ollama -m "${HB_EXEC_MODEL:-qwen2.5:7b-instruct}")
+elif [ -n "${HB_EXEC_MODEL:-}" ]; then
+  prov=(-m "${HB_EXEC_MODEL}")   # per-role models: the recorded model must be the model that ran
 fi
 
 # The gate-time constraint AUTHOR: a read-only model call whose reply must carry a JSON array.
 if [ "$mode" = author ]; then
-  codex exec -s read-only -C "$(pwd)" --skip-git-repo-check "${prov[@]}" "$(field .prompt)" </dev/null 2>/dev/null | author_json
+  codex exec -s read-only -C "$(pwd)" --skip-git-repo-check ${prov[@]+"${prov[@]}"} "$(field .prompt)" </dev/null 2>/dev/null | author_json
   exit 0
 fi
 
 if [ "$mode" = refute ]; then
   rp="$(field .prompt)"
-  ans="$(codex exec -s workspace-write -C "$(pwd)" --skip-git-repo-check "${prov[@]}" "You are a SKEPTICAL adversarial reviewer for a HeartBeat phase gate.
+  ans="$(codex exec -s workspace-write -C "$(pwd)" --skip-git-repo-check ${prov[@]+"${prov[@]}"} "You are a SKEPTICAL adversarial reviewer for a HeartBeat phase gate.
 ${rp}
 
 Context:
@@ -59,7 +61,7 @@ Do not modify files. Hunt for a real hole: a hollow test, a criterion not truly 
     printf '{"refuted":false,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 20000 | jstr)"
   fi
 else
-  if codex exec -s workspace-write -C "$(pwd)" --skip-git-repo-check "${prov[@]}" "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.
+  if codex exec -s workspace-write -C "$(pwd)" --skip-git-repo-check ${prov[@]+"${prov[@]}"} "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.
 
 ${ctx}" </dev/null >/tmp/hb-exec-codex.$$.log 2>&1; then
     echo '{"ok":true,"summary":"codex completed the task"}'

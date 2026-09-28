@@ -217,8 +217,10 @@ def check_answers(body, required):
     if _ANSWER_STYLED.search(str(body)) or _ANSWER_STYLED.search(_answer_text(body, "keep")):
         errors.append("the artifact uses styled letters (mathematical, enclosed, letterlike or legacy-computing symbols) — write plain text")
     # also reversed: a right-to-left override displays "detaloiv" forwards (== node)
-    word_lines = sum(1 for mode in ("keep", "drop") for line in _ANSWER_BREAKS.split(_answer_text(body, mode))
-                     for sq in [_squash_letters(_ANSWER_CTRL.sub("", line))] if "violated" in sq or "detaloiv" in sq)
+    def word_count(mode):
+        return sum(1 for line in _ANSWER_BREAKS.split(_answer_text(body, mode))
+                   for sq in [_squash_letters(_ANSWER_CTRL.sub("", line))] if "violated" in sq or "detaloiv" in sq)
+    word_lines = max(word_count("keep"), word_count("drop"))
     # an unclosed comment hides everything after it when rendered — say so (== node)
     neutral = re.sub(r"`[^`\n]*`", lambda m: m.group(0).replace("<!--", "<!- -").replace("-->", "- ->"), str(body))
     if re.search(r"<!--(?![\s\S]*-->)", neutral):

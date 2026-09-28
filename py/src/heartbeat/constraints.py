@@ -189,6 +189,20 @@ def doctor_problems(hbdir):
         if not sha_ok or errs or counts != e.get("answers"):
             why = "the artifact bytes changed since the pass" if not sha_ok else (errs[0] if errs else "answer counts changed")
             out.append(f"{g} review_passed answers no longer hold in {rel} ({why}) — the stored refutation was altered")
+    # the stored free review must still be the bytes that were recorded (== node)
+    last_free = {}
+    for e in st.read_events(hbdir):
+        if e.get("event") == "free_review_recorded":
+            last_free[e.get("gate")] = e
+    for g, e in last_free.items():
+        rel = e.get("artifact") or f"reviews/{g}.free.md"
+        try:
+            raw = (Path(hbdir) / rel).read_bytes()
+        except OSError:
+            out.append(f"{g} recorded free review {rel} is missing — the free review can no longer be inspected")
+            continue
+        if e.get("sha256") and hashlib.sha256(raw).hexdigest() != e["sha256"]:
+            out.append(f"{g} recorded free review {rel} changed since recording (sha256 mismatch)")
     last = {}
     for e in st.read_events(hbdir):
         if e.get("event") == "constraints_recorded":

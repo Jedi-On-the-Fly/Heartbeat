@@ -1,7 +1,22 @@
 # STATUS — HeartBeat
 
-**Version:** v1.31.1 (gate stdin immunity: a criterion that reads stdin can no longer eat its successors — the silent fail-open skip a field report caught is fixed on both branches, mirrored in python, and mutation-pinned so a regression turns the suite red)
+**Version:** v1.32.0 (constraint-first review: explicit, id'd constraints the refuter must answer one by one, enforced at `review pass` in both runtimes and under `hb exec`; HeartBeat-owned gate anchors and loud restore points)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.32.0 — constraint-first review, gate anchors, loud restore points
+
+- **Gate anchors** (`hb changed <gate>`): HeartBeat records the tree itself (path set + sha256) at the first
+  task start and at every gate acceptance; a phase's changes include uncommitted and untracked work.
+- **Loud restore points**: a failed commit/tag at acceptance is reported and recorded
+  (`restore_point_failed`), a failed commit skips the tag, and `hb doctor` flags missing anchors/tags.
+- **Constraint-first review**: plan-time constraints in `review.constraints` (lint/audit), a gate-time
+  author (`hb constraints --prompt/--record`, write-once per review cycle, not a doer), a constrained refute
+  prompt (every id + answer format + triage rule; `--free` for the breadth review), and enforcement at
+  `hb review pass` (every id answered, no VIOLATED, evidence/reasons, the reserved word, a free review from
+  another actor when the profile asks). `hb exec` runs the same pipeline unattended; every shipped adapter
+  handles `author`, refuses unknown modes and passes the role's model to its CLI.
+- How-to: [constraint-first-review.md](docs/howto/constraint-first-review.md). Proofs T166–T173.
+- Plugin/marketplace → **1.32.0**, Python package → **0.22.0**.
 
 ## v1.31.1 — gate stdin immunity: the slurper that ate the gate
 

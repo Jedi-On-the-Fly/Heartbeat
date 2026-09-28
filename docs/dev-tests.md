@@ -73,7 +73,7 @@ Helpers: `ok`/`ko` (counters), `check "<label>" '<cond>'` (`eval` the condition)
 | T54 | behavioral-gate how-to mechanism demos (refutation, fast/deterministic) |
 | T55 | parity self-test + recovery proofs |
 | T56 | untrusted-Stage-B / liveness / auditor proofs |
-| T57 | portability / backend conformance / diagnose proofs — conformance (T57.2, `backend-conformance.sh`) covers every shipped adapter, python AND shell (CLI absent), in all three modes (`author` → `ok:false` or a constraint list) and requires an unknown mode to be refused with nothing written; a backend whose unknown mode falls through to execute is rejected |
+| T57 | portability / backend conformance / diagnose proofs — conformance (T57.2, `backend-conformance.sh`) covers every shipped adapter, python AND shell (CLI absent), in all three modes (`author` → `ok:false` or a constraint list) and requires an unknown mode to be refused with nothing written; a backend whose unknown mode falls through to execute is rejected; MODEL ROUTING — with fake `claude`/`codex`/`opencode` CLIs logging their argv, every shell adapter and the in-process python claude/codex backends pass `HB_EXEC_MODEL` with the CLI's model flag in execute/refute/author, and pass no model flag when it is unset (refuter catch: the claude adapters never passed it, so recorded per-role models were not the models that ran) |
 | T58 | re-verify / restore-points / tick-economics proofs |
 | T59 | adoption on-ramp proofs (quickstart, DAG authoring, stop/resume, backends) |
 | T60 | best-practice proofs (state discipline, escalate, refute, context) |

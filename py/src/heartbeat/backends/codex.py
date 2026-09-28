@@ -20,6 +20,8 @@ def _cmd(prompt, cwd):
     if os.environ.get("HB_EXEC_PROVIDER", "").lower() == "oss":
         model = os.environ.get("HB_EXEC_MODEL", "qwen2.5:7b-instruct")
         argv += ["--oss", "--local-provider", "ollama", "-m", model]
+    elif os.environ.get("HB_EXEC_MODEL"):
+        argv += ["-m", os.environ["HB_EXEC_MODEL"]]   # per-role models: the recorded model must be the model that ran
     argv.append(prompt)
     return argv
 

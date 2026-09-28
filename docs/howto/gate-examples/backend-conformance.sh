@@ -68,4 +68,50 @@ fallthrough="$work/fallthrough.sh"; printf '#!/usr/bin/env bash\nm="$1"; cat >/d
 conform "bash $fallthrough" && fail "a backend whose unknown mode falls through to execute was accepted"
 conform "bash $good" || fail "a conformant stub was wrongly rejected — the harness rejects everything"
 
-echo "BACKEND-CONFORMANCE-OK:$n (every shipped adapter — python and shell — conforms in degrade mode incl. author + unknown-mode refusal; non-conformant backends rejected)."
+# 3. MODEL ROUTING: the model a role runs on must reach the CLI (per-role models — the event log and the
+#    per-model report record HB_EXEC_MODEL, so an adapter that drops it makes both lie). Fake CLIs log
+#    their argv; each shell adapter and each in-process python backend, in every mode, must pass the
+#    model with the CLI's flag when HB_EXEC_MODEL is set — and pass NO model flag when it is unset.
+fake="$work/fakebin"; mkdir -p "$fake"
+for cli in claude codex opencode; do
+  printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf "%%s\\x1f" "$(basename "$0")" "$@" >> "$ROUTE_LOG"; printf "\\n" >> "$ROUTE_LOG"\necho "[{\\"id\\":\\"G1\\",\\"claim\\":\\"c\\",\\"subjects\\":[\\"a\\"],\\"violation\\":\\"v\\"}] CLEAR"\n' > "$fake/$cli"
+  chmod +x "$fake/$cli"
+done
+route_ok(){ # <log> <cli> <flag> <model|-> → 0 iff every call of <cli> carries (or, with -, never carries) the flag+model
+  python3 - "$@" <<'PY'
+import sys
+log, cli, flag, model = sys.argv[1:5]
+calls = [l.rstrip("\n").split("\x1f")[:-1] for l in open(log) if l.strip()]
+calls = [c for c in calls if c and c[0] == cli]
+if not calls: sys.exit(1)
+for c in calls:
+    args = c[1:]
+    has = any(args[i] == flag and i + 1 < len(args) and (model == "-" or args[i + 1] == model) for i in range(len(args)))
+    if model == "-" and any(a == flag for a in args): sys.exit(1)
+    if model != "-" and not has: sys.exit(1)
+PY
+}
+for pair in "claude-exec.sh claude --model" "codex-exec.sh codex -m" "opencode-exec.sh opencode -m"; do
+  set -- $pair; ad="$ROOT/plugin/templates/executors/$1"
+  for mode in execute refute author; do
+    log="$work/route.log"; : > "$log"
+    ( cd "$(mktemp -d)" && printf '{"prompt":"p","context":"c"}' | PATH="$fake:$PATH" ROUTE_LOG="$log" HB_EXEC_MODEL="MX-$mode" bash "$ad" "$mode" >/dev/null 2>&1 )
+    route_ok "$log" "$2" "$3" "MX-$mode" || fail "$1 $mode does not pass HB_EXEC_MODEL to $2 ($3) — a recorded model would not be the model that ran"
+    : > "$log"
+    ( cd "$(mktemp -d)" && printf '{"prompt":"p","context":"c"}' | env -u HB_EXEC_MODEL PATH="$fake:$PATH" ROUTE_LOG="$log" bash "$ad" "$mode" >/dev/null 2>&1 )
+    route_ok "$log" "$2" "$3" - || fail "$1 $mode passes a model flag although no model was set (a substituted default)"
+  done
+done
+for pair in "claude claude --model" "codex codex -m"; do
+  set -- $pair
+  for mode in execute refute author; do
+    log="$work/route.log"; : > "$log"
+    ( cd "$(mktemp -d)" && PATH="$fake:$PATH" ROUTE_LOG="$log" HB_EXEC_MODEL="MX-$mode" PYTHONPATH="$ROOT/py/src" python3 -c '
+import sys; from heartbeat import executor
+executor.dispatch({"backend": sys.argv[1], "cmd": None, "heartbeat_s": 60}, sys.argv[2], {"prompt": "p", "context": "c"}, ".hb", None)' "$1" "$mode" >/dev/null 2>&1 )
+    route_ok "$log" "$2" "$3" "MX-$mode" || fail "in-process backend $1 $mode does not pass HB_EXEC_MODEL to $2 ($3)"
+  done
+done
+n=$((n + 1))
+
+echo "BACKEND-CONFORMANCE-OK:$n (every shipped adapter — python and shell — conforms in degrade mode incl. author + unknown-mode refusal; the role model reaches the CLI; non-conformant backends rejected)."

@@ -48,7 +48,7 @@ const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0
 const PROTOCOL = {
   next_task:          'hb start <id> → do the work → hb done <id> (or hb fail <id> if you could not complete it). Never hand-edit state.json.',
   gate_pending:       'bash .hb/gate.sh <gate> — a pass advances the phase, UNLESS the gate has a review block (then a review is owed next).',
-  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?) — seed it with `node .hb/hb.js refute-prompt <gate>` (the composed refute prompt: the gate\'s profile persona + a falsification question per criterion + the review angle). Spawn the refuter ON the profile\'s model: read it via `node .hb/hb.js refute-prompt <gate> --json` (.model) and pass it to your agent-spawning tool; inherit the session model only when it is null. Write its full attempt to a findings file, then: node .hb/hb.js review <gate> fail "<holes>" --model <that model>  OR  node .hb/hb.js review <gate> pass --artifact <findings-file> --model <that model> (a pass MUST cite the refuter\'s written attempt — no rubber-stamps; --model records WHAT reviewed, so the per-model impact report has truth to count). CONSTRAINT-FIRST gate (plan-time review.constraints): BEFORE the refute, get the gate-time constraints — `node .hb/hb.js constraints <gate> --prompt` (--json .model = the profile author_model) → an agent that did NOT do the work → HB_ACTOR=<author> node .hb/hb.js constraints <gate> --record <file.json>; the refuter must then answer EVERY id on its own line (<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>); when the profile sets free_review, run `refute-prompt <gate> --free` with another agent and record `node .hb/hb.js review <gate> free --artifact <file>` under its identity. The pass is refused until every id is answered and none is VIOLATED.',
+  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?) — seed it with `node .hb/hb.js refute-prompt <gate>` (the composed refute prompt: the gate\'s profile persona + a falsification question per criterion + the review angle). Spawn the refuter ON the profile\'s model: read it via `node .hb/hb.js refute-prompt <gate> --json` (.model) and pass it to your agent-spawning tool; inherit the session model only when it is null. Write its full attempt to a findings file, then: node .hb/hb.js review <gate> fail "<holes>" --model <that model>  OR  node .hb/hb.js review <gate> pass --artifact <findings-file> --model <that model> (a pass MUST cite the refuter\'s written attempt — no rubber-stamps; --model records WHAT reviewed, so the per-model impact report has truth to count). CONSTRAINT-FIRST gate (plan-time review.constraints): BEFORE the refute, get the gate-time constraints — `node .hb/hb.js constraints <gate> --prompt` (--json .model = the profile author_model) → an agent that did NOT do the work → HB_ACTOR=<author> node .hb/hb.js constraints <gate> --record <file.json> --model <its model>; the refuter must then answer EVERY id on its own line (<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>); when the profile sets free_review, run `node .hb/hb.js refute-prompt <gate> --free` with another agent (the profile free_model) and record `HB_ACTOR=<free reviewer> node .hb/hb.js review <gate> free --artifact <file> --model <its model>`. The pass is refused until every id is answered and none is VIOLATED.',
   gate_blocked:       'Run: node .hb/hb.js diagnose — fix the ROOT cause (do NOT weaken the gate), then re-run bash .hb/gate.sh <gate>.',
   at_capacity:        'Nothing to do — max tasks already in flight. No action.',
   state_corrupted:    'node .hb/hb.js rebuild (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable.',
@@ -343,6 +343,20 @@ function doctor() {
     }
   }
 
+  // The stored free review must still be the bytes that were recorded (the pass relied on it).
+  {
+    const lastFree = {};
+    for (const e of readEvents()) if (e.event === 'free_review_recorded') lastFree[e.gate] = e;
+    for (const [g, e] of Object.entries(lastFree)) {
+      const rel = e.artifact || `reviews/${g}.free.md`;
+      let raw = null;
+      try { raw = fs.readFileSync(path.join(HB_DIR, rel)); } catch (x) {}
+      if (raw === null) problems.push(`${g} recorded free review ${rel} is missing — the free review can no longer be inspected`);
+      else if (e.sha256 && require('crypto').createHash('sha256').update(raw).digest('hex') !== e.sha256)
+        problems.push(`${g} recorded free review ${rel} changed since recording (sha256 mismatch)`);
+    }
+  }
+
   // Recorded gate-time constraints must still be the bytes that were recorded (they are the review's
   // targets; an edit after recording silently moves them).
   {
@@ -634,12 +648,11 @@ function checkAnswers(body, required) {
   // checked on the raw text AND after entity decoding (&#x1D415; is a styled letter too)
   if (ANSWER_STYLED.test(String(body)) || ANSWER_STYLED.test(answerText(body, 'keep'))) errors.push('the artifact uses styled letters (mathematical, enclosed, letterlike or legacy-computing symbols) — write plain text');
   // 1. the word, anywhere: with comment text kept AND with comments removed (a word split by one rejoins)
-  let wordLines = 0;
-  for (const mode of ['keep', 'drop'])
-    for (const line of answerText(body, mode).split(ANSWER_BREAKS)) {
-      const sq = squashLetters(line.replace(ANSWER_CTRL, ''));   // also reversed: a right-to-left override displays it forwards
-      if (sq.includes('violated') || sq.includes('detaloiv')) wordLines++;
-    }
+  const wordCount = (mode) => answerText(body, mode).split(ANSWER_BREAKS).filter(line => {
+    const sq = squashLetters(line.replace(ANSWER_CTRL, ''));   // also reversed: a right-to-left override displays it forwards
+    return sq.includes('violated') || sq.includes('detaloiv');
+  }).length;
+  const wordLines = Math.max(wordCount('keep'), wordCount('drop'));
   // an unclosed comment hides everything after it when rendered — say so (instead of "no answer line")
   if (/<!--(?![\s\S]*-->)/.test(String(body).replace(/`[^`\n]*`/g, m => m.replace(/<!--/g, '<!- -').replace(/-->/g, '- ->'))))
     errors.push('the artifact has an unclosed <!-- — everything after it is hidden when rendered: close the comment or remove it');

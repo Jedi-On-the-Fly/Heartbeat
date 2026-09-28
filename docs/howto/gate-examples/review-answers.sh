@@ -100,6 +100,7 @@ print('mcp-missing\t' + ('0' if r.get('ok') else '1') + '\t' + (r.get('stderr') 
 $(ok_lines)"
   cp "$p/.hb/events.jsonl" "$o/events.jsonl"
   hb "$rt" "$p" doctor > "$o/doctor_clean.txt" 2>&1
+  printf 'edited\n' >> "$p/.hb/reviews/G0.free.md"; hb "$rt" "$p" doctor > "$o/doctor_free.txt" 2>&1
   sed -i.bak '/^G1: /d' "$p/.hb/reviews/G0.md"; hb "$rt" "$p" doctor > "$o/doctor_edited.txt" 2>&1
   python3 - "$o" "$rt" <<'EOF'
 import json, os, sys
@@ -113,7 +114,7 @@ evs = [json.loads(l) for l in rd("events.jsonl").splitlines() if l.strip()]
 rp = [e for e in evs if e.get("event") == "review_passed"]
 fr = [e for e in evs if e.get("event") == "free_review_recorded"]
 print(json.dumps({"rt": rt, "v": v, "passed": rp[-1] if rp else None, "free": fr,
-                  "doctor_clean": rd("doctor_clean.txt"), "doctor_edited": rd("doctor_edited.txt")}))
+                  "doctor_clean": rd("doctor_clean.txt"), "doctor_edited": rd("doctor_edited.txt"), "doctor_free": rd("doctor_free.txt")}))
 EOF
   rm -rf "$p"
 }
@@ -160,6 +161,7 @@ def check(obs):
         if len(o["free"]) != 3 or any(f.get("actor") not in ("freer", "refuter") for f in o["free"]): return rt + ": free_review_recorded events wrong: " + json.dumps(o["free"])
         if "no longer" in o["doctor_clean"] or ("G0" in o["doctor_clean"] and "answer" in o["doctor_clean"]): return rt + ": doctor flagged an intact review"
         if not any("G0" in l and "answer" in l and "✗" in l for l in o["doctor_edited"].splitlines()): return rt + ": doctor missed an edited review artifact"
+        if not any("G0" in l and "free review" in l and "✗" in l for l in o["doctor_free"].splitlines()): return rt + ": doctor missed an edited free-review file"
     n, p = by.get("node"), by.get("py")
     if not n or not p: return "missing runtime"
     nv = {k: v["rc"] for k, v in n["v"].items() if k != "mcp-missing"}; pv = {k: v["rc"] for k, v in p["v"].items() if k != "mcp-missing"}
@@ -241,9 +243,9 @@ EOF
     "node: doctor missed an edited review artifact|node: fixtures"
   mutant "python word check dropped" py/src/heartbeat/review_policy.py '    if word_lines and not counts["violated"]:' '    if False:' \
     "py: fixtures: hostile answer sets ACCEPTED|py: fixtures"
-  mutant "node reads comments out of the word check" plugin/templates/hb.js "  for (const mode of ['keep', 'drop'])" "  for (const mode of ['drop'])" \
+  mutant "node reads comments out of the word check" plugin/templates/hb.js "  const wordLines = Math.max(wordCount('keep'), wordCount('drop'));" "  const wordLines = wordCount('drop');" \
     "node: fixtures|node: "
-  mutant "python reads comments out of the word check" py/src/heartbeat/review_policy.py '    word_lines = sum(1 for mode in ("keep", "drop") for line' '    word_lines = sum(1 for mode in ("drop",) for line' \
+  mutant "python reads comments out of the word check" py/src/heartbeat/review_policy.py '    word_lines = max(word_count("keep"), word_count("drop"))' '    word_lines = word_count("drop")' \
     "py: fixtures|py: "
   mutant "node folds styled letters instead of refusing them" plugin/templates/hb.js "  if (ANSWER_STYLED.test(String(body)) || ANSWER_STYLED.test(answerText(body, 'keep'))) errors.push(" "  if (false) errors.push(" \
     "node: fixtures"
