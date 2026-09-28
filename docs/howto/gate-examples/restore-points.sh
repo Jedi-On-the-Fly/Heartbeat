@@ -17,6 +17,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 unset HB_DIR DAG_FILE EVENTS_FILE HB_ACTOR HB_NO_GIT HB_GIT_AUTOCOMMIT 2>/dev/null || true
+[ -n "${RP_MUTANT_RUN:-}" ] || unset RP_CASES
 command -v node    >/dev/null 2>&1 || { echo "node absent";    exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "python3 absent"; exit 1; }
 command -v git     >/dev/null 2>&1 || { echo "git absent";     exit 1; }
@@ -74,7 +75,7 @@ doctor_lines() { hb "$1" "$2" doctor 2>&1 | grep -E 'no acceptance anchor|no git
 obs_case() {
   local rt="$1" name="$2" p err="" env=()
   case "$name" in
-    tag-fail|commit-fail|nothing-to-commit|clean|review-tag-fail|review-commit-fail|reaccept-tag-fail|doctor-*) p="$(mkproject "$rt" git "$([ "$name" = nothing-to-commit ] && echo ign)")";;
+    tag-fail|commit-fail|nothing-to-commit|clean|review-tag-fail|review-commit-fail|reaccept-tag-fail|unreadable-file|upgraded-commit-fail|doctor-*) p="$(mkproject "$rt" git "$([ "$name" = nothing-to-commit ] && echo ign)")";;
     no-repo) p="$(mkproject "$rt" nogit)";;
     no-git-env|autocommit-off) p="$(mkproject "$rt" git)";;
   esac
@@ -84,6 +85,8 @@ obs_case() {
   case "$name" in
     tag-fail) chmod a-w "$p/.git/refs/tags";;          # `git tag -f G0` cannot create its ref lock
     commit-fail) git -C "$p" config commit.gpgsign true; git -C "$p" config gpg.program false;;   # the commit itself fails
+    upgraded-commit-fail) git -C "$p" config commit.gpgsign true; git -C "$p" config gpg.program false;;   # + no _start (below)
+    unreadable-file) printf 's\n' > "$p/secret.txt"; chmod 000 "$p/secret.txt";;   # git add fails; the anchor must still be written
   esac
   case "$name" in
     review-tag-fail) accept "$rt" "$p" G0 >/dev/null; chmod a-w "$p/.git/refs/tags"; err="$(accept "$rt" "$p" G1)";;
@@ -91,6 +94,9 @@ obs_case() {
       err="$(accept "$rt" "$p" G1)";;
     reaccept-tag-fail) accept "$rt" "$p" G0 >/dev/null; printf 'more\n' >> "$p/a.txt"; git -C "$p" tag -d G0 >/dev/null 2>&1
       chmod a-w "$p/.git/refs/tags"; err="$(hb "$rt" "$p" gate G0 2>&1 >/dev/null)";;   # the LAST acceptance's restore point fails
+    upgraded-commit-fail) # a project upgraded mid-plan: its log predates anchors, so there is no _start
+      HB_ACTOR=doer hb "$rt" "$p" start T1 >/dev/null 2>&1; rm -f "$p/.hb/anchors/_start.json"
+      err="$(accept "$rt" "$p" G0)";;
     *) err="$(accept "$rt" "$p" G0)";;
   esac
   local anc=false; [ -f "$p/.hb/anchors/G0.json" ] && anc=true
@@ -99,14 +105,17 @@ obs_case() {
   local tagged1=false; git -C "$p" rev-parse -q --verify refs/tags/G1 >/dev/null 2>&1 && tagged1=true
   local dl=""
   case "$name" in
-    clean|tag-fail|commit-fail|review-tag-fail|review-commit-fail|reaccept-tag-fail) dl="$(doctor_lines "$rt" "$p")";;
+    clean|tag-fail|commit-fail|review-tag-fail|review-commit-fail|reaccept-tag-fail|unreadable-file|upgraded-commit-fail) dl="$(doctor_lines "$rt" "$p")";;
     doctor-no-git-on-path) git -C "$p" tag -d G0 >/dev/null 2>&1
       local nb="$work/nogitbin"; mkdir -p "$nb"; ln -sf "$(command -v node)" "$nb/node"; ln -sf "$(command -v python3)" "$nb/python3"
       ln -sf "$(command -v bash)" "$nb/bash"
       dl="$(PATH="$nb" hb "$rt" "$p" doctor 2>&1 | grep -E 'no acceptance anchor|no git tag|restore point failed|hb doctor:' | sed 's/^ *//')";;
     doctor-no-anchor) rm -f "$p/.hb/anchors/G0.json"; dl="$(doctor_lines "$rt" "$p")";;
     doctor-no-tag) git -C "$p" tag -d G0 >/dev/null 2>&1; dl="$(doctor_lines "$rt" "$p")";;
-    doctor-legacy) rm -f "$p/.hb/anchors/_start.json" "$p/.hb/anchors/G0.json"; git -C "$p" tag -d G0 >/dev/null 2>&1; dl="$(doctor_lines "$rt" "$p")";;
+    doctor-legacy) # a pre-anchor history: no anchors, no tag, and events WITHOUT the git policy field
+      rm -f "$p/.hb/anchors/_start.json" "$p/.hb/anchors/G0.json"; git -C "$p" tag -d G0 >/dev/null 2>&1
+      python3 -c 'import json,sys;p=sys.argv[1];evs=[json.loads(l) for l in open(p) if l.strip()];[e.pop("git",None) for e in evs];open(p,"w").write("".join(json.dumps(e)+"\n" for e in evs))' "$p/.hb/events.jsonl"
+      dl="$(doctor_lines "$rt" "$p")";;
     doctor-pending) HB_ACTOR=doer hb "$rt" "$p" start T2 >/dev/null 2>&1; HB_ACTOR=doer hb "$rt" "$p" done T2 >/dev/null 2>&1
       hb "$rt" "$p" gate G1 >/dev/null 2>&1; dl="$(doctor_lines "$rt" "$p")";;
     autocommit-off) dl="$(doctor_lines "$rt" "$p")";;
@@ -119,10 +128,10 @@ name, rt, err, evs, anc, dl, tagged, tagged1 = sys.argv[1:9]
 print(json.dumps({"name": name, "rt": rt, "stderr": err, "events": json.loads(evs), "anchor": anc == "true", "tagged": tagged == "true", "tagged1": tagged1 == "true",
                   "doctor": [l for l in dl.splitlines() if l.strip()]}))
 EOF
-  chmod -R u+w "$p" 2>/dev/null; rm -rf "$p"
+  chmod -R u+rw "$p" 2>/dev/null; rm -rf "$p"
 }
 
-NAMES="tag-fail commit-fail nothing-to-commit no-repo no-git-env autocommit-off review-tag-fail review-commit-fail reaccept-tag-fail clean doctor-no-anchor doctor-no-tag doctor-legacy doctor-pending doctor-no-git-on-path"
+NAMES="tag-fail commit-fail nothing-to-commit no-repo no-git-env autocommit-off review-tag-fail review-commit-fail reaccept-tag-fail unreadable-file upgraded-commit-fail clean doctor-no-anchor doctor-no-tag doctor-legacy doctor-pending doctor-no-git-on-path"
 
 CHECK='
 import json, sys
@@ -135,6 +144,9 @@ def check(all_obs):
         acc = [e for e in ev if (e["event"] == "gate_passed" and e["gate"] == "G0") or e["event"] == "review_passed"]
         if not acc: return k + ": no acceptance event"
         pol = acc[-1].get("git")
+        if name == "doctor-legacy":   # its events were rewritten to the pre-1.32 shape (no policy field)
+            if pol is not None: return k + ": legacy fixture still carries a policy field"
+            pol = {"autocommit": True}
         if not isinstance(pol, dict) or not isinstance(pol.get("autocommit"), bool): return k + ": acceptance event has no git:{autocommit:bool}"
         want_pol = name not in ("no-repo", "no-git-env", "autocommit-off")
         if pol["autocommit"] != want_pol: return k + ": recorded autocommit=" + str(pol["autocommit"]) + ", expected " + str(want_pol)
@@ -151,6 +163,11 @@ def check(all_obs):
             if not any(e["step"] == "commit" and e["gate"] == "G1" for e in rpf): return k + ": review-pass commit failure not recorded"
             if o["tagged1"]: return k + ": review pass tagged the PRE-phase HEAD after a failed commit"
             if not any("G1" in l and "restore point failed" in l for l in o["doctor"]): return k + ": doctor missed the failed review-pass commit"
+        elif name == "upgraded-commit-fail":
+            if not any("G0" in l and "restore point failed" in l for l in o["doctor"]): return k + ": doctor hid a new restore failure because the log predates anchors"
+        elif name == "unreadable-file":
+            if not any(e["step"] == "add" and e["gate"] == "G0" for e in rpf): return k + ": the failed git add was not recorded"
+            if not any("G0" in l and "restore point failed" in l for l in o["doctor"]): return k + ": doctor missed the failed add (an unreadable file must not disable doctor)"
         elif name == "reaccept-tag-fail":
             if not any(e["step"] == "tag" and e["gate"] == "G0" for e in rpf): return k + ": the re-acceptance tag failure not recorded"
         elif name == "review-tag-fail":
@@ -179,7 +196,10 @@ def check(all_obs):
     return None
 '
 
-NAMES="${RP_CASES:-$NAMES}"   # a mutant run (selftest) may restrict the cases it concerns
+# Only the selftest's own mutant runs may restrict the cases (RP_MUTANT_RUN is set by mutant());
+# an inherited RP_CASES can never shrink the main proof.
+[ -n "${RP_MUTANT_RUN:-}" ] && NAMES="${RP_CASES:-$NAMES}"
+NCASES=$(set -- $NAMES; echo $#)
 obs_file="$work/all.json"
 { echo '['; first=1
   for rt in node py; do for nm in $NAMES; do [ $first = 1 ] || echo ','; first=0; obs_case "$rt" "$nm"; done; done
@@ -216,7 +236,7 @@ EOF
     cp -r "$ROOT/plugin" "$m/"; cp -r "$ROOT/py/src" "$m/py/"; cp -r "$ROOT/docs/howto/gate-examples" "$m/docs/howto/"
     python3 -c 'import sys; p, a, b = sys.argv[1:4]; s = open(p).read(); sys.exit(1) if s.count(a) != 1 else open(p, "w").write(s.replace(a, b))' \
       "$m/$2" "$3" "$4" || fail "selftest: mutant '$1' did not apply (the code moved — update the mutant)"
-    local out; if out="$(RP_CASES="$5" bash "$m/docs/howto/gate-examples/restore-points.sh" 2>&1)"; then fail "selftest: mutant '$1' still passes — not load-bearing"; fi
+    local out; if out="$(RP_MUTANT_RUN=1 RP_CASES="$5" bash "$m/docs/howto/gate-examples/restore-points.sh" 2>&1)"; then fail "selftest: mutant '$1' still passes — not load-bearing"; fi
     case "$out" in *"$6"*) ;; *) fail "selftest: mutant '$1' failed for the WRONG reason: $out";; esac
     echo "  mutant caught: $1"
   }
@@ -229,17 +249,21 @@ EOF
   mutant "python commit failure swallowed" py/src/heartbeat/gate.py '        if err:
             return failed("commit", err)' '        pass' \
     commit-fail "commit failure not recorded"
-  mutant "node doctor anchor check removed" plugin/templates/hb.js "      if (!readAnchor(g)) problems.push(" "      if (false) problems.push(" \
+  mutant "node doctor anchor check removed" plugin/templates/hb.js "      if (anchored && !readAnchor(g)) problems.push(" "      if (false) problems.push(" \
     doctor-no-anchor "doctor missed the accepted gate without an anchor"
   mutant "node tags after a failed commit" plugin/templates/hb.js "    if (err) return failed('commit', err);" "    if (err) failed('commit', err);" \
     review-commit-fail "review pass tagged the PRE-phase HEAD"
   mutant "gate.sh tags after a failed commit" plugin/templates/gate.sh 'restore_point_failed "$1" commit "$(echo "$err" | tail -1)"; reproject; return 0; fi' 'restore_point_failed "$1" commit "$(echo "$err" | tail -1)"; fi' \
     commit-fail "tagged the PRE-phase HEAD"
-  mutant "python doctor ignores a restore failure after the last acceptance" py/src/heartbeat/doctor.py '            elif ev == "restore_point_failed" and g in acc:' '            elif False:' \
+  mutant "python doctor ignores a restore failure after the last acceptance" py/src/heartbeat/doctor.py '        elif ev == "restore_point_failed" and g in acc:' '        elif False:' \
     reaccept-tag-fail "doctor missed the failed restore point of the LAST acceptance"
   mutant "node doctor ignores git absent from PATH" plugin/templates/hb.js "      else if (gitOk && e.git && e.git.autocommit === true) {" "      else if (e.git && e.git.autocommit === true) {" \
     doctor-no-git-on-path "doctor claimed a missing tag with git absent"
-  mutant "python doctor flags legacy history" py/src/heartbeat/doctor.py '    if anchors.read_anchor(hbdir, "_start") is not None:' '    if True:' \
+  mutant "node anchor aborts on an unreadable file" plugin/templates/hb.js "    try { files[r] = hashFile(abs); } catch (e) { continue; }" "    files[r] = hashFile(abs);" \
+    unreadable-file "acceptance anchor missing"
+  mutant "python restore check hidden behind the _start guard" py/src/heartbeat/doctor.py '        if g in rpf:' '        if anchored and g in rpf:' \
+    upgraded-commit-fail "doctor hid a new restore failure"
+  mutant "python doctor flags legacy history" py/src/heartbeat/doctor.py '        if anchored and anchors.read_anchor(hbdir, g) is None:' '        if anchors.read_anchor(hbdir, g) is None:' \
     doctor-legacy "doctor flagged a healthy/legacy"
   echo "SELFTEST-OK"; exit 0
 fi
@@ -248,6 +272,6 @@ python3 - "$obs_file" <<EOF || exit 1
 $CHECK
 bad = check(json.load(open(sys.argv[1])))
 if bad: print("FAIL: " + bad, file=sys.stderr); sys.exit(1)
-print("restore points: 15 cases × 2 runtimes hold")
+print("restore points: $NCASES cases × 2 runtimes hold")
 print("RESTORE-POINTS-OK")
 EOF

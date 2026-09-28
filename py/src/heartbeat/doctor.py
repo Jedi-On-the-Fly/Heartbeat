@@ -64,41 +64,42 @@ def doctor(hbdir):
         elif len(body.strip()) < 40:
             problems.append(f"{g} review_passed but backing artifact {rel} is empty/thin — not a real refutation")
 
-    # Restore points (only once anchors exist — a log that predates them has no _start, never
-    # flagged): every ACCEPTED gate (review gate: last review verdict is a pass; review-less: a
-    # gate_passed) must have its acceptance anchor, and — if its recorded policy was autocommit-on
-    # — its git tag. Node twin: doctor() in hb.js; lines are identical.
+    # Restore points: every ACCEPTED gate (review gate: last review verdict is a pass; review-less:
+    # a gate_passed) must have no restore failure after its last acceptance and — if its recorded
+    # policy was autocommit-on — its git tag (legacy events carry neither: never flagged). The
+    # acceptance-ANCHOR check applies only once anchors exist (a log that predates them has no
+    # _start). Node twin: doctor() in hb.js; lines are identical.
     from . import anchors
-    if anchors.read_anchor(hbdir, "_start") is not None:
-        # acc: the gate's LAST acceptance event; rpf: a restore_point_failed that follows it.
-        acc, rpf = {}, {}
-        for e in st.read_events(hbdir):
-            g = e.get("gate")
-            ev = e.get("event")
-            rev = bool((gates.get(g) or {}).get("review"))
-            if (ev == "review_passed" and rev) or (ev == "gate_passed" and not rev):
-                acc[g] = e
-                rpf.pop(g, None)
-            elif ev == "review_failed":
-                acc.pop(g, None)
-                rpf.pop(g, None)
-            elif ev == "restore_point_failed" and g in acc:
-                rpf[g] = e
-        git_ok = bool(shutil.which("git"))   # absent ⇒ tag state unknown ⇒ tag checks skipped
-        for g in gates:
-            e = acc.get(g)
-            if not e:
-                continue
-            if anchors.read_anchor(hbdir, g) is None:
-                problems.append(f"{g} accepted but has no acceptance anchor (.hb/anchors/{g}.json) — hb changed cannot report its phase")
-            if g in rpf:
-                problems.append(f"{g} accepted but its restore point failed (git {rpf[g].get('step')}) — no tag certifies the accepted state")
-            elif git_ok and (e.get("git") or {}).get("autocommit") is True:
-                tagged = subprocess.run(
-                    ["git", "-C", str(pd), "rev-parse", "-q", "--verify", f"refs/tags/{g}"],
-                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
-                if not tagged:
-                    problems.append(f"{g} accepted with autocommit on but has no git tag {g} — no restore point")
+    anchored = anchors.read_anchor(hbdir, "_start") is not None
+    # acc: the gate's LAST acceptance event; rpf: a restore_point_failed that follows it.
+    acc, rpf = {}, {}
+    for e in st.read_events(hbdir):
+        g = e.get("gate")
+        ev = e.get("event")
+        rev = bool((gates.get(g) or {}).get("review"))
+        if (ev == "review_passed" and rev) or (ev == "gate_passed" and not rev):
+            acc[g] = e
+            rpf.pop(g, None)
+        elif ev == "review_failed":
+            acc.pop(g, None)
+            rpf.pop(g, None)
+        elif ev == "restore_point_failed" and g in acc:
+            rpf[g] = e
+    git_ok = bool(shutil.which("git"))   # absent ⇒ tag state unknown ⇒ tag checks skipped
+    for g in gates:
+        e = acc.get(g)
+        if not e:
+            continue
+        if anchored and anchors.read_anchor(hbdir, g) is None:
+            problems.append(f"{g} accepted but has no acceptance anchor (.hb/anchors/{g}.json) — hb changed cannot report its phase")
+        if g in rpf:
+            problems.append(f"{g} accepted but its restore point failed (git {rpf[g].get('step')}) — no tag certifies the accepted state")
+        elif git_ok and (e.get("git") or {}).get("autocommit") is True:
+            tagged = subprocess.run(
+                ["git", "-C", str(pd), "rev-parse", "-q", "--verify", f"refs/tags/{g}"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+            if not tagged:
+                problems.append(f"{g} accepted with autocommit on but has no git tag {g} — no restore point")
 
     return {"problems": problems, "notes": notes}
 

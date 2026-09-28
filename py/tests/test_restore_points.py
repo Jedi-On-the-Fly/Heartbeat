@@ -40,5 +40,8 @@ def test_doctor_flags_missing_tag_only_under_recorded_autocommit(tmp_path, monke
     assert doctor.doctor(hb)["problems"] == []
     subprocess.run(["git", "tag", "-d", "GATE_P0"], cwd=tmp_path, stdout=subprocess.DEVNULL, check=True)
     assert any("no git tag GATE_P0" in p for p in doctor.doctor(hb)["problems"])
-    (hb / "anchors" / "_start.json").unlink()   # history that predates anchors is never flagged
+    # history that predates 1.32 (no anchors, no recorded git policy) is never flagged
+    (hb / "anchors" / "_start.json").unlink(); (hb / "anchors" / "GATE_P0.json").unlink()
+    evs = [{k: v for k, v in e.items() if k != "git"} for e in state.read_events(hb)]
+    (hb / "events.jsonl").write_text("".join(__import__("json").dumps(e) + "\n" for e in evs))
     assert doctor.doctor(hb)["problems"] == []

@@ -265,6 +265,7 @@ anchors_case(){  # <git|nogit>: same tree → same manifest (path set + hashes) 
     git -C "$d" init -q && git -C "$d" add -A && git -C "$d" -c user.name=t -c user.email=t@t commit -qm b; fi
   HB_NO_GIT=1 node "$d/.hb/hb.js" start T1 >/dev/null 2>&1
   printf 'a2\n' > "$d/a.txt"; rm -f "$d/b.txt"; printf 'n\n' > "$d/new.txt"
+  printf 's\n' > "$d/secret.txt"; chmod 000 "$d/secret.txt"   # unreadable: skipped by BOTH (never aborts the anchor)
   local MF='import sys,json;print(json.dumps(json.load(open(sys.argv[1]))["files"],sort_keys=True,ensure_ascii=False))'
   HB_NO_GIT=1 node "$d/.hb/hb.js" anchor NODE_A >/dev/null 2>&1
   PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c 'import sys;from heartbeat import anchors;anchors.write_anchor(sys.argv[1],"PY_A")' "$d/.hb"
@@ -277,7 +278,7 @@ anchors_case(){  # <git|nogit>: same tree → same manifest (path set + hashes) 
   cmp "anchors:changed:$mode" \
     "$(HB_NO_GIT=1 node "$d/.hb/hb.js" changed G0 --json 2>&1)" \
     "$(eval "HB_NO_GIT=1 $PY changed G0 --json --dir \"$d\"" 2>&1)"
-  rm -rf "$d"
+  chmod 644 "$d/secret.txt" 2>/dev/null; rm -rf "$d"
 }
 anchors_case git; anchors_case nogit
 

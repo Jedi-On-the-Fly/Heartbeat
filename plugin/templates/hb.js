@@ -293,10 +293,12 @@ function doctor() {
     }
   }
 
-  // Restore points (only once anchors exist — a log that predates them has no _start, never flagged):
-  // every ACCEPTED gate (review gate: last review verdict is a pass; review-less: a gate_passed) must
-  // have its acceptance anchor, and — if its recorded policy was autocommit-on — its git tag.
-  if (readAnchor('_start')) {
+  // Restore points: every ACCEPTED gate (review gate: last review verdict is a pass; review-less: a
+  // gate_passed) must have no restore failure after its last acceptance and — if its recorded policy
+  // was autocommit-on — its git tag (legacy events carry neither, so they are never flagged). The
+  // acceptance-ANCHOR check applies only once anchors exist (a log that predates them has no _start).
+  {
+    const anchored = !!readAnchor('_start');
     // acc: the gate's LAST acceptance event; rpf: a restore_point_failed that follows it.
     const acc = {}, rpf = {};
     for (const e of readEvents()) {
@@ -310,7 +312,7 @@ function doctor() {
     for (const g of Object.keys(gates)) {
       const e = acc[g];
       if (!e) continue;
-      if (!readAnchor(g)) problems.push(`${g} accepted but has no acceptance anchor (.hb/anchors/${g}.json) — hb changed cannot report its phase`);
+      if (anchored && !readAnchor(g)) problems.push(`${g} accepted but has no acceptance anchor (.hb/anchors/${g}.json) — hb changed cannot report its phase`);
       if (rpf[g]) problems.push(`${g} accepted but its restore point failed (git ${rpf[g].step}) — no tag certifies the accepted state`);
       else if (gitOk && e.git && e.git.autocommit === true) {
         let tagged = false;
@@ -463,7 +465,7 @@ function listProjectFiles() {
     let st;
     try { st = fs.lstatSync(abs); } catch (e) { continue; }   // tracked but deleted from the worktree
     if (!st.isFile()) continue;
-    files[r] = hashFile(abs);
+    try { files[r] = hashFile(abs); } catch (e) { continue; }   // unreadable (EACCES…): skipped, as python does
   }
   return files;
 }
