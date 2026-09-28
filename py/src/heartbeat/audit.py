@@ -121,6 +121,11 @@ def audit(dag):
             F("error", "hollow_gate", p["id"],
               f"gate {p['gate_exit']} has NO behavioural criterion — phase {p['id']} passes without proving its work",
               gate=p["gate_exit"])
+        rv = (gates.get(p["gate_exit"]) or {}).get("review")
+        if rv and not (isinstance(rv.get("constraints"), list) and rv["constraints"]):
+            F("warn", "unconstrained_review", p["id"],
+              f"gate {p['gate_exit']} has an adversarial review but no plan-time constraints — the refuter's target is implicit (add review.constraints)",
+              gate=p["gate_exit"])
 
         task_text = " ".join(f"{t.get('title', '')} {t.get('description', '')}" for t in tasks).lower()
         paths = set()

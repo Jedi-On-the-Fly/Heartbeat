@@ -64,7 +64,47 @@ def lint(dag):
 
     _check_placeholders(dag, warnings)
     _check_gate_artifacts(dag, warnings)
+    _check_constraints(dag, errors)
     return {"errors": errors, "warnings": warnings}
+
+
+def _check_constraints(dag, errors):
+    """Plan-time constraints of a gate's adversarial review: gates.<G>.review.constraints =
+    [{id P<n>, claim, subjects:[…], violation}]. G<n> ids are reserved for the constraints
+    authored at review time. Twin: hb-lint.js checkConstraints (messages verbatim)."""
+    import re
+    gates = dag.get("gates") or {}
+    for g in gates:
+        gv = gates[g] if isinstance(gates[g], dict) else {}
+        if "constraints" in gv:
+            errors.append(f"[{g}] constraints belong in review.constraints (the plan-time constraints of the gate's adversarial review)")
+        rv = gv.get("review")
+        if not isinstance(rv, dict) or "constraints" not in rv:
+            continue
+        cs = rv["constraints"]
+        if not isinstance(cs, list):
+            errors.append(f"[{g}] review.constraints must be a list of {{id, claim, subjects, violation}}")
+            continue
+        seen = set()
+        for i, c in enumerate(cs):
+            is_obj = isinstance(c, dict)
+            cid = c.get("id") if is_obj else None
+            label = cid if isinstance(cid, str) and cid else f"#{i + 1}"
+            if not is_obj:
+                errors.append(f"[{g}] constraint {label}: must be an object {{id, claim, subjects, violation}}")
+                continue
+            if not isinstance(cid, str) or not re.fullmatch(r"P[0-9]+", cid):
+                errors.append(f"[{g}] constraint {label}: id must be P<n> (plan-time; G<n> ids are reserved for gate-time constraints)")
+            elif cid in seen:
+                errors.append(f"[{g}] constraint {cid}: duplicate id in this gate")
+            else:
+                seen.add(cid)
+            for f in ("claim", "violation"):
+                if not isinstance(c.get(f), str) or not c[f].strip():
+                    errors.append(f"[{g}] constraint {label}: {f} must be a non-empty string")
+            subj = c.get("subjects")
+            if not isinstance(subj, list) or not subj or any(not isinstance(x, str) or not x.strip() for x in subj):
+                errors.append(f"[{g}] constraint {label}: subjects must be a non-empty list of non-empty strings (the files/areas it covers)")
 
 
 def _check_placeholders(dag, warnings):
