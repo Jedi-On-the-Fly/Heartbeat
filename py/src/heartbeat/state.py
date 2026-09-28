@@ -217,13 +217,13 @@ def with_wlock(hbdir, fn):
 def mutate(hbdir, ev):
     def _do():
         append_event(hbdir, ev)
+        # The plan's start anchor, at the ONE layer every live entry point (CLI, MCP, exec)
+        # shares — INSIDE the lock, so concurrent first starts can't both miss "the first".
+        if ev.get("event") == "task_started":
+            from . import anchors
+            anchors.maybe_start_anchor(hbdir)
         return reproject(hbdir)
-    s = with_wlock(hbdir, _do)
-    # The plan's start anchor, at the ONE layer every live entry point (CLI, MCP, exec) shares.
-    if ev.get("event") == "task_started":
-        from . import anchors
-        anchors.maybe_start_anchor(hbdir)
-    return s
+    return with_wlock(hbdir, _do)
 
 
 def acquire_lease(hbdir, task):

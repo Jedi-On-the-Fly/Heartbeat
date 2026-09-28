@@ -39,3 +39,13 @@ def test_walk_skips_excluded_dirs_and_hb(tmp_path):
     (tmp_path / "node_modules" / "m").mkdir(parents=True); (tmp_path / "node_modules" / "m" / "i.js").write_text("x")
     (tmp_path / "src").mkdir(); (tmp_path / "src" / "k.py").write_text("k")
     assert list(anchors.list_project_files(hb)) == ["src/k.py"]
+
+
+def test_acceptance_anchor_is_write_once(tmp_path):
+    hb = make_hb(tmp_path, two_phase_dag())
+    state.mutate(hb, {"event": "task_started", "task": "P0T1"})
+    assert anchors.try_anchor(hb, "GATE_P0")
+    first = anchors.read_anchor(hb, "GATE_P0")
+    (tmp_path / "later.txt").write_text("x")
+    assert anchors.try_anchor(hb, "GATE_P0")
+    assert anchors.read_anchor(hb, "GATE_P0") == first

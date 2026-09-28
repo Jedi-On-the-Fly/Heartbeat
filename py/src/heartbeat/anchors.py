@@ -69,6 +69,10 @@ def list_project_files(hbdir):
     for r in sorted(rels, key=lambda s: s.encode("utf-16-be")):
         if r == hb_rel or r.startswith(hb_rel + "/") or r.split("/")[0] == ".git":
             continue
+        try:
+            r.encode("utf-8")
+        except UnicodeEncodeError:   # a non-UTF-8 name: skipped (node cannot address it either)
+            continue
         p = pd / r
         try:
             if not p.is_file() or p.is_symlink():   # tracked-but-deleted, or not a regular file
@@ -93,7 +97,11 @@ def write_anchor(hbdir, name):
 
 
 def try_anchor(hbdir, name):
-    """Report, never swallow: a silently missing anchor would make `changed` lie later."""
+    """Report, never swallow: a silently missing anchor would make `changed` lie later.
+    Write-once: an accepted gate's anchor is its acceptance record — re-running the gate
+    later must not move it (later phases' work would leak into its report)."""
+    if read_anchor(hbdir, name) is not None:
+        return True
     try:
         write_anchor(hbdir, name)
         return True
@@ -110,7 +118,8 @@ def read_anchor(hbdir, name):
 
 
 def maybe_start_anchor(hbdir):
-    """The plan's start anchor: on the first LIVE task_started only (called from state.mutate)."""
+    """The plan's start anchor: on the first LIVE task_started only (called from state.mutate,
+    under the write lock — so "exactly one task_started in the log" is race-free)."""
     if read_anchor(hbdir, "_start") is not None:
         return
     if sum(1 for e in st.read_events(hbdir) if e.get("event") == "task_started") == 1:

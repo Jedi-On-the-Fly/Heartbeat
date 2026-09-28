@@ -8,9 +8,13 @@
 # anchor once accepted (later phases' edits never leak in). Listing: inside a git worktree
 # `git ls-files -co --exclude-standard` (read-only), outside git a walk with a fixed exclusion list
 # (.hb .git node_modules __pycache__ .venv). node ≡ python on path set + hashes and change lists.
-# Prints GATE-ANCHORS-OK. `--selftest` runs the real scenario, then perturbs its real observations
-# (drops an untracked file, leaks an ignored one, removes an anchor, …) and proves each perturbation
-# is rejected by the same checker. Prints SELFTEST-OK.
+# Acceptance anchors are write-once (re-running an accepted gate never moves them); the start anchor
+# survives concurrent first starts (both runtimes); in git with autocommit ON the acceptance anchor's
+# commit is the restore-point commit (taken after it). Prints GATE-ANCHORS-OK.
+# `--selftest` (1) perturbs the real observations (drops an untracked file, leaks an ignored one,
+# removes an anchor, …) and proves the checker rejects each, and (2) runs this proof against MUTANT
+# copies of the real code (acceptance-anchor hooks removed, write-once removed, anchor moved before
+# the restore commit) — each must go RED. Prints SELFTEST-OK.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 unset HB_DIR DAG_FILE EVENTS_FILE HB_ACTOR 2>/dev/null || true
@@ -58,6 +62,9 @@ changed() { local o; o="$(hb "$1" "$2" changed "$3" --json 2>/dev/null)" || o=nu
 # scenario <rt> <mode> → one JSON observation object on stdout
 scenario() {
   local rt="$1" mode="$2" p; p="$(mkproject "$rt" "$mode")"
+  # git mode runs with autocommit ON: the acceptance anchor must be taken after the restore commit
+  if [ "$mode" = git ]; then unset HB_NO_GIT; else export HB_NO_GIT=1; fi
+  local base; base="$(git -C "$p" rev-parse HEAD 2>/dev/null || echo none)"
   local o="$work/obs.$rt.$mode"; mkdir -p "$o"
   HB_ACTOR=doer hb "$rt" "$p" start T1 >/dev/null 2>&1
   anchor "$p" _start > "$o/start.json"
@@ -73,6 +80,8 @@ scenario() {
   printf 'new2\n' > "$p/new.txt"; printf 'late\n' > "$p/late.txt"
   HB_ACTOR=doer hb "$rt" "$p" done T2 >/dev/null 2>&1
   changed "$rt" "$p" G0 > "$o/changed_g0_accepted.json"
+  hb "$rt" "$p" gate G0 >/dev/null 2>&1          # re-run the accepted gate: its anchor must not move
+  changed "$rt" "$p" G0 > "$o/changed_g0_rerun.json"
   changed "$rt" "$p" G1 > "$o/changed_g1_pending.json"
   hb "$rt" "$p" gate G1 >/dev/null 2>&1
   anchor "$p" G1 > "$o/g1_review_pending.json"
@@ -86,17 +95,22 @@ p = sys.argv[1]
 print(json.dumps({f: hashlib.sha256(open(os.path.join(p, f), "rb").read()).hexdigest()
                   for f in ("a.txt", "c.txt", "new.txt", "late.txt")}))
 EOF
-  local head=null
-  [ "$mode" = git ] && head="\"$(git -C "$p" rev-parse HEAD)\""
-  python3 - "$o" "$rt" "$mode" "$head" <<'EOF'
+  local head=null g0new=false
+  if [ "$mode" = git ]; then
+    head="\"$(git -C "$p" rev-parse HEAD)\""
+    local c0; c0="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("commit") or "")' "$o/g0.json" 2>/dev/null)"
+    [ -n "$c0" ] && [ "$c0" != "$base" ] && git -C "$p" cat-file -e "$c0:new.txt" 2>/dev/null && g0new=true
+  fi
+  export HB_NO_GIT=1
+  python3 - "$o" "$rt" "$mode" "$head" "$g0new" <<'EOF'
 import json, os, sys
-o, rt, mode, head = sys.argv[1:5]
+o, rt, mode, head, g0new = sys.argv[1:6]
 def load(n):
     try: return json.load(open(os.path.join(o, n + ".json")))
     except Exception: return "UNPARSEABLE"
-obs = {k: load(k) for k in ("start", "changed_g0_pending", "g0", "changed_g0_accepted",
+obs = {k: load(k) for k in ("start", "changed_g0_pending", "g0", "changed_g0_accepted", "changed_g0_rerun",
                             "changed_g1_pending", "g1_review_pending", "g1", "truth")}
-obs.update(rt=rt, mode=mode, head=json.loads(head))
+obs.update(rt=rt, mode=mode, head=json.loads(head), g0_commit_is_restore_point=(g0new == "true"))
 print(json.dumps(obs, sort_keys=True))
 EOF
   rm -rf "$p"
@@ -117,6 +131,21 @@ m.TOOLS['start'][0](sys.argv[1] + '/.hb', {'task': 'T1'})" "$p" >/dev/null 2>&1
     else PATH="$stub:$PATH" HB_EXEC_CMD=stub HB_EXEC_MAX_ITERS=1 HB_EXEC_ATTEMPT_CAP=1 node "$p/.hb/hb-exec.js" run >/dev/null 2>&1; fi
     r="$r\"$rt-exec\":$([ -f "$p/.hb/anchors/_start.json" ] && echo true || echo false),"; rm -rf "$p"
   done
+  # concurrent first starts: 8 at once, 4 trials — the start anchor must never be lost
+  local ok trial
+  ok=true; for trial in 1 2 3 4; do
+    p="$(mkproject py nogit)"
+    python3 -c "
+import sys, threading; from heartbeat import mcp_server as m
+ts = [threading.Thread(target=m.TOOLS['start'][0], args=(sys.argv[1] + '/.hb', {'task': 'X%d' % i})) for i in range(8)]
+[t.start() for t in ts]; [t.join() for t in ts]" "$p" >/dev/null 2>&1
+    [ -f "$p/.hb/anchors/_start.json" ] || ok=false; rm -rf "$p"
+  done; r="$r\"py-parallel\":$ok,"
+  ok=true; for trial in 1 2 3 4; do
+    p="$(mkproject node nogit)"
+    for i in 1 2 3 4 5 6 7 8; do node "$p/.hb/hb.js" start "X$i" >/dev/null 2>&1 & done; wait
+    [ -f "$p/.hb/anchors/_start.json" ] || ok=false; rm -rf "$p"
+  done; r="$r\"node-parallel\":$ok,"
   printf '{%s}' "${r%,}"
 }
 
@@ -151,13 +180,15 @@ def check(all_obs, entries):
             return (sorted(c.get("added") or []), sorted(c.get("modified") or []), sorted(c.get("deleted") or []))
         if trio(o["changed_g0_pending"]) != (["new.txt"], ["a.txt"], ["b.txt"]): return key + ": changed G0 (pending) wrong: " + str(trio(o["changed_g0_pending"]))
         if trio(o["changed_g0_accepted"]) != (["new.txt"], ["a.txt"], ["b.txt"]): return key + ": changed G0 (accepted) leaked later work: " + str(trio(o["changed_g0_accepted"]))
+        if trio(o["changed_g0_rerun"]) != (["new.txt"], ["a.txt"], ["b.txt"]): return key + ": re-running accepted G0 moved its anchor: " + str(trio(o["changed_g0_rerun"]))
+        if o["mode"] == "git" and not o["g0_commit_is_restore_point"]: return key + ": G0 anchor commit is not the restore-point commit (anchor taken before the commit?)"
         if trio(o["changed_g1_pending"]) != (["late.txt"], ["new.txt"], []): return key + ": changed G1 (pending) wrong: " + str(trio(o["changed_g1_pending"]))
     for mode in ("git", "nogit"):
         n, p = by.get(("node", mode)), by.get(("py", mode))
         if not n or not p: return "missing runtime for " + mode
         for k in ("start", "g0", "g1"):
             if n[k]["files"] != p[k]["files"]: return "parity: " + mode + " anchor " + k + " differs node vs python"
-        for k in ("changed_g0_pending", "changed_g0_accepted", "changed_g1_pending"):
+        for k in ("changed_g0_pending", "changed_g0_accepted", "changed_g0_rerun", "changed_g1_pending"):
             if {x: sorted(n[k].get(x) or []) for x in ("added", "modified", "deleted")} != {x: sorted(p[k].get(x) or []) for x in ("added", "modified", "deleted")}:
                 return "parity: " + mode + " " + k + " differs node vs python"
     return None
@@ -196,9 +227,30 @@ m("wrong commit",                 lambda o, e: o[0]["g1"].__setitem__("commit", 
 m("parity drift",                 lambda o, e: o[2]["g0"]["files"].__setitem__("zz.txt", "0"))
 m("MCP start not anchored",       lambda o, e: e.__setitem__("py-mcp", False))
 m("exec start not anchored",      lambda o, e: e.__setitem__("node-exec", False))
-print("SELFTEST-OK")
+m("anchor moved by a re-run",     lambda o, e: o[1]["changed_g0_rerun"]["added"].append("late.txt"))
+m("anchor before restore commit", lambda o, e: o[0].__setitem__("g0_commit_is_restore_point", False))
+m("parallel start lost",          lambda o, e: e.__setitem__("py-parallel", False))
 EOF
-  exit 0
+  # (2) real-code mutants: the SAME proof, run against a mutated copy of the tree, must go RED
+  mutant() { # <label> <file> <old> <new>
+    local m="$work/mut"; rm -rf "$m"; mkdir -p "$m/docs/howto" "$m/py"
+    cp -r "$ROOT/plugin" "$m/"; cp -r "$ROOT/py/src" "$m/py/"; cp -r "$ROOT/docs/howto/gate-examples" "$m/docs/howto/"
+    python3 -c 'import sys; p, a, b = sys.argv[1:4]; s = open(p).read(); sys.exit(1) if s.count(a) != 1 else open(p, "w").write(s.replace(a, b))' \
+      "$m/$2" "$3" "$4" || fail "selftest: mutant '$1' did not apply (the code moved — update the mutant)"
+    if bash "$m/docs/howto/gate-examples/gate-anchors.sh" >/dev/null 2>&1; then fail "selftest: mutant '$1' still passes — that property is not load-bearing"; fi
+    echo "  mutant caught: $1"
+  }
+  mutant "node review-pass anchor removed" plugin/templates/hb.js "    tryAnchor(gate);   // acceptance anchor" "    // (mutant) no acceptance anchor"
+  mutant "gate.sh acceptance anchor removed" plugin/templates/gate.sh 'node "$HB_DIR/hb.js" anchor "$GATE" >/dev/null || true' ': mutant'
+  mutant "node write-once removed" plugin/templates/hb.js "  if (readAnchor(name)) return true;
+" ""
+  mutant "python write-once removed" py/src/heartbeat/anchors.py "    if read_anchor(hbdir, name) is not None:
+        return True
+    try:" "    try:"
+  mutant "node anchor before the restore commit" plugin/templates/gate.sh '  git_snapshot "$GATE"
+  node "$HB_DIR/hb.js" anchor "$GATE" >/dev/null || true' '  node "$HB_DIR/hb.js" anchor "$GATE" >/dev/null || true
+  git_snapshot "$GATE"'
+  echo "SELFTEST-OK"; exit 0
 fi
 
 python3 - "$obs_file" "$ent_file" <<EOF || exit 1

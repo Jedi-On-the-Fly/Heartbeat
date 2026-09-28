@@ -422,7 +422,10 @@ function writeAnchor(name) {
   return a;
 }
 // Report, never swallow: an anchor that silently fails to write would make `changed` lie later.
+// Write-once: an accepted gate's anchor is its acceptance record — re-running the gate later must
+// not move it (later phases' work would leak into its report).
 function tryAnchor(name) {
+  if (readAnchor(name)) return true;
   try { writeAnchor(name); return true; }
   catch (e) { process.stderr.write(`⚠ anchor ${name} not recorded: ${e.message}\n`); return false; }
 }
@@ -460,9 +463,13 @@ switch (cmd) {
     if (!arg1) die('usage: hb start <taskId>');
     fs.mkdirSync(LEASES, { recursive: true });
     try { fs.mkdirSync(path.join(LEASES, arg1)); } catch (e) { /* idempotent: tick may have leased it */ }
-    mutate({ event: 'task_started', task: arg1 });
-    // The plan's start anchor: taken on the first LIVE task_started only (never on rebuild/import).
-    if (!readAnchor('_start') && readEvents().filter(e => e.event === 'task_started').length === 1) tryAnchor('_start');
+    // The plan's start anchor: taken on the first LIVE task_started only (never on rebuild/import),
+    // inside the write lock so concurrent first starts can't both miss "the first".
+    withWlock(() => {
+      appendEvent({ event: 'task_started', task: arg1 });
+      if (!readAnchor('_start') && readEvents().filter(e => e.event === 'task_started').length === 1) tryAnchor('_start');
+      reproject();
+    });
     process.stdout.write(`started ${arg1}\n`);
     break;
 
