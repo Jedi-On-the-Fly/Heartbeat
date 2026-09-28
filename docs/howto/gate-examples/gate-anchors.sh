@@ -11,6 +11,7 @@
 # Acceptance anchors are write-once (re-running an accepted gate never moves them); the start anchor
 # survives concurrent first starts (both runtimes); in git with autocommit ON the acceptance anchor's
 # commit is the restore-point commit (taken after it). Prints GATE-ANCHORS-OK.
+# The start anchor's tree hash runs OUTSIDE the write lock (a big tree never blocks other writers).
 # `--selftest` (1) perturbs the real observations (drops an untracked file, leaks an ignored one,
 # removes an anchor, …) and proves the checker rejects each, and (2) runs this proof against MUTANT
 # copies of the real code (acceptance-anchor hooks removed, write-once removed, anchor moved before
@@ -146,6 +147,40 @@ ts = [threading.Thread(target=m.TOOLS['start'][0], args=(sys.argv[1] + '/.hb', {
     for i in 1 2 3 4 5 6 7 8; do node "$p/.hb/hb.js" start "X$i" >/dev/null 2>&1 & done; wait
     [ -f "$p/.hb/anchors/_start.json" ] || ok=false; rm -rf "$p"
   done; r="$r\"node-parallel\":$ok,"
+  # the tree hash must run OUTSIDE the write lock: a first start on a big tree (a 2.5 GB sparse
+  # file, ~1.5-2 s to hash) must never hold .wlock for the hash's duration (other writers would
+  # time out after 5 s). Sampled every 20 ms: longest continuous .wlock hold vs time-to-anchor.
+  for rt in py node; do
+    p="$(mkproject "$rt" nogit)"; truncate -s 2500M "$p/big.bin"
+    local lf; lf="$(python3 - "$rt" "$p" "$ROOT" <<'PY'
+import os, subprocess, sys, time
+rt, p, root = sys.argv[1:4]
+cmd = (["python3", "-m", "heartbeat.cli", "start", "T1", "--dir", p] if rt == "py"
+       else ["node", p + "/.hb/hb.js", "start", "T1"])
+wl, anc = p + "/.hb/.wlock", p + "/.hb/anchors/_start.json"
+t0 = time.time(); proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+held_since, longest, t_anchor = None, 0.0, None
+while proc.poll() is None or held_since is not None:
+    now = time.time()
+    if os.path.isdir(wl):
+        held_since = held_since or now
+    elif held_since is not None:
+        longest = max(longest, now - held_since); held_since = None
+    if t_anchor is None and os.path.exists(anc):
+        t_anchor = now - t0
+    if proc.poll() is not None and held_since is None:
+        break
+    time.sleep(0.02)
+if t_anchor is None and os.path.exists(anc):
+    t_anchor = time.time() - t0
+# vacuity guard: the hash must actually have taken a while (else nothing was measured)
+print("true" if (t_anchor is not None and t_anchor > 0.8 and longest < 0.5) else
+      "false" if t_anchor is not None and t_anchor > 0.8 else "vacuous")
+PY
+)"
+    r="$r\"$rt-hash-outside-lock\":$( [ "$lf" = true ] && echo true || echo "\"$lf\""),"
+    rm -rf "$p"
+  done
   printf '{%s}' "${r%,}"
 }
 
@@ -154,7 +189,9 @@ import json, sys
 def check(all_obs, entries):
     """Return the first violated property, or None."""
     for s, ok in entries.items():
-        if ok is not True: return "no _start anchor when the first task_started came through " + s
+        if ok is not True:
+            if s.endswith("hash-outside-lock"): return s + ": the start anchor tree hash held the write lock (" + str(ok) + ")"
+            return "no _start anchor when the first task_started came through " + s
     by = {}
     for o in all_obs:
         key = o["rt"] + "/" + o["mode"]; by[(o["rt"], o["mode"])] = o
@@ -230,6 +267,7 @@ m("exec start not anchored",      lambda o, e: e.__setitem__("node-exec", False)
 m("anchor moved by a re-run",     lambda o, e: o[1]["changed_g0_rerun"]["added"].append("late.txt"))
 m("anchor before restore commit", lambda o, e: o[0].__setitem__("g0_commit_is_restore_point", False))
 m("parallel start lost",          lambda o, e: e.__setitem__("py-parallel", False))
+m("hash under the lock",          lambda o, e: e.__setitem__("node-hash-outside-lock", False))
 EOF
   # (2) real-code mutants: the SAME proof, run against a mutated copy of the tree, must go RED
   mutant() { # <label> <file> <old> <new>
@@ -247,6 +285,9 @@ EOF
   mutant "python write-once removed" py/src/heartbeat/anchors.py "    if read_anchor(hbdir, name) is not None:
         return True
     try:" "    try:"
+  mutant "python hash back under the lock" py/src/heartbeat/state.py "            first.append(anchors.is_first_start(hbdir))" "            first.append(anchors.is_first_start(hbdir))
+            if first[0]:
+                anchors.try_anchor(hbdir, '_start')"
   mutant "node anchor before the restore commit" plugin/templates/gate.sh '  git_snapshot "$GATE"
   node "$HB_DIR/hb.js" anchor "$GATE" >/dev/null || true' '  node "$HB_DIR/hb.js" anchor "$GATE" >/dev/null || true
   git_snapshot "$GATE"'

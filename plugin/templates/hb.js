@@ -407,9 +407,16 @@ function listProjectFiles() {
     let st;
     try { st = fs.lstatSync(abs); } catch (e) { continue; }   // tracked but deleted from the worktree
     if (!st.isFile()) continue;
-    files[r] = require('crypto').createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
+    files[r] = hashFile(abs);
   }
   return files;
+}
+function hashFile(abs) {   // streamed in chunks — no whole-file buffer (files past 2 GiB hash too)
+  const h = require('crypto').createHash('sha256'), buf = Buffer.allocUnsafe(1 << 20);
+  const fd = fs.openSync(abs, 'r');
+  try { let n; while ((n = fs.readSync(fd, buf, 0, buf.length, null)) > 0) h.update(buf.subarray(0, n)); }
+  finally { fs.closeSync(fd); }
+  return h.digest('hex');
 }
 function writeAnchor(name) {
   let commit = null;
@@ -463,13 +470,17 @@ switch (cmd) {
     if (!arg1) die('usage: hb start <taskId>');
     fs.mkdirSync(LEASES, { recursive: true });
     try { fs.mkdirSync(path.join(LEASES, arg1)); } catch (e) { /* idempotent: tick may have leased it */ }
-    // The plan's start anchor: taken on the first LIVE task_started only (never on rebuild/import),
-    // inside the write lock so concurrent first starts can't both miss "the first".
-    withWlock(() => {
+    // The plan's start anchor: taken on the first LIVE task_started only (never on rebuild/import).
+    // "Is this the first?" is decided inside the write lock (exactly one caller can see a count of
+    // 1); the tree hash runs AFTER release, so a large project never holds other writers past the
+    // lock timeout.
+    const first = withWlock(() => {
       appendEvent({ event: 'task_started', task: arg1 });
-      if (!readAnchor('_start') && readEvents().filter(e => e.event === 'task_started').length === 1) tryAnchor('_start');
+      const f = !readAnchor('_start') && readEvents().filter(e => e.event === 'task_started').length === 1;
       reproject();
+      return f;
     });
+    if (first) tryAnchor('_start');
     process.stdout.write(`started ${arg1}\n`);
     break;
 

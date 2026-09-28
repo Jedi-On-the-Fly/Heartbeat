@@ -215,15 +215,22 @@ def with_wlock(hbdir, fn):
 
 
 def mutate(hbdir, ev):
+    first = []
     def _do():
         append_event(hbdir, ev)
         # The plan's start anchor, at the ONE layer every live entry point (CLI, MCP, exec)
-        # shares — INSIDE the lock, so concurrent first starts can't both miss "the first".
+        # shares. "Is this the first task_started?" is decided INSIDE the lock (exactly one
+        # caller can see a count of 1); the tree hash runs AFTER it, so a large project never
+        # holds other writers past the lock timeout.
         if ev.get("event") == "task_started":
             from . import anchors
-            anchors.maybe_start_anchor(hbdir)
+            first.append(anchors.is_first_start(hbdir))
         return reproject(hbdir)
-    return with_wlock(hbdir, _do)
+    s = with_wlock(hbdir, _do)
+    if first and first[0]:
+        from . import anchors
+        anchors.try_anchor(hbdir, "_start")
+    return s
 
 
 def acquire_lease(hbdir, task):

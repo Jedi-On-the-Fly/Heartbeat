@@ -49,3 +49,12 @@ def test_acceptance_anchor_is_write_once(tmp_path):
     (tmp_path / "later.txt").write_text("x")
     assert anchors.try_anchor(hb, "GATE_P0")
     assert anchors.read_anchor(hb, "GATE_P0") == first
+
+
+def test_non_utf8_name_is_skipped_not_fatal(tmp_path):
+    import os
+    hb = make_hb(tmp_path, two_phase_dag())
+    (tmp_path / "ok.txt").write_text("k")
+    with open(os.path.join(os.fsencode(tmp_path), b"bad\xff.txt"), "wb") as f:
+        f.write(b"x")
+    assert list(anchors.list_project_files(hb)) == ["ok.txt"]

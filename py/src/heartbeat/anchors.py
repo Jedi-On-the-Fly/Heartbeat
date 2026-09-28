@@ -64,20 +64,26 @@ def list_project_files(hbdir):
                 else:
                     rels.append(r)
         walk("")
-    files = {}
-    # sort by UTF-16 code units == JS default sort (parity on non-BMP names)
-    for r in sorted(rels, key=lambda s: s.encode("utf-16-be")):
-        if r == hb_rel or r.startswith(hb_rel + "/") or r.split("/")[0] == ".git":
-            continue
+    def utf8(r):
         try:
             r.encode("utf-8")
+            return True
         except UnicodeEncodeError:   # a non-UTF-8 name: skipped (node cannot address it either)
+            return False
+    files = {}
+    # sort by UTF-16 code units == JS default sort (parity on non-BMP names)
+    for r in sorted((r for r in rels if utf8(r)), key=lambda s: s.encode("utf-16-be")):
+        if r == hb_rel or r.startswith(hb_rel + "/") or r.split("/")[0] == ".git":
             continue
         p = pd / r
         try:
             if not p.is_file() or p.is_symlink():   # tracked-but-deleted, or not a regular file
                 continue
-            files[r] = hashlib.sha256(p.read_bytes()).hexdigest()
+            h = hashlib.sha256()
+            with open(p, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 20), b""):
+                    h.update(chunk)
+            files[r] = h.hexdigest()
         except OSError:
             continue
     return files
@@ -117,13 +123,11 @@ def read_anchor(hbdir, name):
         return None
 
 
-def maybe_start_anchor(hbdir):
-    """The plan's start anchor: on the first LIVE task_started only (called from state.mutate,
-    under the write lock — so "exactly one task_started in the log" is race-free)."""
-    if read_anchor(hbdir, "_start") is not None:
-        return
-    if sum(1 for e in st.read_events(hbdir) if e.get("event") == "task_started") == 1:
-        try_anchor(hbdir, "_start")
+def is_first_start(hbdir):
+    """True for the first LIVE task_started only. Called by state.mutate UNDER the write lock
+    (so "exactly one task_started in the log" is race-free); the caller hashes after release."""
+    return (read_anchor(hbdir, "_start") is None
+            and sum(1 for e in st.read_events(hbdir) if e.get("event") == "task_started") == 1)
 
 
 def changed(hbdir, gate):
