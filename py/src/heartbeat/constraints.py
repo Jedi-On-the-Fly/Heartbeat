@@ -181,12 +181,14 @@ def doctor_problems(hbdir):
             continue
         rel = e.get("artifact") or f"reviews/{g}.md"
         try:
-            body = (Path(hbdir) / rel).read_text()
+            raw = (Path(hbdir) / rel).read_bytes()
         except OSError:
             continue   # a missing artifact is already a Sev-1 problem
-        errs, counts = check_answers(body, e["constraint_ids"])
-        if errs or counts != e.get("answers"):
-            out.append(f"{g} review_passed answers no longer hold in {rel} ({errs[0] if errs else 'answer counts changed'}) — the stored refutation was altered")
+        errs, counts = check_answers(raw.decode("utf-8", errors="replace"), e["constraint_ids"])
+        sha_ok = not e.get("artifact_sha256") or hashlib.sha256(raw).hexdigest() == e["artifact_sha256"]
+        if not sha_ok or errs or counts != e.get("answers"):
+            why = "the artifact bytes changed since the pass" if not sha_ok else (errs[0] if errs else "answer counts changed")
+            out.append(f"{g} review_passed answers no longer hold in {rel} ({why}) — the stored refutation was altered")
     last = {}
     for e in st.read_events(hbdir):
         if e.get("event") == "constraints_recorded":

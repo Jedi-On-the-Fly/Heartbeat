@@ -333,12 +333,13 @@ function doctor() {
     }
     for (const [g, e] of Object.entries(lastPass)) {
       if (!Array.isArray(e.constraint_ids)) continue;
-      let body = null;
-      try { body = fs.readFileSync(path.join(HB_DIR, e.artifact || `reviews/${g}.md`), 'utf8'); } catch (x) {}
-      if (body === null) continue;   // a missing artifact is already a Sev-1 problem above
-      const a = checkAnswers(body, e.constraint_ids);
-      if (a.errors.length || JSON.stringify(a.counts) !== JSON.stringify(e.answers))
-        problems.push(`${g} review_passed answers no longer hold in ${e.artifact || `reviews/${g}.md`} (${a.errors[0] || 'answer counts changed'}) — the stored refutation was altered`);
+      let raw = null;
+      try { raw = fs.readFileSync(path.join(HB_DIR, e.artifact || `reviews/${g}.md`)); } catch (x) {}
+      if (raw === null) continue;   // a missing artifact is already a Sev-1 problem above
+      const a = checkAnswers(raw.toString('utf8'), e.constraint_ids);
+      const shaOk = !e.artifact_sha256 || require('crypto').createHash('sha256').update(raw).digest('hex') === e.artifact_sha256;
+      if (!shaOk || a.errors.length || JSON.stringify(a.counts) !== JSON.stringify(e.answers))
+        problems.push(`${g} review_passed answers no longer hold in ${e.artifact || `reviews/${g}.md`} (${!shaOk ? 'the artifact bytes changed since the pass' : (a.errors[0] || 'answer counts changed')}) — the stored refutation was altered`);
     }
   }
 
@@ -581,25 +582,48 @@ function reviewCycle(dag, gate) {
 //   <ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>
 // Markdown-insensitive (list bullets, quotes, headings, *, _, ` are ignored) and case-insensitive on the
 // status. Prose that merely mentions an id is not an answer. Twin: review_policy.check_answers.
+// EXPLICIT rules, identical in both runtimes (JS and python primitives disagree on line breaks, trim
+// sets and Unicode case folding — a refuter catch): lines break on ANY of \r\n \n \r \v \f \x1c-\x1e
+// \x85 \u2028 \u2029 (a bare CR cannot hide a line); invisible characters (zero-width, BOM, soft
+// hyphen) are removed before matching; case-insensitivity is ASCII-only; and a line SHAPED like an
+// answer (`<ID>:` or `<ID>：`) that is not in the exact format is REFUSED, never ignored.
+const ANSWER_BREAKS = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/;
+const ANSWER_INVISIBLE = /[\u200b-\u200f\u2060\ufeff\u00ad]/g;
 function checkAnswers(body, required) {
   const req = new Set(required), seen = {}, errors = [], counts = { violated: 0, not_reproduced: 0, na: 0 };
-  for (const raw of String(body).split(/\r?\n/)) {
-    const l = raw.replace(/[*`_]/g, '').replace(/^[ \t>+#-]+/, '').trim();
-    const m = /^([PG][0-9]+)[ \t]*:[ \t]*(VIOLATED|NOT-REPRODUCED|NOT REPRODUCED|N\/A)(?![A-Za-z])(.*)$/i.exec(l);
-    if (!m) continue;
-    const id = m[1].toUpperCase(), st = m[2].toUpperCase().replace(' ', '-');
-    const rest = m[3].replace(/^[ \t]*[—–:-]+/, '').trim();
+  const FMT = require('./refuter_profiles.js').ANSWER_FORMAT;
+  const text = String(body).replace(/<!--[\s\S]*?-->/g, '');   // an HTML comment hides nothing
+  for (const raw of text.split(ANSWER_BREAKS)) {
+    const l = raw.replace(ANSWER_INVISIBLE, '').replace(/[*`_]/g, '').replace(/^[ \t]+|[ \t]+$/g, '').replace(/^[\t >+#-]+/, '');
+    // Match on an ASCII-only lowercased copy: no regex case folding (JS and python fold differently).
+    const lo = l.replace(/[A-Z]/g, c => c.toLowerCase());
+    const head = /^([pg][0-9]+)[ \t]*[:：]/.exec(lo);
+    if (!head) {
+      // a line SHAPED like an answer whose id is not an ASCII P<n>/G<n> (homoglyphs, non-ASCII digits)
+      if (/^[^ \t:：]{1,4}[ \t]*[:：][ \t]*(?:violated|not[- ]reproduced|n\/a)/u.test(lo))
+        errors.push(`an answer-shaped line has an id that is not an ASCII P<n>/G<n> — answer each id exactly (${FMT})`);
+      continue;
+    }
+    const id = head[1].toUpperCase();
+    const m = /^[pg][0-9]+[ \t]*[:：][ \t]*(violated|not-reproduced|not reproduced|n\/a)(?=$|[ \t—–:])(.*)$/.exec(lo);
+    if (!m) { errors.push(`${id} has an answer-shaped line that is not in the format (${FMT})`); continue; }
+    const st = m[1].toUpperCase().replace(' ', '-');
+    const rest = m[2].replace(/^[ \t]*[—–:-]+/, '');
     if (!req.has(id)) { errors.push(`${id} is not a constraint of this gate (an unknown id was answered)`); continue; }
     if (seen[id]) { errors.push(`${id} is answered twice — one line per id`); continue; }
     seen[id] = st;
     if (st === 'VIOLATED') { counts.violated++; errors.push(`${id} is answered VIOLATED — a violation is a finding: record it with hb review <gate> fail "<finding>"`); }
-    else if (!/[^ \t]/.test(rest)) errors.push(`${id} is answered ${st} without ${st === 'N/A' ? 'a reason' : 'evidence (the probe you ran)'}`);
+    else if (!ANSWER_TEXT.test(rest)) errors.push(`${id} is answered ${st} without ${st === 'N/A' ? 'a reason' : 'evidence (the probe you ran)'}`);
     else if (st === 'N/A') counts.na++;
     else counts.not_reproduced++;
   }
-  for (const id of required) if (!seen[id]) errors.push(`${id} has no answer line (${require('./refuter_profiles.js').ANSWER_FORMAT})`);
+  for (const id of required) if (!seen[id]) errors.push(`${id} has no answer line (${FMT})`);
   return { errors, counts };
 }
+// evidence / a reason must contain a character that is not whitespace (ONE explicit set, Unicode
+// spaces included, identical in python)
+const ANSWER_TEXT = /[^ \t   -   　]/;
+
 // A path shown to an agent: control characters (a newline in a file name) would let a doer forge
 // prompt sections, so such a path is rendered JSON-quoted. Twin: anchors.safe_path.
 function safePath(p) { return /[\x00-\x1f\x7f]/.test(p) ? JSON.stringify(p) : p; }
@@ -855,23 +879,23 @@ switch (cmd) {
     // Identity: reject a self-review — a pass whose actor also recorded this phase's
     // task_done events is grading its own homework. Adjudicated only when actors are set.
     const reviewer = process.env.HB_ACTOR || 'unknown';
+    const norm = (a) => String(a).trim().toLowerCase();
     if (reviewer !== 'unknown' && phaseForGate) {
       const phaseTaskIds = new Set((phaseForGate.tasks || []).map(t => t.id));
       const doers = new Set();
       for (const e of readEvents())
         if (e.event === 'task_done' && phaseTaskIds.has(e.task) && e.actor && e.actor !== 'unknown') doers.add(e.actor);
-      if (doers.has(reviewer))
+      if ([...doers].some(d => norm(d) === norm(reviewer)))
         die(`${vw}: reviewer '${reviewer}' also executed this phase's work — a self-review is not adversarial. Have a DIFFERENT actor refute (set HB_ACTOR).`);
     }
     // ── constraint-first review (a CONSTRAINED gate only; an unconstrained gate is unchanged) ──
-    const norm = (a) => String(a).trim().toLowerCase();
     const constrained = planConstraints(dag, gate).length > 0;
     let answers = null, constraintIds = null;
     if (verdict === 'free') {
       if (!constrained) die(`review free: ${gate} has no plan-time constraints — the free review belongs to the constraint-first review of a constrained gate`);
       const cyc = reviewCycle(dag, gate);
       if (!cyc.pending) die(`review free: ${gate} is not awaiting review`);
-      if (!reviewer || norm(reviewer) === 'unknown') die('review free: set HB_ACTOR to the free reviewer\'s identity');
+      if (!reviewer || !norm(reviewer) || norm(reviewer) === 'unknown') die('review free: set HB_ACTOR to the free reviewer\'s identity');
       if ([...phaseDoers(dag, gate, cyc.events)].some(d => norm(d) === norm(reviewer)))
         die(`review free: '${reviewer}' did this phase's work — the free reviewer must be a different actor`);
       const revDirF = path.join(HB_DIR, 'reviews');
@@ -906,7 +930,8 @@ switch (cmd) {
     fs.writeFileSync(path.join(revDir, `${gate}.md`), body);
     const autocommit = gitPolicy();
     mutate({ event: 'review_passed', gate, model, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, git: { autocommit },
-             ...(answers ? { answers, constraint_ids: constraintIds } : {}), ...(note ? { note } : {}) });
+             ...(answers ? { answers, constraint_ids: constraintIds, artifact_sha256: require('crypto').createHash('sha256').update(body, 'utf8').digest('hex') } : {}),
+             ...(note ? { note } : {}) });
     // Reviewed acceptance creates the phase's restore point (commit+tag) — deferred from the
     // deterministic pass so the tag only ever certifies a reviewed-good state.
     if (autocommit) {

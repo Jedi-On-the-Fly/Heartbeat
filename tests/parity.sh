@@ -250,6 +250,17 @@ answers_case(){  # the verdict of hb review pass on crafted answer sets, and the
   case "$n" in *'VIOLATED'*'without evidence'*'answered twice'*) ;; *) echo "  ✗ review:answers — node found none of the expected refusals"; FAIL=1;; esac
 }
 answers_case
+# hostile edges (refuter catches): hidden line breaks, BOM / zero-width, Unicode case folding, homoglyph
+# ids, non-ASCII digits, HTML comments, statuses glued to letters — node ≡ python AND every one refused
+edges_case(){
+  local F="$ROOT/tests/fixtures/review-answers/edges.json" n p
+  n="$(node -e 'const h=require(process.argv[1]);const cs=JSON.parse(require("fs").readFileSync(process.argv[2],"utf8"));console.log(JSON.stringify(cs.map(([k,b])=>[k,h.checkAnswers(b,["P1"])])))' "$ROOT/plugin/templates/hb.js" "$F" | python3 -c 'import sys,json;print(json.dumps(json.load(sys.stdin),ensure_ascii=False,separators=(",",":")))')"
+  p="$(PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c 'import sys,json;from heartbeat.review_policy import check_answers;cs=json.load(open(sys.argv[1]));print(json.dumps([[k,dict(zip(("errors","counts"),check_answers(b,["P1"])))] for k,b in cs],ensure_ascii=False,separators=(",",":")))' "$F")"
+  cmp "review:answers-edges" "$n" "$p"
+  local ok; ok="$(printf '%s' "$n" | python3 -c 'import sys,json;d=json.load(sys.stdin);bad=[k for k,r in d if not r["errors"]];print("OK" if d and not bad else "ACCEPTED:"+",".join(bad))')"
+  [ "$ok" = OK ] || { echo "  ✗ review:answers-edges — hostile answer sets accepted: $ok"; FAIL=1; }
+}
+edges_case
 
 echo "── panel aggregation parity ──"
 # aggregateVerdict must agree node ≡ python across rules and verdict mixes
