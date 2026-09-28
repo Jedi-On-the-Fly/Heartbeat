@@ -171,6 +171,41 @@ compose_case(){
 }
 compose_case
 
+echo "── constraint author parity ──"
+author_case(){  # the author prompt bytes (incl. the hb changed list) + a record verdict sequence
+  local d; d=$(mktemp -d); mkdir -p "$d/.hb/refuters"
+  cp "$ROOT/plugin/templates/"*.js "$ROOT/plugin/templates/gate.sh" "$d/.hb/"
+  printf '%s' '{"phases":[{"id":"P0","title":"t","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"t0","title":"w","description":"d é"}]}],"gates":{"G0":{"desc":"gd","review":{"prompt":"r","profile":"ap","constraints":[{"id":"P1","claim":"c1","subjects":["a.txt"],"violation":"v1"}]},"criteria":[{"id":"c","cmd":"grep -q 2 \"$PROJECT_DIR/a.txt\""}]}}}' > "$d/.hb/dag.json"
+  printf '%s' '{"persona":"p","author_model":"AM"}' > "$d/.hb/refuters/ap.json"
+  printf '%s\n' '{"event":"initialized"}' > "$d/.hb/events.jsonl"; printf '1\n' > "$d/a.txt"
+  HB_NO_GIT=1 HB_ACTOR=doer node "$d/.hb/hb.js" start t0 >/dev/null 2>&1; printf '2\n' > "$d/a.txt"; printf 'n\n' > "$d/n.txt"
+  HB_NO_GIT=1 HB_ACTOR=doer node "$d/.hb/hb.js" done t0 >/dev/null 2>&1
+  cmp "constraints:author:prompt" "$(HB_NO_GIT=1 node "$d/.hb/hb.js" constraints G0 --prompt 2>&1)" "$(eval "HB_NO_GIT=1 $PY constraints G0 --prompt --dir \"$d\"" 2>&1)"
+  cmp "constraints:author:json" \
+    "$(HB_NO_GIT=1 node "$d/.hb/hb.js" constraints G0 --prompt --json 2>&1 | python3 -c 'import sys,json;print(json.dumps(json.load(sys.stdin),sort_keys=True,ensure_ascii=False))')" \
+    "$(eval "HB_NO_GIT=1 $PY constraints G0 --prompt --json --dir \"$d\"" 2>&1 | python3 -c 'import sys,json;print(json.dumps(json.load(sys.stdin),sort_keys=True,ensure_ascii=False))')"
+  case "$(HB_NO_GIT=1 node "$d/.hb/hb.js" constraints G0 --prompt 2>&1)" in *"M a.txt"*"c1"*) ;; *"c1"*"M a.txt"*) ;; *) echo "  ✗ constraints:author — node prompt lacks the change list / constraints"; FAIL=1;; esac
+  HB_NO_GIT=1 bash "$d/.hb/gate.sh" G0 >/dev/null 2>&1
+  printf '[{"id":"G1","claim":"x","subjects":["a.txt"],"violation":"y"}]' > "$d/g.json"; printf '[]' > "$d/e.json"
+  # verdicts: doer refused, empty refused, valid accepted, again refused — on COPIES so each runtime starts equal
+  local rt out=""
+  for rt in node py; do
+    local c; c=$(mktemp -d); cp -r "$d/." "$c/"; local v=""
+    for step in "doer g" "author e" "author g" "author g"; do
+      set -- $step
+      if [ "$rt" = node ]; then HB_NO_GIT=1 HB_ACTOR="$1" node "$c/.hb/hb.js" constraints G0 --record "$c/$2.json" >/dev/null 2>&1; else
+        eval "HB_NO_GIT=1 HB_ACTOR=$1 $PY constraints G0 --record \"$c/$2.json\" --dir \"$c\"" >/dev/null 2>&1; fi
+      v="$v$?"
+    done
+    out="$out $rt:$v"; rm -rf "$c"
+  done
+  set -- $out
+  cmp "constraints:author:record" "${1#node:}" "${2#py:}"
+  [ "${1#node:}" = "1101" ] || { echo "  ✗ constraints:author:record — verdicts ${1#node:} ≠ 1101 (doer, empty, valid, again)"; FAIL=1; }
+  rm -rf "$d"
+}
+author_case
+
 echo "── panel aggregation parity ──"
 # aggregateVerdict must agree node ≡ python across rules and verdict mixes
 NODE_AGG='const {aggregateVerdict}=require(process.argv[1]);const cases=[["majority",[true,false,false]],["majority",[true,true,false]],["any",[false,false,true]],["any",[false,false,false]],["all",[true,true,true]],["all",[true,true,false]]];console.log(cases.map(([r,v])=>r+":"+aggregateVerdict(v,r)).join(","))'

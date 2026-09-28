@@ -1805,6 +1805,12 @@ check "T168.1 well-formed lints clean + schema-valid; malformed = lint ERROR nam
 check "T168.2 teeth: perturbed observations and seven reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/constraints-schema.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
+grp "T169 — gate-time constraint author: hb constraints --prompt/--record, write-once per review cycle, author ≠ doer, doctor hash check; node ≡ python"
+check "T169.1 prompt carries tasks/gate/P-constraints/hb changed + the no-bug-hunting rule; --json .model = author_model verbatim (null unset); record refusals + new cycle; doctor catches tampering (constraint-author.sh → CONSTRAINT-AUTHOR-OK)" \
+  'bash "'"$GEX"'/constraint-author.sh" 2>&1 | grep -q "CONSTRAINT-AUTHOR-OK"'
+check "T169.2 teeth: perturbed observations and seven reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/constraint-author.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done
