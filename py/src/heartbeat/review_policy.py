@@ -84,8 +84,10 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
     revdir = Path(hb) / "reviews"
     revdir.mkdir(parents=True, exist_ok=True)
     (revdir / f"{gate}.md").write_text(body)
+    from . import gate as _g
     ev = {"event": "review_passed", "gate": gate, "model": model, "artifact": f"reviews/{gate}.md",
-          "artifact_chars": len(body.strip()), "cited": cited, "reviewer": reviewer}
+          "artifact_chars": len(body.strip()), "cited": cited, "reviewer": reviewer,
+          "git": {"autocommit": _g.git_policy(hb)}}
     if note_str:
         ev["note"] = note_str
     st.mutate(hb, ev)

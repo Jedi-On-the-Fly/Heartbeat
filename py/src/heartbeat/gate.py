@@ -6,6 +6,7 @@ appends gate_passed and (optionally) commits+tags a git restore point.
 """
 import os
 import shutil
+import sys
 import subprocess
 import time
 from pathlib import Path
@@ -172,7 +173,8 @@ def run_gate(hbdir, gate_id, check=False, emit=None, progress=None):
             commit = subprocess.run(["git", "-C", _project_dir(hbdir), "rev-parse", "HEAD"],
                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode().strip() or None
         st.mutate(hbdir, {"event": "gate_passed", "gate": gate_id, "pass": res["passed"], "fail": 0,
-                          "criteria": res.get("results", []), "commit": commit, "runtime": "python"})
+                          "criteria": res.get("results", []), "commit": commit, "runtime": "python",
+                          "git": {"autocommit": git_policy(hbdir)}})
         review = bool((st.read_dag(hbdir).get("gates") or {}).get(gate_id, {}).get("review"))
         # A review-gated phase's restore point (commit+tag) is created at review acceptance
         # (cli.py review pass), NOT here — the tag must never certify an un-reviewed state.
@@ -227,19 +229,43 @@ def _git(pd, *args, **kw):
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kw)
 
 
-def _git_snapshot(hbdir, gate_id):
+def git_policy(hbdir):
+    """The git policy in force: autocommit on AND git present AND inside a worktree. Recorded on
+    the acceptance event as git:{autocommit} so doctor judges a missing tag by the policy of the
+    time, not of the day doctor runs (node twin: gitPolicy)."""
     if os.environ.get("HB_NO_GIT") or os.environ.get("HB_GIT_AUTOCOMMIT", "1") == "0":
-        return
+        return False
     if not shutil.which("git"):   # git is optional
+        return False
+    return _git(_project_dir(hbdir), "rev-parse", "--is-inside-work-tree").returncode == 0
+
+
+def _git_snapshot(hbdir, gate_id):
+    """The phase's restore point (commit + tag). A failed step is reported on stderr AND recorded
+    as restore_point_failed {gate, step, error} — never swallowed. Nothing staged is not a failure."""
+    if not git_policy(hbdir):
         return
     pd = _project_dir(hbdir)
-    if _git(pd, "rev-parse", "--is-inside-work-tree").returncode != 0:
-        return
     phase = next((p for p in (st.read_dag(hbdir).get("phases") or []) if p.get("gate_exit") == gate_id), None)
     msg = (f"heartbeat({phase['id']}): {phase.get('title', phase['id'])} [{gate_id}]"
            if phase else f"heartbeat: {gate_id} passed")
-    _git(pd, "add", "-A")
-    subprocess.run(["git", "-c", "user.name=HeartBeat", "-c", "user.email=heartbeat@local",
-                    "-C", pd, "commit", "--no-verify", "-q", "-m", msg],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    _git(pd, "tag", "-f", gate_id)
+
+    def run(*args):
+        r = subprocess.run(["git", *args], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        return None if r.returncode == 0 else ((r.stderr.decode(errors="replace").strip().splitlines() or [f"exit {r.returncode}"])[-1])
+
+    def failed(step, error):
+        sys.stderr.write(f"⚠ restore point for {gate_id}: git {step} failed — {error}\n")
+        st.mutate(hbdir, {"event": "restore_point_failed", "gate": gate_id, "step": step, "error": error})
+
+    err = run("-C", pd, "add", "-A")
+    if err:
+        failed("add", err)
+    if run("-C", pd, "diff", "--cached", "--quiet") is not None:   # something staged
+        err = run("-c", "user.name=HeartBeat", "-c", "user.email=heartbeat@local",
+                  "-C", pd, "commit", "--no-verify", "-q", "-m", msg)
+        if err:
+            failed("commit", err)
+    err = run("-C", pd, "tag", "-f", gate_id)
+    if err:
+        failed("tag", err)

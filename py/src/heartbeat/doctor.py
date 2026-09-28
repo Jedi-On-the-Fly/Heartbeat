@@ -1,5 +1,6 @@
 """Integrity check (rot detection) + computed root-cause diagnosis. Ported from hb.js."""
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -62,6 +63,35 @@ def doctor(hbdir):
             problems.append(f"{g} review_passed but backing artifact {rel} is missing — the refutation can no longer be inspected (Sev-1 rot)")
         elif len(body.strip()) < 40:
             problems.append(f"{g} review_passed but backing artifact {rel} is empty/thin — not a real refutation")
+
+    # Restore points (only once anchors exist — a log that predates them has no _start, never
+    # flagged): every ACCEPTED gate (review gate: last review verdict is a pass; review-less: a
+    # gate_passed) must have its acceptance anchor, and — if its recorded policy was autocommit-on
+    # — its git tag. Node twin: doctor() in hb.js; lines are identical.
+    from . import anchors
+    if anchors.read_anchor(hbdir, "_start") is not None:
+        acc = {}
+        for e in st.read_events(hbdir):
+            g = e.get("gate")
+            rev = bool((gates.get(g) or {}).get("review"))
+            if e.get("event") == "review_passed" and rev:
+                acc[g] = e
+            elif e.get("event") == "review_failed":
+                acc.pop(g, None)
+            elif e.get("event") == "gate_passed" and not rev and g not in acc:
+                acc[g] = e
+        for g in gates:
+            e = acc.get(g)
+            if not e:
+                continue
+            if anchors.read_anchor(hbdir, g) is None:
+                problems.append(f"{g} accepted but has no acceptance anchor (.hb/anchors/{g}.json) — hb changed cannot report its phase")
+            if (e.get("git") or {}).get("autocommit") is True:
+                tagged = shutil.which("git") and subprocess.run(
+                    ["git", "-C", str(pd), "rev-parse", "-q", "--verify", f"refs/tags/{g}"],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+                if not tagged:
+                    problems.append(f"{g} accepted with autocommit on but has no git tag {g} — no restore point")
 
     return {"problems": problems, "notes": notes}
 

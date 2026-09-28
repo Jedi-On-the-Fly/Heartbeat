@@ -151,7 +151,7 @@ ts = [threading.Thread(target=m.TOOLS['start'][0], args=(sys.argv[1] + '/.hb', {
   # file, ~1.5-2 s to hash) must never hold .wlock for the hash's duration (other writers would
   # time out after 5 s). Sampled every 20 ms: longest continuous .wlock hold vs time-to-anchor.
   for rt in py node; do
-    p="$(mkproject "$rt" nogit)"; truncate -s 2500M "$p/big.bin"
+    p="$(mkproject "$rt" nogit)"; python3 -c "open(__import__('sys').argv[1], 'wb').truncate(2500 * 1024 * 1024)" "$p/big.bin"   # sparse; portable (no truncate(1) on stock macOS)
     local lf; lf="$(python3 - "$rt" "$p" "$ROOT" <<'PY'
 import os, subprocess, sys, time
 rt, p, root = sys.argv[1:4]

@@ -187,7 +187,13 @@ EOF
     if bash "$m/docs/howto/gate-examples/restore-points.sh" >/dev/null 2>&1; then fail "selftest: mutant '$1' still passes — not load-bearing"; fi
     echo "  mutant caught: $1"
   }
-  MUTANTS_HERE
+  mutant "gate.sh tag failure swallowed" plugin/templates/gate.sh 'then restore_point_failed "$1" tag "$(echo "$err" | tail -1)"; fi' 'then :; fi'
+  mutant "gate.sh nothing-to-commit treated as a failure" plugin/templates/gate.sh '  if ! git -C "$PROJECT_DIR" diff --cached --quiet >/dev/null 2>&1; then' '  if true; then'
+  mutant "python review-pass policy field dropped" py/src/heartbeat/review_policy.py '          "git": {"autocommit": _g.git_policy(hb)}}' '          }'
+  mutant "python commit failure swallowed" py/src/heartbeat/gate.py '        if err:
+            failed("commit", err)' '        pass'
+  mutant "node doctor anchor check removed" plugin/templates/hb.js "      if (!readAnchor(g)) problems.push(" "      if (false) problems.push("
+  mutant "python doctor flags legacy history" py/src/heartbeat/doctor.py '    if anchors.read_anchor(hbdir, "_start") is not None:' '    if True:'
   echo "SELFTEST-OK"; exit 0
 fi
 
