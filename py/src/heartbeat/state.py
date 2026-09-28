@@ -218,7 +218,12 @@ def mutate(hbdir, ev):
     def _do():
         append_event(hbdir, ev)
         return reproject(hbdir)
-    return with_wlock(hbdir, _do)
+    s = with_wlock(hbdir, _do)
+    # The plan's start anchor, at the ONE layer every live entry point (CLI, MCP, exec) shares.
+    if ev.get("event") == "task_started":
+        from . import anchors
+        anchors.maybe_start_anchor(hbdir)
+    return s
 
 
 def acquire_lease(hbdir, task):

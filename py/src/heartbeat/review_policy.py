@@ -93,5 +93,7 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
     # deterministic pass deferred it so the tag only ever certifies a reviewed-good state.
     from . import gate as _gate
     _gate._git_snapshot(hb, gate)
+    from . import anchors
+    anchors.try_anchor(hb, gate)   # acceptance anchor — after the restore point, so its commit is the accepted HEAD
     return 0, (f"review pass {gate} (backed by reviews/{gate}.md, {len(body.strip())} chars, "
                f"cites: {', '.join(cited[:3])})"), ""

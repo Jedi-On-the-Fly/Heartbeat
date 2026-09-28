@@ -51,6 +51,7 @@ def main(argv=None):
     # silently truncating the findings (GATE_RE2 refuter catch). Refusing loudly beats guessing.
     p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail"]); p.add_argument("note", nargs="?"); p.add_argument("--artifact"); p.add_argument("--model"); _add_dir(p)
     p = sub.add_parser("evidence"); p.add_argument("gate"); _add_dir(p)
+    p = sub.add_parser("changed"); p.add_argument("gate"); p.add_argument("--json", action="store_true"); _add_dir(p)
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
     p = sub.add_parser("refuters"); p.add_argument("rest", nargs=argparse.REMAINDER); _add_dir(p)
     p = sub.add_parser("refute-prompt"); p.add_argument("gate"); p.add_argument("--json", action="store_true"); _add_dir(p)
@@ -243,6 +244,22 @@ def main(argv=None):
         if err:
             sys.stderr.write(err + "\n")
         return rc
+    elif args.cmd == "changed":
+        from . import anchors
+        try:
+            c = anchors.changed(hb, args.gate)
+        except ValueError as e:
+            sys.stderr.write(f"hb changed: {e}\n"); return 1
+        if args.json:
+            print(json.dumps(c, ensure_ascii=False, separators=(",", ":")))
+            return 0
+        print(f"changes in the phase exiting {args.gate} ({c['base']} → {c['target']}):")
+        for k, t in (("A", c["added"]), ("M", c["modified"]), ("D", c["deleted"])):
+            for p in t:
+                print(f"  {k} {p}")
+        if not (c["added"] or c["modified"] or c["deleted"]):
+            print("  (no changes)")
+        return 0
     elif args.cmd == "evidence":
         # The provenance of a gate's acceptance: what was proven, how, on which commit.
         evs = st.read_events(hb)

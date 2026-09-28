@@ -178,6 +178,8 @@ def run_gate(hbdir, gate_id, check=False, emit=None, progress=None):
         # (cli.py review pass), NOT here — the tag must never certify an un-reviewed state.
         if not review:
             _git_snapshot(hbdir, gate_id)
+            from . import anchors
+            anchors.try_anchor(hbdir, gate_id)   # acceptance anchor, after the restore point
         res.update(status="review_pending" if review else "passed", gate=gate_id)
     else:
         st.mutate(hbdir, {"event": "gate_failed", "gate": gate_id, "pass": res["passed"], "fail": res["failed"]})
