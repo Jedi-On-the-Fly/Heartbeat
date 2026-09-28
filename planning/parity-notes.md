@@ -45,7 +45,14 @@ coverage** of the shared surfaces — node ≡ python on:
 - **protocol** — the reason KEYS (not the action text, see below),
 - **resolve** (`hb next`), **ready** (the runnable set), **report** (progress numbers),
 - **diagnose** (the inferred blocker's first line),
-- **state projection** (fresh / p0-gated / review-owed / two-fails).
+- **state projection** (fresh / p0-gated / review-owed / two-fails),
+- **anchors** — the manifest (path set + sha256) and `hb changed`, git and no-git (`anchors:*`),
+- **plan-time constraints** — lint errors and the `unconstrained_review` warning (`constraints:lint/audit`),
+- **the constraint author** — prompt bytes, `--json`, and the `--record` verdict sequence (`constraints:author:*`),
+- **the constrained refute prompt** — constrained / free / `--json`, and `free_review` coercion from JSON and
+  SKILL-format profiles on unicode-whitespace edges (`refute-prompt:constrained*`, `:free`, `:free_review:*`,
+  `:skill-free_review:*`),
+- **the answer parser** — `checkAnswers` ≡ `check_answers` messages and counts (`review:answers`).
 
 **Generative oracle — `tests/parity-fuzz.sh` (T75).** Beyond the fixed fixtures, a seeded
 deterministic generator (`tests/gen-parity-case.py`) produces varied well-formed cases and
@@ -101,6 +108,27 @@ a refute result with **no boolean `refuted`** (a sentinel — `{"error": …}` f
 substantive findings ≥40 chars** (the reviewer's actual text) → review pass; `refuted:true` →
 review_failed. The model-text verdict is the reply's **final REFUTED/CLEAR token**, not a grep-anywhere
 (the prompt itself contains "REFUTED"). Proof: `gate-examples/refute-integrity.sh` (T119), both runtimes.
+
+## Constraint-first review is a shared surface (1.32.0)
+
+Both runtimes implement the same pipeline and the same refusals, byte-for-byte where text is involved:
+anchors (`hb.js` anchor section ≡ `anchors.py`), plan-time constraint validation (`constraintErrors` ≡
+`lint.constraint_errors`), the author (`composeAuthorPrompt` ≡ `constraints.compose_author_prompt`, record
+≡ `constraints.record` — write-once per review cycle, the cycle starting after the last review verdict,
+check-then-write under the write lock), the constrained refute prompt (`composePrompt` ≡ `compose_prompt`),
+the answer enforcement (`hb.js review` ≡ `review_policy.accept_review`) and the unattended pipeline
+(`constrainedReview` ≡ `executor._constrained_review`). Proofs: T166–T172.
+
+Where the two languages' primitives disagree, ONE explicit rule is used on both sides (each was a
+refuter catch): **whitespace** — "blank", the `free_review` coercion and the SKILL-format parser use
+ASCII whitespace only (`" \t\n\r\f\v"`; JS `trim()` and python `strip()` disagree on `\ufeff`,
+`\x1c-\x1f`, `\x85`); **a review value** must be a non-empty object (JS truthiness and python `bool()`
+disagree on `{}`/`[]`); **strict JSON** for `--record` (valid UTF-8 only, a BOM refused, no
+NaN/Infinity); **paths and constraint text with control characters** are shown JSON-quoted
+(`safePath` ≡ `safe_path`); **Unicode normalisation** is never delegated to the platform (node ICU and python unicodedata ship different Unicode versions — the answer parser folds explicitly and refuses styled-letter blocks by fixed ranges); **sort order** of paths is UTF-16 code units (python sorts with a
+`utf-16-be` key). Known, accepted differences on INVALID input only: a lone surrogate in a gate-time
+claim prints in node and raises in python; a lint-invalid `null` claim prints `null` vs `None`;
+U+2028/U+2029/U+0085 are not quoted by `safePath` (identically in both).
 
 ## Write-lock scope (both runtimes)
 

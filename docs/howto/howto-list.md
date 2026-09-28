@@ -85,6 +85,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | Extract a Verifiable-Reward Stream (`hb reward`) | ✅ [benchmark-agents.md](benchmark-agents.md) — T76 |
 | Detect Model Regression (`hb bench --baseline`) | ✅ [benchmark-agents.md](benchmark-agents.md) — T76 |
 | Write a Good Refuter Prompt / Profile | ✅ [write-a-refuter-profile.md](write-a-refuter-profile.md) — T145–T148 |
+| Run a Constraint-First Review (explicit targets, enforced answers) | ✅ [constraint-first-review.md](constraint-first-review.md) — T166–T173 |
 | Decide Which Gates Need Refutation | ⬜ Not available yet |
 | Handle a Successful Refutation | ✅ [handle-a-successful-refutation.md](handle-a-successful-refutation.md) — T61 |
 | Handle a Stuck Refutation Review | ✅ [prove-liveness.md](prove-liveness.md) (review_stuck) — T56 |

@@ -1829,6 +1829,12 @@ check "T172.1 14 scenarios × 2 executors: happy / VIOLATED / malformed author /
 check "T172.2 teeth: perturbed observations and nine reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/exec-constrained-review.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
+grp "T173 — the constraint-first review how-to is true: its bash blocks run end to end on a scratch project and the gate is accepted with enforced answers; no vendor model is required by the how-to or the SKILL's plan/review steps"
+check "T173.1 the page's commands run in order (author, record, refute, free, pass) and the gate ends accepted (constraint-first-review.sh → CONSTRAINT-FIRST-REVIEW-OK)" \
+  'bash "'"$GEX"'/constraint-first-review.sh" 2>&1 | grep -q "CONSTRAINT-FIRST-REVIEW-OK"'
+check "T173.2 teeth: a removed step, a renamed flag, a doer as author, a required vendor model (page or SKILL) each go RED (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/constraint-first-review.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done
