@@ -55,7 +55,7 @@ def main(argv=None):
     p = sub.add_parser("constraints"); p.add_argument("gate"); p.add_argument("--prompt", action="store_true"); p.add_argument("--json", action="store_true"); p.add_argument("--record"); p.add_argument("--model"); _add_dir(p)
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
     p = sub.add_parser("refuters"); p.add_argument("rest", nargs=argparse.REMAINDER); _add_dir(p)
-    p = sub.add_parser("refute-prompt"); p.add_argument("gate"); p.add_argument("--json", action="store_true"); _add_dir(p)
+    p = sub.add_parser("refute-prompt"); p.add_argument("gate"); p.add_argument("--json", action="store_true"); p.add_argument("--free", action="store_true"); _add_dir(p)
     p = sub.add_parser("park"); p.add_argument("id"); p.add_argument("--reason", default=""); _add_dir(p)
     p = sub.add_parser("unpark"); p.add_argument("id"); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
@@ -370,7 +370,7 @@ def main(argv=None):
         from . import refuter_profiles as rp
         try:
             dag = st.read_dag(hb)
-            prompt = rp.compose_prompt(str(hb), dag, args.gate)
+            prompt = rp.compose_prompt(str(hb), dag, args.gate, free=args.free)
             if args.json:
                 # Machine-readable binding for an INTERACTIVE host: json.prompt IS the text
                 # compose's bytes (one compose, no drift — pinned by refuter-model-routing.sh);
@@ -383,7 +383,10 @@ def main(argv=None):
                 print(json.dumps({"prompt": prompt, "model": prof.get("model"),
                                   "provider": prof.get("provider"),
                                   "panel": verdict.get("panel"),
-                                  "refute_if": verdict.get("refute_if")}))
+                                  "refute_if": verdict.get("refute_if"),
+                                  "author_model": prof.get("author_model"),
+                                  "free_review": bool(prof.get("free_review")),
+                                  "free_model": prof.get("free_model")}))
             else:
                 sys.stdout.write(prompt + "\n")
         except ValueError as e:

@@ -45,6 +45,23 @@ def review_cycle(hbdir, dag, gate):
 SAFE_GATE_ID = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
 
 
+def recorded_constraints(hbdir, dag, gate):
+    """The gate-time set recorded in THIS review cycle ([] when none). Raises on a set whose bytes no
+    longer match its constraints_recorded event (fail closed: the review's targets were altered)."""
+    pending, recorded, events = review_cycle(hbdir, dag, gate)
+    if not recorded:
+        return []
+    ev = [e for e in events if e.get("event") == "constraints_recorded" and e.get("gate") == gate][-1]
+    try:
+        raw = (Path(hbdir) / "constraints" / f"{gate}.json").read_bytes()
+    except OSError:
+        raise ValueError(f"the recorded constraints of {gate} are missing (.hb/constraints/{gate}.json)")
+    if hashlib.sha256(raw).hexdigest() != ev.get("sha256"):
+        raise ValueError(f"the recorded constraints of {gate} changed since recording (sha256 mismatch) — "
+                         "refusing to compose against altered targets")
+    return json.loads(raw.decode("utf-8"))
+
+
 def compose_author_prompt(hbdir, dag, gate):
     ph = next((p for p in (dag.get("phases") or []) if p.get("gate_exit") == gate), None) or {"id": "?", "tasks": []}
     gv = (dag.get("gates") or {}).get(gate) or {}

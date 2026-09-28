@@ -50,6 +50,10 @@ def render_skill(name, description, profile):
         lines.append("provider: " + profile["provider"])
     if profile.get("author_model"):
         lines.append("author_model: " + profile["author_model"])
+    if profile.get("free_review") is True:
+        lines.append("free_review: true")
+    if profile.get("free_model"):
+        lines.append("free_model: " + profile["free_model"])
     v = profile.get("verdict") or {}
     if v.get("panel"):
         lines.append("panel: " + str(v["panel"]))
@@ -93,6 +97,19 @@ def scaffold(hbdir, name, from_=None, lite=False):
     return path
 
 
+def _to_bool(v):
+    """free_review coercion — ONE rule in both runtimes (node twin: toBool). A SKILL-format value is a
+    plain string, so 'false' must not read as truthy: True/'true'/'yes'/'1'/'on' (any case, trimmed) and
+    non-zero numbers are true; everything else (absent, None, 'false', 'no', '0', 'off', '') is false."""
+    if v is True or v is False:
+        return v
+    if isinstance(v, (int, float)):
+        return v != 0
+    if isinstance(v, str):
+        return v.strip().lower() in ("true", "yes", "1", "on")
+    return False
+
+
 def _normalize(d):
     """Fill the full profile shape from a partial file/inline definition — so every profile (and
     both runtimes) return the same keys AND coerce mistyped fields identically (a non-string persona
@@ -106,6 +123,8 @@ def _normalize(d):
         "provider": d.get("provider"),
         "verdict": d.get("verdict"),
         "author_model": d.get("author_model"),
+        "free_review": _to_bool(d.get("free_review")),
+        "free_model": d.get("free_model"),
     }
 
 
@@ -173,7 +192,8 @@ def parse_skill(text):
             raise ValueError("panel value out of range: %r" % pv)
         verdict = {"panel": iv, "refute_if": fm.get("refute_if", "majority")}
     return {"persona": persona, "questions": questions, "model": fm.get("model"),
-            "provider": fm.get("provider"), "verdict": verdict, "author_model": fm.get("author_model")}
+            "provider": fm.get("provider"), "verdict": verdict, "author_model": fm.get("author_model"),
+            "free_review": fm.get("free_review", False), "free_model": fm.get("free_model")}
 
 
 def _load_from_dirs(hbdir, name):
@@ -233,7 +253,67 @@ def gate_profile(hbdir, review):
     return resolve(hbdir, name)
 
 
-def compose_prompt(hbdir, dag, gate):
+ANSWER_FORMAT = "<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>"
+TRIAGE_RULE = "An exploitable side finding means REFUTED, whatever the scope"
+
+
+def compose_prompt(hbdir, dag, gate, free=False):
+    """The ONE refute-prompt compose, shared by every refute surface (node twin: composePrompt).
+
+    An UNCONSTRAINED gate (no plan-time review.constraints) gets exactly the pre-constraint compose
+    (_compose_base). A constrained gate gets that compose + the phase's `hb changed` list + every
+    constraint id (P then G, the gate-time set of THIS review cycle) + the per-id answer format + the
+    triage rule; `free=True` composes the unconstrained breadth review instead (no constraint block).
+    """
+    from . import constraints as cons
+    base = _compose_base(hbdir, dag, gate)
+    cs = cons.plan_constraints(dag, gate)
+    if not cs:
+        if free:
+            raise ValueError(gate + " has no plan-time constraints — the free review is part of the "
+                             "constraint-first review of a constrained gate")
+        return base
+    parts = [base, _change_block(hbdir, gate)]
+    if free:
+        parts.append("## Free review\nYou are the FREE reviewer: there is deliberately no constraint list. Look in breadth "
+                     "for anything that makes this phase wrong or unsafe — including outside what the plan names. "
+                     + TRIAGE_RULE + ".")
+        return "\n\n".join(parts)
+    by_id = lambda c: int(str(c.get("id"))[1:])  # noqa: E731 — P2 before P10
+    allc = sorted(cs, key=by_id) + sorted(cons.recorded_constraints(hbdir, dag, gate), key=by_id)
+    lines = ["## Constraints to answer — every id, one line each"]
+    for c in allc:
+        lines.append("  - %s: %s" % (c.get("id"), c.get("claim")))
+        lines.append("      subjects: " + ", ".join(c.get("subjects") or []))
+        lines.append("      violated if: %s" % c.get("violation"))
+    parts.append("\n".join(lines))
+    parts.append("Answer format — one line per id, exactly:\n  " + ANSWER_FORMAT + "\n"
+                 "VIOLATED = you reproduced the violation (cite the command and its output); NOT-REPRODUCED = you tried "
+                 "and could not (cite the probe you ran); N/A = the constraint does not apply to this phase (say why).")
+    parts.append("## Triage rule\n" + TRIAGE_RULE + ": if you find a real, exploitable defect outside the constraints, "
+                 "report it and end with REFUTED.")
+    return "\n\n".join(parts)
+
+
+def _change_block(hbdir, gate):
+    from . import anchors
+    try:
+        ch, why = anchors.changed(hbdir, gate), None
+    except ValueError as e:
+        ch, why = None, str(e)
+    L = ["## What this phase changed (%s → %s)" % (ch["base"], ch["target"]) if ch else "## What this phase changed"]
+    if not ch:
+        L.append("  (unavailable: %s)" % why)
+    else:
+        for k, t in (("A", ch["added"]), ("M", ch["modified"]), ("D", ch["deleted"])):
+            for p in t:
+                L.append("  %s %s" % (k, anchors.safe_path(p)))
+        if not (ch["added"] or ch["modified"] or ch["deleted"]):
+            L.append("  (no changes)")
+    return "\n".join(L)
+
+
+def _compose_base(hbdir, dag, gate):
     """The ONE refute-prompt compose, shared by every refute surface (node twin: composePrompt).
 
     No profile selected ⇒ EXACTLY today's prompt (review.prompt, or the fallback) — existing projects
