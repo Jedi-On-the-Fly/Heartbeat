@@ -49,7 +49,7 @@ def main(argv=None):
     # note is a SINGLE (quoted) argument: with nargs="*", argparse consumed a flag-shaped token
     # inside an unquoted note as the --model flag — fabricating provenance from note text and
     # silently truncating the findings (GATE_RE2 refuter catch). Refusing loudly beats guessing.
-    p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail"]); p.add_argument("note", nargs="?"); p.add_argument("--artifact"); p.add_argument("--model"); _add_dir(p)
+    p = sub.add_parser("review"); p.add_argument("gate"); p.add_argument("verdict", choices=["pass", "fail", "free"]); p.add_argument("note", nargs="?"); p.add_argument("--artifact"); p.add_argument("--model"); _add_dir(p)
     p = sub.add_parser("evidence"); p.add_argument("gate"); _add_dir(p)
     p = sub.add_parser("changed"); p.add_argument("gate"); p.add_argument("--json", action="store_true"); _add_dir(p)
     p = sub.add_parser("constraints"); p.add_argument("gate"); p.add_argument("--prompt", action="store_true"); p.add_argument("--json", action="store_true"); p.add_argument("--record"); p.add_argument("--model"); _add_dir(p)

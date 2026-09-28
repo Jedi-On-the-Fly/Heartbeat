@@ -175,7 +175,7 @@ TOOLS.update({
     "fail":   (_fail,   "Fail a task (task_failed event + release the lease).",
                {"type": "object", "properties": {"task": {"type": "string"}, "reason": {"type": "string"}}, "required": ["task"]}),
     "review": (_review, "Record an adversarial review verdict (a pass requires --artifact from a distinct actor); model records what reviewed (self-reported).",
-               {"type": "object", "properties": {"gate": {"type": "string"}, "verdict": {"type": "string", "enum": ["pass", "fail"]},
+               {"type": "object", "properties": {"gate": {"type": "string"}, "verdict": {"type": "string", "enum": ["pass", "fail", "free"]},
                                                  "artifact": {"type": "string"}, "note": {"type": "array", "items": {"type": "string"}},
                                                  "model": {"type": "string"}},
                "required": ["gate", "verdict"]}),

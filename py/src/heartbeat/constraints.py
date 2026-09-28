@@ -42,6 +42,14 @@ def review_cycle(hbdir, dag, gate):
     return pending, recorded, events
 
 
+def review_cycle_full(hbdir, dag, gate):
+    """(pending, recorded, events, start) — start = index of the gate's last review verdict (-1)."""
+    pending, recorded, events = review_cycle(hbdir, dag, gate)
+    start = max((i for i, e in enumerate(events)
+                 if e.get("event") in ("review_failed", "review_passed") and e.get("gate") == gate), default=-1)
+    return pending, recorded, events, start
+
+
 SAFE_GATE_ID = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
 
 
@@ -158,12 +166,31 @@ def record(hbdir, dag, gate, file, model=None):
 
 
 def doctor_problems(hbdir):
-    """Recorded gate-time constraints must still be the bytes that were recorded."""
+    """Recorded gate-time constraints must still be the bytes that were recorded; a constrained review
+    pass's stored artifact must still answer the ids it answered."""
+    from .review_policy import check_answers
+    out = []
+    last_pass = {}
+    for e in st.read_events(hbdir):
+        if e.get("event") == "review_passed":
+            last_pass[e.get("gate")] = e
+        elif e.get("event") == "review_failed":
+            last_pass.pop(e.get("gate"), None)
+    for g, e in last_pass.items():
+        if not isinstance(e.get("constraint_ids"), list):
+            continue
+        rel = e.get("artifact") or f"reviews/{g}.md"
+        try:
+            body = (Path(hbdir) / rel).read_text()
+        except OSError:
+            continue   # a missing artifact is already a Sev-1 problem
+        errs, counts = check_answers(body, e["constraint_ids"])
+        if errs or counts != e.get("answers"):
+            out.append(f"{g} review_passed answers no longer hold in {rel} ({errs[0] if errs else 'answer counts changed'}) — the stored refutation was altered")
     last = {}
     for e in st.read_events(hbdir):
         if e.get("event") == "constraints_recorded":
             last[e.get("gate")] = e
-    out = []
     for g, e in last.items():
         try:
             raw = (Path(hbdir) / "constraints" / f"{g}.json").read_bytes()
