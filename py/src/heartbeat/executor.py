@@ -249,6 +249,123 @@ def _fan_out(hbdir, cfg, attempts):
     return "stop" if "capped" in results else "continue"
 
 
+
+def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refuter_actor):
+    """Constraint-first review, unattended (a CONSTRAINED gate) — node twin: constrainedReview in
+    hb-exec.js. author (mode `author` → {"ok": bool, "constraints": [...]}) → constraints.record as the
+    author actor → constrained refute (each panelist's answers checked on their own) → free refute
+    (payload.review = "free") when the profile asks → review free as the free actor → the SAME enforced
+    review pass. Each role uses its own profile model (author_model / model / free_model), falling back
+    to the executor's refute default. A refused answer set or pass is recorded as review_failed (the
+    next tick surfaces gate_blocked) — never a crash, never a pass. Returns an exit code, or None."""
+    from . import constraints as cons
+    from . import refuter_profiles as rp
+    from . import review_policy
+    try:
+        prof = rp.gate_profile(hbdir, rv_block)
+    except ValueError as e:
+        print(f"HB-EXEC STOP: review_error — {g}: {e}")
+        return 1
+    dflt = cfg["refute_model"]
+    r_provider = (prof.get("provider") if prof else None) or cfg["refute_provider"]
+    models = {"author": (prof.get("author_model") if prof else None) or dflt,
+              "refute": (prof.get("model") if prof else None) or dflt,
+              "free": (prof.get("free_model") if prof else None) or dflt}
+    refute_cfg = {**cfg, "backend": cfg["refute_backend"], "cmd": cfg["refute_cmd"]}
+    context = assemble_context(hbdir, {"id": "?", "phase": data["next_task"].get("phase")})
+    fdir = Path(hbdir) / "reviews"
+    fdir.mkdir(parents=True, exist_ok=True)
+
+    def as_actor(actor, fn):
+        saved = os.environ.get("HB_ACTOR")
+        os.environ["HB_ACTOR"] = actor
+        try:
+            return fn()
+        finally:
+            os.environ["HB_ACTOR"] = saved if saved is not None else worker_actor
+
+    def refuse(reason):   # a refused review is a recorded failure, never a crash
+        st.mutate(hbdir, {"event": "review_failed", "gate": g, "model": models["refute"] or None, "note": reason[:1500]})
+        return None
+
+    def fresh():
+        return st.read_dag(hbdir)
+
+    # 1. the gate-time author (once per review cycle)
+    if not cons.review_cycle(hbdir, fresh(), g)[1]:
+        try:
+            a_prompt = cons.compose_author_prompt(hbdir, fresh(), g)
+        except ValueError as e:
+            print(f"HB-EXEC STOP: review_error — {g}: {e}")
+            return 1
+        ra = dispatch(refute_cfg, "author", {"mode": "author", "gate": g, "prompt": a_prompt, "context": context},
+                      hbdir, None, model=models["author"], provider=r_provider)
+        if ra.get("ok") is not True or not isinstance(ra.get("constraints"), list):
+            print(f"HB-EXEC STOP: review_error — {g}: the constraint author returned no constraint list")
+            return 1
+        af = fdir / f"{g}.author.json"
+        af.write_text(json.dumps(ra["constraints"], indent=2) + "\n")
+        rc, _o, err = as_actor(f"{worker_actor}:author", lambda: cons.record(hbdir, fresh(), g, str(af), model=models["author"]))
+        if rc != 0:
+            print(f"HB-EXEC STOP: review_error — {g}: the author's constraints were rejected — {err}")
+            return 1
+    try:
+        ids = [c.get("id") for c in cons.plan_constraints(fresh(), g)] + [c.get("id") for c in cons.recorded_constraints(hbdir, fresh(), g)]
+        prompt = rp.compose_prompt(hbdir, fresh(), g)
+    except ValueError as e:
+        print(f"HB-EXEC STOP: review_error — {g}: {e}")
+        return 1
+
+    # 2. the constrained refute (composed AFTER recording, so it carries the gate-time ids)
+    payload = {"mode": "refute", "gate": g, "prompt": prompt, "context": context}
+    verdict_cfg = (prof.get("verdict") if prof else None) or {}
+    panel_n = int(verdict_cfg.get("panel") or 1)
+    verdicts, texts = [], []
+    for i in range(panel_n):
+        ri = dispatch(refute_cfg, "refute", payload, hbdir, None, model=models["refute"], provider=r_provider)
+        if not isinstance(ri.get("refuted"), bool):
+            who = f"panelist {i + 1}/{panel_n}" if panel_n > 1 else "the refuter"
+            print(f"HB-EXEC STOP: review_error — {g}: {who} returned no verdict (fail-closed)")
+            return 1
+        verdicts.append(ri["refuted"])
+        texts.append((ri.get("findings") or "").strip())
+    refuted = rp.aggregate_verdict(verdicts, verdict_cfg.get("refute_if") or "majority") if panel_n > 1 else verdicts[0]
+    if refuted:
+        return refuse("\n\n".join(t for t in texts if t) or "refuted")
+    for i, t in enumerate(texts):
+        errs, _counts = review_policy.check_answers(t, ids)
+        if errs:
+            return refuse(f"answers refused{f' (panelist {i + 1}/{panel_n})' if panel_n > 1 else ''}: " + "; ".join(errs))
+
+    # 3. the free review (breadth, no constraint list) when the profile asks for it
+    if prof and prof.get("free_review"):
+        try:
+            f_prompt = rp.compose_prompt(hbdir, fresh(), g, free=True)
+        except ValueError as e:
+            print(f"HB-EXEC STOP: review_error — {g}: {e}")
+            return 1
+        rf = dispatch(refute_cfg, "refute", {"mode": "refute", "review": "free", "gate": g, "prompt": f_prompt, "context": context},
+                      hbdir, None, model=models["free"], provider=r_provider)
+        if not isinstance(rf.get("refuted"), bool):
+            print(f"HB-EXEC STOP: review_error — {g}: the free reviewer returned no verdict (fail-closed)")
+            return 1
+        ft = (rf.get("findings") or "").strip()
+        if rf["refuted"]:
+            return refuse("free review: " + (ft or "refuted"))
+        ff = fdir / f"{g}.free.attempt.md"
+        ff.write_text(f"# Free review of {g}\n\n{ft}\n")
+        rc, _o, err = as_actor(f"{worker_actor}:free", lambda: review_policy.accept_review(hbdir, g, "free", artifact=str(ff), model=models["free"] or None))
+        if rc != 0:
+            return refuse("free review rejected: " + err)
+
+    # 4. the SAME enforced pass (the first panelist's validated answers are the artifact)
+    fpath = fdir / f"{g}.attempt.md"
+    fpath.write_text(f"# Refutation attempt for {g}\n\nVerdict: could not refute (refuted=false)\n\n{texts[0]}\n")
+    rc, _o, err = as_actor(refuter_actor, lambda: review_policy.accept_review(hbdir, g, "pass", artifact=str(fpath), model=models["refute"] or None))
+    if rc != 0:
+        return refuse("review pass refused: " + err)
+    return None
+
 def run(hbdir):
     # In-process, so don't leak HB_ACTOR into the caller's environment.
     _saved = os.environ.get("HB_ACTOR")
@@ -317,6 +434,11 @@ def _run(hbdir):
             from . import refuter_profiles as rp
             dag = st.read_dag(hbdir)
             rv_block = ((dag.get("gates") or {}).get(g, {}).get("review") or {})
+            if isinstance(rv_block.get("constraints"), list) and rv_block["constraints"]:
+                rc = _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refuter_actor)
+                if rc is not None:
+                    return rc
+                continue
             # ONE compose (shared with `hb refute-prompt` + the interactive surface). An unknown
             # profile raises → fail CLOSED (never skip the review). A profile's model/provider route
             # through the existing cross-model refute path.
