@@ -272,6 +272,96 @@ async function fanOut(c, attempts) {
   return 'continue';
 }
 
+// ── constraint-first review, unattended (a CONSTRAINED gate) ──────────────────────
+// author (mode `author` → {"ok":bool,"constraints":[…]}) → `hb constraints --record` as the author actor
+// → constrained refute (every id + answer format; a panel checks EACH panelist's answers) → free refute
+// (payload.review = "free") when the profile asks → `hb review free` as the free actor → the SAME enforced
+// `hb review pass`. Each role dispatches with its own profile model (author_model / model / free_model),
+// an unset one falling back to the executor's refute default. A refused answer set or pass is recorded as
+// review_failed with the reason (the next tick surfaces gate_blocked → escalation) — never a crash, never
+// a pass. Returns an exit code to stop the run, or undefined to continue the loop.
+async function constrainedReview(c, dag, gate, rv, actors) {
+  const rprof = require('./refuter_profiles.js');
+  const hbjs = require('./hb.js');
+  let prof;
+  try { prof = rprof.gateProfile(HB_DIR, rv); } catch (e) { escalate('review_error', `${gate}: ${e.message}`); return 1; }
+  const dflt = c.refuteModel;
+  const rProvider = (prof && prof.provider) || c.refuteProvider;
+  const models = { author: (prof && prof.author_model) || dflt, refute: (prof && prof.model) || dflt, free: (prof && prof.free_model) || dflt };
+  const envFor = (m) => { const e = {}; if (m) e.HB_EXEC_MODEL = m; if (rProvider) e.HB_EXEC_PROVIDER = rProvider; return Object.keys(e).length ? e : undefined; };
+  const context = sh(`git -C "${PROJECT_DIR}" log --oneline -8`).trim();
+  const fdir = path.join(HB_DIR, 'reviews');
+  try { fs.mkdirSync(fdir, { recursive: true }); } catch (e) {}
+  const errOf = (e) => ((e && e.stderr) ? e.stderr.toString() : (e && e.message) || '').trim().split('\n').pop();
+  const refuse = (reason) => {   // a refused review is a recorded failure, never a crash
+    try { hb('review', gate, 'fail', reason.slice(0, 1500), ...(models.refute ? ['--model', models.refute] : [])); }
+    catch (e) { escalate('review_error', `${gate}: could not record the refusal (${errOf(e)})`); return 1; }
+    return undefined;
+  };
+
+  // 1. the gate-time author (once per review cycle)
+  if (!hbjs.reviewCycle(hbjs_dag(), gate).recorded) {
+    let aPrompt;
+    try { aPrompt = hbjs.composeAuthorPrompt(hbjs_dag(), gate); } catch (e) { escalate('review_error', `${gate}: ${e.message}`); return 1; }
+    const ra = await dispatch(c.refuteCmd, 'author', { mode: 'author', gate, prompt: aPrompt, project_dir: PROJECT_DIR, context }, null, 0, undefined, envFor(models.author));
+    if (!ra.json || ra.json.ok !== true || !Array.isArray(ra.json.constraints)) {
+      escalate('review_error', `${gate}: the constraint author returned no constraint list`); return 1;
+    }
+    const af = path.join(fdir, `${gate}.author.json`);
+    fs.writeFileSync(af, JSON.stringify(ra.json.constraints, null, 2) + '\n');
+    try { hbAs(actors.authorActor, 'constraints', gate, '--record', af, ...(models.author ? ['--model', models.author] : [])); }
+    catch (e) { escalate('review_error', `${gate}: the author's constraints were rejected — ${errOf(e)}`); return 1; }
+  }
+  let ids;
+  try { ids = hbjs.planConstraints(hbjs_dag(), gate).map(x => x.id).concat(hbjs.recordedConstraints(gate).map(x => x.id)); }
+  catch (e) { escalate('review_error', `${gate}: ${e.message}`); return 1; }
+
+  // 2. the constrained refute (composed AFTER recording, so it carries the gate-time ids)
+  let prompt;
+  try { prompt = rprof.composePrompt(HB_DIR, hbjs_dag(), gate); } catch (e) { escalate('review_error', `${gate}: ${e.message}`); return 1; }
+  const payload = { mode: 'refute', gate, prompt, project_dir: PROJECT_DIR, context };
+  const verdictCfg = (prof && prof.verdict) || {};
+  const panelN = parseInt(verdictCfg.panel || 1, 10) || 1;
+  const verdicts = [], texts = [];
+  for (let i = 0; i < panelN; i++) {
+    const ri = await dispatch(c.refuteCmd, 'refute', payload, null, 0, undefined, envFor(models.refute));
+    if (!ri.json || typeof ri.json.refuted !== 'boolean') {
+      escalate('review_error', `${gate}: ${panelN > 1 ? `panelist ${i + 1}/${panelN}` : 'the refuter'} returned no verdict (fail-closed)`); return 1;
+    }
+    verdicts.push(ri.json.refuted); texts.push((ri.json.findings || '').trim());
+  }
+  const refuted = panelN > 1 ? rprof.aggregateVerdict(verdicts, verdictCfg.refute_if || 'majority') : verdicts[0];
+  if (refuted) return refuse(texts.filter(Boolean).join('\n\n') || 'refuted');
+  // each panelist's answers are checked on their own — one VIOLATED (or incomplete) answer set refuses
+  for (let i = 0; i < texts.length; i++) {
+    const a = hbjs.checkAnswers(texts[i], ids);
+    if (a.errors.length)
+      return refuse(`answers refused${panelN > 1 ? ` (panelist ${i + 1}/${panelN})` : ''}: ${a.errors.join('; ')}`);
+  }
+
+  // 3. the free review (breadth, no constraint list) when the profile asks for it
+  if (prof && prof.free_review) {
+    let fPrompt;
+    try { fPrompt = rprof.composePrompt(HB_DIR, hbjs_dag(), gate, { free: true }); } catch (e) { escalate('review_error', `${gate}: ${e.message}`); return 1; }
+    const rf = await dispatch(c.refuteCmd, 'refute', { mode: 'refute', review: 'free', gate, prompt: fPrompt, project_dir: PROJECT_DIR, context }, null, 0, undefined, envFor(models.free));
+    if (!rf.json || typeof rf.json.refuted !== 'boolean') { escalate('review_error', `${gate}: the free reviewer returned no verdict (fail-closed)`); return 1; }
+    const ft = (rf.json.findings || '').trim();
+    if (rf.json.refuted) return refuse(`free review: ${ft || 'refuted'}`);
+    const ff = path.join(fdir, `${gate}.free.attempt.md`);
+    fs.writeFileSync(ff, `# Free review of ${gate}\n\n${ft}\n`);
+    try { hbAs(actors.freeActor, 'review', gate, 'free', '--artifact', ff, ...(models.free ? ['--model', models.free] : [])); }
+    catch (e) { return refuse(`free review rejected: ${errOf(e)}`); }
+  }
+
+  // 4. the SAME enforced pass (the first panelist's validated answers are the artifact)
+  const fpath = path.join(fdir, `${gate}.attempt.md`);
+  fs.writeFileSync(fpath, `# Refutation attempt for ${gate}\n\nVerdict: could not refute (refuted=false)\n\n${texts[0]}\n`);
+  try { hbAs(actors.refuterActor, 'review', gate, 'pass', '--artifact', fpath, ...(models.refute ? ['--model', models.refute] : [])); }
+  catch (e) { return refuse(`review pass refused: ${errOf(e)}`); }
+  return undefined;
+}
+function hbjs_dag() { return readJson(DAG, { gates: {} }); }
+
 // ── the run loop (serial by default; parallel when concurrency > 1) ───────────
 async function run() {
   const c = config();
@@ -281,6 +371,9 @@ async function run() {
   const workerActor = process.env.HB_ACTOR || 'hb-exec:worker';
   process.env.HB_ACTOR = workerActor;
   const refuterActor = `${workerActor}:refuter`;
+  // Constraint-first review roles — each a distinct identity (the author and the free reviewer must
+  // not be the doer, and the free reviewer must not be the pass reviewer).
+  const authorActor = `${workerActor}:author`, freeActor = `${workerActor}:free`;
   const attempts = {};
 
   for (let i = 0; i < maxIters; i++) {
@@ -339,6 +432,11 @@ async function run() {
         const gate = data.next_task && data.next_task.gate;
         const dag  = readJson(DAG, { gates: {} });
         const rv   = ((dag.gates || {})[gate] || {}).review || {};
+        if (Array.isArray(rv.constraints) && rv.constraints.length) {
+          const rc = await constrainedReview(c, dag, gate, rv, { refuterActor, authorActor, freeActor });
+          if (rc !== undefined) return rc;
+          break;
+        }
         // ONE compose (shared with `hb refute-prompt` + the interactive surface). An unknown profile
         // throws → fail CLOSED (never skip the review). A profile's model/provider route through the
         // existing cross-model refute path.

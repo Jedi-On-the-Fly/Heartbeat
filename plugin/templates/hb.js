@@ -735,7 +735,8 @@ function composeAuthorPrompt(dag, gate) {
 
 // Exported BEFORE the CLI dispatch: refuter_profiles.js requires this module while hb.js is running
 // as the CLI (a circular require sees only what is already assigned).
-module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath, checkAnswers };
+module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath, checkAnswers,
+  planConstraints, reviewCycle, composeAuthorPrompt };
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 // v1.7: guard the dispatch so hb.js is safely requirable (the tick requires it to
