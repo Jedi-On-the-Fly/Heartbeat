@@ -178,7 +178,20 @@ EOF
     case "$out" in *"$5"*) ;; *) fail "selftest: mutant '$1' failed for the WRONG reason: $out";; esac
     echo "  mutant caught: $1"
   }
-  MUTANTS_HERE
+  mutant "node allows a second record in the cycle" plugin/templates/hb.js "    if (cyc.recorded) die(" "    if (false) die(" \
+    "node: record again was not refused"
+  mutant "python lets a doer author" py/src/heartbeat/constraints.py '    if actor in phase_doers(dag, gate, events):' '    if False:' \
+    "py: record doer was not refused"
+  mutant "node drops the change list" plugin/templates/hb.js "  try { ch = changed(gate); } catch (e) { why = e.message; }" "  why = 'mutant';" \
+    "node: author prompt lacks the uncommitted edit"
+  mutant "python substitutes a default author model" py/src/heartbeat/cli.py '"model": (prof or {}).get("author_model")}' '"model": (prof or {}).get("author_model") or "default-model"}' \
+    "py: .model not null with author_model unset"
+  mutant "python doctor ignores tampering" py/src/heartbeat/doctor.py '    problems.extend(cons.doctor_problems(hbdir))' '    pass' \
+    "py: doctor missed the tampered constraints"
+  mutant "node records before the gate passed" plugin/templates/hb.js "    if (!cyc.pending) die(" "    if (false) die(" \
+    "node: record before-pass was not refused"
+  mutant "python accepts P-ids at review time" py/src/heartbeat/constraints.py '    errs = lintmod.constraint_errors(lst, "G")' '    errs = []' \
+    "py: record dup was not refused"
   echo "SELFTEST-OK"; exit 0
 fi
 

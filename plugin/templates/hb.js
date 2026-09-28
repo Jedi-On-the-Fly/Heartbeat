@@ -15,6 +15,8 @@
  *   hb state                   print the projected state (no write)
  *   hb import                  seed the log from an existing state.json (migration)
  *   hb changed <gate> [--json] what the phase exiting <gate> changed (anchors, below)
+ *   hb constraints <gate> --prompt [--json] | --record <file.json> [--model <m>]
+ *                              gate-time constraint author (constraint-first review)
  *
  * State-mutating events: initialized, task_started, task_done, task_failed,
  * gate_passed, gate_failed. All other events are audit-only (ignored by the
@@ -322,6 +324,20 @@ function doctor() {
     }
   }
 
+  // Recorded gate-time constraints must still be the bytes that were recorded (they are the review's
+  // targets; an edit after recording silently moves them).
+  {
+    const lastRec = {};
+    for (const e of readEvents()) if (e.event === 'constraints_recorded') lastRec[e.gate] = e;
+    for (const [g, e] of Object.entries(lastRec)) {
+      let raw = null;
+      try { raw = fs.readFileSync(path.join(HB_DIR, 'constraints', `${g}.json`)); } catch (x) {}
+      if (raw === null) problems.push(`${g} recorded constraints .hb/constraints/${g}.json are missing — the review's targets can no longer be inspected`);
+      else if (require('crypto').createHash('sha256').update(raw).digest('hex') !== e.sha256)
+        problems.push(`${g} recorded constraints .hb/constraints/${g}.json changed since recording (sha256 mismatch) — the review's targets were altered`);
+    }
+  }
+
   return { problems, notes };
 }
 
@@ -516,6 +532,73 @@ function changed(gate) {
   return out;
 }
 
+// ── Gate-time constraint author (constraint-first review) ──
+// A CONSTRAINED gate has non-empty plan-time review.constraints. At review time an author who did
+// not do the work writes G-id constraints from the plan + what the phase changed; HeartBeat records
+// them once per REVIEW CYCLE (a deterministic pass leaving the gate review_pending, until its review
+// verdict) as .hb/constraints/<gate>.json + a constraints_recorded {gate, ids, sha256, actor, model}.
+function planConstraints(dag, gate) {
+  const cs = ((((dag.gates || {})[gate] || {}).review) || {}).constraints;
+  return Array.isArray(cs) ? cs : [];
+}
+function phaseDoers(dag, gate, events) {
+  const ph = (dag.phases || []).find(p => p.gate_exit === gate);
+  const ids = new Set(((ph && ph.tasks) || []).map(t => t.id));
+  const doers = new Set();
+  for (const e of events) if (e.event === 'task_done' && ids.has(e.task) && e.actor && e.actor !== 'unknown') doers.add(e.actor);
+  return doers;
+}
+// The current review cycle of <gate>: pending (review owed) + whether a set was recorded in it.
+function reviewCycle(dag, gate) {
+  const events = readEvents();
+  const pending = (project(events, dag).pending_reviews || []).includes(gate);
+  let lastPass = -1;
+  events.forEach((e, i) => { if (e.event === 'gate_passed' && e.gate === gate) lastPass = i; });
+  const recorded = events.some((e, i) => i > lastPass && e.event === 'constraints_recorded' && e.gate === gate);
+  return { pending, recorded, events };
+}
+function composeAuthorPrompt(dag, gate) {
+  const ph = (dag.phases || []).find(p => p.gate_exit === gate) || { id: '?', tasks: [] };
+  const gv = (dag.gates || {})[gate] || {};
+  const L = [];
+  L.push(`You are the CONSTRAINT AUTHOR for HeartBeat gate ${gate} (phase ${ph.id}: ${ph.title || ph.id}).`);
+  L.push('Write falsifiable constraints on the behaviour this phase claims to deliver — do not hunt for bugs and do not judge the work; a separate refuter will test each constraint you write.');
+  L.push('');
+  L.push(`## Phase ${ph.id}: ${ph.title || ph.id}`);
+  if (typeof ph.desc === 'string' && ph.desc) L.push(ph.desc);
+  L.push('Tasks:');
+  for (const t of (ph.tasks || [])) L.push(`  - ${t.id}: ${t.title || ''}${t.description ? ' — ' + t.description : ''}`);
+  L.push('');
+  L.push(`## Gate ${gate}`);
+  L.push(typeof gv.desc === 'string' && gv.desc ? gv.desc : '(no description)');
+  L.push('');
+  L.push('## Plan-time constraints (fixed at plan time — do not repeat them)');
+  for (const c of planConstraints(dag, gate)) {
+    L.push(`  - ${c.id}: ${c.claim}`);
+    L.push(`      subjects: ${(c.subjects || []).join(', ')}`);
+    L.push(`      violated if: ${c.violation}`);
+  }
+  L.push('');
+  let ch = null, why = null;
+  try { ch = changed(gate); } catch (e) { why = e.message; }
+  L.push(ch ? `## What this phase changed (${ch.base} → ${ch.target})` : '## What this phase changed');
+  if (!ch) L.push(`  (unavailable: ${why})`);
+  else {
+    for (const [k, t] of [['A', ch.added], ['M', ch.modified], ['D', ch.deleted]]) for (const p of t) L.push(`  ${k} ${p}`);
+    if (!ch.added.length && !ch.modified.length && !ch.deleted.length) L.push('  (no changes)');
+  }
+  L.push('');
+  L.push('## Your output');
+  L.push('A JSON array, ids G1..Gn in order:');
+  L.push('[{"id": "G1", "claim": "…", "subjects": ["…"], "violation": "…"}]');
+  L.push('- claim: a property of the changed behaviour that the plan-time constraints do not already pin');
+  L.push('- subjects: the files/areas it covers (from the change list above)');
+  L.push('- violation: the concrete, observable result that would falsify it');
+  L.push('Record it (as an actor who did not do this phase\'s work):');
+  L.push(`  hb constraints ${gate} --record <file.json>`);
+  return L.join('\n');
+}
+
 // ── CLI ───────────────────────────────────────────────────────────────────────
 // v1.7: guard the dispatch so hb.js is safely requirable (the tick requires it to
 // read PROTOCOL). Without this, require() would run the switch → default → exit.
@@ -547,6 +630,51 @@ switch (cmd) {
     if (!arg1) die('usage: hb anchor <gate>');
     if (!tryAnchor(arg1)) process.exit(1);
     break;
+
+  case 'constraints': {
+    const cArgs = [arg1, ...rest].filter(a => a !== undefined);
+    const flag = (f) => cArgs.includes(f);
+    const val = (f) => { const i = cArgs.indexOf(f); return i !== -1 ? cArgs[i + 1] : undefined; };
+    const gate = cArgs.find((a, i) => !a.startsWith('--') && !['--record', '--model'].includes(cArgs[i - 1]));
+    if (!gate || (!flag('--prompt') && !flag('--record')))
+      die('usage: hb constraints <gate> --prompt [--json] | --record <file.json> [--model <m>]');
+    const dag = readDag();
+    if (!planConstraints(dag, gate).length)
+      die(`hb constraints: ${gate} has no plan-time constraints (review.constraints) — constraint-first review applies to constrained gates only`);
+    if (flag('--prompt')) {
+      const prompt = composeAuthorPrompt(dag, gate);
+      if (flag('--json')) {
+        let prof = null;
+        try { prof = require('./refuter_profiles.js').gateProfile(HB_DIR, ((dag.gates || {})[gate] || {}).review || {}); }
+        catch (e) { die('hb constraints: ' + e.message); }
+        process.stdout.write(JSON.stringify({ gate, prompt, model: (prof && prof.author_model) ?? null }) + '\n');
+      } else process.stdout.write(prompt + '\n');
+      break;
+    }
+    const file = val('--record');
+    if (!file) die('hb constraints: --record needs <file.json>');
+    const model = val('--model') ?? null;
+    const actor = process.env.HB_ACTOR;
+    const cyc = reviewCycle(dag, gate);
+    if (!cyc.pending) die(`hb constraints --record: ${gate} is not awaiting review — record after its deterministic pass (review_pending)`);
+    if (cyc.recorded) die(`hb constraints --record: a constraint set is already recorded for ${gate} in this review cycle — it is write-once until the review verdict`);
+    if (!actor || actor === 'unknown') die('hb constraints --record: set HB_ACTOR to the author\'s identity (the author must not have done this phase\'s work)');
+    if (phaseDoers(dag, gate, cyc.events).has(actor))
+      die(`hb constraints --record: '${actor}' did this phase's work — the constraint author must be a different actor`);
+    let raw, list;
+    try { raw = fs.readFileSync(path.isAbsolute(file) ? file : path.join(process.cwd(), file)); } catch (e) { die(`hb constraints --record: cannot read ${file} (${e.code || e.message})`); }
+    try { list = JSON.parse(raw.toString('utf8')); } catch (e) { die(`hb constraints --record: ${file} is not valid JSON (${e.message})`); }
+    if (!Array.isArray(list) || !list.length) die('hb constraints --record: expected a non-empty JSON array of {id G<n>, claim, subjects, violation}');
+    const errs = require('./hb-lint.js').constraintErrors(list, 'G');
+    if (errs.length) die('hb constraints --record: ' + errs.join('; '));
+    const dir = path.join(HB_DIR, 'constraints');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${gate}.json`), raw);
+    const sha256 = require('crypto').createHash('sha256').update(raw).digest('hex');
+    mutate({ event: 'constraints_recorded', gate, ids: list.map(c => c.id), sha256, actor, model });
+    process.stdout.write(`constraints recorded for ${gate}: ${list.map(c => c.id).join(', ')} (.hb/constraints/${gate}.json)\n`);
+    break;
+  }
 
   case 'changed': {
     const asJson = rest.includes('--json') || arg1 === '--json';
@@ -857,7 +985,7 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|refuters|refute-prompt|changed|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|refuters|refute-prompt|changed|constraints|import> [args]');
 }
 }
 

@@ -101,21 +101,31 @@ function checkConstraints(dag, errors) {
     if (!rv || typeof rv !== 'object' || Array.isArray(rv) || !Object.prototype.hasOwnProperty.call(rv, 'constraints')) continue;
     const cs = rv.constraints;
     if (!Array.isArray(cs)) { errors.push(`[${g}] review.constraints must be a list of {id, claim, subjects, violation}`); continue; }
-    const seen = new Set();
-    cs.forEach((c, i) => {
-      const isObj = c !== null && typeof c === 'object' && !Array.isArray(c);
-      const label = isObj && typeof c.id === 'string' && c.id ? c.id : `#${i + 1}`;
-      if (!isObj) { errors.push(`[${g}] constraint ${label}: must be an object {id, claim, subjects, violation}`); return; }
-      if (typeof c.id !== 'string' || !/^P[0-9]+$/.test(c.id))
-        errors.push(`[${g}] constraint ${label}: id must be P<n> (plan-time; G<n> ids are reserved for gate-time constraints)`);
-      else if (seen.has(c.id)) errors.push(`[${g}] constraint ${c.id}: duplicate id in this gate`);
-      else seen.add(c.id);
-      for (const f of ['claim', 'violation'])
-        if (typeof c[f] !== 'string' || !blankFree(c[f])) errors.push(`[${g}] constraint ${label}: ${f} must be a non-empty string`);
-      if (!Array.isArray(c.subjects) || !c.subjects.length || c.subjects.some(x => typeof x !== 'string' || !blankFree(x)))
-        errors.push(`[${g}] constraint ${label}: subjects must be a non-empty list of non-empty strings (the files/areas it covers)`);
-    });
+    for (const m of constraintErrors(cs, 'P')) errors.push(`[${g}] ${m}`);
   }
+}
+
+// Validate one constraint list; kind 'P' (plan-time, in dag.json) or 'G' (gate-time, recorded by
+// `hb constraints --record`). Messages carry no gate prefix. Twin: lint.py constraint_errors.
+const CONSTRAINT_ID_RULE = {
+  P: 'id must be P<n> (plan-time; G<n> ids are reserved for gate-time constraints)',
+  G: 'id must be G<n> (gate-time; P<n> ids belong to the plan)',
+};
+function constraintErrors(cs, kind) {
+  const out = [], seen = new Set(), idRe = kind === 'G' ? /^G[0-9]+$/ : /^P[0-9]+$/;
+  cs.forEach((c, i) => {
+    const isObj = c !== null && typeof c === 'object' && !Array.isArray(c);
+    const label = isObj && typeof c.id === 'string' && c.id ? c.id : `#${i + 1}`;
+    if (!isObj) { out.push(`constraint ${label}: must be an object {id, claim, subjects, violation}`); return; }
+    if (typeof c.id !== 'string' || !idRe.test(c.id)) out.push(`constraint ${label}: ${CONSTRAINT_ID_RULE[kind]}`);
+    else if (seen.has(c.id)) out.push(`constraint ${c.id}: duplicate id in this gate`);
+    else seen.add(c.id);
+    for (const f of ['claim', 'violation'])
+      if (typeof c[f] !== 'string' || !blankFree(c[f])) out.push(`constraint ${label}: ${f} must be a non-empty string`);
+    if (!Array.isArray(c.subjects) || !c.subjects.length || c.subjects.some(x => typeof x !== 'string' || !blankFree(x)))
+      out.push(`constraint ${label}: subjects must be a non-empty list of non-empty strings (the files/areas it covers)`);
+  });
+  return out;
 }
 
 // v1.4 (#1): warn if the DAG still carries bootstrap-skeleton text — catches
@@ -223,4 +233,4 @@ if (require.main === module) {
   }
   process.exit(errors.length ? 1 : 0);
 }
-module.exports = { lint, extractPaths };
+module.exports = { lint, extractPaths, constraintErrors };

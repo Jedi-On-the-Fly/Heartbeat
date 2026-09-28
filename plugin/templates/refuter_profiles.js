@@ -33,6 +33,7 @@ function renderSkill(name, description, profile) {
   const lines = ["---", "name: " + name, "description: " + description];
   if (profile.model) lines.push("model: " + profile.model);
   if (profile.provider) lines.push("provider: " + profile.provider);
+  if (profile.author_model) lines.push("author_model: " + profile.author_model);
   const v = profile.verdict || {};
   if (v.panel) {
     lines.push("panel: " + String(v.panel));
@@ -84,6 +85,7 @@ function normalize(d) {
     model: d.model !== undefined ? d.model : null,
     provider: d.provider !== undefined ? d.provider : null,
     verdict: d.verdict !== undefined ? d.verdict : null,
+    author_model: d.author_model !== undefined ? d.author_model : null,
   };
 }
 
@@ -142,7 +144,8 @@ function parseSkill(text) {
     verdict = { panel: parseInt(pv, 10), refute_if: fm.refute_if || "majority" };
   }
   return { persona, questions, model: fm.model === undefined ? null : fm.model,
-           provider: fm.provider === undefined ? null : fm.provider, verdict };
+           provider: fm.provider === undefined ? null : fm.provider, verdict,
+           author_model: fm.author_model === undefined ? null : fm.author_model };
 }
 
 function loadFromDirs(hbdir, name) {
