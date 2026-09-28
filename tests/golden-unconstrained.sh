@@ -21,7 +21,7 @@ MODE=compare; [ "${1:-}" = "--capture" ] && MODE=capture
 export HB_NO_GIT=1
 # python orders the cited anchors of a review pass by set iteration (hash-seeded): pin it
 export PYTHONHASHSEED=0
-unset HB_ACTOR
+unset HB_ACTOR HB_DIR DAG_FILE EVENTS_FILE HB_REFUTER 2>/dev/null || true
 
 # One fixture DAG: a no-profile gate + one gate per shipped profile (all unconstrained).
 PROFILES=$(cd "$ROOT/plugin/templates/refuters" && for f in *; do echo "${f%.json}"; done | sort)
