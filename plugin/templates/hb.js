@@ -324,6 +324,24 @@ function doctor() {
     }
   }
 
+  // A constrained review pass: the stored artifact must still answer the ids it answered.
+  {
+    const lastPass = {};
+    for (const e of readEvents()) {
+      if (e.event === 'review_passed') lastPass[e.gate] = e;
+      if (e.event === 'review_failed') delete lastPass[e.gate];
+    }
+    for (const [g, e] of Object.entries(lastPass)) {
+      if (!Array.isArray(e.constraint_ids)) continue;
+      let body = null;
+      try { body = fs.readFileSync(path.join(HB_DIR, e.artifact || `reviews/${g}.md`), 'utf8'); } catch (x) {}
+      if (body === null) continue;   // a missing artifact is already a Sev-1 problem above
+      const a = checkAnswers(body, e.constraint_ids);
+      if (a.errors.length || JSON.stringify(a.counts) !== JSON.stringify(e.answers))
+        problems.push(`${g} review_passed answers no longer hold in ${e.artifact || `reviews/${g}.md`} (${a.errors[0] || 'answer counts changed'}) — the stored refutation was altered`);
+    }
+  }
+
   // Recorded gate-time constraints must still be the bytes that were recorded (they are the review's
   // targets; an edit after recording silently moves them).
   {
@@ -557,7 +575,30 @@ function reviewCycle(dag, gate) {
   let start = -1;
   events.forEach((e, i) => { if ((e.event === 'review_failed' || e.event === 'review_passed') && e.gate === gate) start = i; });
   const recorded = events.some((e, i) => i > start && e.event === 'constraints_recorded' && e.gate === gate);
-  return { pending, recorded, events };
+  return { pending, recorded, events, start };
+}
+// The refuter's per-id answers (constraint-first review). One line per id:
+//   <ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>
+// Markdown-insensitive (list bullets, quotes, headings, *, _, ` are ignored) and case-insensitive on the
+// status. Prose that merely mentions an id is not an answer. Twin: review_policy.check_answers.
+function checkAnswers(body, required) {
+  const req = new Set(required), seen = {}, errors = [], counts = { violated: 0, not_reproduced: 0, na: 0 };
+  for (const raw of String(body).split(/\r?\n/)) {
+    const l = raw.replace(/[*`_]/g, '').replace(/^[ \t>+#-]+/, '').trim();
+    const m = /^([PG][0-9]+)[ \t]*:[ \t]*(VIOLATED|NOT-REPRODUCED|NOT REPRODUCED|N\/A)(?![A-Za-z])(.*)$/i.exec(l);
+    if (!m) continue;
+    const id = m[1].toUpperCase(), st = m[2].toUpperCase().replace(' ', '-');
+    const rest = m[3].replace(/^[ \t]*[—–:-]+/, '').trim();
+    if (!req.has(id)) { errors.push(`${id} is not a constraint of this gate (an unknown id was answered)`); continue; }
+    if (seen[id]) { errors.push(`${id} is answered twice — one line per id`); continue; }
+    seen[id] = st;
+    if (st === 'VIOLATED') { counts.violated++; errors.push(`${id} is answered VIOLATED — a violation is a finding: record it with hb review <gate> fail "<finding>"`); }
+    else if (!/[^ \t]/.test(rest)) errors.push(`${id} is answered ${st} without ${st === 'N/A' ? 'a reason' : 'evidence (the probe you ran)'}`);
+    else if (st === 'N/A') counts.na++;
+    else counts.not_reproduced++;
+  }
+  for (const id of required) if (!seen[id]) errors.push(`${id} has no answer line (${require('./refuter_profiles.js').ANSWER_FORMAT})`);
+  return { errors, counts };
 }
 // A path shown to an agent: control characters (a newline in a file name) would let a doer forge
 // prompt sections, so such a path is rendered JSON-quoted. Twin: anchors.safe_path.
@@ -623,7 +664,7 @@ function composeAuthorPrompt(dag, gate) {
 
 // Exported BEFORE the CLI dispatch: refuter_profiles.js requires this module while hb.js is running
 // as the CLI (a circular require sees only what is already assigned).
-module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath };
+module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath, checkAnswers };
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 // v1.7: guard the dispatch so hb.js is safely requirable (the tick requires it to
@@ -782,18 +823,21 @@ switch (cmd) {
     if (noteToks[0] && /^--\S+$/.test(noteToks[0]))
       die(`review: unrecognized flag-shaped token '${noteToks[0]}' in the note position — quote the note (refusing rather than guessing).`);
     const note = noteToks[0] || '';
-    if (!gate || (verdict !== 'pass' && verdict !== 'fail'))
-      die('usage: hb review <gate> pass|fail [--artifact <findings-file>] [--model <m>] [note]');
+    if (!gate || (verdict !== 'pass' && verdict !== 'fail' && verdict !== 'free'))
+      die('usage: hb review <gate> pass|fail|free [--artifact <findings-file>] [--model <m>] [note]');
     if (verdict === 'fail') {
       mutate({ event: 'review_failed', gate, model, ...(note ? { note } : {}) });
       process.stdout.write(`review fail ${gate}\n`);
       break;
     }
-    if (!artifact) die('review pass requires --artifact <findings-file>: the refuter\'s written attempt to break the phase (a pass must cite evidence, not just assert one).');
+    const vw = verdict === 'free' ? 'review free' : 'review pass';
+    if (!artifact) die(verdict === 'free'
+      ? 'review free requires --artifact <findings-file>: the free reviewer\'s written breadth review.'
+      : 'review pass requires --artifact <findings-file>: the refuter\'s written attempt to break the phase (a pass must cite evidence, not just assert one).');
     const ap = path.isAbsolute(artifact) ? artifact : path.join(PROJECT_DIR, artifact);
     let body = '';
-    try { body = fs.readFileSync(ap, 'utf8'); } catch (e) { die(`review pass: cannot read artifact ${artifact} (${e.code || e.message})`); }
-    if (body.trim().length < 40) die(`review pass: artifact ${artifact} is too thin (${body.trim().length} chars) to be a real refutation attempt — a rubber-stamp is not a review.`);
+    try { body = fs.readFileSync(ap, 'utf8'); } catch (e) { die(`${vw}: cannot read artifact ${artifact} (${e.code || e.message})`); }
+    if (body.trim().length < 40) die(`${vw}: artifact ${artifact} is too thin (${body.trim().length} chars) to be a real refutation attempt — a rubber-stamp is not a review.`);
     // Substance: a genuine refutation inspects THIS phase's actual work, so require the
     // artifact to cite real anchors — the gate id, a phase task id, or a path the gate's
     // criteria reference. Filler references none.
@@ -807,7 +851,7 @@ switch (cmd) {
     const hay = body.toLowerCase();
     const cited = [...anchors].filter(a => a && String(a).length > 1 && hay.includes(String(a).toLowerCase()));
     if (cited.length === 0)
-      die(`review pass: artifact ${artifact} does not reference the phase under review (it cites nothing real; expected one of: ${[...anchors].filter(a => a && String(a).length > 1).join(', ')}).`);
+      die(`${vw}: artifact ${artifact} does not reference the phase under review (it cites nothing real; expected one of: ${[...anchors].filter(a => a && String(a).length > 1).join(', ')}).`);
     // Identity: reject a self-review — a pass whose actor also recorded this phase's
     // task_done events is grading its own homework. Adjudicated only when actors are set.
     const reviewer = process.env.HB_ACTOR || 'unknown';
@@ -817,13 +861,52 @@ switch (cmd) {
       for (const e of readEvents())
         if (e.event === 'task_done' && phaseTaskIds.has(e.task) && e.actor && e.actor !== 'unknown') doers.add(e.actor);
       if (doers.has(reviewer))
-        die(`review pass: reviewer '${reviewer}' also executed this phase's work — a self-review is not adversarial. Have a DIFFERENT actor refute (set HB_ACTOR).`);
+        die(`${vw}: reviewer '${reviewer}' also executed this phase's work — a self-review is not adversarial. Have a DIFFERENT actor refute (set HB_ACTOR).`);
+    }
+    // ── constraint-first review (a CONSTRAINED gate only; an unconstrained gate is unchanged) ──
+    const norm = (a) => String(a).trim().toLowerCase();
+    const constrained = planConstraints(dag, gate).length > 0;
+    let answers = null, constraintIds = null;
+    if (verdict === 'free') {
+      if (!constrained) die(`review free: ${gate} has no plan-time constraints — the free review belongs to the constraint-first review of a constrained gate`);
+      const cyc = reviewCycle(dag, gate);
+      if (!cyc.pending) die(`review free: ${gate} is not awaiting review`);
+      if (!reviewer || norm(reviewer) === 'unknown') die('review free: set HB_ACTOR to the free reviewer\'s identity');
+      if ([...phaseDoers(dag, gate, cyc.events)].some(d => norm(d) === norm(reviewer)))
+        die(`review free: '${reviewer}' did this phase's work — the free reviewer must be a different actor`);
+      const revDirF = path.join(HB_DIR, 'reviews');
+      fs.mkdirSync(revDirF, { recursive: true });
+      fs.writeFileSync(path.join(revDirF, `${gate}.free.md`), body);
+      const sha256 = require('crypto').createHash('sha256').update(body).digest('hex');
+      mutate({ event: 'free_review_recorded', gate, actor: reviewer, model, artifact: `reviews/${gate}.free.md`, sha256 });
+      process.stdout.write(`review free ${gate} recorded (reviews/${gate}.free.md, by ${reviewer})\n`);
+      break;
+    }
+    if (constrained) {
+      const cyc = reviewCycle(dag, gate);
+      if (!cyc.recorded)
+        die(`review pass refused on ${gate}: no gate-time constraints were recorded in this review cycle — run hb constraints ${gate} --prompt, have a non-doer author them, then hb constraints ${gate} --record <file.json>`);
+      let gset;
+      try { gset = recordedConstraints(gate); } catch (e) { die(`review pass refused on ${gate}: ${e.message}`); }
+      constraintIds = planConstraints(dag, gate).map(c => c.id).concat(gset.map(c => c.id));
+      const a = checkAnswers(body, constraintIds);
+      if (a.errors.length) die(`review pass refused on ${gate}: ${a.errors.join('; ')}`);
+      answers = a.counts;
+      let prof = null;
+      try { prof = require('./refuter_profiles.js').gateProfile(HB_DIR, ((dag.gates || {})[gate] || {}).review || {}); }
+      catch (e) { die(`review pass refused on ${gate}: ${e.message}`); }
+      if (prof && prof.free_review) {
+        const ok = cyc.events.some((e, i) => i > cyc.start && e.event === 'free_review_recorded' && e.gate === gate &&
+                                              norm(e.actor || '') !== norm(reviewer));
+        if (!ok) die(`review pass refused on ${gate}: the profile requires a free review — record one in this review cycle from an actor other than '${reviewer}': hb review ${gate} free --artifact <file>`);
+      }
     }
     const revDir = path.join(HB_DIR, 'reviews');
     try { fs.mkdirSync(revDir, { recursive: true }); } catch (e) {}
     fs.writeFileSync(path.join(revDir, `${gate}.md`), body);
     const autocommit = gitPolicy();
-    mutate({ event: 'review_passed', gate, model, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, git: { autocommit }, ...(note ? { note } : {}) });
+    mutate({ event: 'review_passed', gate, model, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, git: { autocommit },
+             ...(answers ? { answers, constraint_ids: constraintIds } : {}), ...(note ? { note } : {}) });
     // Reviewed acceptance creates the phase's restore point (commit+tag) — deferred from the
     // deterministic pass so the tag only ever certifies a reviewed-good state.
     if (autocommit) {
