@@ -275,6 +275,12 @@ def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refute
         return 1
     dflt = cfg["refute_model"]
     r_provider = (prof.get("provider") if prof else None) or cfg["refute_provider"]
+    # ONE validation, identical to node: model fields are strings; verdict.panel a positive integer (a
+    # number, or a string of digits). Anything else escalates — never a crash, never a guess.
+    for f in ("author_model", "model", "free_model", "provider"):
+        if prof and prof.get(f) is not None and not isinstance(prof.get(f), str):
+            print(f"HB-EXEC STOP: review_error — {g}: the refuter profile field {f} must be a string")
+            return 1
     models = {"author": (prof.get("author_model") if prof else None) or dflt,
               "refute": (prof.get("model") if prof else None) or dflt,
               "free": (prof.get("free_model") if prof else None) or dflt}
@@ -291,8 +297,8 @@ def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refute
         finally:
             os.environ["HB_ACTOR"] = saved if saved is not None else worker_actor
 
-    def refuse(reason):   # a refused review is a recorded failure, never a crash
-        st.mutate(hbdir, {"event": "review_failed", "gate": g, "model": models["refute"] or None, "note": reason[:1500]})
+    def refuse(reason, model=None):   # a refused review is a recorded failure, never a crash
+        st.mutate(hbdir, {"event": "review_failed", "gate": g, "model": (model or models["refute"]) or None, "note": reason[:1500]})
         return None
 
     def fresh():
@@ -307,7 +313,7 @@ def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refute
             return 1
         ra = dispatch(refute_cfg, "author", {"mode": "author", "gate": g, "prompt": a_prompt, "context": context},
                       hbdir, None, model=models["author"], provider=r_provider)
-        if ra.get("ok") is not True or not isinstance(ra.get("constraints"), list):
+        if not isinstance(ra, dict) or ra.get("ok") is not True or not isinstance(ra.get("constraints"), list):
             print(f"HB-EXEC STOP: review_error — {g}: the constraint author returned no constraint list")
             return 1
         af = fdir / f"{g}.author.json"
@@ -326,11 +332,25 @@ def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refute
     # 2. the constrained refute (composed AFTER recording, so it carries the gate-time ids)
     payload = {"mode": "refute", "gate": g, "prompt": prompt, "context": context}
     verdict_cfg = (prof.get("verdict") if prof else None) or {}
-    panel_n = int(verdict_cfg.get("panel") or 1)
+    pv = 1 if verdict_cfg.get("panel") is None else verdict_cfg.get("panel")
+    if isinstance(pv, bool):
+        panel_n = None
+    elif isinstance(pv, int) and pv >= 1:
+        panel_n = pv
+    elif isinstance(pv, float) and pv.is_integer() and pv >= 1:
+        panel_n = int(pv)
+    elif isinstance(pv, str) and re.fullmatch(r"[0-9]+", pv) and int(pv) >= 1:
+        panel_n = int(pv)
+    else:
+        panel_n = None
+    if panel_n is None:
+        print(f"HB-EXEC STOP: review_error — {g}: the refuter profile verdict.panel must be a positive integer")
+        return 1
     verdicts, texts = [], []
     for i in range(panel_n):
         ri = dispatch(refute_cfg, "refute", payload, hbdir, None, model=models["refute"], provider=r_provider)
-        if not isinstance(ri.get("refuted"), bool):
+        if not isinstance(ri, dict) or not isinstance(ri.get("refuted"), bool) or \
+                (ri.get("findings") is not None and not isinstance(ri.get("findings"), str)):
             who = f"panelist {i + 1}/{panel_n}" if panel_n > 1 else "the refuter"
             print(f"HB-EXEC STOP: review_error — {g}: {who} returned no verdict (fail-closed)")
             return 1
@@ -353,12 +373,13 @@ def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refute
             return 1
         rf = dispatch(refute_cfg, "refute", {"mode": "refute", "review": "free", "gate": g, "prompt": f_prompt, "context": context},
                       hbdir, None, model=models["free"], provider=r_provider)
-        if not isinstance(rf.get("refuted"), bool):
+        if not isinstance(rf, dict) or not isinstance(rf.get("refuted"), bool) or \
+                (rf.get("findings") is not None and not isinstance(rf.get("findings"), str)):
             print(f"HB-EXEC STOP: review_error — {g}: the free reviewer returned no verdict (fail-closed)")
             return 1
         ft = (rf.get("findings") or "").strip()
         if rf["refuted"]:
-            return refuse("free review: " + (ft or "refuted"))
+            return refuse("free review: " + (ft or "refuted"), models["free"])
         ff = fdir / f"{g}.free.attempt.md"
         ff.write_text(f"# Free review of {g}\n\n{ft}\n")
         rc, _o, err = as_actor(f"{worker_actor}:free", lambda: review_policy.accept_review(hbdir, g, "free", artifact=str(ff), model=models["free"] or None))

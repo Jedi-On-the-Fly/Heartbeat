@@ -45,9 +45,9 @@ def author_reply(text):
     import json as _json
     text = text or ""
     cands = re.findall(r"```(?:json)?\s*(\[.*?\])\s*```", text, re.S)
-    i, j = text.find("["), text.rfind("]")
-    if i != -1 and j > i:
-        cands.append(text[i:j + 1])
+    opens = [k for k, ch in enumerate(text) if ch == "["][:50]
+    closes = [k for k, ch in enumerate(text) if ch == "]"][-50:]
+    cands += [text[i:j + 1] for i in opens for j in closes if j > i]
     for c in cands:
         try:
             v = _json.loads(c)

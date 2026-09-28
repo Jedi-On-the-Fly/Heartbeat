@@ -12,11 +12,12 @@ set -uo pipefail
 mode="${1:-execute}"
 payload="$(cat)"
 case "$mode" in execute|refute|author) ;; *)
-  printf '{"error":"unsupported mode %s (execute | refute | author)"}\n' "$mode"; exit 0;; esac
+  printf '{"error":%s}\n' "$(printf 'unsupported mode %s (execute | refute | author)' "$mode" | node -pe 'JSON.stringify(require("fs").readFileSync(0,"utf8"))')"; exit 0;; esac
 author_json() { node -e '
 let t="";process.stdin.on("data",c=>t+=c).on("end",()=>{
   const cands=[...t.matchAll(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/g)].map(m=>m[1]);
-  const i=t.indexOf("["),j=t.lastIndexOf("]"); if(i!==-1&&j>i) cands.push(t.slice(i,j+1));
+  const op=[],cl=[];for(let k=0;k<t.length;k++){if(t[k]==="[")op.push(k);else if(t[k]==="]")cl.push(k);}
+  for(const i of op.slice(0,50))for(const j of cl.slice(-50))if(j>i)cands.push(t.slice(i,j+1));
   for(const c of cands){ try{ const v=JSON.parse(c); if(Array.isArray(v)&&v.length&&v.every(x=>x&&typeof x==="object"&&!Array.isArray(x))){ process.stdout.write(JSON.stringify({ok:true,constraints:v})+"\n"); return; } }catch(e){} }
   process.stdout.write(JSON.stringify({ok:false,error:"no JSON array of constraints in the author reply: "+t.slice(0,200)})+"\n");
 });'; }

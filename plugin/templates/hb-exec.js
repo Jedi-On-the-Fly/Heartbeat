@@ -287,14 +287,18 @@ async function constrainedReview(c, dag, gate, rv, actors) {
   try { prof = rprof.gateProfile(HB_DIR, rv); } catch (e) { escalate('review_error', `${gate}: ${e.message}`); return 1; }
   const dflt = c.refuteModel;
   const rProvider = (prof && prof.provider) || c.refuteProvider;
+  // ONE validation, identical in python: model fields are strings; verdict.panel a positive integer
+  // (a number, or a string of digits). Anything else escalates — never a crash, never a guess.
+  for (const f of ['author_model', 'model', 'free_model', 'provider'])
+    if (prof && prof[f] != null && typeof prof[f] !== 'string') { escalate('review_error', `${gate}: the refuter profile field ${f} must be a string`); return 1; }
   const models = { author: (prof && prof.author_model) || dflt, refute: (prof && prof.model) || dflt, free: (prof && prof.free_model) || dflt };
   const envFor = (m) => { const e = {}; if (m) e.HB_EXEC_MODEL = m; if (rProvider) e.HB_EXEC_PROVIDER = rProvider; return Object.keys(e).length ? e : undefined; };
   const context = sh(`git -C "${PROJECT_DIR}" log --oneline -8`).trim();
   const fdir = path.join(HB_DIR, 'reviews');
   try { fs.mkdirSync(fdir, { recursive: true }); } catch (e) {}
   const errOf = (e) => ((e && e.stderr) ? e.stderr.toString() : (e && e.message) || '').trim().split('\n').pop();
-  const refuse = (reason) => {   // a refused review is a recorded failure, never a crash
-    try { hb('review', gate, 'fail', reason.slice(0, 1500), ...(models.refute ? ['--model', models.refute] : [])); }
+  const refuse = (reason, model = models.refute) => {   // a refused review is a recorded failure, never a crash
+    try { hb('review', gate, 'fail', reason.slice(0, 1500), ...(model ? ['--model', model] : [])); }
     catch (e) { escalate('review_error', `${gate}: could not record the refusal (${errOf(e)})`); return 1; }
     return undefined;
   };
@@ -304,7 +308,7 @@ async function constrainedReview(c, dag, gate, rv, actors) {
     let aPrompt;
     try { aPrompt = hbjs.composeAuthorPrompt(hbjs_dag(), gate); } catch (e) { escalate('review_error', `${gate}: ${e.message}`); return 1; }
     const ra = await dispatch(c.refuteCmd, 'author', { mode: 'author', gate, prompt: aPrompt, project_dir: PROJECT_DIR, context }, null, 0, undefined, envFor(models.author));
-    if (!ra.json || ra.json.ok !== true || !Array.isArray(ra.json.constraints)) {
+    if (!ra.json || typeof ra.json !== 'object' || Array.isArray(ra.json) || ra.json.ok !== true || !Array.isArray(ra.json.constraints)) {
       escalate('review_error', `${gate}: the constraint author returned no constraint list`); return 1;
     }
     const af = path.join(fdir, `${gate}.author.json`);
@@ -321,11 +325,16 @@ async function constrainedReview(c, dag, gate, rv, actors) {
   try { prompt = rprof.composePrompt(HB_DIR, hbjs_dag(), gate); } catch (e) { escalate('review_error', `${gate}: ${e.message}`); return 1; }
   const payload = { mode: 'refute', gate, prompt, project_dir: PROJECT_DIR, context };
   const verdictCfg = (prof && prof.verdict) || {};
-  const panelN = parseInt(verdictCfg.panel || 1, 10) || 1;
+  const pv = verdictCfg.panel == null ? 1 : verdictCfg.panel;
+  const panelN = (typeof pv === 'number' && Number.isInteger(pv) && pv >= 1) ? pv
+    : (typeof pv === 'string' && /^[0-9]+$/.test(pv) && parseInt(pv, 10) >= 1) ? parseInt(pv, 10) : null;
+  if (panelN === null) { escalate('review_error', `${gate}: the refuter profile verdict.panel must be a positive integer`); return 1; }
   const verdicts = [], texts = [];
   for (let i = 0; i < panelN; i++) {
     const ri = await dispatch(c.refuteCmd, 'refute', payload, null, 0, undefined, envFor(models.refute));
-    if (!ri.json || typeof ri.json.refuted !== 'boolean') {
+    const bad = !ri.json || typeof ri.json !== 'object' || Array.isArray(ri.json) || typeof ri.json.refuted !== 'boolean' ||
+                (ri.json.findings != null && typeof ri.json.findings !== 'string');
+    if (bad) {
       escalate('review_error', `${gate}: ${panelN > 1 ? `panelist ${i + 1}/${panelN}` : 'the refuter'} returned no verdict (fail-closed)`); return 1;
     }
     verdicts.push(ri.json.refuted); texts.push((ri.json.findings || '').trim());
@@ -344,9 +353,10 @@ async function constrainedReview(c, dag, gate, rv, actors) {
     let fPrompt;
     try { fPrompt = rprof.composePrompt(HB_DIR, hbjs_dag(), gate, { free: true }); } catch (e) { escalate('review_error', `${gate}: ${e.message}`); return 1; }
     const rf = await dispatch(c.refuteCmd, 'refute', { mode: 'refute', review: 'free', gate, prompt: fPrompt, project_dir: PROJECT_DIR, context }, null, 0, undefined, envFor(models.free));
-    if (!rf.json || typeof rf.json.refuted !== 'boolean') { escalate('review_error', `${gate}: the free reviewer returned no verdict (fail-closed)`); return 1; }
+    if (!rf.json || typeof rf.json !== 'object' || Array.isArray(rf.json) || typeof rf.json.refuted !== 'boolean' ||
+        (rf.json.findings != null && typeof rf.json.findings !== 'string')) { escalate('review_error', `${gate}: the free reviewer returned no verdict (fail-closed)`); return 1; }
     const ft = (rf.json.findings || '').trim();
-    if (rf.json.refuted) return refuse(`free review: ${ft || 'refuted'}`);
+    if (rf.json.refuted) return refuse(`free review: ${ft || 'refuted'}`, models.free);
     const ff = path.join(fdir, `${gate}.free.attempt.md`);
     fs.writeFileSync(ff, `# Free review of ${gate}\n\n${ft}\n`);
     try { hbAs(actors.freeActor, 'review', gate, 'free', '--artifact', ff, ...(models.free ? ['--model', models.free] : [])); }
