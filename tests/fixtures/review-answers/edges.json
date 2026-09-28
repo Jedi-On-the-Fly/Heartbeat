@@ -170,5 +170,33 @@
 [
 "prose_nothing_violated",
 "Summary: nothing was violated.\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"outlined_word",
+"Constraint P1 is 𜳫𜳞𜳤𜳡𜳖𜳩𜳚𜳙\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"outlined_id",
+"𜳥1: N/A — reason"
+],
+[
+"math_bold_word",
+"Constraint P1 is 𝐕𝐈𝐎𝐋𝐀𝐓𝐄𝐃\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"multiline_comment_split",
+"Constraint P1 is VIO<!--\n-->LATED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"unclosed_comment_hides_answer",
+"<!--\nP1: NOT-REPRODUCED — hidden by an unclosed comment"
+],
+[
+"small_caps",
+"Constraint P1 is ᴠɪᴏʟᴀᴛᴇᴅ\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"armenian_o",
+"Constraint P1 is VIօLATED\nP1: NOT-REPRODUCED — probe ran"
 ]
 ]

@@ -166,13 +166,21 @@ _ANSWER_INVISIBLE = re.compile(r"[​-‏⁠-⁤﻿­᠎͏؜]")
 _ANSWER_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-_]")
 _ANSWER_CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 _ANSWER_TEXT = re.compile(r"[^ \t   -   　⠀ㅤﾠᅟᅠ]")
-_ANSWER_CONFUSABLES = {"\u0410": "a", "\u0412": "b", "\u0415": "e", "\u041a": "k", "\u041c": "m", "\u041d": "h", "\u041e": "o", "\u0420": "p", "\u0421": "c", "\u0422": "t", "\u0425": "x", "\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0440": "p", "\u0441": "c", "\u0443": "y", "\u0445": "x", "\u0456": "i", "\u0458": "j", "\u0455": "s", "\u0501": "d", "\u0406": "i", "\u0408": "j", "\u0405": "s", "\u04cf": "l", "\u0500": "d", "\u04ae": "y", "\u04af": "y", "\u04c0": "l", "\u051b": "q", "\u051d": "w", "\u0391": "a", "\u0392": "b", "\u0395": "e", "\u0396": "z", "\u0397": "h", "\u0399": "i", "\u039a": "k", "\u039c": "m", "\u039d": "n", "\u039f": "o", "\u03a1": "p", "\u03a4": "t", "\u03a5": "y", "\u03a7": "x", "\u03bf": "o", "\u03bd": "v", "\u03b9": "i", "\u03b1": "a", "\u03ba": "k", "\u03c1": "p", "\u03c4": "t", "\u03c5": "u", "\u0131": "i", "\u017f": "s", "\u2113": "l", "\u01c0": "l", "\u0251": "a", "\u0261": "g", "\u1d20": "v", "\u1d05": "d", "\u1d07": "e", "\u1d1b": "t", "\u1d0f": "o"}
+_ANSWER_CONFUSABLES = {"\u0410": "a", "\u0412": "b", "\u0415": "e", "\u041a": "k", "\u041c": "m", "\u041d": "h", "\u041e": "o", "\u0420": "p", "\u0421": "c", "\u0422": "t", "\u0425": "x", "\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0440": "p", "\u0441": "c", "\u0443": "y", "\u0445": "x", "\u0456": "i", "\u0458": "j", "\u0455": "s", "\u0501": "d", "\u0406": "i", "\u0408": "j", "\u0405": "s", "\u04cf": "l", "\u0500": "d", "\u04ae": "y", "\u04af": "y", "\u04c0": "l", "\u051b": "q", "\u051d": "w", "\u0391": "a", "\u0392": "b", "\u0395": "e", "\u0396": "z", "\u0397": "h", "\u0399": "i", "\u039a": "k", "\u039c": "m", "\u039d": "n", "\u039f": "o", "\u03a1": "p", "\u03a4": "t", "\u03a5": "y", "\u03a7": "x", "\u03bf": "o", "\u03bd": "v", "\u03b9": "i", "\u03b1": "a", "\u03ba": "k", "\u03c1": "p", "\u03c4": "t", "\u03c5": "u", "\u0131": "i", "\u017f": "s", "\u2113": "l", "\u01c0": "l", "\u0251": "a", "\u0261": "g", "\u1d20": "v", "\u1d05": "d", "\u1d07": "e", "\u1d1b": "t", "\u1d0f": "o", "\u1d00": "a", "\u0299": "b", "\u1d04": "c", "\ua730": "f", "\u0262": "g", "\u029c": "h", "\u026a": "i", "\u1d0a": "j", "\u1d0b": "k", "\u029f": "l", "\u1d0d": "m", "\u0274": "n", "\u1d18": "p", "\u01eb": "q", "\u0280": "r", "\ua731": "s", "\u1d1c": "u", "\u1d21": "w", "\u028f": "y", "\u1d22": "z", "\u0585": "o", "\u057d": "u", "\u0581": "g", "\u0570": "h", "\u0578": "n", "\u0561": "w", "\u0565": "e", "\u056b": "h", "\u056c": "l", "\u057c": "n"}
 _ANSWER_ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'", "nbsp": " "}
 
 
-def _answer_text(body, keep_comments):
-    import unicodedata
-    t = unicodedata.normalize("NFKC", str(body))
+# NO platform normalisation (== node; unicodedata / ICU versions differ): explicit full-width fold, and
+# STYLED letters (fixed ranges) refused outright.
+_ANSWER_STYLED = re.compile("[\u2100-\u214f\u2460-\u24ff\U0001cc00-\U0001cebf\U0001d400-\U0001d7ff\U0001f100-\U0001f1ff]")
+
+
+def _fold_width(t):
+    return re.sub("[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]", " ", re.sub("[\uff01-\uff5e]", lambda m: chr(ord(m.group(0)) - 0xFEE0), t))
+
+
+def _answer_text(body, comment_mode):
+    t = _fold_width(str(body))
 
     def ent(m):
         d, h, n = m.group(1), m.group(2), m.group(3)
@@ -182,9 +190,11 @@ def _answer_text(body, keep_comments):
         return _ANSWER_ENTITIES.get(n.lower(), m.group(0))
     t = re.sub(r"&#([0-9]{1,7});|&#[xX]([0-9a-fA-F]{1,6});|&([a-zA-Z]+);", ent, t)
     t = re.sub(r"<br[ \t]*/?>", "\n", t, flags=re.I)
-    t = re.sub(r"<!--|-->", " ", t) if keep_comments else re.sub(r"<!--.*?-->", "", t, flags=re.S)
+    # inside an inline code span a comment marker is literal text, not a comment (== node)
+    t = re.sub(r"`[^`\n]*`", lambda m: m.group(0).replace("<!--", "<!- -").replace("-->", "- ->"), t)
+    t = re.sub(r"<!--|-->", " ", t) if comment_mode == "keep" else re.sub(r"<!--.*?(?:-->|\Z)", "", t, flags=re.S)
     t = re.sub(r"</?[a-zA-Z][^<>]*>", "", t)
-    return unicodedata.normalize("NFKC", _ANSWER_INVISIBLE.sub("", _ANSWER_ANSI.sub("", t)))
+    return _fold_width(_ANSWER_INVISIBLE.sub("", _ANSWER_ANSI.sub("", t)))
 
 
 def _squash_letters(s):
@@ -202,10 +212,12 @@ def check_answers(body, required):
     from .refuter_profiles import ANSWER_FORMAT
     req, seen, errors = set(required), {}, []
     counts = {"violated": 0, "not_reproduced": 0, "na": 0}
-    word_lines = sum(1 for line in _ANSWER_BREAKS.split(_answer_text(body, True))
+    if _ANSWER_STYLED.search(str(body)):
+        errors.append("the artifact uses styled letters (mathematical, enclosed, letterlike or legacy-computing symbols) — write plain text")
+    word_lines = sum(1 for mode in ("keep", "drop") for line in _ANSWER_BREAKS.split(_answer_text(body, mode))
                      if "violated" in _squash_letters(_ANSWER_CTRL.sub("", line)))
     loose_id = 0
-    for raw in _ANSWER_BREAKS.split(_answer_text(body, False)):
+    for raw in _ANSWER_BREAKS.split(_answer_text(body, "drop")):
         l = re.sub(r"[*`_]", "", _ANSWER_CTRL.sub("", raw)).strip(" \t")
         l = re.sub(r"^(?:[\t >+#-]+|[0-9]+[.)][ \t]+)+", "", l)
         lo = "".join(c.lower() if "A" <= c <= "Z" else c for c in l)   # ASCII-only: no regex case folding

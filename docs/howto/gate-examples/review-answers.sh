@@ -241,10 +241,14 @@ EOF
     "node: doctor missed an edited review artifact|node: fixtures"
   mutant "python word check dropped" py/src/heartbeat/review_policy.py '    if word_lines and not counts["violated"]:' '    if False:' \
     "py: fixtures: hostile answer sets ACCEPTED|py: fixtures"
-  mutant "node reads comments out of the word check" plugin/templates/hb.js "  for (const line of answerText(body, true).split(ANSWER_BREAKS))" "  for (const line of answerText(body, false).split(ANSWER_BREAKS))" \
-    "node: fixtures: hostile answer sets ACCEPTED|node: fixtures"
-  mutant "python reads comments out of the word check" py/src/heartbeat/review_policy.py '    word_lines = sum(1 for line in _ANSWER_BREAKS.split(_answer_text(body, True))' '    word_lines = sum(1 for line in _ANSWER_BREAKS.split(_answer_text(body, False))' \
-    "py: fixtures: hostile answer sets ACCEPTED|py: fixtures"
+  mutant "node reads comments out of the word check" plugin/templates/hb.js "  for (const mode of ['keep', 'drop'])" "  for (const mode of ['drop'])" \
+    "node: fixtures|node: "
+  mutant "python reads comments out of the word check" py/src/heartbeat/review_policy.py '    word_lines = sum(1 for mode in ("keep", "drop") for line' '    word_lines = sum(1 for mode in ("drop",) for line' \
+    "py: fixtures|py: "
+  mutant "node folds styled letters instead of refusing them" plugin/templates/hb.js "  if (ANSWER_STYLED.test(String(body))) errors.push(" "  if (false) errors.push(" \
+    "node: fixtures"
+  mutant "python keeps an unclosed comment visible" py/src/heartbeat/review_policy.py 're.sub(r"<!--.*?(?:-->|\Z)", "", t, flags=re.S)' 're.sub(r"<!--.*?-->", "", t, flags=re.S)' \
+    "py: fixtures"
   mutant "python pass without a recorded set" py/src/heartbeat/review_policy.py '        if not recorded:
             return 1, "", (f"review pass refused on {gate}: no gate-time' '        if False:
             return 1, "", (f"review pass refused on {gate}: no gate-time' \

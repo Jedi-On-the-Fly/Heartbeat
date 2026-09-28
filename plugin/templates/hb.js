@@ -596,19 +596,29 @@ const ANSWER_BREAKS = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/;
 const ANSWER_INVISIBLE = /[​-‏⁠-⁤﻿­᠎͏؜]/g;
 const ANSWER_ANSI = /\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b[@-_]/g;
 const ANSWER_CTRL = /[\x00-\x08\x0b-\x1f\x7f]/g;
-const ANSWER_CONFUSABLES = {"\u0410": "a", "\u0412": "b", "\u0415": "e", "\u041a": "k", "\u041c": "m", "\u041d": "h", "\u041e": "o", "\u0420": "p", "\u0421": "c", "\u0422": "t", "\u0425": "x", "\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0440": "p", "\u0441": "c", "\u0443": "y", "\u0445": "x", "\u0456": "i", "\u0458": "j", "\u0455": "s", "\u0501": "d", "\u0406": "i", "\u0408": "j", "\u0405": "s", "\u04cf": "l", "\u0500": "d", "\u04ae": "y", "\u04af": "y", "\u04c0": "l", "\u051b": "q", "\u051d": "w", "\u0391": "a", "\u0392": "b", "\u0395": "e", "\u0396": "z", "\u0397": "h", "\u0399": "i", "\u039a": "k", "\u039c": "m", "\u039d": "n", "\u039f": "o", "\u03a1": "p", "\u03a4": "t", "\u03a5": "y", "\u03a7": "x", "\u03bf": "o", "\u03bd": "v", "\u03b9": "i", "\u03b1": "a", "\u03ba": "k", "\u03c1": "p", "\u03c4": "t", "\u03c5": "u", "\u0131": "i", "\u017f": "s", "\u2113": "l", "\u01c0": "l", "\u0251": "a", "\u0261": "g", "\u1d20": "v", "\u1d05": "d", "\u1d07": "e", "\u1d1b": "t", "\u1d0f": "o"};
+const ANSWER_CONFUSABLES = {"\u0410": "a", "\u0412": "b", "\u0415": "e", "\u041a": "k", "\u041c": "m", "\u041d": "h", "\u041e": "o", "\u0420": "p", "\u0421": "c", "\u0422": "t", "\u0425": "x", "\u0430": "a", "\u0435": "e", "\u043e": "o", "\u0440": "p", "\u0441": "c", "\u0443": "y", "\u0445": "x", "\u0456": "i", "\u0458": "j", "\u0455": "s", "\u0501": "d", "\u0406": "i", "\u0408": "j", "\u0405": "s", "\u04cf": "l", "\u0500": "d", "\u04ae": "y", "\u04af": "y", "\u04c0": "l", "\u051b": "q", "\u051d": "w", "\u0391": "a", "\u0392": "b", "\u0395": "e", "\u0396": "z", "\u0397": "h", "\u0399": "i", "\u039a": "k", "\u039c": "m", "\u039d": "n", "\u039f": "o", "\u03a1": "p", "\u03a4": "t", "\u03a5": "y", "\u03a7": "x", "\u03bf": "o", "\u03bd": "v", "\u03b9": "i", "\u03b1": "a", "\u03ba": "k", "\u03c1": "p", "\u03c4": "t", "\u03c5": "u", "\u0131": "i", "\u017f": "s", "\u2113": "l", "\u01c0": "l", "\u0251": "a", "\u0261": "g", "\u1d20": "v", "\u1d05": "d", "\u1d07": "e", "\u1d1b": "t", "\u1d0f": "o", "\u1d00": "a", "\u0299": "b", "\u1d04": "c", "\ua730": "f", "\u0262": "g", "\u029c": "h", "\u026a": "i", "\u1d0a": "j", "\u1d0b": "k", "\u029f": "l", "\u1d0d": "m", "\u0274": "n", "\u1d18": "p", "\u01eb": "q", "\u0280": "r", "\ua731": "s", "\u1d1c": "u", "\u1d21": "w", "\u028f": "y", "\u1d22": "z", "\u0585": "o", "\u057d": "u", "\u0581": "g", "\u0570": "h", "\u0578": "n", "\u0561": "w", "\u0565": "e", "\u056b": "h", "\u056c": "l", "\u057c": "n"};
 const ANSWER_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
-function answerText(body, keepComments) {
-  let t = String(body).normalize('NFKC');
+// NO platform normalisation (NFKC tables differ between the node and python Unicode versions — a
+// refuter catch): full-width ASCII is folded by explicit arithmetic, and STYLED letters (mathematical,
+// enclosed, letterlike, legacy-computing blocks — fixed ranges) are refused outright (ANSWER_STYLED).
+const ANSWER_STYLED = /[\u2100-\u214f\u2460-\u24ff\u{1cc00}-\u{1cebf}\u{1d400}-\u{1d7ff}\u{1f100}-\u{1f1ff}]/u;
+function foldWidth(t) { return t.replace(/[\uff01-\uff5e]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, ' '); }
+function answerText(body, commentMode) {
+  let t = foldWidth(String(body));
   t = t.replace(/&#([0-9]{1,7});|&#[xX]([0-9a-fA-F]{1,6});|&([a-zA-Z]+);/g, (m, d, h, n) => {
     const cp = d ? parseInt(d, 10) : h ? parseInt(h, 16) : null;
     if (cp !== null) return cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : '';
     return Object.prototype.hasOwnProperty.call(ANSWER_ENTITIES, n.toLowerCase()) ? ANSWER_ENTITIES[n.toLowerCase()] : m;
   });
   t = t.replace(/<br[ \t]*\/?>/gi, '\n');
-  t = keepComments ? t.replace(/<!--|-->/g, ' ') : t.replace(/<!--[\s\S]*?-->/g, '');
+  // commentMode: 'keep' → comment markers become spaces, comment text kept (a word inside a comment is
+  // seen); 'drop' → comments removed, an UNCLOSED one hiding the rest (what a renderer shows, and a word
+  // split across a comment rejoins)
+  // inside an inline code span a comment marker is literal text, not a comment
+  t = t.replace(/`[^`\n]*`/g, m => m.replace(/<!--/g, '<!- -').replace(/-->/g, '- ->'));
+  t = commentMode === 'keep' ? t.replace(/<!--|-->/g, ' ') : t.replace(/<!--[\s\S]*?(?:-->|$(?![\s\S]))/g, '');
   t = t.replace(/<\/?[a-zA-Z][^<>]*>/g, '');
-  return t.replace(ANSWER_ANSI, '').replace(ANSWER_INVISIBLE, '').normalize('NFKC');
+  return foldWidth(t.replace(ANSWER_ANSI, '').replace(ANSWER_INVISIBLE, ''));
 }
 function squashLetters(s) {
   let o = '';
@@ -618,12 +628,15 @@ function squashLetters(s) {
 function checkAnswers(body, required) {
   const req = new Set(required), seen = {}, errors = [], counts = { violated: 0, not_reproduced: 0, na: 0 };
   const FMT = require('./refuter_profiles.js').ANSWER_FORMAT;
-  // 1. the word, anywhere (comment text included)
+  // 0. styled letters are refused outright (no version-dependent folding)
+  if (ANSWER_STYLED.test(String(body))) errors.push('the artifact uses styled letters (mathematical, enclosed, letterlike or legacy-computing symbols) — write plain text');
+  // 1. the word, anywhere: with comment text kept AND with comments removed (a word split by one rejoins)
   let wordLines = 0;
-  for (const line of answerText(body, true).split(ANSWER_BREAKS)) if (squashLetters(line.replace(ANSWER_CTRL, '')).includes('violated')) wordLines++;
+  for (const mode of ['keep', 'drop'])
+    for (const line of answerText(body, mode).split(ANSWER_BREAKS)) if (squashLetters(line.replace(ANSWER_CTRL, '')).includes('violated')) wordLines++;
   // 2. the answers, from the visible text
   let looseId = 0;
-  for (const raw of answerText(body, false).split(ANSWER_BREAKS)) {
+  for (const raw of answerText(body, 'drop').split(ANSWER_BREAKS)) {
     const l = raw.replace(ANSWER_CTRL, '').replace(/[*`_]/g, '').replace(/^[ \t]+|[ \t]+$/g, '').replace(/^(?:[\t >+#-]+|[0-9]+[.)][ \t]+)+/, '');
     const lo = l.replace(/[A-Z]/g, c => c.toLowerCase());   // ASCII-only: no regex case folding
     const m = /^([pg][0-9]+)[ \t]*[:：][ \t]*(violated|not-reproduced|not reproduced|n\/a)(?=$|[ \t—–:,.;])(.*)$/.exec(lo);
