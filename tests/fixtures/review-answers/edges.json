@@ -210,5 +210,9 @@
 [
 "bare_comment_hides",
 "Notes <!-- draft\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"rlo_reversed_word",
+"Constraint P1 is ‮detaloiv‬\nP1: NOT-REPRODUCED — probe ran"
 ]
 ]

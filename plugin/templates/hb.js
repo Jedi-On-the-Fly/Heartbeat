@@ -636,7 +636,10 @@ function checkAnswers(body, required) {
   // 1. the word, anywhere: with comment text kept AND with comments removed (a word split by one rejoins)
   let wordLines = 0;
   for (const mode of ['keep', 'drop'])
-    for (const line of answerText(body, mode).split(ANSWER_BREAKS)) if (squashLetters(line.replace(ANSWER_CTRL, '')).includes('violated')) wordLines++;
+    for (const line of answerText(body, mode).split(ANSWER_BREAKS)) {
+      const sq = squashLetters(line.replace(ANSWER_CTRL, ''));   // also reversed: a right-to-left override displays it forwards
+      if (sq.includes('violated') || sq.includes('detaloiv')) wordLines++;
+    }
   // an unclosed comment hides everything after it when rendered — say so (instead of "no answer line")
   if (/<!--(?![\s\S]*-->)/.test(String(body).replace(/`[^`\n]*`/g, m => m.replace(/<!--/g, '<!- -').replace(/-->/g, '- ->'))))
     errors.push('the artifact has an unclosed <!-- — everything after it is hidden when rendered: close the comment or remove it');

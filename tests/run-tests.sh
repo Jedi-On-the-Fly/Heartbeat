@@ -1824,7 +1824,7 @@ check "T171.2 teeth: perturbed observations and eight reason-checked code mutant
   'bash "'"$GEX"'/review-answers.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
 grp "T172 — hb exec runs the constraint-first review unattended: author → record → constrained refute (each panelist checked) → free → enforced pass; per-role models; refusals recorded, never a crash; node ≡ python"
-check "T172.1 12 scenarios × 2 executors: happy / VIOLATED / malformed author / default model / panel / unconstrained + 6 hostile replies/profiles (exec-constrained-review.sh → EXEC-CONSTRAINED-REVIEW-OK)" \
+check "T172.1 14 scenarios × 2 executors: happy / VIOLATED / malformed author / default model / panel / unconstrained + 6 hostile replies/profiles (exec-constrained-review.sh → EXEC-CONSTRAINED-REVIEW-OK)" \
   'bash "'"$GEX"'/exec-constrained-review.sh" 2>&1 | grep -q "EXEC-CONSTRAINED-REVIEW-OK"'
 check "T172.2 teeth: perturbed observations and nine reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/exec-constrained-review.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'

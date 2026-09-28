@@ -297,8 +297,12 @@ def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refute
         finally:
             os.environ["HB_ACTOR"] = saved if saved is not None else worker_actor
 
-    def refuse(reason, model=None):   # a refused review is a recorded failure, never a crash
-        st.mutate(hbdir, {"event": "review_failed", "gate": g, "model": (model or models["refute"]) or None, "note": reason[:1500]})
+    _refute_role = object()
+
+    def refuse(reason, model=_refute_role):   # a refused review is a recorded failure, never a crash
+        # the model of the role that refused, verbatim — None stays None (== node's explicit null)
+        m = models["refute"] if model is _refute_role else model
+        st.mutate(hbdir, {"event": "review_failed", "gate": g, "model": m or None, "note": reason[:1500]})
         return None
 
     def fresh():
@@ -343,8 +347,8 @@ def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refute
         panel_n = int(pv)
     else:
         panel_n = None
-    if panel_n is None:
-        print(f"HB-EXEC STOP: review_error — {g}: the refuter profile verdict.panel must be a positive integer")
+    if panel_n is None or panel_n > 50:
+        print(f"HB-EXEC STOP: review_error — {g}: the refuter profile verdict.panel must be a positive integer (at most 50)")
         return 1
     verdicts, texts = [], []
     for i in range(panel_n):

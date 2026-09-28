@@ -16,7 +16,10 @@ command -v python3 >/dev/null 2>&1 || { echo "python3 absent"; exit 1; }
 fail(){ echo "FAIL: $1"; exit 1; }
 
 # conform CMD -> 0 iff execute/refute both emit a protocol-valid JSON object on the last line.
-conform(){
+# every backend runs inside a throwaway directory: a non-conformant stub (e.g. the fall-through one below)
+# may WRITE files, and must never do so in the caller's tree
+conform(){ local d rc; d="$(mktemp -d)"; ( cd "$d" && conform_in "$1" ); rc=$?; rm -rf "$d"; return $rc; }
+conform_in(){
   local ex ref
   ex="$(printf '{}' | bash -c "$1 execute" 2>/dev/null | grep -v '^[[:space:]]*$' | tail -1)"
   printf '%s' "$ex" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if isinstance(d.get('ok'),bool) else 1)" 2>/dev/null || return 1

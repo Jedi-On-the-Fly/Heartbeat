@@ -328,7 +328,7 @@ async function constrainedReview(c, dag, gate, rv, actors) {
   const pv = verdictCfg.panel == null ? 1 : verdictCfg.panel;
   const panelN = (typeof pv === 'number' && Number.isInteger(pv) && pv >= 1) ? pv
     : (typeof pv === 'string' && /^[0-9]+$/.test(pv) && parseInt(pv, 10) >= 1) ? parseInt(pv, 10) : null;
-  if (panelN === null) { escalate('review_error', `${gate}: the refuter profile verdict.panel must be a positive integer`); return 1; }
+  if (panelN === null || panelN > 50) { escalate('review_error', `${gate}: the refuter profile verdict.panel must be a positive integer (at most 50)`); return 1; }
   const verdicts = [], texts = [];
   for (let i = 0; i < panelN; i++) {
     const ri = await dispatch(c.refuteCmd, 'refute', payload, null, 0, undefined, envFor(models.refute));

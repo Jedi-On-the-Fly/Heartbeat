@@ -53,6 +53,8 @@ if os.environ.get("STUB_REFUTE") == "null":
 if os.environ.get("STUB_REFUTE") == "list-findings":
     print(json.dumps({"refuted": False, "findings": ["a", "list"]})); sys.exit(0)
 head = "Refutation of P0 / t0 / G0: ran the gate criterion and inspected a.txt myself."
+if review == "free" and os.environ.get("STUB_FREE") == "refute":
+    print(json.dumps({"refuted": True, "findings": "Free review of P0 / t0 / G0: an exploitable hole found in breadth."})); sys.exit(0)
 if review == "free":
     print(json.dumps({"refuted": False, "findings": "Free review of P0 / t0 / G0: looked in breadth at a.txt; nothing exploitable."})); sys.exit(0)
 ids = re.findall(r"(?m)^  - ([PG][0-9]+): ", p.get("prompt", ""))
@@ -92,6 +94,7 @@ calls = [l.rstrip("\n").split("\t") for l in open(os.path.join(o, "log")) if l.s
 cr = [e for e in evs if e.get("event") == "constraints_recorded"]
 rf = [e for e in evs if e.get("event") == "review_failed"]
 print(json.dumps({"rt": rt, "name": name, "rc": int(rc), "seq": seq, "calls": calls,
+                  "fail_model": rf[-1].get("model") if rf else "NO-FAIL",
                   "author_actor": cr[0].get("actor") if cr else None, "author_model": cr[0].get("model") if cr else None,
                   "fail_note": rf[-1].get("note", "") if rf else "", "out": open(os.path.join(o, "out"), errors="replace").read()[-600:]}))
 EOF
@@ -103,6 +106,8 @@ PROF_PANEL='{"persona":"CP","model":"RM","verdict":{"panel":2,"refute_if":"any"}
 PROF_PANEL_NEG='{"persona":"CP","model":"RM","verdict":{"panel":-1}}'
 PROF_PANEL_STR='{"persona":"CP","model":"RM","verdict":{"panel":"2x"}}'
 PROF_MODEL_NUM='{"persona":"CP","author_model":5}'
+PROF_FREE_NOMODEL='{"persona":"CP","model":"RM","free_review":true}'
+PROF_PANEL_BIG='{"persona":"CP","model":"RM","verdict":{"panel":51}}'
 
 obs_file="$work/obs.json"
 { echo '['; first=1
@@ -122,6 +127,8 @@ obs_file="$work/obs.json"
     want findings-list && sep && run "$rt" findings-list  "$DAG_C" "$PROF_NOAUTH" STUB_REFUTE=list-findings
     want panel-negative && sep && run "$rt" panel-negative "$DAG_C" "$PROF_PANEL_NEG" X=1
     want panel-string && sep && run "$rt" panel-string   "$DAG_C" "$PROF_PANEL_STR" X=1
+    want free-refutes && sep && run "$rt" free-refutes "$DAG_C" "$PROF_FREE_NOMODEL" STUB_FREE=refute
+    want panel-too-big && sep && run "$rt" panel-too-big "$DAG_C" "$PROF_PANEL_BIG" X=1
     want model-number && sep && run "$rt" model-number   "$DAG_C" "$PROF_MODEL_NUM" X=1
   done; echo ']'; } > "$obs_file"
 [ -n "${HB_PROOF_DUMP:-}" ] && cp "$obs_file" "$HB_PROOF_DUMP"
@@ -155,7 +162,10 @@ def check(obs):
         elif name == "panel":
             if [m for m in modes if m == ("refute", "")] != [("refute", "")] * 2: return k + ": the panel did not run 2 refuters: " + str(modes)
             if "review_passed" in o["seq"] or "review_failed" not in o["seq"]: return k + ": one VIOLATED panelist did not refuse: " + str(o["seq"])
-        elif name in ("author-bare", "refute-null", "findings-list", "panel-negative", "panel-string", "model-number"):
+        elif name == "free-refutes":
+            if "review_passed" in o["seq"] or "review_failed" not in o["seq"]: return k + ": a refuting free review did not become review_failed"
+            if o["fail_model"] is not None: return k + ": the free reviewer ran with no model but its refusal records " + json.dumps(o["fail_model"])
+        elif name in ("author-bare", "refute-null", "findings-list", "panel-negative", "panel-string", "panel-too-big", "model-number"):
             if "review_passed" in o["seq"]: return k + ": a hostile reply/profile led to a PASS"
             if o["rc"] == 0 or "review_error" not in o["out"]: return k + ": a hostile reply/profile did not escalate review_error: " + o["out"][-200:]
         elif name == "unconstrained":
@@ -164,12 +174,13 @@ def check(obs):
     import os
     if not os.environ.get("EC_MUTANT_RUN"):
         expected = {"happy", "violated", "author-bad", "default-model", "panel", "unconstrained", "author-bare", "refute-null",
-                    "findings-list", "panel-negative", "panel-string", "model-number"}
+                    "findings-list", "panel-negative", "panel-string", "model-number", "free-refutes", "panel-too-big"}
         if set(n for _, n in by) != expected: return "scenarios missing from the run: " + str(sorted(expected - set(n for _, n in by)))
     for name in set(n for _, n in by):
         n, p = by.get(("node", name)), by.get(("py", name))
         if not n or not p: return "missing runtime for " + name
         if n["seq"] != p["seq"]: return "parity: event sequence differs for " + name + ": " + str(n["seq"]) + " vs " + str(p["seq"])
+        if n.get("fail_model") != p.get("fail_model"): return "parity: review_failed.model differs for " + name + ": " + json.dumps(n.get("fail_model")) + " vs " + json.dumps(p.get("fail_model"))
         if [c[:2] for c in n["calls"]] != [c[:2] for c in p["calls"]]: return "parity: dispatches differ for " + name
     return None
 '
@@ -227,6 +238,6 @@ python3 - "$obs_file" <<EOF || exit 1
 $CHECK
 bad = check(json.load(open(sys.argv[1])))
 if bad: print("FAIL: " + bad, file=sys.stderr); sys.exit(1)
-print("exec constrained review: 12 scenarios × 2 executors hold")
+print("exec constrained review: 14 scenarios × 2 executors hold")
 print("EXEC-CONSTRAINED-REVIEW-OK")
 EOF
