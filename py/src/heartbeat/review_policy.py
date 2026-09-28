@@ -104,7 +104,7 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
             return 1, "", f"review free: '{reviewer}' did this phase's work — the free reviewer must be a different actor"
         rd = Path(hb) / "reviews"
         rd.mkdir(parents=True, exist_ok=True)
-        (rd / f"{gate}.free.md").write_text(body)
+        (rd / f"{gate}.free.md").write_text(body, encoding="utf-8")
         st.mutate(hb, {"event": "free_review_recorded", "gate": gate, "actor": reviewer, "model": model,
                        "artifact": f"reviews/{gate}.free.md", "sha256": hashlib.sha256(body.encode()).hexdigest()})
         return 0, f"review free {gate} recorded (reviews/{gate}.free.md, by {reviewer})", ""
@@ -135,7 +135,7 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
                                f"cycle from an actor other than '{reviewer}': hb review {gate} free --artifact <file>")
     revdir = Path(hb) / "reviews"
     revdir.mkdir(parents=True, exist_ok=True)
-    (revdir / f"{gate}.md").write_text(body)
+    (revdir / f"{gate}.md").write_text(body, encoding="utf-8")
     from . import gate as _g
     ev = {"event": "review_passed", "gate": gate, "model": model, "artifact": f"reviews/{gate}.md",
           "artifact_chars": len(body.strip()), "cited": cited, "reviewer": reviewer,
@@ -157,12 +157,15 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
                f"cites: {', '.join(cited[:3])})"), ""
 
 
-# EXPLICIT rules, identical to hb.js checkAnswers (see there): every line break, invisible characters
-# removed, ASCII-only case folding (re.A), and an answer-SHAPED line not in the format is refused.
+# EXPLICIT rules, identical to hb.js checkAnswers (see there): every line break, escape sequences /
+# control / invisible characters removed, list markers removed, ASCII-only case folding, and a rule by
+# CONTENT — a line saying "violated" outside a well-formed non-VIOLATED answer is refused, and a line
+# naming a constraint id with a status must be well-formed.
 _ANSWER_BREAKS = re.compile(r"\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]")
-_ANSWER_INVISIBLE = re.compile(r"[\u200b-\u200f\u2060\ufeff\u00ad]")
-_ANSWER_HEAD = re.compile(r"^([PG][0-9]+)[ \t]*[:：]", re.I | re.A)
-_ANSWER_RE = re.compile(r"^[PG][0-9]+[ \t]*[:：][ \t]*(VIOLATED|NOT-REPRODUCED|NOT REPRODUCED|N/A)(?![A-Za-z0-9])(.*)$", re.I | re.A)
+_ANSWER_INVISIBLE = re.compile(r"[​-‏⁠-⁤﻿­᠎͏؜]")
+_ANSWER_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-_]")
+_ANSWER_CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+_ANSWER_TEXT = re.compile(r"[^ \t   -   　⠀ㅤﾠᅟᅠ]")
 
 
 def check_answers(body, required):
@@ -171,23 +174,31 @@ def check_answers(body, required):
     from .refuter_profiles import ANSWER_FORMAT
     req, seen, errors = set(required), {}, []
     counts = {"violated": 0, "not_reproduced": 0, "na": 0}
-    text = re.sub(r"<!--.*?-->", "", str(body), flags=re.S)   # an HTML comment hides nothing
-    for raw in _ANSWER_BREAKS.split(text):
-        l = re.sub(r"^[\t >+#-]+", "", re.sub(r"[*`_]", "", _ANSWER_INVISIBLE.sub("", raw)).strip(" \t"))
-        # match on an ASCII-only lowercased copy: no regex case folding (JS and python fold differently)
-        lo = "".join(c.lower() if "A" <= c <= "Z" else c for c in l)
+    loose = loose_id = 0
+    in_comment = False
+    for raw in _ANSWER_BREAKS.split(str(body)):
+        # an HTML comment is invisible when rendered: an answer inside one is refused (== node)
+        commented = in_comment or "<!--" in raw
+        if "<!--" in raw:
+            in_comment = not re.search(r"<!--.*-->", raw[raw.rindex("<!--"):], re.S)
+        elif in_comment and "-->" in raw:
+            in_comment = False
+        l = re.sub(r"[*`_]", "", _ANSWER_INVISIBLE.sub("", _ANSWER_CTRL.sub("", _ANSWER_ANSI.sub("", raw)))).strip(" \t")
+        l = re.sub(r"^(?:[\t >+#-]+|[0-9]+[.)][ \t]+)+", "", l)
+        lo = "".join(c.lower() if "A" <= c <= "Z" else c for c in l)   # ASCII-only: no regex case folding
+        m = re.match(r"^([pg][0-9]+)[ \t]*[:：][ \t]*(violated|not-reproduced|not reproduced|n/a)(?=$|[ \t—–:,.;])(.*)$", lo)
         head = re.match(r"^([pg][0-9]+)[ \t]*[:：]", lo)
-        if not head:
-            if re.match(r"^[^ \t:：]{1,4}[ \t]*[:：][ \t]*(?:violated|not[- ]reproduced|n/a)", lo):
-                errors.append(f"an answer-shaped line has an id that is not an ASCII P<n>/G<n> — answer each id exactly ({ANSWER_FORMAT})")
+        if head and (not m or commented):   # shaped like an answer but malformed (or hidden in a comment)
+            errors.append(f"{head.group(1).upper()} has an answer-shaped line that is not a visible, well-formed answer ({ANSWER_FORMAT})")
             continue
-        cid = head.group(1).upper()
-        m = re.match(r"^[pg][0-9]+[ \t]*[:：][ \t]*(violated|not-reproduced|not reproduced|n/a)(?=$|[ \t—–:])(.*)$", lo)
         if not m:
-            errors.append(f"{cid} has an answer-shaped line that is not in the format ({ANSWER_FORMAT})")
+            if re.search(r"(^|[^a-z0-9])violated([^a-z0-9]|$)", lo):
+                loose += 1
+            elif re.search(r"(^|[^a-z0-9])[pg][0-9]+([^0-9]|$)", lo) and re.search(r"(not[- ]?reproduced|n/a)", lo):
+                loose_id += 1
             continue
-        stt = m.group(1).upper().replace(" ", "-", 1)
-        rest = re.sub(r"^[ \t]*[—–:-]+", "", m.group(2))
+        cid, stt = m.group(1).upper(), m.group(2).upper().replace(" ", "-", 1)
+        rest = re.sub(r"^[ \t]*[—–:,.;-]+", "", m.group(3))
         if cid not in req:
             errors.append(f"{cid} is not a constraint of this gate (an unknown id was answered)")
             continue
@@ -204,11 +215,13 @@ def check_answers(body, required):
             counts["na"] += 1
         else:
             counts["not_reproduced"] += 1
+    if loose:
+        errors.append(f'the artifact says VIOLATED outside a well-formed answer line ({loose} line(s)) — a violation is a finding: '
+                      f'record it with hb review <gate> fail "<finding>"; otherwise answer each id exactly ({ANSWER_FORMAT})')
+    if loose_id:
+        errors.append(f"a line names a constraint id with a status but is not a well-formed answer ({loose_id} line(s)) — "
+                      f"answer each id exactly ({ANSWER_FORMAT})")
     for cid in required:
         if cid not in seen:
             errors.append(f"{cid} has no answer line ({ANSWER_FORMAT})")
     return errors, counts
-
-
-# evidence / a reason must contain a character that is not whitespace (== node ANSWER_TEXT)
-_ANSWER_TEXT = re.compile(r"[^ \t   -   　]")

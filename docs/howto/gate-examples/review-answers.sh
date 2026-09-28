@@ -200,7 +200,7 @@ EOF
   }
   mutant "node accepts a VIOLATED answer" plugin/templates/hb.js "    if (st === 'VIOLATED') { counts.violated++; errors.push(" "    if (st === 'VIOLATED') { counts.violated++; if (0) errors.push(" \
     "node: violated-md"
-  mutant "python ignores markdown decoration" py/src/heartbeat/review_policy.py '        l = re.sub(r"^[\t >+#-]+", "", re.sub(r"[*`_]", "", _ANSWER_INVISIBLE.sub("", raw)).strip(" \t"))' '        l = raw.strip()' \
+  mutant "python ignores markdown decoration" py/src/heartbeat/review_policy.py '        l = re.sub(r"[*`_]", "", _ANSWER_INVISIBLE.sub("", _ANSWER_CTRL.sub("", _ANSWER_ANSI.sub("", raw)))).strip(" \t")' '        l = raw.strip()' \
     "py: violated-md"
   mutant "node free review not required" plugin/templates/hb.js "      if (prof && prof.free_review) {" "      if (false) {" \
     "node: free-missing"

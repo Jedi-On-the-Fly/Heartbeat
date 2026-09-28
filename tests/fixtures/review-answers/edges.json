@@ -1,24 +1,130 @@
 [
- ["bom_hides_violated", "﻿P1: VIOLATED — found\nP1: NOT-REPRODUCED — probe ran"],
- ["nel_hides_violated", "\u0085P1: VIOLATED — found\nP1: NOT-REPRODUCED — probe ran"],
- ["fs_hides_violated", "\u001cP1: VIOLATED — found\nP1: NOT-REPRODUCED — probe ran"],
- ["dotless_i", "P1: VıOLATED — found\nP1: NOT-REPRODUCED — probe ran"],
- ["dotted_I", "P1: VİOLATED — found\nP1: NOT-REPRODUCED — probe ran"],
- ["ls_in_rest", "P1: N/A reason here"],
- ["nbsp_lead", " P1: N/A — reason"],
- ["cyrillic_P", "Р1: VIOLATED — x\nP1: N/A — reason"],
- ["fullwidth_colon", "P1： VIOLATED — x\nP1: N/A — reason"],
- ["lower", "p1: violated — x"],
- ["nrdash_violated", "P1: NOT-REPRODUCED-VIOLATED"],
- ["na_ish", "P1: N/A-ish"],
- ["zwsp_status", "P1: ​VIOLATED — x\nP1: N/A — r"],
- ["html_comment", "<!--\nP1: NOT-REPRODUCED — hidden\n-->"],
- ["cr_only", "P1: VIOLATED — x\rP1: N/A — r"],
- ["kelvin_sep", "P1: N/AK"],
- ["long_s", "P1: N/Aſ"],
- ["vt_rest", "P1: N/A\u000b"],
- ["nbsp_rest", "P1: N/A  "],
- ["emdash_only", "P1: N/A —"],
- ["fullwidth_digit", "P１: VIOLATED — x\nP1: N/A — r"],
- ["arabic_digit", "P١: VIOLATED — x\nP1: N/A — r"]
+[
+"bom_hides_violated",
+"﻿P1: VIOLATED — found\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"nel_hides_violated",
+"P1: VIOLATED — found\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"fs_hides_violated",
+"\u001cP1: VIOLATED — found\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"dotless_i",
+"P1: VıOLATED — found\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"dotted_I",
+"P1: VİOLATED — found\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"ls_in_rest",
+"P1: N/A reason here"
+],
+[
+"nbsp_lead",
+" P1: N/A — reason"
+],
+[
+"cyrillic_P",
+"Р1: VIOLATED — x\nP1: N/A — reason"
+],
+[
+"fullwidth_colon",
+"P1： VIOLATED — x\nP1: N/A — reason"
+],
+[
+"lower",
+"p1: violated — x"
+],
+[
+"nrdash_violated",
+"P1: NOT-REPRODUCED-VIOLATED"
+],
+[
+"na_ish",
+"P1: N/A-ish"
+],
+[
+"zwsp_status",
+"P1: ​VIOLATED — x\nP1: N/A — r"
+],
+[
+"html_comment",
+"<!--\nP1: NOT-REPRODUCED — hidden\n-->"
+],
+[
+"cr_only",
+"P1: VIOLATED — x\rP1: N/A — r"
+],
+[
+"kelvin_sep",
+"P1: N/AK"
+],
+[
+"long_s",
+"P1: N/Aſ"
+],
+[
+"vt_rest",
+"P1: N/A\u000b"
+],
+[
+"nbsp_rest",
+"P1: N/A  "
+],
+[
+"emdash_only",
+"P1: N/A —"
+],
+[
+"fullwidth_digit",
+"P１: VIOLATED — x\nP1: N/A — r"
+],
+[
+"arabic_digit",
+"P١: VIOLATED — x\nP1: N/A — r"
+],
+[
+"numbered_violated",
+"1. P1: VIOLATED — found\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"ansi_violated",
+"\u001b[0mP1: VIOLATED — found\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"backticked_comment",
+"`<!--`\nP1: VIOLATED — found\n`-->`\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"table_violated",
+"| P1 | VIOLATED |\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"spaced_id",
+"P 1: VIOLATED — x\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"dash_sep",
+"P1 - VIOLATED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"prefixed",
+"Constraint P1: VIOLATED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"bullet_char",
+"• P1: VIOLATED\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"invisible_evidence",
+"P1: NOT-REPRODUCED — ᠎⠀"
+],
+[
+"prose_status",
+"P1 was not reproduced in my tests\nP1: NOT-REPRODUCED — probe ran"
+]
 ]

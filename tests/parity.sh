@@ -259,6 +259,13 @@ edges_case(){
   cmp "review:answers-edges" "$n" "$p"
   local ok; ok="$(printf '%s' "$n" | python3 -c 'import sys,json;d=json.load(sys.stdin);bad=[k for k,r in d if not r["errors"]];print("OK" if d and not bad else "ACCEPTED:"+",".join(bad))')"
   [ "$ok" = OK ] || { echo "  ✗ review:answers-edges — hostile answer sets accepted: $ok"; FAIL=1; }
+  # and legitimate layouts must be ACCEPTED (strictness must not refuse honest answers)
+  local L="$ROOT/tests/fixtures/review-answers/legit.json"
+  n="$(node -e 'const h=require(process.argv[1]);const cs=JSON.parse(require("fs").readFileSync(process.argv[2],"utf8"));console.log(JSON.stringify(cs.map(([k,b])=>[k,h.checkAnswers(b,["P1"])])))' "$ROOT/plugin/templates/hb.js" "$L" | python3 -c 'import sys,json;print(json.dumps(json.load(sys.stdin),ensure_ascii=False,separators=(",",":")))')"
+  p="$(PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c 'import sys,json;from heartbeat.review_policy import check_answers;cs=json.load(open(sys.argv[1]));print(json.dumps([[k,dict(zip(("errors","counts"),check_answers(b,["P1"])))] for k,b in cs],ensure_ascii=False,separators=(",",":")))' "$L")"
+  cmp "review:answers-legit" "$n" "$p"
+  ok="$(printf '%s' "$n" | python3 -c 'import sys,json;d=json.load(sys.stdin);bad=[k for k,r in d if r["errors"]];print("OK" if d and not bad else "REFUSED:"+",".join(bad))')"
+  [ "$ok" = OK ] || { echo "  ✗ review:answers-legit — honest answer sets refused: $ok"; FAIL=1; }
 }
 edges_case
 

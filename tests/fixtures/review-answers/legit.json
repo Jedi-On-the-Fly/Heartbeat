@@ -1,0 +1,38 @@
+[
+[
+"plain",
+"P1: NOT-REPRODUCED — ran grep on a.txt"
+],
+[
+"numbered",
+"1. P1: NOT-REPRODUCED — probe ran"
+],
+[
+"comma",
+"P1: NOT-REPRODUCED, probe: cat a.txt"
+],
+[
+"period",
+"P1: N/A. The phase has no upload path."
+],
+[
+"bold_bullet",
+"- **P1**: N/A — not applicable here"
+],
+[
+"prose_around",
+"Summary: I could not break it.\nNote: not reproduced anywhere.\nP1: NOT-REPRODUCED — probe ran"
+],
+[
+"evidence_mentions",
+"P1: NOT-REPRODUCED — the limit is never violated by the probe"
+],
+[
+"cjk_evidence",
+"P1: NOT-REPRODUCED — 已测试"
+],
+[
+"html_comment_prose",
+"<!-- reviewer notes -->\nP1: NOT-REPRODUCED — probe ran"
+]
+]

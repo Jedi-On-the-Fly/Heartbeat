@@ -583,32 +583,42 @@ function reviewCycle(dag, gate) {
 // Markdown-insensitive (list bullets, quotes, headings, *, _, ` are ignored) and case-insensitive on the
 // status. Prose that merely mentions an id is not an answer. Twin: review_policy.check_answers.
 // EXPLICIT rules, identical in both runtimes (JS and python primitives disagree on line breaks, trim
-// sets and Unicode case folding — a refuter catch): lines break on ANY of \r\n \n \r \v \f \x1c-\x1e
-// \x85 \u2028 \u2029 (a bare CR cannot hide a line); invisible characters (zero-width, BOM, soft
-// hyphen) are removed before matching; case-insensitivity is ASCII-only; and a line SHAPED like an
-// answer (`<ID>:` or `<ID>：`) that is not in the exact format is REFUSED, never ignored.
+// sets and Unicode case folding — refuter catches). Each line: split on ANY line break; terminal escape
+// sequences, control characters and invisible characters removed; markdown emphasis removed; list
+// markers (-, *, +, >, #, "1.", "2)") removed; matched on an ASCII-only lowercased copy (no regex case
+// folding). The rule is by CONTENT, not by shape: a line that says "violated" is refused unless it is a
+// well-formed non-VIOLATED answer, and a line naming a constraint id with a status must be well-formed —
+// so a violation can never sit in the artifact, in any layout, next to a clean answer.
 const ANSWER_BREAKS = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/;
-const ANSWER_INVISIBLE = /[\u200b-\u200f\u2060\ufeff\u00ad]/g;
+const ANSWER_INVISIBLE = /[​-‏⁠-⁤﻿­᠎͏؜]/g;
+const ANSWER_ANSI = /\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b[@-_]/g;
+const ANSWER_CTRL = /[\x00-\x08\x0b-\x1f\x7f]/g;
 function checkAnswers(body, required) {
   const req = new Set(required), seen = {}, errors = [], counts = { violated: 0, not_reproduced: 0, na: 0 };
   const FMT = require('./refuter_profiles.js').ANSWER_FORMAT;
-  const text = String(body).replace(/<!--[\s\S]*?-->/g, '');   // an HTML comment hides nothing
-  for (const raw of text.split(ANSWER_BREAKS)) {
-    const l = raw.replace(ANSWER_INVISIBLE, '').replace(/[*`_]/g, '').replace(/^[ \t]+|[ \t]+$/g, '').replace(/^[\t >+#-]+/, '');
-    // Match on an ASCII-only lowercased copy: no regex case folding (JS and python fold differently).
-    const lo = l.replace(/[A-Z]/g, c => c.toLowerCase());
+  let loose = 0, looseId = 0, inComment = false;
+  for (const raw of String(body).split(ANSWER_BREAKS)) {
+    // an HTML comment is invisible when rendered: an answer inside one is refused (a violation inside
+    // one is refused by the content rule below, like anywhere else)
+    const commented = inComment || raw.includes('<!--');
+    if (raw.includes('<!--')) inComment = !/<!--[\s\S]*-->/.test(raw.slice(raw.lastIndexOf('<!--')));
+    else if (inComment && raw.includes('-->')) inComment = false;
+    const l = raw.replace(ANSWER_ANSI, '').replace(ANSWER_CTRL, '').replace(ANSWER_INVISIBLE, '').replace(/[*`_]/g, '')
+      .replace(/^[ \t]+|[ \t]+$/g, '').replace(/^(?:[\t >+#-]+|[0-9]+[.)][ \t]+)+/, '');
+    const lo = l.replace(/[A-Z]/g, c => c.toLowerCase());   // ASCII-only: no regex case folding
+    const m = /^([pg][0-9]+)[ \t]*[:：][ \t]*(violated|not-reproduced|not reproduced|n\/a)(?=$|[ \t—–:,.;])(.*)$/.exec(lo);
     const head = /^([pg][0-9]+)[ \t]*[:：]/.exec(lo);
-    if (!head) {
-      // a line SHAPED like an answer whose id is not an ASCII P<n>/G<n> (homoglyphs, non-ASCII digits)
-      if (/^[^ \t:：]{1,4}[ \t]*[:：][ \t]*(?:violated|not[- ]reproduced|n\/a)/u.test(lo))
-        errors.push(`an answer-shaped line has an id that is not an ASCII P<n>/G<n> — answer each id exactly (${FMT})`);
+    if (head && (!m || commented)) {   // shaped like an answer but malformed (or hidden in a comment): refused
+      errors.push(`${head[1].toUpperCase()} has an answer-shaped line that is not a visible, well-formed answer (${FMT})`);
       continue;
     }
-    const id = head[1].toUpperCase();
-    const m = /^[pg][0-9]+[ \t]*[:：][ \t]*(violated|not-reproduced|not reproduced|n\/a)(?=$|[ \t—–:])(.*)$/.exec(lo);
-    if (!m) { errors.push(`${id} has an answer-shaped line that is not in the format (${FMT})`); continue; }
-    const st = m[1].toUpperCase().replace(' ', '-');
-    const rest = m[2].replace(/^[ \t]*[—–:-]+/, '');
+    if (!m) {
+      if (/(^|[^a-z0-9])violated([^a-z0-9]|$)/.test(lo)) loose++;
+      else if (/(^|[^a-z0-9])[pg][0-9]+([^0-9]|$)/.test(lo) && /(not[- ]?reproduced|n\/a)/.test(lo)) looseId++;
+      continue;
+    }
+    const id = m[1].toUpperCase(), st = m[2].toUpperCase().replace(' ', '-');
+    const rest = m[3].replace(/^[ \t]*[—–:,.;-]+/, '');
     if (!req.has(id)) { errors.push(`${id} is not a constraint of this gate (an unknown id was answered)`); continue; }
     if (seen[id]) { errors.push(`${id} is answered twice — one line per id`); continue; }
     seen[id] = st;
@@ -617,12 +627,14 @@ function checkAnswers(body, required) {
     else if (st === 'N/A') counts.na++;
     else counts.not_reproduced++;
   }
+  if (loose) errors.push(`the artifact says VIOLATED outside a well-formed answer line (${loose} line(s)) — a violation is a finding: record it with hb review <gate> fail "<finding>"; otherwise answer each id exactly (${FMT})`);
+  if (looseId) errors.push(`a line names a constraint id with a status but is not a well-formed answer (${looseId} line(s)) — answer each id exactly (${FMT})`);
   for (const id of required) if (!seen[id]) errors.push(`${id} has no answer line (${FMT})`);
   return { errors, counts };
 }
-// evidence / a reason must contain a character that is not whitespace (ONE explicit set, Unicode
-// spaces included, identical in python)
-const ANSWER_TEXT = /[^ \t   -   　]/;
+// evidence / a reason must contain a character that is not whitespace or invisible (ONE explicit set,
+// identical in python)
+const ANSWER_TEXT = /[^ \t   -   　⠀ㅤﾠᅟᅠ]/;
 
 // A path shown to an agent: control characters (a newline in a file name) would let a doer forge
 // prompt sections, so such a path is rendered JSON-quoted. Twin: anchors.safe_path.
