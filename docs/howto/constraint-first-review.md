@@ -125,6 +125,11 @@ split:
 - **The free reviewer** — a different model from the refuter when you have one: breadth benefits
   from a different point of view.
 
+Under `hb exec`, an unset role falls back to the executor's refute default (`HB_REFUTE_MODEL`); if
+that is unset too, the backend runs whatever model its environment selects — including a
+`HB_EXEC_MODEL` set globally for the worker — and the event records `model: null`. Set each role's
+model explicitly when the reviewers must not run on the doer's model.
+
 Expect one author call per review cycle and one extra reviewer when `free_review` is on, on top of
 the refute you already run.
 
