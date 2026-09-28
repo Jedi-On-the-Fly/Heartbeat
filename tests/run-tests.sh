@@ -1817,6 +1817,12 @@ check "T170.1 constrained (with and without profile) / free / new cycle / tamper
 check "T170.2 teeth: perturbed observations and seven reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/constrained-refute.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
+grp "T171 — constraint-first review pass: every id answered (no VIOLATED; evidence / reason), a recorded gate-time set, a free review from another actor when the profile asks; MCP enforces the same; doctor re-checks; node ≡ python"
+check "T171.1 18 verdicts (missing / prose-only / duplicate / unknown / VIOLATED in markdown / no evidence / free-review rules / old cycle) + answer counts + doctor + MCP, both runtimes (review-answers.sh → REVIEW-ANSWERS-OK)" \
+  'bash "'"$GEX"'/review-answers.sh" 2>&1 | grep -q "REVIEW-ANSWERS-OK"'
+check "T171.2 teeth: perturbed observations and eight reason-checked code mutants go RED (--selftest → SELFTEST-OK)" \
+  'bash "'"$GEX"'/review-answers.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

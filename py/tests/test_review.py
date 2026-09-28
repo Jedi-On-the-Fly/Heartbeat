@@ -54,3 +54,12 @@ def test_free_review_coercion_is_explicit():
     assert [_to_bool(v) for v in (False, None, "false", "no", "0", "off", "", 0, [])] == [False] * 9
     # ASCII whitespace only (== node): unicode edges are NOT stripped
     assert [_to_bool(v) for v in ("\ufefftrue", "true\u001f", "\u0085true", "\ttrue\n")] == [False, False, False, True]
+
+
+def test_check_answers_rules():
+    from heartbeat.review_policy import check_answers
+    ids = ["P1", "G1"]
+    assert check_answers("- **P1**: NOT-REPRODUCED — probe\nG1: N/A — reason", ids) == ([], {"violated": 0, "not_reproduced": 1, "na": 1})
+    errs, _ = check_answers("P1: `violated` — x\nP1: N/A — y\nG9: N/A — z", ids)
+    assert any("P1 is answered VIOLATED" in e for e in errs) and any("answered twice" in e for e in errs)
+    assert any("G9 is not a constraint" in e for e in errs) and any("G1 has no answer line" in e for e in errs)

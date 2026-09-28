@@ -69,7 +69,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | `rebuild` | reproject from log |
 | `park <PHASE\|GATE> [--reason …]` / `unpark <PHASE\|GATE>` | retire a phase without deleting it (sets `parked` in dag.json; resolver/audit/report/sweep all skip it, loudly; reversible) |
 | `start/done/fail/heartbeat <id>` | state mutations (+ lease) |
-| `review <gate> pass\|fail [note]` | record adversarial verdict |
+| `review <gate> pass\|fail\|free [note]` | record adversarial verdict — constraint-first enforcement on a constrained gate lives in `review_policy.accept_review` (+ `check_answers`), so the CLI, the MCP `review` tool (verdict `free` in its schema) and the executor all enforce it |
 | `constraints <gate> --prompt [--json] \| --record <file.json> [--model M]` | gate-time constraint author; see `constraints.py` |
 | `changed <gate> [--json]` | what the phase exiting `<gate>` changed (entry anchor vs the gate's own anchor once accepted, else the live tree); see `anchors.py` |
 | `exec [run\|config] [--parallel N]` | `run` (default) drives the loop with a backend; `config` prints the resolved executor config |

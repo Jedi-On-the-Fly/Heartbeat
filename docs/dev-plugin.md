@@ -124,7 +124,7 @@ exactly that state.json read-modify-write; the append-only informational events 
 | `done <id>` | `task_done` + release lease |
 | `fail <id> [reason]` | `task_failed` + release lease |
 | `heartbeat`/`beat <id>` | refresh lease `beat` mtime |
-| `review <gate> pass\|fail [note]` | `review_passed`/`review_failed` |
+| `review <gate> pass\|fail\|free [--artifact f] [--model m] [note]` | `review_passed`/`review_failed`/`free_review_recorded`. On a CONSTRAINED gate a pass also needs this cycle's recorded gate-time set and an answer per id (`checkAnswers`: `<ID>: VIOLATED \| NOT-REPRODUCED \| N/A — <evidence or reason>`, markdown-/case-insensitive; no VIOLATED, evidence/reason required, no duplicate/unknown id), plus — when the profile sets `free_review` — a `review free` recorded this cycle by another actor; the event records `answers` + `constraint_ids`, which `doctor` re-checks against the stored artifact. `free` (constrained gates only; review_pending; not a doer) stores `reviews/<G>.free.md` |
 | `ready [N]` | JSON of `readyTasks` (concurrently-runnable set) |
 | `doctor` | integrity: rot problems + notes; exit 1 on problems |
 | `diagnose [reason]` | computed root-cause + recovery (read-only) |

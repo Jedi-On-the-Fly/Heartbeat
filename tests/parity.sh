@@ -237,6 +237,20 @@ constrained_case(){
 }
 constrained_case
 
+echo "── review answers parity ──"
+answers_case(){  # the verdict of hb review pass on crafted answer sets, and the checkAnswers messages
+  local NA PA
+  NA='const h=require(process.argv[1]);const ids=["P1","G1"];const cases=JSON.parse(process.argv[2]);console.log(JSON.stringify(cases.map(b=>h.checkAnswers(b,ids))))'
+  PA='import sys,json;from heartbeat.review_policy import check_answers;ids=["P1","G1"];print(json.dumps([dict(zip(("errors","counts"),check_answers(b,ids))) for b in json.loads(sys.argv[1])],ensure_ascii=False,separators=(",",":")))'
+  local C; C='["P1: NOT-REPRODUCED — p\nG1: N/A — r","- **P1**: `violated` — x\nG1: N/A — r","P1: NOT-REPRODUCED\nG1: N/A —  ","P1: not reproduced — p\nP1: N/A — r\nG9: N/A — r","> p1: N/A: reason\r\nG1: NOT-REPRODUCED — é probe"]'
+  local n p
+  n="$(node -e "$NA" "$ROOT/plugin/templates/hb.js" "$C" | python3 -c 'import sys,json;print(json.dumps(json.load(sys.stdin),ensure_ascii=False,separators=(",",":")))')"
+  p="$(PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c "$PA" "$C")"
+  cmp "review:answers" "$n" "$p"
+  case "$n" in *'VIOLATED'*'without evidence'*'answered twice'*) ;; *) echo "  ✗ review:answers — node found none of the expected refusals"; FAIL=1;; esac
+}
+answers_case
+
 echo "── panel aggregation parity ──"
 # aggregateVerdict must agree node ≡ python across rules and verdict mixes
 NODE_AGG='const {aggregateVerdict}=require(process.argv[1]);const cases=[["majority",[true,false,false]],["majority",[true,true,false]],["any",[false,false,true]],["any",[false,false,false]],["all",[true,true,true]],["all",[true,true,false]]];console.log(cases.map(([r,v])=>r+":"+aggregateVerdict(v,r)).join(","))'
