@@ -293,6 +293,29 @@ function doctor() {
     }
   }
 
+  // Restore points (only once anchors exist — a log that predates them has no _start, never flagged):
+  // every ACCEPTED gate (review gate: last review verdict is a pass; review-less: a gate_passed) must
+  // have its acceptance anchor, and — if its recorded policy was autocommit-on — its git tag.
+  if (readAnchor('_start')) {
+    const acc = {};
+    for (const e of readEvents()) {
+      const rev = !!((gates[e.gate] || {}).review);
+      if (e.event === 'review_passed' && rev) acc[e.gate] = e;
+      else if (e.event === 'review_failed') delete acc[e.gate];
+      else if (e.event === 'gate_passed' && !rev && !acc[e.gate]) acc[e.gate] = e;
+    }
+    for (const g of Object.keys(gates)) {
+      const e = acc[g];
+      if (!e) continue;
+      if (!readAnchor(g)) problems.push(`${g} accepted but has no acceptance anchor (.hb/anchors/${g}.json) — hb changed cannot report its phase`);
+      if (e.git && e.git.autocommit === true) {
+        let tagged = false;
+        try { require('child_process').execFileSync('git', ['-C', PROJECT_DIR, 'rev-parse', '-q', '--verify', `refs/tags/${g}`], { stdio: 'ignore' }); tagged = true; } catch (x) {}
+        if (!tagged) problems.push(`${g} accepted with autocommit on but has no git tag ${g} — no restore point`);
+      }
+    }
+  }
+
   return { problems, notes };
 }
 
@@ -366,6 +389,33 @@ function diagnose(reason) {
     P('  (no structured diagnosis for this reason — see: node .hb/hb.js protocol ' + reason + ')');
   }
   return out.join('\n');
+}
+
+// ── Restore points: the git policy in force + a snapshot whose failures are LOUD ──
+// autocommit = HB_NO_GIT unset AND HB_GIT_AUTOCOMMIT != 0 AND git present AND inside a worktree.
+// It is recorded on the acceptance event (git:{autocommit}) so doctor judges a missing tag by the
+// policy of the time, not of the day doctor runs.
+function gitPolicy() {
+  if (process.env.HB_NO_GIT || process.env.HB_GIT_AUTOCOMMIT === '0') return false;
+  return inGitWorktree();
+}
+function gitSnapshot(gate, msg) {
+  const cp = require('child_process');
+  const run = (args) => { try { cp.execFileSync('git', args, { stdio: ['ignore', 'ignore', 'pipe'] }); return null; }
+                          catch (e) { return ((e.stderr || '').toString().trim().split('\n').pop()) || e.message; } };
+  const failed = (step, error) => {
+    process.stderr.write(`⚠ restore point for ${gate}: git ${step} failed — ${error}\n`);
+    mutate({ event: 'restore_point_failed', gate, step, error });
+  };
+  let err = run(['-C', PROJECT_DIR, 'add', '-A']);
+  if (err) failed('add', err);
+  // Nothing staged ⇒ nothing to commit: not a failure (the tag then marks the current HEAD).
+  if (run(['-C', PROJECT_DIR, 'diff', '--cached', '--quiet']) !== null) {
+    err = run(['-c', 'user.name=HeartBeat', '-c', 'user.email=heartbeat@local', '-C', PROJECT_DIR, 'commit', '-q', '--no-verify', '-m', msg]);
+    if (err) failed('commit', err);
+  }
+  err = run(['-C', PROJECT_DIR, 'tag', '-f', gate]);
+  if (err) failed('tag', err);
 }
 
 // ── Anchors: HeartBeat's own record of the tree at plan start and at each gate acceptance ──
@@ -597,20 +647,13 @@ switch (cmd) {
     const revDir = path.join(HB_DIR, 'reviews');
     try { fs.mkdirSync(revDir, { recursive: true }); } catch (e) {}
     fs.writeFileSync(path.join(revDir, `${gate}.md`), body);
-    mutate({ event: 'review_passed', gate, model, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, ...(note ? { note } : {}) });
+    const autocommit = gitPolicy();
+    mutate({ event: 'review_passed', gate, model, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, git: { autocommit }, ...(note ? { note } : {}) });
     // Reviewed acceptance creates the phase's restore point (commit+tag) — deferred from the
     // deterministic pass so the tag only ever certifies a reviewed-good state.
-    if (!process.env.HB_NO_GIT && process.env.HB_GIT_AUTOCOMMIT !== '0') {
-      const cp = require('child_process');
-      let inRepo = false;
-      try { cp.execFileSync('git', ['-C', PROJECT_DIR, 'rev-parse', '--is-inside-work-tree'], { stdio: 'ignore' }); inRepo = true; } catch (e) {}
-      if (inRepo) {
-        const p = (dag.phases || []).find(x => x.gate_exit === gate);
-        const msg = p ? `heartbeat(${p.id}): ${p.title} [${gate}]` : `heartbeat: ${gate} accepted`;
-        try { cp.execFileSync('git', ['-C', PROJECT_DIR, 'add', '-A'], { stdio: 'ignore' }); } catch (e) {}
-        try { cp.execFileSync('git', ['-c', 'user.name=HeartBeat', '-c', 'user.email=heartbeat@local', '-C', PROJECT_DIR, 'commit', '-q', '--no-verify', '-m', msg], { stdio: 'ignore' }); } catch (e) {}
-        try { cp.execFileSync('git', ['-C', PROJECT_DIR, 'tag', '-f', gate], { stdio: 'ignore' }); } catch (e) {}
-      }
+    if (autocommit) {
+      const p = (dag.phases || []).find(x => x.gate_exit === gate);
+      gitSnapshot(gate, p ? `heartbeat(${p.id}): ${p.title} [${gate}]` : `heartbeat: ${gate} accepted`);
     }
     tryAnchor(gate);   // acceptance anchor — after the restore point, so its commit is the accepted HEAD
     process.stdout.write(`review pass ${gate} (backed by reviews/${gate}.md, ${body.trim().length} chars, cites: ${cited.slice(0, 3).join(', ')})\n`);

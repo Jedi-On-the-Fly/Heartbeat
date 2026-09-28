@@ -179,11 +179,20 @@ eval_gate() {
 }
 
 reproject() { [ -f "$HB_DIR/hb.js" ] && node "$HB_DIR/hb.js" rebuild >/dev/null 2>&1 || true; }
+# The git policy in force: autocommit on AND git present AND inside a worktree. Recorded on the
+# acceptance event as git:{autocommit} so doctor judges a missing tag by the policy of the time.
+git_policy() {
+  [ -z "${HB_NO_GIT:-}" ] && [ "${HB_GIT_AUTOCOMMIT:-1}" != "0" ] && command -v git >/dev/null 2>&1 \
+    && git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 && echo true || echo false
+}
+# A failed restore-point step is reported on stderr AND recorded — never swallowed.
+restore_point_failed() {   # <gate> <step> <error>
+  echo "⚠ restore point for $1: git $2 failed — $3" >&2
+  node -e 'require("fs").appendFileSync(process.argv[1], JSON.stringify({ts:new Date().toISOString(),event:"restore_point_failed",gate:process.argv[2],step:process.argv[3],error:process.argv[4]})+"\n")' \
+    "$EVENTS_FILE" "$1" "$2" "$3"
+}
 git_snapshot() {   # snapshot the phase on gate pass → git restore point (v1.4)
-  [ -z "${HB_NO_GIT:-}" ] || return 0
-  [ "${HB_GIT_AUTOCOMMIT:-1}" != "0" ] || return 0
-  command -v git >/dev/null 2>&1 || return 0
-  git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  [ "$(git_policy)" = true ] || return 0
   # Descriptive message: the phase this gate closes (id + title), not just "GATE_X passed".
   MSG=$(node -e "
     try {
@@ -194,12 +203,17 @@ git_snapshot() {   # snapshot the phase on gate pass → git restore point (v1.4
     } catch (e) { console.log('heartbeat: '+process.argv[2]+' passed'); }
   " "$DAG_FILE" "$1" 2>/dev/null)
   [ -n "$MSG" ] || MSG="heartbeat: $1 passed"
-  git -C "$PROJECT_DIR" add -A >/dev/null 2>&1 || true
-  # --no-verify: internal snapshots bypass the rot pre-commit hook (avoids a
-  # pre-existing rot blocking this gate's own snapshot → loop deadlock).
-  git -c user.name='HeartBeat' -c user.email='heartbeat@local' \
-      -C "$PROJECT_DIR" commit -q --no-verify -m "$MSG" >/dev/null 2>&1 || true
-  git -C "$PROJECT_DIR" tag -f "$1" >/dev/null 2>&1 || true
+  local err
+  if ! err=$(git -C "$PROJECT_DIR" add -A 2>&1); then restore_point_failed "$1" add "$(echo "$err" | tail -1)"; fi
+  # Nothing staged ⇒ nothing to commit: not a failure (the tag then marks the current HEAD).
+  if ! git -C "$PROJECT_DIR" diff --cached --quiet >/dev/null 2>&1; then
+    # --no-verify: internal snapshots bypass the rot pre-commit hook (avoids a
+    # pre-existing rot blocking this gate's own snapshot → loop deadlock).
+    if ! err=$(git -c user.name='HeartBeat' -c user.email='heartbeat@local' \
+        -C "$PROJECT_DIR" commit -q --no-verify -m "$MSG" 2>&1); then restore_point_failed "$1" commit "$(echo "$err" | tail -1)"; fi
+  fi
+  if ! err=$(git -C "$PROJECT_DIR" tag -f "$1" 2>&1); then restore_point_failed "$1" tag "$(echo "$err" | tail -1)"; fi
+  reproject
 }
 
 # ── flags ─────────────────────────────────────────────────────────────────────
@@ -300,9 +314,9 @@ if [ "$FAIL" -eq 0 ]; then
     const gate=process.argv[2];
     const exits=process.argv[3].trim().split(/\s+/).filter(x=>x!=="").map(Number);
     const crits=((dag.gates[gate]||{}).criteria||[]).map((c,i)=>({id:c.id,cmd:c.cmd,exit:exits[i]===undefined?0:exits[i]}));
-    const ev={ts:process.argv[4],event:"gate_passed",gate,pass:Number(process.argv[5]),fail:0,criteria:crits,commit:process.argv[6]||null,runtime:"node"};
+    const ev={ts:process.argv[4],event:"gate_passed",gate,pass:Number(process.argv[5]),fail:0,criteria:crits,commit:process.argv[6]||null,runtime:"node",git:{autocommit:process.argv[8]==="true"}};
     fs.appendFileSync(process.argv[7],JSON.stringify(ev)+"\n");
-  ' "$DAG_FILE" "$GATE" "$CRIT_EXITS" "$TS" "$PASS" "$COMMIT" "$EVENTS_FILE"
+  ' "$DAG_FILE" "$GATE" "$CRIT_EXITS" "$TS" "$PASS" "$COMMIT" "$EVENTS_FILE" "$(git_policy)"
   reproject
   echo ""
   if node -e "process.exit((JSON.parse(require('fs').readFileSync(process.env.DAG_FILE,'utf8')).gates[process.env.GATE]||{}).review?0:1)" 2>/dev/null; then
