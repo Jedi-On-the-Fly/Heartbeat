@@ -1,7 +1,33 @@
 # STATUS — HeartBeat
 
-**Version:** v1.32.0 (constraint-first review: explicit, id'd constraints the refuter must answer one by one, enforced at `review pass` in both runtimes and under `hb exec`; HeartBeat-owned gate anchors and loud restore points)
+**Version:** v1.32.1 (refutation fails closed: a verdict only when the reviewer gave one, read from its last line by one exact contract; review-failed gates say so)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.32.1 — refutation fails closed
+
+Running reviews through small local models exposed a fail-open in every refute adapter, and then a run
+of verdict-parsing holes behind it.
+
+- **A refuter that could not run passed the gate.** Every adapter (8 python, 3 shell, and the python
+  backends) returned `{"refuted": false}` when the framework was missing, the server unreachable or the
+  CLI failed — which the driver reads as "could not refute". Now a refutation that did not produce a
+  verdict is `{"error"}`, and the driver escalates. Proven end to end: `hb exec` with an unreachable
+  refuter no longer accepts a reviewed gate (T174).
+- **One exact verdict contract.** A verdict is read only from the reply's last non-empty line, and only
+  when that line is the verdict alone (optional markup or a `Verdict:` label); the line before it must not
+  be another verdict. Everything else — "unclear", `NOT yet CLEAR`, `CLEAR would be premature`, a copied
+  template `REFUTED | CLEAR` or a list of both — is no verdict. The contract is a shared case table
+  (`py/tests/verdict_cases.json`) that every parser copy (python package, python adapters, the shell
+  adapters' node `verdict_of`) is checked against; every adapter's prompt asks for exactly that line.
+  Residual, by design: a last line that is only a verdict is taken at face value.
+- **OpenCode**: the verdict comes from the model's text parts, never a tool's output; `--standalone` /
+  `--auto` are passed when `opencode run --help` advertises them.
+- **Ollama**: the backend requests an explicit context (`HB_OLLAMA_NUM_CTX`, default 16384) and refuses a
+  reply whose prompt filled it — Ollama's 4096 default truncated silently.
+- **A gate blocked by a failed review says so**: `hb exec` stops with `<gate>: review_failed — <finding>`
+  and `hb diagnose` prints `Cause: review_failed` with the findings (T175), both runtimes.
+- **Audit**: a JS arrow (`=>`) in an inline `node -e` is no longer read as a file redirect.
+- Plugin/marketplace → **1.32.1**, Python package → **0.22.1**.
 
 ## v1.32.0 — constraint-first review, gate anchors, loud restore points
 
