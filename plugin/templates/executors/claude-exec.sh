@@ -55,7 +55,7 @@ ${rp}
 Context:
 ${ctx}
 
-Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with a final line that is only the verdict: REFUTED (you found a hole) or CLEAR (you could not)." 2>/dev/null)"
+Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with a final line containing only the verdict, REFUTED if you found a hole or CLEAR if you could not, with nothing else on that line." 2>/dev/null)"
   # Verdict = the reply's FINAL REFUTED/CLEAR token (the prompt itself contains "REFUTED", so a
   # grep-anywhere would misread a CLEAR reply that merely restates the instruction). Carry the
   # reviewer's ACTUAL text as findings on BOTH paths, so a genuine CLEAR has substantive evidence.
@@ -67,7 +67,7 @@ Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-
   else
     # no final REFUTED/CLEAR token (the CLI failed, or the reviewer never concluded): NOT a CLEAR —
     # an error, which the driver escalates (fail-closed)
-    printf '{"error":%s}\n' "$(printf 'no REFUTED/CLEAR verdict in the reviewer reply (fail-closed): %s' "$(printf '%s' "$ans" | head -c 300)" | jstr)"
+    printf '{"error":%s}\n' "$(printf 'no verdict line at the end of the reviewer reply (fail-closed); the reply ends: %s' "$(printf '%s' "$ans" | tail -c 300)" | jstr)"
   fi
 else
   if claude ${mdl[@]+"${mdl[@]}"} -p "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.

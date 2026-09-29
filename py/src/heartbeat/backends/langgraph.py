@@ -77,7 +77,7 @@ def refute(payload):
         return {"error": f"langgraph unavailable ({e})"}
     try:
         prompt = (f'{payload.get("prompt", "Refute that the phase is complete.")}\n\nContext:\n{ctx}\n\n'
-                  "You are a skeptical adversarial reviewer. End with a final line that is only the verdict: REFUTED or CLEAR.")
+                  "You are a skeptical adversarial reviewer. End your reply with a final line containing only the verdict, REFUTED if you found a hole or CLEAR if you could not, with nothing else on that line.")
         out = model.invoke(prompt)
         text = getattr(out, "content", str(out))
         return refute_result(str(text))

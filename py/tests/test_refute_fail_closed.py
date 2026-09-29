@@ -27,6 +27,25 @@ def test_refute_result_is_three_state():
     assert "error" in refute_result("") and "error" in refute_result(None)
 
 
+def test_a_no_verdict_error_quotes_the_replys_end():
+    """the verdict belongs on the last line — an error must show that end, not the reply's start"""
+    r = refute_result("x" * 900 + "\n\nVerdict: REFUTED (a reason on the verdict line)")
+    assert "error" in r and "a reason on the verdict line" in r["error"]
+
+
+def test_every_prompt_asks_for_a_verdict_only_last_line():
+    """the prompts must not invite the forms the contract rejects: a capitalised END (echoed as a label)
+    or a parenthetical after the token (copied onto the verdict line)"""
+    import glob, re
+    root = os.path.join(os.path.dirname(__file__), "..", "..")
+    files = glob.glob(root + "/plugin/templates/executors/*") + glob.glob(root + "/py/src/heartbeat/backends/*.py")
+    for f in (f for f in files if os.path.isfile(f)):
+        src = open(f, errors="replace").read()
+        assert not re.search(r"REFUTED \(you found|CLEAR \(you could|END with", src), f
+        if re.search(r"\bdef refute\b|mode == \"refute\"|\"\$mode\" = refute", src) and "REFUTED" in src:
+            assert "nothing else on that line" in src, f
+
+
 def test_the_verdict_contract():
     """verdict_cases.json is the contract (shared with tests/refute-fail-closed.sh and verdict-robust.sh):
     the last non-empty line is only the verdict, and the line before it does not begin with one."""

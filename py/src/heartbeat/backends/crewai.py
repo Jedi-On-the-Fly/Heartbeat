@@ -44,7 +44,7 @@ def refute(payload):
         return {"error": f"crewai unavailable ({e})"}
     rev = Agent(role="Skeptical adversarial reviewer", goal="Find a real hole in the claimed completion",
                 backstory="You refuse to rubber-stamp.", llm=llm, verbose=False)
-    task = Task(description=f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd with a final line that is only the verdict: REFUTED or CLEAR.',
+    task = Task(description=f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd your reply with a final line containing only the verdict, REFUTED if you found a hole or CLEAR if you could not, with nothing else on that line.',
                 agent=rev, expected_output="A final line that is only the verdict: REFUTED or CLEAR.")
     try:
         out = str(Crew(agents=[rev], tasks=[task], verbose=False).kickoff())

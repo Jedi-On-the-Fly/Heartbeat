@@ -63,7 +63,7 @@ def refute(payload):
     ctx = payload.get("context", "")
     try:
         from pydantic_ai import Agent
-        agent = Agent(_model(), system_prompt="You are a skeptical adversarial reviewer. End with a final line that is only the verdict: REFUTED or CLEAR.")
+        agent = Agent(_model(), system_prompt="You are a skeptical adversarial reviewer. End your reply with a final line containing only the verdict, REFUTED if you found a hole or CLEAR if you could not, with nothing else on that line.")
     except Exception as e:
         return {"error": f"pydantic-ai unavailable ({e})"}
     try:

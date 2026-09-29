@@ -48,7 +48,7 @@ def _refute_result(text):
         return {"refuted": False, "findings": text[:20000]}   # array, parsed by author_reply (fail-closed)
     v = _verdict(text)
     if v is None:
-        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+        return {"error": "no verdict line at the end of the reviewer's reply (fail-closed); the reply ends: " + text[-300:]}
     return {"refuted": v, "findings": text[:20000]}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -106,7 +106,7 @@ def do_refute(payload):
         return {"error": f"smolagents unavailable ({e})"}
     try:
         agent = ToolCallingAgent(tools=[], model=model)
-        out = str(agent.run(f'{payload.get("prompt","Refute.")}\n\nContext:\n{ctx}\n\nEnd with a final line that is only the verdict: REFUTED or CLEAR.'))
+        out = str(agent.run(f'{payload.get("prompt","Refute.")}\n\nContext:\n{ctx}\n\nEnd your reply with a final line containing only the verdict, REFUTED if you found a hole or CLEAR if you could not, with nothing else on that line.'))
         return _refute_result(out)
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

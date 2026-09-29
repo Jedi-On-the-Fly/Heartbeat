@@ -48,7 +48,7 @@ def refute_result(text):
         return {"refuted": False, "findings": text[:20000]}
     v = verdict_of(text)
     if v is None:
-        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+        return {"error": "no verdict line at the end of the reviewer's reply (fail-closed); the reply ends: " + text[-300:]}
     return {"refuted": v, "findings": text[:20000]}
 
 _KNOWN = {"ollama", "agno", "crewai", "claude", "claude-code", "langgraph", "openai-agents",

@@ -48,7 +48,7 @@ def _refute_result(text):
         return {"refuted": False, "findings": text[:20000]}   # array, parsed by author_reply (fail-closed)
     v = _verdict(text)
     if v is None:
-        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+        return {"error": "no verdict line at the end of the reviewer's reply (fail-closed); the reply ends: " + text[-300:]}
     return {"refuted": v, "findings": text[:20000]}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -91,7 +91,7 @@ def do_execute(payload):
 def do_refute(payload):
     ctx = payload.get("context", "")
     try:
-        text = _run("You are a skeptical adversarial reviewer. End with a final line that is only the verdict: REFUTED or CLEAR.", f'{payload.get("prompt","Refute.")}\n\nContext:\n{ctx}')
+        text = _run("You are a skeptical adversarial reviewer. End your reply with a final line containing only the verdict, REFUTED if you found a hole or CLEAR if you could not, with nothing else on that line.", f'{payload.get("prompt","Refute.")}\n\nContext:\n{ctx}')
     except Exception as e:
         return {"error": f"autogen unavailable ({e})"}
     return _refute_result(str(text))

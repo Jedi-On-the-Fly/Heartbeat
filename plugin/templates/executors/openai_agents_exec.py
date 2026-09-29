@@ -54,7 +54,7 @@ def _refute_result(text):
         return {"refuted": False, "findings": text[:20000]}   # array, parsed by author_reply (fail-closed)
     v = _verdict(text)
     if v is None:
-        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+        return {"error": "no verdict line at the end of the reviewer's reply (fail-closed); the reply ends: " + text[-300:]}
     return {"refuted": v, "findings": text[:20000]}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -131,7 +131,7 @@ def do_refute(payload):
         return {"error": f"openai-agents unavailable ({e})"}
     try:
         agent = Agent(name="Skeptic",
-                      instructions="You are a skeptical adversarial reviewer. End with a final line that is only the verdict: REFUTED or CLEAR.",
+                      instructions="You are a skeptical adversarial reviewer. End your reply with a final line containing only the verdict, REFUTED if you found a hole or CLEAR if you could not, with nothing else on that line.",
                       model=model)
         res = Runner.run_sync(agent, f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}')
         text = _final(res)

@@ -62,7 +62,7 @@ def _refute_result(text):
         return {"refuted": False, "findings": text[:20000]}   # array, parsed by author_reply (fail-closed)
     v = _verdict(text)
     if v is None:
-        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+        return {"error": "no verdict line at the end of the reviewer's reply (fail-closed); the reply ends: " + text[-300:]}
     return {"refuted": v, "findings": text[:20000]}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -125,7 +125,7 @@ def main():
                          backstory="You refuse to rubber-stamp: you hunt hollow tests and faked output.",
                          llm=llm, verbose=False)
         task = Task(description=f'{payload.get("prompt", "Refute that the phase is complete.")}\n\n'
-                                f"Context:\n{ctx}\n\nEnd with a final line that is only the verdict: REFUTED or CLEAR.",
+                                f"Context:\n{ctx}\n\nEnd your reply with a final line containing only the verdict, REFUTED if you found a hole or CLEAR if you could not, with nothing else on that line.",
                     agent=reviewer, expected_output="Reasons, then a final line that is only the verdict: REFUTED or CLEAR.")
         try:
             out = str(Crew(agents=[reviewer], tasks=[task], verbose=False).kickoff())

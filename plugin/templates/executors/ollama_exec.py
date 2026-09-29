@@ -70,7 +70,7 @@ def _refute_result(text):
         return {"refuted": False, "findings": text[:20000]}   # array, parsed by author_reply (fail-closed)
     v = _verdict(text)
     if v is None:
-        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+        return {"error": "no verdict line at the end of the reviewer's reply (fail-closed); the reply ends: " + text[-300:]}
     return {"refuted": v, "findings": text[:20000]}
 
 # Guarantee ONLY the protocol JSON lands on stdout: keep the real stdout fd, then point
@@ -134,7 +134,7 @@ def main():
                   f'Context:\n{ctx}\n\n'
                   'You are a skeptical adversarial reviewer. Hunt for a real hole: a hollow '
                   'test, a criterion not truly met, a faked or hard-coded output. Reply with a '
-                  'short reason, then END with a final line that is only the verdict: REFUTED (you found a hole) or CLEAR.')
+                  'short reason. End your reply with a final line containing only the verdict, REFUTED if you found a hole or CLEAR if you could not, with nothing else on that line.')
         try:
             out = generate(prompt)
             emit(_refute_result(out))
