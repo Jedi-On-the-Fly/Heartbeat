@@ -201,7 +201,7 @@ Wire protocol — driver spawns `bash -c "<cmd> <mode>"`, mode ∈ `execute|refu
 | Mode | stdout |
 |---|---|
 | `execute` | `{"ok": bool, "summary": str}` |
-| `refute` | `{"refuted": bool, "findings": str}` only when the reply carries a final whole-word, upper-case REFUTED/CLEAR (for opencode: in the model's text parts, never a tool's output); a review that could not run, or a reply without a final verdict token, is `{"error": str}` (fail-closed — the driver escalates) (payload `review: "free"` = the free review; findings up to 20 000 chars) |
+| `refute` | `{"refuted": bool, "findings": str}` only when the reply carries a final whole-word, upper-case REFUTED/CLEAR — not a copied template like `REFUTED | CLEAR` (for opencode: in the model's text parts, never a tool's output); a review that could not run, or a reply without a final verdict token, is `{"error": str}` (fail-closed — the driver escalates) (payload `review: "free"` = the free review; findings up to 20 000 chars) |
 | `author` | `{"ok": bool, "constraints": [...]}` — the gate-time constraint author (every adapter passes the role's model, `HB_EXEC_MODEL`, to its CLI: `claude --model`, `codex -m`, `opencode -m`; none when unset — T57.2) (read-only model call; the python adapters extract the first JSON array via `_fileblocks.author_reply`, the shell adapters via an inline node extractor) |
 | anything else | `{"error": "unsupported mode …"}` — never falls through to execute (T57.2 conformance) |
 

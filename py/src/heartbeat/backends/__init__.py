@@ -11,9 +11,17 @@ import re as _re
 def verdict_of(text):
     """A model reviewer's verdict = the reply's FINAL whole-word, upper-case REFUTED/CLEAR (the prompt
     itself contains 'REFUTED', so a grep-anywhere would misread a CLEAR reply; "unclear" or a lower-case
-    "all clear" is not a verdict): True / False — or None when there is none."""
-    toks = _re.findall(r"\b(REFUTED|CLEAR)\b", text or "")
-    return (toks[-1] == "REFUTED") if toks else None
+    "all clear" is not a verdict, nor is a copied template "REFUTED | CLEAR"): True / False — or None
+    when there is none."""
+    t = text or ""
+    ms = list(_re.finditer(r"\b(REFUTED|CLEAR)\b", t))
+    if not ms:
+        return None
+    a = ms[-1]
+    if len(ms) > 1 and ms[-2].group(1) != a.group(1) and \
+            _re.fullmatch(r"\W*(?:or|and)?\W*", t[ms[-2].end():a.start()], _re.I):
+        return None   # "REFUTED | CLEAR", "REFUTED or CLEAR": a copied answer template, no verdict
+    return a.group(1) == "REFUTED"
 
 
 def refute_result(text):

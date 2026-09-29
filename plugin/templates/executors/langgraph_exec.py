@@ -22,8 +22,14 @@ def _verdict(t):
     """The reply's FINAL whole-word, upper-case REFUTED/CLEAR: True / False — or None when there is
     none ("unclear" or a lower-case "all clear" is not a verdict)."""
     import re as _r
-    toks = _r.findall(r"\b(REFUTED|CLEAR)\b", t or "")
-    return (toks[-1] == "REFUTED") if toks else None
+    ms = list(_r.finditer(r"\b(REFUTED|CLEAR)\b", t or ""))
+    if not ms:
+        return None
+    a = ms[-1]
+    if len(ms) > 1 and ms[-2].group(1) != a.group(1) and \
+            _r.fullmatch(r"\W*(?:or|and)?\W*", (t or "")[ms[-2].end():a.start()], _r.I):
+        return None   # "REFUTED | CLEAR", "REFUTED or CLEAR": a copied answer template, no verdict
+    return a.group(1) == "REFUTED"
 
 
 def _refute_result(text):

@@ -6,7 +6,9 @@
 # Also: the ollama backend sends an explicit context size (num_ctx) and refuses a verdict when the
 # prompt filled it (a truncated prompt means the reviewer never saw the whole request).
 # The verdict is the reply's final WHOLE-WORD, upper-case REFUTED/CLEAR: "unclear" or "all clear" is
-# not a verdict (else a REFUTED reply that goes on to call something unclear reads as CLEAR). The
+# not a verdict (else a REFUTED reply that goes on to call something unclear reads as CLEAR), and a
+# verdict line carrying BOTH tokens (a model that copied the answer template "REFUTED | CLEAR") is no
+# verdict either — its last token would otherwise read as a CLEAR. The
 # opencode adapter reads the model's TEXT parts of its --format json stream only — a tool output
 # (a file the reviewer read, a grep hit) is not the reviewer's verdict.
 #   bash tests/refute-fail-closed.sh [case]   cases: degrade cli ollama token e2e (default: all)
@@ -63,6 +65,9 @@ case_token(){
     printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf %%s "I checked it, all clear."\n' > "$bin/$a"; chmod +x "$bin/$a"
     out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
     printf '%s' "$out" | is_error || fail "token: $a read a lower-case 'clear' as a verdict → $out (must be an error)"
+    printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf "## Findings\\nnone\\n## Verdict\\nREFUTED | CLEAR\\n"\n' > "$bin/$a"; chmod +x "$bin/$a"
+    out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
+    printf '%s' "$out" | is_error || fail "token: $a read a copied template 'REFUTED | CLEAR' as a verdict → $out (must be an error)"
   done
   # opencode: the verdict comes from the model's text parts, never from a tool's output
   ev(){ python3 -c 'import json,sys
@@ -92,7 +97,8 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 EOF
   local port r want
-  for r in "True|Hollow. REFUTED. The rest is unclear." "err|Looks fine to me, all clear."; do
+  for r in "True|Hollow. REFUTED. The rest is unclear." "err|Looks fine to me, all clear." "err|## Verdict
+REFUTED | CLEAR"; do
     want="${r%%|*}"; port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
     python3 "$W/tmock.py" "$port" "${r#*|}" & MOCK_PID=$!
     for i in $(seq 1 50); do python3 -c "import socket; socket.create_connection(('127.0.0.1',$port),0.2)" 2>/dev/null && break; sleep 0.1; done
@@ -113,6 +119,8 @@ v = ns["_verdict"]
 assert v("Hollow. REFUTED. The rest is unclear.") is True
 assert v("all clear") is None and v("UNCLEAR") is None and v("") is None
 assert v("**CLEAR**") is False and v("REFUTED.") is True
+assert v("## Verdict\nREFUTED | CLEAR") is None and v("End with REFUTED or CLEAR") is None
+assert v("I first thought CLEAR.\nThe gate is hollow. REFUTED") is True
 EOF
   done
   echo "TOKEN-OK"

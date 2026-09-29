@@ -19,6 +19,10 @@ let t="";process.stdin.on("data",c=>t+=c).on("end",()=>{
   for(const c of cands){ try{ const v=JSON.parse(c); if(Array.isArray(v)&&v.length&&v.every(x=>x&&typeof x==="object"&&!Array.isArray(x))){ process.stdout.write(JSON.stringify({ok:true,constraints:v})+"\n"); return; } }catch(e){} }
   process.stdout.write(JSON.stringify({ok:false,error:"no JSON array of constraints in the author reply: "+t.slice(0,200)})+"\n");
 });'; }
+# The reviewer's verdict: its FINAL whole-word, upper-case REFUTED/CLEAR — none when the reply has
+# none, or when the last two tokens differ and only a connector separates them ("REFUTED | CLEAR",
+# "REFUTED or CLEAR": a copied answer template). Twin of _verdict in the python adapters.
+verdict_of() { node -e 'const t=require("fs").readFileSync(0,"utf8");const m=[...t.matchAll(/\b(REFUTED|CLEAR)\b/g)];let v="";if(m.length){const a=m[m.length-1];v=a[1];if(m.length>1){const b=m[m.length-2];if(b[1]!==a[1]&&/^\W*(?:or|and)?\W*$/i.test(t.slice(b.index+b[1].length,a.index)))v="";}}process.stdout.write(v)'; }
 field() { printf '%s' "$payload" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String((JSON.parse(d)$1)??''))}catch(e){process.stdout.write('')}})"; }
 jstr()  { node -pe 'JSON.stringify(require("fs").readFileSync(0,"utf8"))'; }
 
@@ -54,7 +58,7 @@ Context:
 ${ctx}
 
 Do not modify files. Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with the single token REFUTED (you found a hole) or CLEAR (you could not)." </dev/null 2>/dev/null)"
-  verdict="$(printf '%s' "$ans" | grep -owE 'REFUTED|CLEAR' | tail -1)"   # whole word, upper-case
+  verdict="$(printf '%s' "$ans" | verdict_of)"
   if [ "$verdict" = REFUTED ]; then
     printf '{"refuted":true,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 20000 | jstr)"
   elif [ "$verdict" = CLEAR ]; then
