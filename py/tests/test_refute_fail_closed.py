@@ -42,7 +42,8 @@ def test_the_verdict_is_a_whole_upper_case_word():
     assert refute_result("Final verdict — REFUTED")["refuted"] is True
     # the verdict must be the reply's final word, standing alone (review 5's forms are none)
     for s in ("Hollow. REFUTED. The rest is unclear.", "P1: VIOLATED (reproduced). CLEAR would be premature.",
-              "P1: VIOLATED. The gate fails, so it is not\nCLEAR.", "Choose one:\n* REFUTED\n* CLEAR"):
+              "P1: VIOLATED. The gate fails, so it is not\nCLEAR.", "Choose one:\n* REFUTED\n* CLEAR",
+              "Verdict: REFUTED - CLEAR", "REFUTED; CLEAR", "Final verdict:\n\nREFUTED\n\nCLEAR", "Verdict: REFUTED. CLEAR"):
         assert "error" in refute_result(s), s
 
 

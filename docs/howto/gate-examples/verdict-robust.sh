@@ -22,6 +22,7 @@ assert v("so the gate is NOT CLEAR.") is None        # a negated final token is 
 assert v("so the gate is NOT yet CLEAR.") is None and v("far from CLEAR") is None   # the token must stand alone
 assert v("**Verdict:** CLEAR") is False and v("Final verdict — REFUTED") is True
 assert v("CLEAR would be premature.") is None and v("so it is not\nCLEAR.") is None and v("* REFUTED\n* CLEAR") is None
+assert v("Verdict: REFUTED - CLEAR") is None and v("REFUTED; CLEAR") is None and v("Final verdict:\n\nREFUTED\n\nCLEAR") is None
 PY
 # completeness: NO backend (in-process registry OR executor template) still decides by grep-anywhere
 if grep -rqE '"REFUTED" in|grep -q .REFUTED.' "$ROOT/py/src/heartbeat/backends" "$ROOT/plugin/templates/executors"; then

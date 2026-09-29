@@ -30,13 +30,12 @@ Three rules make an adapter safe:
   protocol object (`{"ok": false, "summary": "…unavailable…"}`) — never a traceback or empty
   output. The driver treats a failed shape as a failed task and escalates.
 - **A verdict only when the reviewer gave one.** `refute` returns `{"refuted": bool, …}` only when
-  the reply ends with an explicit, whole-word, upper-case `REFUTED` or `CLEAR` ("unclear" is not a
-  `CLEAR`, and the token must be the reply's final word and stand alone — after a sentence end or a label
-  (`Verdict: CLEAR`), or on its own line after a finished sentence; text after it (`CLEAR would be
-  premature`), a token inside a sentence (`NOT yet CLEAR`) or a copied template (`REFUTED | CLEAR`) is
-  no verdict; read the model's own text, not a
-  tool's output); a review that could not run (framework
-  missing, server unreachable, CLI failed) or a reply with no final verdict token returns
+  the reply's last line carries an explicit, upper-case `REFUTED` or `CLEAR`: either a line that is
+  only the verdict (`**Verdict:** CLEAR`, `REFUTED.`) or a finished sentence followed by the token as
+  the final word (`… no hole found. CLEAR`). Read the model's own text, never a tool's output. Text
+  after the token (`CLEAR would be premature`), a token inside a sentence (`NOT yet CLEAR`), a
+  template (`REFUTED | CLEAR`, `Verdict: REFUTED - CLEAR`, a list of both), a review that could not
+  run (framework missing, server unreachable, CLI failed) or a reply with no verdict returns
   `{"error": "…"}`, which the driver escalates. Never `{"refuted": false}` for "could not review" —
   the driver reads that as "could not refute" and passes the gate.
 - **Refuse an unknown mode.** Print `{"error": "unsupported mode …"}` and do nothing. A mode that

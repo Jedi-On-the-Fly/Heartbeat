@@ -143,6 +143,14 @@ for s in ("P1: VIOLATED (reproduced). CLEAR would be premature.", "Verdict: CLEA
           "Verdict (choose one):\n  - REFUTED\n  - CLEAR", "Verdict:\n- REFUTED\n- CLEAR"):
     assert v(s) is None, s
 assert v("## Verdict\nCLEAR") is False and v("Verdict: **CLEAR**") is False and v("hollow.\n\n**REFUTED**") is True
+# review 6's forms: templates joined by - / — / – / ; or a period, stacked over blank lines, numbered;
+# negations behind a dash or a colon
+for s in ("Verdict: REFUTED - CLEAR", "Verdict: REFUTED \u2014 CLEAR", "Verdict: REFUTED \u2013 CLEAR", "REFUTED; CLEAR",
+          "Verdict: REFUTED. CLEAR", "CLEAR. REFUTED", "Verdict (pick one):\n\n- REFUTED\n\n- CLEAR",
+          "Final verdict:\n\nREFUTED\n\nCLEAR", "1. REFUTED\n2. CLEAR", "so the gate is \u2014 not \u2014 CLEAR.",
+          "the gate is not: CLEAR.", "It is not; CLEAR", "Done. CLEAR\ufeff", "Done. CLEAR\x1c"):
+    assert v(s) is None, s
+assert v("earlier I wrote CLEAR ... final verdict: REFUTED") is True and v("hollow)\nREFUTED") is True
 EOF
   done
   # the three parser copies (python package, python adapters, the shell adapters' node verdict_of) agree
@@ -154,7 +162,9 @@ src = open(root + "/plugin/templates/executors/ollama_exec.py").read(); ns = {}
 fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "_verdict")
 exec(compile(ast.Module([fn], []), "x", "exec"), ns)
 node = next(l for l in open(root + "/plugin/templates/executors/claude-exec.sh") if l.startswith("verdict_of()"))
-cases = ["The gate is hollow. REFUTED", "done.\n\nCLEAR\n", "**Verdict:** REFUTED", "Final verdict \u2014 REFUTED",
+cases = ["The gate is hollow. REFUTED", "done.\n\nCLEAR\n", "Verdict: REFUTED - CLEAR", "REFUTED; CLEAR",
+         "Verdict (pick one):\n\n- REFUTED\n\n- CLEAR", "Done. CLEAR\ufeff", "Done. CLEAR\x1c", "done.\u2028 CLEAR",
+         "\u00c9CLEAR", "Done. \u00c9CLEAR", "earlier I wrote CLEAR ... final verdict: REFUTED", "Verdict: REFUTED. CLEAR", "**Verdict:** REFUTED", "Final verdict \u2014 REFUTED",
          "CLEAR would be premature.", "so it is not\nCLEAR.", "* REFUTED\n* CLEAR", "REFUTED | CLEAR", "it isn't CLEAR",
          "Verdict: not \"CLEAR\"", "(CLEAR)", "1. REFUTED\n2. CLEAR", "x\n# Verdict\nREFUTED", "Verdict: 'CLEAR'",
          "The gate is fine\nCLEAR", "\u201cCLEAR\u201d", "P1: VIOLATED \u2014 CLEAR", "CLEAR. REFUTED", "all clear", ""]

@@ -19,11 +19,11 @@ let t="";process.stdin.on("data",c=>t+=c).on("end",()=>{
   for(const c of cands){ try{ const v=JSON.parse(c); if(Array.isArray(v)&&v.length&&v.every(x=>x&&typeof x==="object"&&!Array.isArray(x))){ process.stdout.write(JSON.stringify({ok:true,constraints:v})+"\n"); return; } }catch(e){} }
   process.stdout.write(JSON.stringify({ok:false,error:"no JSON array of constraints in the author reply: "+t.slice(0,200)})+"\n");
 });'; }
-# The reviewer's verdict (twin of _verdict in the python adapters): a whole-word, upper-case
-# REFUTED/CLEAR that is the reply's FINAL word and stands alone — after a sentence end or a label on its
-# line, or at a line start after a finished sentence, a heading, a label or a blank line. Anything else
-# (text after it, "NOT yet CLEAR", a hard-wrapped "not\nCLEAR", a copied template) prints nothing.
-verdict_of() { node -e 'const t=require("fs").readFileSync(0,"utf8").replace(/\s+$/,"");const m=t.match(/\b(REFUTED|CLEAR)\b[\s*_`"\x27\u201c\u201d.!)\]]*$/);let v="";if(m){const L=t.slice(0,m.index).split("\n");const pre=L[L.length-1].replace(/^\s*(?:[-*+\u2022]|\d+[.)])\s+/,"").replace(/[\s*_`#>"\x27\u201c\u201d]+/g," ").trim();let ok=true;if(pre)ok=/(?:[.!?:;\u2014\u2013]|\s-)$/.test(pre);else if(L.length>1&&L[L.length-2].trim()){const q=L[L.length-2].replace(/[\s*_`>"\x27\u201c\u201d]+$/,"");ok=/^\s*#/.test(q)||/[.!?:;)\]]$/.test(q);}if(ok)v=m[1];}process.stdout.write(v)'; }
+# The reviewer's verdict (twin of _verdict in the python adapters): read from the reply's LAST non-empty
+# line by an exact grammar — (A) only the verdict (optional bullet/markup, optional "Verdict:" label, the
+# token, optional "."/"!") or (B) a finished sentence or a "verdict:" label then the token as the final
+# word; no verdict line just before it; a bare line not glued to an unfinished sentence. Else nothing.
+verdict_of() { node -e 'const t=require("fs").readFileSync(0,"utf8");const A=/^[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?[ \t*_\x60]*(?:(?:[Ff]inal[ \t]+)?(?:[Vv]erdict|VERDICT)[ \t*_\x60]*[:\u2014\u2013-])?[ \t*_\x60"\x27\u201c\u201d]*(REFUTED|CLEAR)[ \t*_\x60"\x27\u201c\u201d.!]*$/;const B=/^([^\n]*[A-Za-z][^\n]*(?:[.!?][)"\x27\u201d*_\x60]*|(?:[Vv]erdict|VERDICT)[ \t*_\x60]*[:\u2014\u2013-]))[ \t]+[*_\x60"\x27\u201c]*(REFUTED|CLEAR)[*_\x60"\x27\u201d.!]*[ \t]*$/;const L=t.split("\n").map(l=>l.replace(/[ \t\r]+$/,""));while(L.length&&!L[L.length-1])L.pop();let v="";if(L.length){let m=L[L.length-1].match(A);const bare=!!m;let ok=true;if(!m){m=L[L.length-1].match(B);if(!m||A.test(m[1].split(/(?<=[.!?])[ \t]+/).pop()))ok=false;}if(ok){let k=L.length-2;while(k>=0&&!L[k])k--;if(k>=0){const p=L[k];if(A.test(p)||B.test(p))ok=false;else if(bare&&k===L.length-2&&!(/^[ \t]*#/.test(p)||/[.!?:)\]]["\x27\u201d*_\x60]*$/.test(p)))ok=false;}}if(ok)v=m[m.length-1];}process.stdout.write(v)'; }
 field() { printf '%s' "$payload" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String((JSON.parse(d)$1)??''))}catch(e){process.stdout.write('')}})"; }
 jstr()  { node -pe 'JSON.stringify(require("fs").readFileSync(0,"utf8"))'; }
 

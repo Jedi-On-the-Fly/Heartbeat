@@ -19,29 +19,42 @@ except Exception:
         return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
-    """The reply's verdict — True (REFUTED) / False (CLEAR) — only when a whole-word, upper-case
-    REFUTED/CLEAR is the reply's FINAL word (only punctuation/markup after it) and stands alone: after a
-    sentence end or a label on its line ("… done. CLEAR", "**Verdict:** REFUTED"), or at a line start
-    after a finished sentence, a heading, a label or a blank line. Anything else — no token, text after
-    it ("CLEAR would be premature"), a token inside a sentence ("NOT yet CLEAR", a hard-wrapped
-    "not\\nCLEAR"), a copied template ("REFUTED | CLEAR", "* REFUTED\\n* CLEAR") — is None (fail-closed).
-    A reply that argues one way and ends with the other token explicitly is still read as that token."""
+    """The reviewer's verdict — True (REFUTED) / False (CLEAR) — read from the reply's LAST non-empty line
+    by an exact grammar, else None (fail-closed). The line is either (A) only the verdict: optional list
+    bullet / markup, an optional "Verdict:" label, the upper-case token, optional "." / "!"; or (B) a
+    finished sentence (ending ".", "!", "?") or a "verdict:" label, then the token as the final word —
+    where that last sentence is not itself a bare verdict ("Verdict: REFUTED. CLEAR"). The nearest earlier
+    non-empty line must not be a verdict line (a stacked or listed template), and for (A) an adjacent line
+    before must end a sentence or be a heading or a label (a hard-wrapped "not\\nCLEAR"). Whitespace is
+    space/tab only. A reply that argues one way and ends with a well-formed verdict line for the other is
+    still read as that verdict."""
     import re as _r
-    t = (t or "").rstrip()
-    m = _r.search(r"\b(REFUTED|CLEAR)\b[\s*_`\"'\u201c\u201d.!)\]]*$", t)
+    A = ("[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?[ \t*_\x60]*(?:(?:[Ff]inal[ \t]+)?(?:[Vv]erdict|VERDICT)[ \t*_\x60]*"
+         "[:\u2014\u2013-])?[ \t*_\x60\"'\u201c\u201d]*(REFUTED|CLEAR)[ \t*_\x60\"'\u201c\u201d.!]*")
+    B = ("([^\n]*[A-Za-z][^\n]*(?:[.!?][)\"'\u201d*_\x60]*|(?:[Vv]erdict|VERDICT)[ \t*_\x60]*[:\u2014\u2013-]))"
+         "[ \t]+[*_\x60\"'\u201c]*(REFUTED|CLEAR)[*_\x60\"'\u201d.!]*[ \t]*")
+    lines = [ln.rstrip(" \t\r") for ln in (t or "").split("\n")]
+    while lines and not lines[-1]:
+        lines.pop()
+    if not lines:
+        return None
+    m = _r.fullmatch(A, lines[-1])
+    bare = bool(m)
     if not m:
-        return None   # no token, or text after it: the verdict must be the reply's final word
-    lines = t[:m.start()].split("\n")
-    pre = _r.sub(r"^\s*(?:[-*+\u2022]|\d+[.)])\s+", "", lines[-1])            # a list bullet
-    pre = _r.sub(r"[\s*_`#>\"'\u201c\u201d]+", " ", pre).strip()
-    if pre:   # mid-line: only after a sentence end or a label ("… done. CLEAR", "Verdict: REFUTED")
-        if not _r.search(r"(?:[.!?:;\u2014\u2013]|\s-)$", pre):
+        m = _r.fullmatch(B, lines[-1])
+        if not m or _r.fullmatch(A, _r.split(r"(?<=[.!?])[ \t]+", m.group(1))[-1]):
             return None
-    elif len(lines) > 1 and lines[-2].strip():   # line start: the line before must end a sentence,
-        q = _r.sub(r"[\s*_`>\"'\u201c\u201d]+$", "", lines[-2])   # or be a heading / a label
-        if not (q.lstrip().startswith("#") or _r.search(r"[.!?:;)\]]$", q)):
-            return None
-    return m.group(1) == "REFUTED"
+    k = len(lines) - 2
+    while k >= 0 and not lines[k]:
+        k -= 1
+    if k >= 0:
+        p = lines[k]
+        if _r.fullmatch(A, p) or _r.fullmatch(B, p):
+            return None   # another verdict line before it: a stacked / listed template
+        if bare and k == len(lines) - 2 and not (p.lstrip(" \t").startswith("#") or
+                                                  _r.search(r"[.!?:)\]][\"'\u201d*_\x60]*$", p)):
+            return None   # a bare verdict line glued to an unfinished sentence ("…is not\\nCLEAR")
+    return m.group(m.lastindex) == "REFUTED"
 
 
 def _refute_result(text):
