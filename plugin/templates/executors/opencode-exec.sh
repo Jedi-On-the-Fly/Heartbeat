@@ -22,11 +22,11 @@ let t="";process.stdin.on("data",c=>t+=c).on("end",()=>{
   for(const c of cands){ try{ const v=JSON.parse(c); if(Array.isArray(v)&&v.length&&v.every(x=>x&&typeof x==="object"&&!Array.isArray(x))){ process.stdout.write(JSON.stringify({ok:true,constraints:v})+"\n"); return; } }catch(e){} }
   process.stdout.write(JSON.stringify({ok:false,error:"no JSON array of constraints in the author reply: "+t.slice(0,200)})+"\n");
 });'; }
-# The reviewer's verdict: its FINAL whole-word, upper-case REFUTED/CLEAR, only when that token stands
-# alone — at the start of a line, or right after a sentence end or a label (". CLEAR", "Verdict:
-# REFUTED", "— CLEAR"); a token inside a sentence ("NOT yet CLEAR", a copied template "REFUTED | CLEAR")
-# is no verdict (empty). Twin of _verdict in the python adapters.
-verdict_of() { node -e 'const t=require("fs").readFileSync(0,"utf8");const m=[...t.matchAll(/\b(REFUTED|CLEAR)\b/g)];let v="";if(m.length){const a=m[m.length-1];const pre=t.slice(0,a.index).split("\n").pop().replace(/[\s*_`#>"\x27\u201c\u201d]+$/,"");v=(!pre||/(?:[.!?:;\u2014\u2013]|\s-)$/.test(pre))?a[1]:"";}process.stdout.write(v)'; }
+# The reviewer's verdict (twin of _verdict in the python adapters): a whole-word, upper-case
+# REFUTED/CLEAR that is the reply's FINAL word and stands alone — after a sentence end or a label on its
+# line, or at a line start after a finished sentence, a heading, a label or a blank line. Anything else
+# (text after it, "NOT yet CLEAR", a hard-wrapped "not\nCLEAR", a copied template) prints nothing.
+verdict_of() { node -e 'const t=require("fs").readFileSync(0,"utf8").replace(/\s+$/,"");const m=t.match(/\b(REFUTED|CLEAR)\b[\s*_`"\x27\u201c\u201d.!)\]]*$/);let v="";if(m){const L=t.slice(0,m.index).split("\n");const pre=L[L.length-1].replace(/^\s*(?:[-*+\u2022]|\d+[.)])\s+/,"").replace(/[\s*_`#>"\x27\u201c\u201d]+/g," ").trim();let ok=true;if(pre)ok=/(?:[.!?:;\u2014\u2013]|\s-)$/.test(pre);else if(L.length>1&&L[L.length-2].trim()){const q=L[L.length-2].replace(/[\s*_`>"\x27\u201c\u201d]+$/,"");ok=/^\s*#/.test(q)||/[.!?:;)\]]$/.test(q);}if(ok)v=m[1];}process.stdout.write(v)'; }
 field() { printf '%s' "$payload" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String((JSON.parse(d)$1)??''))}catch(e){process.stdout.write('')}})"; }
 jstr()  { node -pe 'JSON.stringify(require("fs").readFileSync(0,"utf8"))'; }
 # the model's own words in a --format json event stream: its "text" parts, in order — never a tool's

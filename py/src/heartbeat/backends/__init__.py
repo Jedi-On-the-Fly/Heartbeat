@@ -9,20 +9,30 @@ import re as _re
 
 
 def verdict_of(text):
-    """A model reviewer's verdict: the reply's FINAL whole-word, upper-case REFUTED/CLEAR — True / False —
-    but only when that token stands alone: at the start of a line, or right after a sentence end or a
-    label (". CLEAR", "Verdict: REFUTED", "— CLEAR"). The prompt itself contains 'REFUTED', so a
-    grep-anywhere would misread a CLEAR reply; a token inside a sentence ("NOT yet CLEAR", "far from
-    CLEAR", a copied template "REFUTED | CLEAR") is no verdict: None (fail-closed)."""
-    t = text or ""
-    ms = list(_re.finditer(r"\b(REFUTED|CLEAR)\b", t))
-    if not ms:
-        return None
-    a = ms[-1]
-    pre = _re.sub(r"[\s*_`#>\"'\u201c\u201d]+$", "", t[:a.start()].split("\n")[-1])
-    if pre and not _re.search(r"(?:[.!?:;\u2014\u2013]|\s-)$", pre):
-        return None
-    return a.group(1) == "REFUTED"
+    """A model reviewer's verdict — True (REFUTED) / False (CLEAR) — only when a whole-word, upper-case
+    REFUTED/CLEAR is the reply's FINAL word (only punctuation/markup after it) and stands alone: after a
+    sentence end or a label on its line ("… done. CLEAR", "**Verdict:** REFUTED"), or at a line start
+    after a finished sentence, a heading, a label or a blank line. Anything else — no token, text after
+    it ("CLEAR would be premature"), a token inside a sentence ("NOT yet CLEAR", a hard-wrapped
+    "not\\nCLEAR"), a copied template ("REFUTED | CLEAR", "* REFUTED\\n* CLEAR") — is None (fail-closed).
+    A reply that argues one way and ends with the other token explicitly is still read as that token."""
+    _r = _re
+    t = text
+    t = (t or "").rstrip()
+    m = _r.search(r"\b(REFUTED|CLEAR)\b[\s*_`\"'\u201c\u201d.!)\]]*$", t)
+    if not m:
+        return None   # no token, or text after it: the verdict must be the reply's final word
+    lines = t[:m.start()].split("\n")
+    pre = _r.sub(r"^\s*(?:[-*+\u2022]|\d+[.)])\s+", "", lines[-1])            # a list bullet
+    pre = _r.sub(r"[\s*_`#>\"'\u201c\u201d]+", " ", pre).strip()
+    if pre:   # mid-line: only after a sentence end or a label ("… done. CLEAR", "Verdict: REFUTED")
+        if not _r.search(r"(?:[.!?:;\u2014\u2013]|\s-)$", pre):
+            return None
+    elif len(lines) > 1 and lines[-2].strip():   # line start: the line before must end a sentence,
+        q = _r.sub(r"[\s*_`>\"'\u201c\u201d]+$", "", lines[-2])   # or be a heading / a label
+        if not (q.lstrip().startswith("#") or _r.search(r"[.!?:;)\]]$", q)):
+            return None
+    return m.group(1) == "REFUTED"
 
 
 def refute_result(text):

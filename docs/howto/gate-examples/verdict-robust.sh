@@ -14,12 +14,14 @@ assert v("Found a hollow test — this is not done. REFUTED") is True
 assert v("earlier I wrote CLEAR ... final verdict: REFUTED") is True
 assert v("earlier I wrote REFUTED ... final verdict: CLEAR") is False
 assert v("no verdict token here") is None
-assert v("Hollow. REFUTED. Whether the fix is small is unclear.") is True
+assert v("Whether the fix is small is unclear. Hollow. REFUTED") is True
+assert v("Hollow. REFUTED. Whether the fix is small is unclear.") is None   # the verdict must be the final word
 assert v("looks fine, all clear") is None
 assert v("## Verdict\nREFUTED | CLEAR") is None     # a copied answer template is no verdict
 assert v("so the gate is NOT CLEAR.") is None        # a negated final token is no verdict
 assert v("so the gate is NOT yet CLEAR.") is None and v("far from CLEAR") is None   # the token must stand alone
 assert v("**Verdict:** CLEAR") is False and v("Final verdict — REFUTED") is True
+assert v("CLEAR would be premature.") is None and v("so it is not\nCLEAR.") is None and v("* REFUTED\n* CLEAR") is None
 PY
 # completeness: NO backend (in-process registry OR executor template) still decides by grep-anywhere
 if grep -rqE '"REFUTED" in|grep -q .REFUTED.' "$ROOT/py/src/heartbeat/backends" "$ROOT/plugin/templates/executors"; then

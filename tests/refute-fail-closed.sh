@@ -6,9 +6,10 @@
 # Also: the ollama backend sends an explicit context size (num_ctx) and refuses a verdict when the
 # prompt filled it (a truncated prompt means the reviewer never saw the whole request).
 # The verdict is the reply's final WHOLE-WORD, upper-case REFUTED/CLEAR: "unclear" or "all clear" is
-# not a verdict (else a REFUTED reply that goes on to call something unclear reads as CLEAR), and a
-# verdict line carrying BOTH tokens (a model that copied the answer template "REFUTED | CLEAR") is no
-# verdict either — its last token would otherwise read as a CLEAR. The
+# not a verdict, and the token must be the reply's FINAL word and stand alone (after a sentence end or
+# a label, or at a line start after a finished sentence / heading / label / blank line): a token inside
+# a sentence ("NOT yet CLEAR", a hard-wrapped "not\nCLEAR", "CLEAR would be premature") or a copied
+# template ("REFUTED | CLEAR", a list of both) is no verdict. The three parser copies must agree. The
 # opencode adapter reads the model's TEXT parts of its --format json stream only — a tool output
 # (a file the reviewer read, a grep hit) is not the reviewer's verdict.
 #   bash tests/refute-fail-closed.sh [case]   cases: degrade cli ollama token e2e (default: all)
@@ -59,9 +60,9 @@ case_token(){
   local bin="$W/tbin" a out
   mkdir -p "$bin"
   for a in claude codex; do
-    printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf %%s "The gate is hollow. REFUTED. Whether the fix is trivial is unclear."\n' > "$bin/$a"; chmod +x "$bin/$a"
+    printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf %%s "Whether the fix is trivial is unclear. The gate is hollow. REFUTED"\n' > "$bin/$a"; chmod +x "$bin/$a"
     out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
-    printf '%s' "$out" | is_verdict True || fail "token: $a read 'unclear' as the final CLEAR → $out"
+    printf '%s' "$out" | is_verdict True || fail "token: $a read 'unclear' as a CLEAR → $out"
     printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf %%s "I checked it, all clear."\n' > "$bin/$a"; chmod +x "$bin/$a"
     out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
     printf '%s' "$out" | is_error || fail "token: $a read a lower-case 'clear' as a verdict → $out (must be an error)"
@@ -106,7 +107,7 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 EOF
   local port r want
-  for r in "True|Hollow. REFUTED. The rest is unclear." "err|Looks fine to me, all clear." "err|## Verdict
+  for r in "True|The rest is unclear. Hollow. REFUTED" "err|Hollow. REFUTED. The rest is unclear." "err|Looks fine to me, all clear." "err|## Verdict
 REFUTED | CLEAR"; do
     want="${r%%|*}"; port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
     python3 "$W/tmock.py" "$port" "${r#*|}" & MOCK_PID=$!
@@ -125,7 +126,8 @@ src = open(sys.argv[1]).read(); ns = {}
 fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "_verdict")
 exec(compile(ast.Module([fn], []), sys.argv[1], "exec"), ns)
 v = ns["_verdict"]
-assert v("Hollow. REFUTED. The rest is unclear.") is True
+assert v("The rest is unclear. Hollow. REFUTED") is True
+assert v("Hollow. REFUTED. The rest is unclear.") is None     # the verdict must be the final word
 assert v("all clear") is None and v("UNCLEAR") is None and v("") is None
 assert v("**CLEAR**") is False and v("REFUTED.") is True
 assert v("## Verdict\nREFUTED | CLEAR") is None and v("End with REFUTED or CLEAR") is None
@@ -135,8 +137,32 @@ assert v("the gate is NOT CLEAR.") is None and v("REFUTED | not CLEAR") is None 
 for s in ("so the gate is NOT yet CLEAR.", "far from CLEAR", "It is never CLEAR.", "a non-CLEAR result", 'Verdict: not "CLEAR"'):
     assert v(s) is None, s
 assert v("**Verdict:** CLEAR") is False and v("Final verdict — REFUTED") is True and v("done.\n\nCLEAR\n") is False
+# review 5's forms: text after the token, a hard-wrapped negation, a template laid out as a list
+for s in ("P1: VIOLATED (reproduced). CLEAR would be premature.", "Verdict: CLEAR is not justified; P1 is violated.",
+          "P1: VIOLATED. The gate fails, so it is not\nCLEAR.", "Choose one:\n* REFUTED\n* CLEAR",
+          "Verdict (choose one):\n  - REFUTED\n  - CLEAR", "Verdict:\n- REFUTED\n- CLEAR"):
+    assert v(s) is None, s
+assert v("## Verdict\nCLEAR") is False and v("Verdict: **CLEAR**") is False and v("hollow.\n\n**REFUTED**") is True
 EOF
   done
+  # the three parser copies (python package, python adapters, the shell adapters' node verdict_of) agree
+  python3 - "$ROOT" <<'EOF' || fail "token: the verdict parsers disagree (python package / python adapter / node)"
+import ast, json, subprocess, sys
+root = sys.argv[1]; sys.path.insert(0, root + "/py/src")
+from heartbeat.backends import verdict_of
+src = open(root + "/plugin/templates/executors/ollama_exec.py").read(); ns = {}
+fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "_verdict")
+exec(compile(ast.Module([fn], []), "x", "exec"), ns)
+node = next(l for l in open(root + "/plugin/templates/executors/claude-exec.sh") if l.startswith("verdict_of()"))
+cases = ["The gate is hollow. REFUTED", "done.\n\nCLEAR\n", "**Verdict:** REFUTED", "Final verdict \u2014 REFUTED",
+         "CLEAR would be premature.", "so it is not\nCLEAR.", "* REFUTED\n* CLEAR", "REFUTED | CLEAR", "it isn't CLEAR",
+         "Verdict: not \"CLEAR\"", "(CLEAR)", "1. REFUTED\n2. CLEAR", "x\n# Verdict\nREFUTED", "Verdict: 'CLEAR'",
+         "The gate is fine\nCLEAR", "\u201cCLEAR\u201d", "P1: VIOLATED \u2014 CLEAR", "CLEAR. REFUTED", "all clear", ""]
+for c in cases:
+    n = {"REFUTED": True, "CLEAR": False, "": None}[subprocess.run(["bash", "-c", node + "\nverdict_of"], input=c, capture_output=True, text=True).stdout]
+    if not (verdict_of(c) == ns["_verdict"](c) == n):
+        sys.exit("disagree on %r: pkg=%r adapter=%r node=%r" % (c, verdict_of(c), ns["_verdict"](c), n))
+EOF
   echo "TOKEN-OK"
 }
 

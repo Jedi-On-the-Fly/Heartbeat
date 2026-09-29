@@ -26,7 +26,7 @@ def test_refute_result_is_three_state():
 
 def test_the_verdict_is_a_whole_upper_case_word():
     # "unclear" after a REFUTED must not read as the final CLEAR; a lower-case "clear" is no verdict
-    assert refute_result("Hollow. REFUTED. The rest is unclear.")["refuted"] is True
+    assert refute_result("The rest is unclear. Hollow. REFUTED")["refuted"] is True
     assert "error" in refute_result("Looks fine to me, all clear.")
     assert "error" in refute_result("UNCLEAR")
     assert refute_result("**CLEAR**")["refuted"] is False
@@ -40,6 +40,10 @@ def test_the_verdict_is_a_whole_upper_case_word():
         assert "error" in refute_result(s), s
     assert refute_result("I checked every criterion.\n\n**Verdict:** CLEAR")["refuted"] is False
     assert refute_result("Final verdict — REFUTED")["refuted"] is True
+    # the verdict must be the reply's final word, standing alone (review 5's forms are none)
+    for s in ("Hollow. REFUTED. The rest is unclear.", "P1: VIOLATED (reproduced). CLEAR would be premature.",
+              "P1: VIOLATED. The gate fails, so it is not\nCLEAR.", "Choose one:\n* REFUTED\n* CLEAR"):
+        assert "error" in refute_result(s), s
 
 
 def test_opencode_reads_the_models_text_not_tool_output(tmp_path, monkeypatch):
