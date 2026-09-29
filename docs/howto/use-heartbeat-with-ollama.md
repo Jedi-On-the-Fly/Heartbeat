@@ -16,7 +16,11 @@ The backend is stdlib-only (no extra dependencies) and talks to Ollama's OpenAI-
 `/api/generate`. A text model can't call tools, so `execute` runs a small **FILE-block
 protocol**: the model returns file contents in `===FILE: path===` … `===END===` blocks and the
 backend writes them. Config: `OLLAMA_HOST` (default `http://localhost:11434`),
-`HB_EXEC_MODEL` / `OLLAMA_MODEL`.
+`HB_EXEC_MODEL` / `OLLAMA_MODEL`, and `HB_OLLAMA_NUM_CTX` (default 16384): the context the backend
+asks for. Ollama's own default is 4096 tokens and it truncates a longer prompt silently — a
+constraint-first refute prompt is longer — so the backend requests an explicit context and refuses
+(an error, escalated) any result whose prompt filled it. A review that could not run is an error
+too, never a CLEAR verdict.
 
 ## What HeartBeat does
 

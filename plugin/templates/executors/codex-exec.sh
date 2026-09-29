@@ -54,11 +54,15 @@ Context:
 ${ctx}
 
 Do not modify files. Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with the single token REFUTED (you found a hole) or CLEAR (you could not)." </dev/null 2>/dev/null)"
-  verdict="$(printf '%s' "$ans" | tr '[:lower:]' '[:upper:]' | grep -oE 'REFUTED|CLEAR' | tail -1)"
+  verdict="$(printf '%s' "$ans" | grep -owE 'REFUTED|CLEAR' | tail -1)"   # whole word, upper-case
   if [ "$verdict" = REFUTED ]; then
     printf '{"refuted":true,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 20000 | jstr)"
-  else
+  elif [ "$verdict" = CLEAR ]; then
     printf '{"refuted":false,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 20000 | jstr)"
+  else
+    # no final REFUTED/CLEAR token (the CLI failed, or the reviewer never concluded): NOT a CLEAR —
+    # an error, which the driver escalates (fail-closed)
+    printf '{"error":%s}\n' "$(printf 'no REFUTED/CLEAR verdict in the reviewer reply (fail-closed): %s' "$(printf '%s' "$ans" | head -c 300)" | jstr)"
   fi
 else
   if codex exec -s workspace-write -C "$(pwd)" --skip-git-repo-check ${prov[@]+"${prov[@]}"} "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.

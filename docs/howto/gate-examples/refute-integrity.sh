@@ -40,7 +40,7 @@ PY
 
 # ── NODE: run claude-exec.sh with a claude-free PATH (a clean bin of only the tools it needs) ──
 cleanbin="$tmp/cleanbin"; mkdir -p "$cleanbin"
-for b in node cat grep tr head sed dirname bash env; do p="$(command -v "$b" 2>/dev/null)" && ln -sf "$p" "$cleanbin/$b"; done
+for b in node cat grep tr head tail sed dirname bash env; do p="$(command -v "$b" 2>/dev/null)" && ln -sf "$p" "$cleanbin/$b"; done
 command -v claude >/dev/null 2>&1 && [ ! -e "$cleanbin/claude" ] || true   # ensure the clean bin has NO claude
 PATH="$cleanbin" bash -c 'command -v claude' >/dev/null 2>&1 && fail "proof setup: claude leaked into the clean PATH"
 

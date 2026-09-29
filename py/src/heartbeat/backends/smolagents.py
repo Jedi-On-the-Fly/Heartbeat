@@ -7,7 +7,7 @@ protocol-valid JSON if smolagents isn't installed.
 import os
 
 from ._fileblocks import write_blocks, norm_rel
-from . import verdict_refuted
+from . import refute_result
 
 
 def _model():
@@ -69,6 +69,6 @@ def refute(payload):
     try:
         agent = ToolCallingAgent(tools=[], model=model)
         out = str(agent.run(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd with REFUTED or CLEAR.'))
-        return {"refuted": verdict_refuted(out), "findings": out[:20000]}
+        return refute_result(out)
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

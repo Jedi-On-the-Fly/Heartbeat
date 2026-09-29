@@ -13,9 +13,23 @@ except Exception:
         return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
+    """The reply's FINAL whole-word, upper-case REFUTED/CLEAR: True / False — or None when there is
+    none ("unclear" or a lower-case "all clear" is not a verdict)."""
     import re as _r
-    toks = _r.findall(r"REFUTED|CLEAR", (t or "").upper())
-    return bool(toks) and toks[-1] == "REFUTED"
+    toks = _r.findall(r"\b(REFUTED|CLEAR)\b", t or "")
+    return (toks[-1] == "REFUTED") if toks else None
+
+
+def _refute_result(text):
+    """A verdict only when the reviewer gave one. No final REFUTED/CLEAR token is not a CLEAR:
+    it is an error, which the driver escalates (fail-closed)."""
+    text = str(text or "")
+    if sys.argv[1:2] == ["author"]:          # author mode reuses this path: its reply is a constraint
+        return {"refuted": False, "findings": text[:20000]}   # array, parsed by author_reply (fail-closed)
+    v = _verdict(text)
+    if v is None:
+        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+    return {"refuted": v, "findings": text[:20000]}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from _fileblocks import write_blocks, norm_rel
@@ -66,12 +80,12 @@ def do_refute(payload):
         from pydantic_ai import Agent
         agent = Agent(_model(), system_prompt="You are a skeptical adversarial reviewer. End with REFUTED or CLEAR.")
     except Exception as e:
-        return {"refuted": False, "findings": f"pydantic-ai unavailable ({e})"}
+        return {"error": f"pydantic-ai unavailable ({e})"}
     try:
         text = _text(agent.run_sync(f'{payload.get("prompt","Refute.")}\n\nContext:\n{ctx}'))
-        return {"refuted": _verdict(text), "findings": text[:20000]}
+        return _refute_result(text)
     except Exception as e:
-        return {"refuted": False, "findings": f"reviewer error: {e}"}
+        return {"error": f"reviewer error: {e}"}
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "execute"

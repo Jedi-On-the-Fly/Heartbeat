@@ -166,7 +166,7 @@ plugin in Codex or Claude Code wires it with no manual `mcp add` (proof:
 | `codex` | subprocess `codex exec` (stdin closed) | `HB_EXEC_PROVIDER=oss` → keyless Ollama |
 | `opencode` | subprocess `opencode run --format json` | `HB_EXEC_MODEL=provider/model` (e.g. `ollama/…`) |
 
-`HB_EXEC_MODEL` selects the model; `OLLAMA_HOST` the server. Backend degrade: missing lib/server → protocol-valid `{ok:false}` / `{refuted:false}`.
+`HB_EXEC_MODEL` selects the model; `OLLAMA_HOST` the server; `HB_OLLAMA_NUM_CTX` (default 16384) the context the ollama backend requests — a prompt that fills it is refused. Backend degrade: missing lib/server → protocol-valid `{ok:false}` for execute and `{error}` for refute; `refute_result()` returns a verdict only for a reply whose final whole-word upper-case token is REFUTED/CLEAR (`verdict_of`; opencode reads only the text parts of its JSON stream), else `{error}` (fail-closed). The executor's author fallback (a backend without `author()`) sets `HB_REFUTE_RAW=1` so the raw reply reaches `author_reply`.
 
 ## Audit
 

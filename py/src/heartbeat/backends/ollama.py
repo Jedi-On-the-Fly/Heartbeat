@@ -6,7 +6,7 @@ import urllib.request
 import urllib.error
 
 from ._fileblocks import write_blocks
-from . import verdict_refuted
+from . import refute_result
 
 HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 
@@ -15,13 +15,28 @@ def _model():
     return os.environ.get("HB_EXEC_MODEL") or os.environ.get("OLLAMA_MODEL") or "qwen2.5:7b-instruct"
 
 
+class Truncated(Exception):
+    pass
+
+
+def _num_ctx():
+    # Ollama's default context (4096) TRUNCATES a longer prompt silently — ask for an explicit one
+    # (node twin: NUM_CTX in executors/ollama_exec.py).
+    return int(os.environ.get("HB_OLLAMA_NUM_CTX") or 16384)
+
+
 def _generate(prompt, timeout=180):
+    num_ctx = _num_ctx()
     body = json.dumps({"model": _model(), "prompt": prompt, "stream": False,
-                       "options": {"temperature": 0.1}}).encode()
+                       "options": {"temperature": 0.1, "num_ctx": num_ctx}}).encode()
     req = urllib.request.Request(f"{HOST}/api/generate", data=body,
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode()).get("response", "")
+        reply = json.loads(r.read().decode())
+    used = int(reply.get("prompt_eval_count") or 0)
+    if used >= num_ctx - 1:   # the prompt filled the context: the model never saw the whole request
+        raise Truncated(f"the prompt filled the model's context ({used} of {num_ctx} tokens) — raise HB_OLLAMA_NUM_CTX")
+    return reply.get("response", "")
 
 
 def execute(payload):
@@ -38,6 +53,8 @@ def execute(payload):
     )
     try:
         out = _generate(prompt)
+    except Truncated as e:
+        return {"ok": False, "summary": f"task prompt truncated: {e}"}
     except (urllib.error.URLError, OSError) as e:
         return {"ok": False, "summary": f"ollama unreachable ({e})"}
     written = write_blocks(out, cwd)
@@ -52,6 +69,8 @@ def refute(payload):
               "criterion not truly met, faked output). End with exactly one token: REFUTED or CLEAR.")
     try:
         out = _generate(prompt)
+    except Truncated as e:
+        return {"error": f"refute prompt truncated: {e}"}
     except (urllib.error.URLError, OSError) as e:
         return {"error": f"ollama unreachable ({e})"}
-    return {"refuted": verdict_refuted(out), "findings": out[:20000]}
+    return refute_result(out)

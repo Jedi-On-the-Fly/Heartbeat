@@ -27,9 +27,23 @@ except Exception:
         return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
+    """The reply's FINAL whole-word, upper-case REFUTED/CLEAR: True / False — or None when there is
+    none ("unclear" or a lower-case "all clear" is not a verdict)."""
     import re as _r
-    toks = _r.findall(r"REFUTED|CLEAR", (t or "").upper())
-    return bool(toks) and toks[-1] == "REFUTED"
+    toks = _r.findall(r"\b(REFUTED|CLEAR)\b", t or "")
+    return (toks[-1] == "REFUTED") if toks else None
+
+
+def _refute_result(text):
+    """A verdict only when the reviewer gave one. No final REFUTED/CLEAR token is not a CLEAR:
+    it is an error, which the driver escalates (fail-closed)."""
+    text = str(text or "")
+    if sys.argv[1:2] == ["author"]:          # author mode reuses this path: its reply is a constraint
+        return {"refuted": False, "findings": text[:20000]}   # array, parsed by author_reply (fail-closed)
+    v = _verdict(text)
+    if v is None:
+        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+    return {"refuted": v, "findings": text[:20000]}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from _fileblocks import write_blocks
@@ -80,7 +94,7 @@ def main():
         from agno.agent import Agent
         model = make_model(provider, model_id)
     except Exception as e:  # agno (or its provider deps) not installed → graceful degrade
-        emit({"refuted": False, "findings": f"agno unavailable ({e})"} if mode == "refute"
+        emit({"error": f"agno unavailable ({e})"} if mode == "refute"
              else {"ok": False, "summary": f"agno unavailable ({e})"})
         return
 
@@ -93,9 +107,9 @@ def main():
         try:
             r = reviewer.run(prompt)
             text = getattr(r, "content", str(r))
-            emit({"refuted": _verdict(text), "findings": text[:20000]})
+            emit(_refute_result(text))
         except Exception as e:
-            emit({"refuted": False, "findings": f"reviewer error: {e}"})
+            emit({"error": f"reviewer error: {e}"})
         return
 
     # execute — give the agent real file tools

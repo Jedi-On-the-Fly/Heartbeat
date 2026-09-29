@@ -27,9 +27,23 @@ except Exception:
         return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
+    """The reply's FINAL whole-word, upper-case REFUTED/CLEAR: True / False — or None when there is
+    none ("unclear" or a lower-case "all clear" is not a verdict)."""
     import re as _r
-    toks = _r.findall(r"REFUTED|CLEAR", (t or "").upper())
-    return bool(toks) and toks[-1] == "REFUTED"
+    toks = _r.findall(r"\b(REFUTED|CLEAR)\b", t or "")
+    return (toks[-1] == "REFUTED") if toks else None
+
+
+def _refute_result(text):
+    """A verdict only when the reviewer gave one. No final REFUTED/CLEAR token is not a CLEAR:
+    it is an error, which the driver escalates (fail-closed)."""
+    text = str(text or "")
+    if sys.argv[1:2] == ["author"]:          # author mode reuses this path: its reply is a constraint
+        return {"refuted": False, "findings": text[:20000]}   # array, parsed by author_reply (fail-closed)
+    v = _verdict(text)
+    if v is None:
+        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+    return {"refuted": v, "findings": text[:20000]}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from _fileblocks import write_blocks
@@ -81,7 +95,7 @@ def main():
         from crewai import Agent, Task, Crew
         llm = make_llm(provider, model_id)
     except Exception as e:  # crewai (or its deps) not installed → graceful degrade
-        emit({"refuted": False, "findings": f"crewai unavailable ({e})"} if mode == "refute"
+        emit({"error": f"crewai unavailable ({e})"} if mode == "refute"
              else {"ok": False, "summary": f"crewai unavailable ({e})"})
         return
 
@@ -95,9 +109,9 @@ def main():
                     agent=reviewer, expected_output="REFUTED or CLEAR, with reasons.")
         try:
             out = str(Crew(agents=[reviewer], tasks=[task], verbose=False).kickoff())
-            emit({"refuted": _verdict(out), "findings": out[:20000]})
+            emit(_refute_result(out))
         except Exception as e:
-            emit({"refuted": False, "findings": f"reviewer error: {e}"})
+            emit({"error": f"reviewer error: {e}"})
         return
 
     # execute — real file-writer tool if available, plus the FILE-block fallback

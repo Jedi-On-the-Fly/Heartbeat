@@ -35,9 +35,23 @@ except Exception:
         return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
+    """The reply's FINAL whole-word, upper-case REFUTED/CLEAR: True / False — or None when there is
+    none ("unclear" or a lower-case "all clear" is not a verdict)."""
     import re as _r
-    toks = _r.findall(r"REFUTED|CLEAR", (t or "").upper())
-    return bool(toks) and toks[-1] == "REFUTED"
+    toks = _r.findall(r"\b(REFUTED|CLEAR)\b", t or "")
+    return (toks[-1] == "REFUTED") if toks else None
+
+
+def _refute_result(text):
+    """A verdict only when the reviewer gave one. No final REFUTED/CLEAR token is not a CLEAR:
+    it is an error, which the driver escalates (fail-closed)."""
+    text = str(text or "")
+    if sys.argv[1:2] == ["author"]:          # author mode reuses this path: its reply is a constraint
+        return {"refuted": False, "findings": text[:20000]}   # array, parsed by author_reply (fail-closed)
+    v = _verdict(text)
+    if v is None:
+        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+    return {"refuted": v, "findings": text[:20000]}
 
 # Guarantee ONLY the protocol JSON lands on stdout: keep the real stdout fd, then point
 # fd 1 at stderr so any library chatter (banners, progress) can't corrupt the JSON line.
@@ -52,13 +66,28 @@ def emit(obj):
     os.write(_STDOUT_FD, (json.dumps(obj) + "\n").encode())
 
 
+# Ollama's default context is small (4096 tokens) and it TRUNCATES a longer prompt silently — a
+# constraint-first refute prompt is longer. Ask for an explicit context, and refuse a result whose
+# prompt filled it (the model never saw the whole request).
+NUM_CTX = int(os.environ.get("HB_OLLAMA_NUM_CTX") or 16384)
+
+
+class Truncated(Exception):
+    pass
+
+
 def generate(prompt, timeout=180):
     body = json.dumps({"model": MODEL, "prompt": prompt, "stream": False,
-                       "options": {"temperature": 0.1}}).encode()
+                       "options": {"temperature": 0.1, "num_ctx": NUM_CTX}}).encode()
     req = urllib.request.Request(f"{HOST}/api/generate", data=body,
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode()).get("response", "")
+        reply = json.loads(r.read().decode())
+    used = int(reply.get("prompt_eval_count") or 0)
+    if used >= NUM_CTX - 1:
+        raise Truncated(f"the prompt filled the model's context ({used} of {NUM_CTX} tokens) — "
+                        "raise HB_OLLAMA_NUM_CTX")
+    return reply.get("response", "")
 
 
 def main():
@@ -88,9 +117,11 @@ def main():
                   'short reason, then END with exactly one token: REFUTED (you found a hole) or CLEAR.')
         try:
             out = generate(prompt)
-            emit({"refuted": _verdict(out), "findings": out[:20000]})
+            emit(_refute_result(out))
+        except Truncated as e:
+            emit({"error": f"refute prompt truncated: {e}"})
         except (urllib.error.URLError, OSError) as e:
-            emit({"refuted": False, "findings": f"ollama unreachable ({e})"})
+            emit({"error": f"ollama unreachable ({e})"})
         return
 
     # execute
@@ -108,6 +139,9 @@ def main():
     )
     try:
         out = generate(prompt)
+    except Truncated as e:
+        emit({"ok": False, "summary": f"task prompt truncated: {e}"})
+        return
     except (urllib.error.URLError, OSError) as e:
         emit({"ok": False, "summary": f"ollama unreachable ({e})"})
         return

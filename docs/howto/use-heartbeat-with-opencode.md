@@ -16,9 +16,18 @@ The adapter runs `opencode run --format json` with the task prompt. Pick the mod
 `HB_EXEC_PROVIDER` + a bare `HB_EXEC_MODEL` and the adapter joins them. For a keyless local run,
 configure an ollama provider and use `HB_EXEC_MODEL=ollama/qwen2.5:7b-instruct`.
 
-**Autonomy (the gotcha).** Headless `opencode run` blocks on an "ask" permission when there's no
-terminal. Configure opencode's `permission` to `allow` (in `opencode.json`) for unattended use —
-opencode 0.15.3 has no `--auto` flag (newer builds add one). The adapter closes stdin defensively.
+**Autonomy and isolation (the gotchas).** Headless `opencode run` blocks on an "ask" permission when
+there's no terminal, and a recent `run` attaches to a background opencode service whose working
+directory and config may not be the project's. The adapter asks `opencode run --help` which flags the
+installed CLI has: when it advertises them, execute and refute pass `--auto` and every mode passes
+`--standalone` (a private server for that run). An older CLI without `--auto` needs opencode's
+`permission` set to `allow` in `opencode.json` for unattended use. The adapter closes stdin
+defensively.
+
+**The verdict is the model's words.** `refute` reads only the model's `text` parts of the
+`--format json` stream: a tool's output (a file the reviewer read, a grep hit) may contain `CLEAR`
+or `REFUTED` and is never taken as the verdict. No final whole-word `REFUTED`/`CLEAR` is an error the
+driver escalates.
 
 **Trust the gate, not the exit code.** `opencode run` exits `0` even when the model call fails
 (it reports the error as a JSON event). That's fine here: HeartBeat advances a phase only when its
@@ -27,9 +36,12 @@ opencode 0.15.3 has no `--auto` flag (newer builds add one). The adapter closes 
 **Proof.** The deterministic suite proof is a stub `opencode` on PATH —
 [`gate-examples/opencode-backend.sh`](gate-examples/opencode-backend.sh) drives the *real* adapter
 to a passing gate (and a failing stub does not complete the phase), with no model or network. A
-live run is on-demand and **best-effort**: an authed provider works; the local ollama path needs
-opencode's AI-SDK provider install and did not complete a headless turn in our environment — so,
-like the codex backend, the honest suite gate is the stub. See
+live run is on-demand and **best-effort**: an authed provider works. With local models through
+ollama, two things decide whether a headless turn works at all: Ollama's context (its 4096-token
+default silently truncates opencode's own system prompt, which is larger — raise it, e.g.
+`OLLAMA_CONTEXT_LENGTH`, and declare the model's `limit.context` and `tool_call` in `opencode.json`),
+and the model (many small local models never call a tool — probe yours with a one-command task before
+relying on it). So, like the codex backend, the honest suite gate is the stub. See
 [choose-a-backend.md](choose-a-backend.md).
 
 ## Be driven by OpenCode over MCP

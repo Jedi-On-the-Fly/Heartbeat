@@ -8,7 +8,7 @@ import os
 import asyncio
 
 from ._fileblocks import write_blocks
-from . import verdict_refuted
+from . import refute_result
 
 
 def _client():
@@ -59,4 +59,4 @@ def refute(payload):
                     f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}')
     except Exception as e:
         return {"error": f"autogen unavailable ({e})"}
-    return {"refuted": verdict_refuted(str(text)), "findings": str(text)[:20000]}
+    return refute_result(str(text))

@@ -8,11 +8,27 @@ import importlib
 import re as _re
 
 
-def verdict_refuted(text):
-    """A model reviewer's verdict = the reply's FINAL REFUTED/CLEAR token (the prompt itself contains
-    'REFUTED', so a grep-anywhere would misread a CLEAR reply). Default False (could-not-refute)."""
-    toks = _re.findall(r"REFUTED|CLEAR", (text or "").upper())
-    return bool(toks) and toks[-1] == "REFUTED"
+def verdict_of(text):
+    """A model reviewer's verdict = the reply's FINAL whole-word, upper-case REFUTED/CLEAR (the prompt
+    itself contains 'REFUTED', so a grep-anywhere would misread a CLEAR reply; "unclear" or a lower-case
+    "all clear" is not a verdict): True / False — or None when there is none."""
+    toks = _re.findall(r"\b(REFUTED|CLEAR)\b", text or "")
+    return (toks[-1] == "REFUTED") if toks else None
+
+
+def refute_result(text):
+    """A verdict only when the reviewer gave one (node twin: _refute_result in the executors). No final
+    REFUTED/CLEAR token is not a CLEAR: it is an error, which the driver escalates (fail-closed). The
+    executor's author fallback reuses a backend's refute() and sets HB_REFUTE_RAW=1 so the raw reply
+    (a constraint array, parsed by author_reply) passes through."""
+    import os as _os
+    text = str(text or "")
+    if _os.environ.get("HB_REFUTE_RAW") == "1":
+        return {"refuted": False, "findings": text[:20000]}
+    v = verdict_of(text)
+    if v is None:
+        return {"error": "no REFUTED/CLEAR verdict in the reviewer's reply (fail-closed): " + text[:300]}
+    return {"refuted": v, "findings": text[:20000]}
 
 _KNOWN = {"ollama", "agno", "crewai", "claude", "claude-code", "langgraph", "openai-agents",
           "autogen", "smolagents", "pydantic-ai", "codex", "opencode"}

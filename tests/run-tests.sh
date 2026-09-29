@@ -584,8 +584,8 @@ if command -v python3 >/dev/null 2>&1; then
   else
     check "T37.2 execute degrades to protocol-valid JSON (ok:false) without agno" \
       'printf "{}" | python3 "'"$AGNO"'" execute | grep -q "\"ok\": false"'
-    check "T37.3 refute degrades to protocol-valid JSON (refuted:false) without agno" \
-      'printf "{}" | python3 "'"$AGNO"'" refute | grep -q "\"refuted\": false"'
+    check "T37.3 refute FAILS CLOSED (an error, no verdict) without agno" \
+      'printf "{}" | python3 "'"$AGNO"'" refute | python3 -c "import sys,json; d=json.loads(sys.stdin.read().strip().splitlines()[-1]); sys.exit(0 if \"error\" in d and \"refuted\" not in d else 1)"'
   fi
 else
   echo "  (python3 absent — T37 skipped)"
@@ -600,8 +600,8 @@ if command -v python3 >/dev/null 2>&1; then
   else
     check "T38.2 execute degrades to protocol-valid JSON (ok:false) without crewai" \
       'printf "{}" | python3 "'"$CREW"'" execute | grep -q "\"ok\": false"'
-    check "T38.3 refute degrades to protocol-valid JSON (refuted:false) without crewai" \
-      'printf "{}" | python3 "'"$CREW"'" refute | grep -q "\"refuted\": false"'
+    check "T38.3 refute FAILS CLOSED (an error, no verdict) without crewai" \
+      'printf "{}" | python3 "'"$CREW"'" refute | python3 -c "import sys,json; d=json.loads(sys.stdin.read().strip().splitlines()[-1]); sys.exit(0 if \"error\" in d and \"refuted\" not in d else 1)"'
   fi
 else
   echo "  (python3 absent — T38 skipped)"
@@ -646,8 +646,8 @@ if command -v python3 >/dev/null 2>&1; then
   # Point at a dead port so the degrade path is deterministic (no model needed).
   check "T41.2 execute degrades to protocol-valid JSON when the server is unreachable" \
     'OLLAMA_HOST=http://127.0.0.1:9 bash -c "printf {} | python3 \"'"$OLL"'\" execute" | grep -q "\"ok\": false"'
-  check "T41.3 refute degrades to protocol-valid JSON when the server is unreachable" \
-    'OLLAMA_HOST=http://127.0.0.1:9 bash -c "printf {} | python3 \"'"$OLL"'\" refute" | grep -q "\"refuted\": false"'
+  check "T41.3 refute FAILS CLOSED when the server is unreachable: an error, never a CLEAR verdict" \
+    'o=$(OLLAMA_HOST=http://127.0.0.1:9 bash -c "printf {} | python3 \"'"$OLL"'\" refute"); printf "%s" "$o" | grep -q "\"error\"" && ! printf "%s" "$o" | grep -q "\"refuted\""'
 else
   echo "  (python3 absent — T41 skipped)"
 fi
@@ -745,8 +745,8 @@ if command -v python3 >/dev/null 2>&1; then
   else
     check "T47.2 execute degrades to protocol-valid JSON without langgraph" \
       'printf "{}" | python3 "'"$LG"'" execute | grep -q "\"ok\": false"'
-    check "T47.3 refute degrades to protocol-valid JSON without langgraph" \
-      'printf "{}" | python3 "'"$LG"'" refute | grep -q "\"refuted\": false"'
+    check "T47.3 refute FAILS CLOSED (an error, no verdict) without langgraph" \
+      'printf "{}" | python3 "'"$LG"'" refute | python3 -c "import sys,json; d=json.loads(sys.stdin.read().strip().splitlines()[-1]); sys.exit(0 if \"error\" in d and \"refuted\" not in d else 1)"'
   fi
 else
   echo "  (python3 absent — T47 skipped)"
@@ -761,8 +761,8 @@ if command -v python3 >/dev/null 2>&1; then
   else
     check "T48.2 execute degrades to protocol-valid JSON without openai-agents" \
       'printf "{}" | python3 "'"$OA"'" execute | grep -q "\"ok\": false"'
-    check "T48.3 refute degrades to protocol-valid JSON without openai-agents" \
-      'printf "{}" | python3 "'"$OA"'" refute | grep -q "\"refuted\": false"'
+    check "T48.3 refute FAILS CLOSED (an error, no verdict) without openai-agents" \
+      'printf "{}" | python3 "'"$OA"'" refute | python3 -c "import sys,json; d=json.loads(sys.stdin.read().strip().splitlines()[-1]); sys.exit(0 if \"error\" in d and \"refuted\" not in d else 1)"'
   fi
 else
   echo "  (python3 absent — T48 skipped)"
@@ -779,8 +779,8 @@ for spec in "T49:autogen:autogen_exec.py:autogen_agentchat" "T50:smolagents:smol
     else
       check "$TN.2 execute degrades to protocol-valid JSON without $NAME" \
         'printf "{}" | python3 "'"$P"'" execute | grep -q "\"ok\": false"'
-      check "$TN.3 refute degrades to protocol-valid JSON without $NAME" \
-        'printf "{}" | python3 "'"$P"'" refute | grep -q "\"refuted\": false"'
+      check "$TN.3 refute FAILS CLOSED (an error, no verdict) without $NAME" \
+        'printf "{}" | python3 "'"$P"'" refute | python3 -c "import sys,json; d=json.loads(sys.stdin.read().strip().splitlines()[-1]); sys.exit(0 if \"error\" in d and \"refuted\" not in d else 1)"'
     fi
   else
     echo "  (python3 absent — $TN skipped)"
@@ -1501,7 +1501,7 @@ else echo "  (python3 absent — T129 skipped)"; fi
 
 grp "T130 — safety: python backends decide the verdict by the final REFUTED/CLEAR token (shared helper)"
 if command -v python3 >/dev/null 2>&1; then
-  check "T130.1 verdict_refuted: prose mentioning REFUTED but ending CLEAR is not a refutation; final token wins (verdict-robust.sh → VERDICT-ROBUST-OK)" \
+  check "T130.1 verdict_of: prose mentioning REFUTED but ending CLEAR is not a refutation; final whole-word token wins; none = no verdict (verdict-robust.sh → VERDICT-ROBUST-OK)" \
     'bash "'"$GEX"'/verdict-robust.sh" 2>&1 | grep -q "VERDICT-ROBUST-OK"'
 else echo "  (python3 absent — T130 skipped)"; fi
 
@@ -1709,6 +1709,23 @@ check "T159.3 the --all verdict reports the total elapsed time" \
   'bash "$H159/gate.sh" --all 2>&1 | grep -qE "ALL GATES PASS.*in [0-9]+s"'
 check "T159.4 captured (non-TTY) output carries NO transient progress marker — pipes and hooks stay clean" \
   '! bash "$H159/gate.sh" --check GATE_TM 2>&1 | grep -q "⏳"'
+
+grp "T174 — a refute verdict only when the reviewer gave one (fail-closed), explicit Ollama context"
+RFC="$HB_SRC/tests/refute-fail-closed.sh"
+if command -v python3 >/dev/null 2>&1; then
+  check "T174.1 every python adapter that cannot run (framework absent, server down) returns an error, not a verdict" \
+    'bash "'"$RFC"'" degrade 2>&1 | grep -q "^DEGRADE-OK"'
+  check "T174.2 the CLI adapters: a reply with no final REFUTED/CLEAR token is an error; CLEAR/REFUTED still map to false/true" \
+    'bash "'"$RFC"'" cli 2>&1 | grep -q "^CLI-OK"'
+  check "T174.3 ollama: sends num_ctx (default >= 16384, HB_OLLAMA_NUM_CTX honoured); no verdict or a prompt that filled the context is an error" \
+    'bash "'"$RFC"'" ollama 2>&1 | grep -q "^OLLAMA-OK"'
+  check "T174.5 the verdict is the final whole-word upper-case token (unclear is no CLEAR) in every parser; opencode reads the model text, never a tool output" \
+    'bash "'"$RFC"'" token 2>&1 | grep -q "^TOKEN-OK"'
+  check "T174.4 end to end: hb exec with an unreachable refuter does NOT accept the gate" \
+    'bash "'"$RFC"'" e2e 2>&1 | grep -q "^E2E-OK"'
+else
+  echo "  (python3 absent — T174 skipped)"
+fi
 
 grp "T160 — --all dedupes byte-identical criteria (same cmd + same effective timeout): run once per sweep, reuse LOUDLY"
 P160="$TMP/p160"; bash "$HB_SRC/plugin/bootstrap.sh" "$P160" >/dev/null 2>&1 </dev/null; H160="$P160/.hb"

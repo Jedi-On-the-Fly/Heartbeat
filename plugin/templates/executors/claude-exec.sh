@@ -55,11 +55,15 @@ Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-
   # Verdict = the reply's FINAL REFUTED/CLEAR token (the prompt itself contains "REFUTED", so a
   # grep-anywhere would misread a CLEAR reply that merely restates the instruction). Carry the
   # reviewer's ACTUAL text as findings on BOTH paths, so a genuine CLEAR has substantive evidence.
-  verdict="$(printf '%s' "$ans" | tr '[:lower:]' '[:upper:]' | grep -oE 'REFUTED|CLEAR' | tail -1)"
+  verdict="$(printf '%s' "$ans" | grep -owE 'REFUTED|CLEAR' | tail -1)"   # whole word, upper-case
   if [ "$verdict" = REFUTED ]; then
     printf '{"refuted":true,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 20000 | jstr)"
-  else
+  elif [ "$verdict" = CLEAR ]; then
     printf '{"refuted":false,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 20000 | jstr)"
+  else
+    # no final REFUTED/CLEAR token (the CLI failed, or the reviewer never concluded): NOT a CLEAR —
+    # an error, which the driver escalates (fail-closed)
+    printf '{"error":%s}\n' "$(printf 'no REFUTED/CLEAR verdict in the reviewer reply (fail-closed): %s' "$(printf '%s' "$ans" | head -c 300)" | jstr)"
   fi
 else
   if claude ${mdl[@]+"${mdl[@]}"} -p "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.

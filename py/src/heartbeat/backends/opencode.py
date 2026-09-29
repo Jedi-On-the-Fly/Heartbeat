@@ -6,14 +6,16 @@ non-interactive mode; `--format json` emits structured events. The model is `-m 
 `anthropic/claude-...`); HB_EXEC_PROVIDER prefixes a bare model name. Degrades to protocol-valid
 JSON if `opencode` isn't on PATH.
 
-Headless autonomy note: opencode's `run` blocks on an "ask" permission when there's no TTY.
-Configure opencode.json `permission: allow` for unattended HeartBeat use (opencode 0.15.3 has no
-`--auto` flag). The adapter closes stdin defensively (the prompt travels as an argv message).
+Autonomy + isolation, by feature (not version): when `opencode run --help` advertises them, both modes
+pass --auto (else a permission "ask" blocks with no TTY) and --standalone (else v2 attaches to a
+background service whose cwd/config may not be the project's). An older CLI without them needs
+opencode.json `permission: allow`. stdin is closed (the prompt travels as an argv message).
 """
+import json
 import os
 import subprocess
 from shutil import which
-from . import verdict_refuted
+from . import refute_result
 
 
 def _model():
@@ -24,13 +26,39 @@ def _model():
     return f"{prov}/{m}" if (prov and "/" not in m) else m
 
 
+def _features():
+    try:
+        r = subprocess.run(["opencode", "run", "--help"], stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, timeout=30)
+        h = (r.stdout or "") + (r.stderr or "")
+    except Exception:
+        h = ""
+    return [f for f in ("--standalone", "--auto") if f in h]
+
+
 def _cmd(prompt):
     argv = ["opencode", "run", "--format", "json"]
     m = _model()
     if m:
         argv += ["-m", m]
+    argv += _features()
     argv.append(prompt)
     return argv
+
+
+def _texts(stdout):
+    """The model's own words in a --format json event stream: its "text" parts, in order — never a
+    tool's output (a file the reviewer read may contain REFUTED/CLEAR). Node twin: texts()."""
+    out = []
+    for line in (stdout or "").splitlines():
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        p = (e.get("part") or {}) if isinstance(e, dict) else {}
+        if e.get("type") == "text" and p.get("type") == "text" and isinstance(p.get("text"), str):
+            out.append(p["text"])
+    return "\n".join(out)
 
 
 def execute(payload):
@@ -59,6 +87,6 @@ def refute(payload):
     try:
         r = subprocess.run(_cmd(prompt), cwd=cwd, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=600)
-        return {"refuted": verdict_refuted(r.stdout or ""), "findings": (r.stdout or "")[:20000]}
+        return refute_result(_texts(r.stdout))
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

@@ -155,6 +155,8 @@ def dispatch(cfg, mode, payload, hbdir, task_id, cwd=None, model=None, provider=
                 if hasattr(mod, "author"):   # else its review call, reply → JSON array (fail-closed)
                     return mod.author(p)
                 from .backends._fileblocks import author_reply
+                saved.setdefault("HB_REFUTE_RAW", os.environ.get("HB_REFUTE_RAW"))   # restored in finally
+                os.environ["HB_REFUTE_RAW"] = "1"          # the raw reply, not a verdict
                 return author_reply((mod.refute(p) or {}).get("findings", ""))
             return {"error": f"unsupported mode {mode!r} (execute | refute | author)"}   # never falls through to execute
     finally:

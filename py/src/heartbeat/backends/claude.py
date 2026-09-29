@@ -2,7 +2,7 @@
 import os
 import subprocess
 from shutil import which
-from . import verdict_refuted
+from . import refute_result
 
 
 def _claude(prompt):
@@ -33,7 +33,7 @@ def refute(payload):
               "You are a skeptical reviewer. End with REFUTED or CLEAR.")
     try:
         r = subprocess.run(_claude(prompt), capture_output=True, text=True, timeout=600)
-        return {"refuted": verdict_refuted(r.stdout), "findings": r.stdout[:20000]}
+        return refute_result(r.stdout)
     except Exception as e:
         return {"error": f"reviewer error: {e}"}
 

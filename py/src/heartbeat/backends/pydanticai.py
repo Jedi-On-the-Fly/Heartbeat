@@ -7,7 +7,7 @@ protocol-valid JSON if pydantic-ai isn't installed.
 import os
 
 from ._fileblocks import write_blocks, norm_rel
-from . import verdict_refuted
+from . import refute_result
 
 
 def _model():
@@ -68,6 +68,6 @@ def refute(payload):
         return {"error": f"pydantic-ai unavailable ({e})"}
     try:
         text = _text(agent.run_sync(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}'))
-        return {"refuted": verdict_refuted(text), "findings": text[:20000]}
+        return refute_result(text)
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

@@ -2,7 +2,7 @@
 A HeartBeat task is NOT a CrewAI Task — one HeartBeat task = one Agent+Task+Crew run."""
 import os
 from ._fileblocks import write_blocks
-from . import verdict_refuted
+from . import refute_result
 
 
 def _llm():
@@ -48,6 +48,6 @@ def refute(payload):
                 agent=rev, expected_output="REFUTED or CLEAR.")
     try:
         out = str(Crew(agents=[rev], tasks=[task], verbose=False).kickoff())
-        return {"refuted": verdict_refuted(out), "findings": out[:20000]}
+        return refute_result(out)
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

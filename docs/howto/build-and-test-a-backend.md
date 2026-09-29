@@ -29,6 +29,12 @@ Three rules make an adapter safe:
 - **Degrade, don't crash.** If the framework/model/server is unavailable, still emit a valid
   protocol object (`{"ok": false, "summary": "…unavailable…"}`) — never a traceback or empty
   output. The driver treats a failed shape as a failed task and escalates.
+- **A verdict only when the reviewer gave one.** `refute` returns `{"refuted": bool, …}` only when
+  the reply ends with an explicit, whole-word, upper-case `REFUTED` or `CLEAR` ("unclear" is not a
+  `CLEAR`; read the model's own text, not a tool's output); a review that could not run (framework
+  missing, server unreachable, CLI failed) or a reply with no final verdict token returns
+  `{"error": "…"}`, which the driver escalates. Never `{"refuted": false}` for "could not review" —
+  the driver reads that as "could not refute" and passes the gate.
 - **Refuse an unknown mode.** Print `{"error": "unsupported mode …"}` and do nothing. A mode that
   is not `refute` must never fall through to `execute` — execute writes files, and the driver adds
   modes over time (`author` did).
@@ -43,11 +49,13 @@ methods are dispatched independently, so `refute` can be routed to a *different*
 Before trusting a backend, run it through the contract in degrade mode and confirm the shape.
 [`gate-examples/backend-conformance.sh`](gate-examples/backend-conformance.sh) is a reusable
 harness: it checks that **every shipped adapter** — python and shell (CLI absent) — degrades to
-a protocol-valid object in all three modes (`ok` / `refuted` booleans, `author` → `ok:false` or a
-constraint list), and refuses an unknown mode while writing nothing — deriving the list from the
+a protocol-valid object in all three modes (`ok` boolean; a `refute` that could not run is an
+`{"error"}`, never a verdict; `author` → `ok:false` or a constraint list), and refuses an unknown
+mode while writing nothing — deriving the list from the
 executors directory so a new adapter is included automatically — and it proves the harness has
 teeth by **rejecting** a wrong-shape backend (`{"done":true}`), one that prints junk after its
-JSON, and one whose unknown mode falls through to execute. Run it:
+JSON, one that emits a CLEAR verdict while it could not review (fail-open), and one whose unknown
+mode falls through to execute. Run it:
 
 ```bash
 bash docs/howto/gate-examples/backend-conformance.sh   # -> BACKEND-CONFORMANCE-OK:<n>

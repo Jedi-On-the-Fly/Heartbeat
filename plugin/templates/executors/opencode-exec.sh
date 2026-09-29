@@ -4,9 +4,10 @@
 #   execute → {"ok":bool,"summary":str}   refute → {"refuted":bool,"findings":str}
 # Model via HB_EXEC_MODEL (-m provider/model, e.g. ollama/qwen2.5:7b-instruct). Degrades to
 # protocol-valid JSON if `opencode` isn't on PATH.
-# Autonomy: opencode's `run` blocks on an "ask" permission with no TTY — configure opencode.json
-# `permission: allow` for unattended use (0.15.3 has no --auto). The prompt travels as an argv
-# message, so we run with </dev/null defensively.
+# Autonomy + isolation, by feature (not version): when `opencode run --help` advertises them, execute and
+# refute pass --auto (else a permission "ask" blocks with no TTY) and every mode passes --standalone (else
+# v2 attaches to a background service whose cwd/config may not be the project's). An older CLI without
+# them needs opencode.json `permission: allow`. The prompt travels as an argv message, so </dev/null.
 set -uo pipefail
 
 mode="${1:-execute}"
@@ -23,6 +24,9 @@ let t="";process.stdin.on("data",c=>t+=c).on("end",()=>{
 });'; }
 field() { printf '%s' "$payload" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String((JSON.parse(d)$1)??''))}catch(e){process.stdout.write('')}})"; }
 jstr()  { node -pe 'JSON.stringify(require("fs").readFileSync(0,"utf8"))'; }
+# the model's own words in a --format json event stream: its "text" parts, in order — never a tool's
+# output (a file the reviewer read or a grep hit may contain REFUTED/CLEAR)
+texts() { node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const o=[];for(const l of d.split("\n")){let e;try{e=JSON.parse(l)}catch(x){continue}const p=(e&&e.part)||{};if(e.type==="text"&&p.type==="text"&&typeof p.text==="string")o.push(p.text)}process.stdout.write(o.join("\n"))})'; }
 
 ctx="$(field .context)"
 
@@ -35,6 +39,10 @@ fi
 
 mdl=()
 if [ -n "${HB_EXEC_MODEL:-}" ]; then mdl=(-m "${HB_EXEC_MODEL}"); fi
+ochelp="$(opencode run --help 2>&1 </dev/null)"
+case "$ochelp" in *--standalone*) mdl+=(--standalone);; esac
+run_auto=()
+case "$ochelp" in *--auto*) run_auto=(--auto);; esac
 
 # The gate-time constraint AUTHOR: a read-only model call whose reply must carry a JSON array.
 if [ "$mode" = author ]; then
@@ -44,21 +52,25 @@ fi
 
 if [ "$mode" = refute ]; then
   rp="$(field .prompt)"
-  ans="$(opencode run --format json ${mdl[@]+"${mdl[@]}"} "You are a SKEPTICAL adversarial reviewer for a HeartBeat phase gate.
+  ans="$(opencode run --format json ${mdl[@]+"${mdl[@]}"} ${run_auto[@]+"${run_auto[@]}"} "You are a SKEPTICAL adversarial reviewer for a HeartBeat phase gate.
 ${rp}
 
 Context:
 ${ctx}
 
-Do not modify files. Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with the single token REFUTED (you found a hole) or CLEAR (you could not)." </dev/null 2>/dev/null)"
-  verdict="$(printf '%s' "$ans" | tr '[:lower:]' '[:upper:]' | grep -oE 'REFUTED|CLEAR' | tail -1)"
+Do not modify files. Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with the single token REFUTED (you found a hole) or CLEAR (you could not)." </dev/null 2>/dev/null | texts)"
+  verdict="$(printf '%s' "$ans" | grep -owE 'REFUTED|CLEAR' | tail -1)"   # whole word, upper-case
   if [ "$verdict" = REFUTED ]; then
     printf '{"refuted":true,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 20000 | jstr)"
-  else
+  elif [ "$verdict" = CLEAR ]; then
     printf '{"refuted":false,"findings":%s}\n' "$(printf '%s' "$ans" | head -c 20000 | jstr)"
+  else
+    # no final REFUTED/CLEAR token (the CLI failed, or the reviewer never concluded): NOT a CLEAR —
+    # an error, which the driver escalates (fail-closed)
+    printf '{"error":%s}\n' "$(printf 'no REFUTED/CLEAR verdict in the reviewer reply (fail-closed): %s' "$(printf '%s' "$ans" | head -c 300)" | jstr)"
   fi
 else
-  if opencode run --format json ${mdl[@]+"${mdl[@]}"} "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.
+  if opencode run --format json ${mdl[@]+"${mdl[@]}"} ${run_auto[@]+"${run_auto[@]}"} "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.
 
 ${ctx}" </dev/null >/tmp/hb-exec-opencode.$$.log 2>&1; then
     echo '{"ok":true,"summary":"opencode completed the task"}'
