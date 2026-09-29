@@ -12,8 +12,9 @@ VACUOUS = re.compile(r"^\s*(true|:|exit\s+0|echo\b|test\s+1\s*=\s*1|\[\s+1\s+=\s
 EXISTENCE = re.compile(r"^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls(\s|$))")
 NONDET = re.compile(r"\bcurl\b|\bwget\b|\bnc\b|\bping\b|\bsleep\b|\bRANDOM\b|\bshuf\b|/dev/urandom|\bSECONDS\b|\$\$|\bmktemp\b(?!\s+-u)|\bdate\b|https?://(?!localhost|127\.0\.0\.1)")
 # A criterion that CREATES evidence can fabricate its own pass — a gate must observe,
-# not produce. Read-only redirections (/dev/null, /tmp scratch, 2>&1) are exempt.
-SIDE_EFFECT = re.compile(r"(^|[^0-9>])>{1,2}\s*(?!/dev/null|/tmp|&\s*[12])|\btee\b|\bcp\b|\bmv\b|\bmkdir\b|\btouch\b|\bdd\b|\bsed\s+-i\b|\binstall\s+-D\b")
+# not produce. Read-only redirections (/dev/null, /tmp scratch, 2>&1) are exempt, and so is
+# `=>` (a JS arrow in an inline `node -e`).
+SIDE_EFFECT = re.compile(r"(^|[^0-9>=])>{1,2}\s*(?!/dev/null|/tmp|&\s*[12])|\btee\b|\bcp\b|\bmv\b|\bmkdir\b|\btouch\b|\bdd\b|\bsed\s+-i\b|\binstall\s+-D\b")
 
 
 def classify(cmd):

@@ -1,0 +1,4 @@
+{"phases":[{"id":"P","title":"double","gate_entry":null,"gate_exit":"G","tasks":[{"id":"T","title":"write m.js","requires":[],"description":"write m.js exporting double(x)"}]}],
+ "gates":{"G":{"criteria":[
+   {"id":"c1","desc":"double maps over a list","cmd":"cd \"$PROJECT_DIR\" && node -e \"const {double}=require('./m.js'); process.exit([1,2].map(x => double(x)).join()==='2,4'?0:1)\""},
+   {"id":"c2","desc":"double is a function of its input","cmd":"cd \"$PROJECT_DIR\" && node -e \"const d=require('./m.js').double; const ok=[3,5].every((n)=>d(n)===2*n); process.exit(ok?0:1)\""}]}}}

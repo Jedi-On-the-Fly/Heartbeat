@@ -21,8 +21,8 @@ const EXISTENCE = /^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls(\s|$))/;
 const NONDET    = /\bcurl\b|\bwget\b|\bnc\b|\bping\b|\bsleep\b|\bRANDOM\b|\bshuf\b|\/dev\/urandom|\bSECONDS\b|\$\$|\bmktemp\b(?!\s+-u)|\bdate\b|https?:\/\/(?!localhost|127\.0\.0\.1)/;
 // A criterion that CREATES evidence can fabricate its own pass. Gates must observe
 // reality, not produce it. Read-only redirections (/dev/null, /tmp scratch, 2>&1) are
-// exempt; writes into the project tree are the risk.
-const SIDE_EFFECT = /(^|[^0-9>])>{1,2}\s*(?!\/dev\/null|\/tmp|&\s*[12])|\btee\b|\bcp\b|\bmv\b|\bmkdir\b|\btouch\b|\bdd\b|\bsed\s+-i\b|\binstall\s+-D\b/;
+// exempt, and so is `=>` (a JS arrow in an inline `node -e`); writes into the project tree are the risk.
+const SIDE_EFFECT = /(^|[^0-9>=])>{1,2}\s*(?!\/dev\/null|\/tmp|&\s*[12])|\btee\b|\bcp\b|\bmv\b|\bmkdir\b|\btouch\b|\bdd\b|\bsed\s+-i\b|\binstall\s+-D\b/;
 
 function classify(cmd) {
   const c = (cmd || '').trim();

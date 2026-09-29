@@ -41,7 +41,7 @@ suites (node T42, py test_audit.py).
 
 **The parity test `tests/parity.sh`** (ratcheted as node-suite T43) now has **full
 coverage** of the shared surfaces — node ≡ python on:
-- **audit** findings (5 fixtures), **lint** errors (`tests/fixtures/parity/broken.json` + fixtures),
+- **audit** findings (6 fixtures), **lint** errors (`tests/fixtures/parity/broken.json` + fixtures),
 - **protocol** — the reason KEYS (not the action text, see below),
 - **resolve** (`hb next`), **ready** (the runnable set), **report** (progress numbers),
 - **diagnose** (the inferred blocker's first line),

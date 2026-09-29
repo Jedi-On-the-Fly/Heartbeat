@@ -47,5 +47,8 @@ clean="$(mktemp)"
 printf '%s' '{"phases":[{"id":"P","gate_exit":"G","tasks":[{"id":"T","title":"write out.txt"}]}],"gates":{"G":{"criteria":[{"id":"c","cmd":"grep -q ok \"$PROJECT_DIR/out.txt\""}]}}}' > "$clean"
 cgot="$(rules_of "$clean")"; rm -f "$clean"
 for r in $rules; do case " $cgot " in *" $r "*) fail "clean DAG wrongly tripped '$r' (cry wolf): $cgot";; esac; done
+# ... and a JS arrow function in an inline `node -e` (`x => …`, `(n)=>…`) is not a shell redirect
+agot="$(rules_of "$ROOT/tests/fixtures/audit/arrow.json")"
+case " $agot " in *" side_effecting "*) fail "an arrow function (=>) was read as a file redirect (cry wolf): $agot";; esac
 
 echo "AUDIT-RULES-PROVEN:$n (every auditor rule fires on a must-trip DAG; a clean DAG trips none)."
