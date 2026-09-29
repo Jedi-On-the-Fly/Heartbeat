@@ -1727,6 +1727,14 @@ else
   echo "  (python3 absent — T174 skipped)"
 fi
 
+grp "T175 — a gate blocked by a failed review names that cause (hb exec stop + diagnose), both runtimes"
+if command -v python3 >/dev/null 2>&1; then
+  check "T175.1 criteria pass + review refutes → the stop and diagnose name review_failed with the finding; a criteria failure keeps the criteria diagnosis (gate-blocked-cause.sh → GATE-BLOCKED-CAUSE-OK)" \
+    'bash "'"$HB_SRC"'/tests/gate-blocked-cause.sh" 2>&1 | grep -q "^GATE-BLOCKED-CAUSE-OK"'
+else
+  echo "  (python3 absent — T175 skipped)"
+fi
+
 grp "T160 — --all dedupes byte-identical criteria (same cmd + same effective timeout): run once per sweep, reuse LOUDLY"
 P160="$TMP/p160"; bash "$HB_SRC/plugin/bootstrap.sh" "$P160" >/dev/null 2>&1 </dev/null; H160="$P160/.hb"
 node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const cmd='echo run >> \"\$PROJECT_DIR/runs.txt\"';d.gates.G0={desc:'0',criteria:[{id:'c',desc:'suite',cmd}]};d.gates.G1={desc:'1',criteria:[{id:'c',desc:'suite',cmd}]};d.gates.G2={desc:'2',criteria:[{id:'c',desc:'suite',cmd}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"

@@ -144,6 +144,14 @@ for c in calls:
 PY
   done
 done
+# the feature probe runs in the TASK's directory, like the run itself — never the caller's cwd
+printf '#!/usr/bin/env bash\ncase "$*" in *--help*) : > probed-here; exit 0;; esac\ncat >/dev/null 2>&1 </dev/null; echo "CLEAR"\n' > "$fake/opencode"; chmod +x "$fake/opencode"
+caller="$(mktemp -d)"; task="$(mktemp -d)"
+( cd "$caller" && PATH="$fake:$PATH" PYTHONPATH="$ROOT/py/src" python3 -c '
+import sys; from heartbeat.backends import opencode as o
+o.refute({"prompt": "p", "context": "c", "cwd": sys.argv[1]})' "$task" >/dev/null 2>&1 )
+[ -e "$task/probed-here" ] && [ ! -e "$caller/probed-here" ] || fail "the python opencode backend probes \`opencode run --help\` outside the task's directory"
+rm -rf "$caller" "$task"
 n=$((n + 1))
 
 echo "BACKEND-CONFORMANCE-OK:$n (every shipped adapter — python and shell — conforms in degrade mode incl. author + unknown-mode refusal; the role model reaches the CLI; non-conformant backends rejected)."

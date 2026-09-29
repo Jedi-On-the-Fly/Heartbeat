@@ -138,15 +138,24 @@ def diagnose(hbdir, reason=None):
         return "\n".join(out)
 
     if reason == "gate_blocked":
-        g = None
+        g, rf = None, None
         for ev in reversed(events):
-            if ev.get("event") in ("gate_failed", "gate_passed"):
+            if ev.get("event") in ("gate_failed", "gate_passed", "review_failed"):
                 g = ev.get("gate")
+                rf = ev if ev.get("event") == "review_failed" else None
                 break
         if not g:
             ph = next((p for p in (dag.get("phases") or []) if p["id"] not in state["completed_phases"]), None)
             g = ph and ph.get("gate_exit")
         out.append(f"  Gate: {g}")
+        if rf:   # the criteria passed; the adversarial review did not
+            note = " ".join(str(rf.get("note") or "(none recorded)").split())[:600]
+            out.append("  Cause: review_failed — the criteria pass; the review refuted the phase (or could not run).")
+            out.append(f"  Findings: {note}")
+            out.append("  Recover: a refutation → fix the CODE for the hole it names (never weaken the gate or the "
+                       f"review); a review that could not run → fix the refuter backend. Then hb gate {g} — a pass "
+                       "owes the review again.")
+            return "\n".join(out)
         res = gatemod.eval_gate(hbdir, g) if g else None
         for ln in (res["lines"] if res else []):
             if "✗" in ln:

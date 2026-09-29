@@ -26,9 +26,9 @@ def _model():
     return f"{prov}/{m}" if (prov and "/" not in m) else m
 
 
-def _features():
+def _features(cwd):
     try:
-        r = subprocess.run(["opencode", "run", "--help"], stdin=subprocess.DEVNULL,
+        r = subprocess.run(["opencode", "run", "--help"], cwd=cwd, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=30)
         h = (r.stdout or "") + (r.stderr or "")
     except Exception:
@@ -36,12 +36,12 @@ def _features():
     return [f for f in ("--standalone", "--auto") if f in h]
 
 
-def _cmd(prompt):
+def _cmd(prompt, cwd):
     argv = ["opencode", "run", "--format", "json"]
     m = _model()
     if m:
         argv += ["-m", m]
-    argv += _features()
+    argv += _features(cwd)
     argv.append(prompt)
     return argv
 
@@ -69,7 +69,7 @@ def execute(payload):
     prompt = ("You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. "
               f"Work in {cwd}. Never edit .hb/ or gate.sh.\n\n{ctx}")
     try:
-        r = subprocess.run(_cmd(prompt), cwd=cwd, stdin=subprocess.DEVNULL,   # prompt is an argv message
+        r = subprocess.run(_cmd(prompt, cwd), cwd=cwd, stdin=subprocess.DEVNULL,   # prompt is an argv message
                            capture_output=True, text=True, timeout=1800)
         summary = (r.stdout or "").strip()[-200:]
         return {"ok": r.returncode == 0,
@@ -85,7 +85,7 @@ def refute(payload):
     prompt = (f'{payload.get("prompt", "Refute.")}\n\nContext:\n{payload.get("context", "")}\n\n'
               "You are a skeptical reviewer. Do not modify files. End with REFUTED or CLEAR.")
     try:
-        r = subprocess.run(_cmd(prompt), cwd=cwd, stdin=subprocess.DEVNULL,
+        r = subprocess.run(_cmd(prompt, cwd), cwd=cwd, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=600)
         return refute_result(_texts(r.stdout))
     except Exception as e:

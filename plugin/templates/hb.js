@@ -395,10 +395,19 @@ function diagnose(reason) {
   if (!reason) { P('  Not currently blocked. Run: node .hb/hb.js state'); return out.join('\n'); }
 
   if (reason === 'gate_blocked') {
-    let g = null;
-    for (let i = events.length - 1; i >= 0 && !g; i--) if (['gate_failed', 'gate_passed'].includes(events[i].event)) g = events[i].gate;
+    let g = null, rf = null;
+    for (let i = events.length - 1; i >= 0 && !g; i--) if (['gate_failed', 'gate_passed', 'review_failed'].includes(events[i].event)) { g = events[i].gate; if (events[i].event === 'review_failed') rf = events[i]; }
     if (!g) { const p = (dag.phases || []).find(p => !state.completed_phases.includes(p.id)); g = p && p.gate_exit; }
     P(`  Gate: ${g}`);
+    if (rf) {   // the criteria passed; the adversarial review did not
+      P('  Cause: review_failed — the criteria pass; the review refuted the phase (or could not run).');
+      P(`  Findings: ${String(rf.note || '(none recorded)').replace(/\s+/g, ' ').slice(0, 600)}`);
+      P('  Recover:');
+      P('   1. A refutation: fix the CODE for the hole it names — never weaken the gate or the review.');
+      P('   2. A review that could not run (an error): fix the refuter backend.');
+      P(`   3. Then bash .hb/gate.sh ${g} — a pass owes the review again.`);
+      return out.join('\n');
+    }
     P('  Observe (read-only re-run):');
     const fails = sh(`bash "${HB_DIR}/gate.sh" --check "${g}"`).split('\n').filter(l => l.includes('✗'));
     (fails.length ? fails : ['   (run: bash .hb/gate.sh --check ' + g + ')']).forEach(l => P('   ' + l.trim()));

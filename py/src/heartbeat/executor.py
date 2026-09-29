@@ -402,6 +402,15 @@ def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refute
         return refuse("review pass refused: " + err)
     return None
 
+def _blocked_cause(hbdir):
+    """Why the gate is blocked: its criteria failed, or its criteria passed and the review did not
+    (review_failed — a refutation, or a review that could not run). Node twin: blockedCause()."""
+    last = next((e for e in reversed(st.read_events(hbdir)) if e.get("event") in ("gate_failed", "review_failed")), None)
+    if last and last.get("event") == "review_failed":
+        note = " ".join(str(last.get("note") or "(no findings recorded)").split())[:300]
+        return f"{last.get('gate')}: review_failed — {note} (hb diagnose)"
+    return f"{(last.get('gate') or '?') + ': ' if last else ''}gate errors — human needed (escalate-only policy)"
+
 def run(hbdir):
     # In-process, so don't leak HB_ACTOR into the caller's environment.
     _saved = os.environ.get("HB_ACTOR")
@@ -555,6 +564,9 @@ def _run(hbdir):
             print(reportmod.render(hbdir))
             print("HB-EXEC DONE: all phases complete")
             return 0
+        elif reason == "gate_blocked":
+            print(f"HB-EXEC STOP: gate_blocked — {_blocked_cause(hbdir)}")
+            return 1
         else:
             print(f"HB-EXEC STOP: {reason}")
             return 1

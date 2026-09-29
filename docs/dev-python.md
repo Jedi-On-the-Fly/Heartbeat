@@ -29,7 +29,7 @@ Data model (`dag.json` / `events.jsonl` / `state.json`), event types, phase-comp
 | `review.py` | `build_prompt(dag, det)`, `run(hbdir, dag)` → `{det, refuted, concerns}` | agent DAG refutation via a backend |
 | `gate.py` | `eval_gate(hbdir, gate, timeout)`, `run_gate(hbdir, gate, check)`, `run_all(hbdir)` | criteria via `subprocess(shell=True)` |
 | `tick.py` | `tick(hbdir)` → `{wakeAgent, data}` | Stage A; priority order = plugin |
-| `doctor.py` | `doctor(hbdir)`, `has_rot(hbdir)`, `diagnose(hbdir, reason)` | rot + computed root-cause; once `_start` exists, accepted gates missing their acceptance anchor or (recorded autocommit-on) their tag — lines identical to node (T167) |
+| `doctor.py` | `doctor(hbdir)`, `has_rot(hbdir)`, `diagnose(hbdir, reason)` | rot + computed root-cause (a gate blocked by a failed review: `Cause: review_failed` + findings; `hb exec` names the same cause on its `gate_blocked` stop); once `_start` exists, accepted gates missing their acceptance anchor or (recorded autocommit-on) their tag — lines identical to node (T167) |
 | `report.py` | `build(hbdir)`, `render(hbdir)`, `refuter_impact(events, dag)` | JSON shape differs from node (progress-only parity); the refuter-impact summary (catches/clears per gate + `review.profile` lens, from the event log) is a node≡python shared surface (T152) |
 | `scaffold.py` | `init(project_dir, force)` | `hb init`; `DEFAULT_DAG`, `DEFAULT_EXECUTOR` |
 | `protocol.py` | `PROTOCOL`, `render_md()` | reason keys = plugin; action text cites `hb` console |

@@ -518,7 +518,7 @@ async function run() {
         return 0;
 
       // escalate-only: every human-needed reason stops the run and notifies.
-      case 'gate_blocked':        escalate('gate_blocked', 'gate errors — human needed (escalate-only policy)'); return 1;
+      case 'gate_blocked':        escalate('gate_blocked', blockedCause()); return 1;
       case 'build_stuck':         escalate('build_stuck', data.task || data.signal || ''); return 1;
       case 'deadlock':            escalate('deadlock', data.detail ? JSON.stringify(data.detail) : ''); return 1;
       case 'unsanctioned_drift':  escalate('unsanctioned_drift', ''); return 1;
@@ -531,6 +531,17 @@ async function run() {
   }
   process.stdout.write('HB-EXEC: max iterations reached\n');
   return 0;
+}
+
+// Why the gate is blocked: its criteria failed, or its criteria passed and the review did not
+// (review_failed — a refutation, or a review that could not run). Read from the log, newest first.
+function blockedCause() {
+  let evs = [];
+  try { evs = fs.readFileSync(path.join(HB_DIR, 'events.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return {}; } }); } catch (e) {}
+  const last = evs.reverse().find(e => e.event === 'gate_failed' || e.event === 'review_failed');
+  if (last && last.event === 'review_failed')
+    return `${last.gate}: review_failed — ${String(last.note || '(no findings recorded)').replace(/\s+/g, ' ').slice(0, 300)} (node .hb/hb.js diagnose)`;
+  return `${last ? last.gate + ': ' : ''}gate errors — human needed (escalate-only policy)`;
 }
 
 function report() {
