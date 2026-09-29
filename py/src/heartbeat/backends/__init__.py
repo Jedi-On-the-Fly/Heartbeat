@@ -9,20 +9,19 @@ import re as _re
 
 
 def verdict_of(text):
-    """A model reviewer's verdict = the reply's FINAL whole-word, upper-case REFUTED/CLEAR (the prompt
-    itself contains 'REFUTED', so a grep-anywhere would misread a CLEAR reply; "unclear" or a lower-case
-    "all clear" is not a verdict, nor is a copied template "REFUTED | CLEAR" or a negated "NOT CLEAR"): True / False — or None
-    when there is none."""
+    """A model reviewer's verdict: the reply's FINAL whole-word, upper-case REFUTED/CLEAR — True / False —
+    but only when that token stands alone: at the start of a line, or right after a sentence end or a
+    label (". CLEAR", "Verdict: REFUTED", "— CLEAR"). The prompt itself contains 'REFUTED', so a
+    grep-anywhere would misread a CLEAR reply; a token inside a sentence ("NOT yet CLEAR", "far from
+    CLEAR", a copied template "REFUTED | CLEAR") is no verdict: None (fail-closed)."""
     t = text or ""
     ms = list(_re.finditer(r"\b(REFUTED|CLEAR)\b", t))
     if not ms:
         return None
     a = ms[-1]
-    if len(ms) > 1 and ms[-2].group(1) != a.group(1) and \
-            _re.fullmatch(r"\W*(?:or|and)?\W*", t[ms[-2].end():a.start()], _re.I):
-        return None   # "REFUTED | CLEAR", "REFUTED or CLEAR": a copied answer template, no verdict
-    if _re.search(r"(?:\bnot|n't)\W*$", t[:a.start()], _re.I):
-        return None   # "NOT CLEAR", "isn't REFUTED": a negated token is no verdict
+    pre = _re.sub(r"[\s*_`#>\"'\u201c\u201d]+$", "", t[:a.start()].split("\n")[-1])
+    if pre and not _re.search(r"(?:[.!?:;\u2014\u2013]|\s-)$", pre):
+        return None
     return a.group(1) == "REFUTED"
 
 

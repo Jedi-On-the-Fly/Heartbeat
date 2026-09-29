@@ -31,7 +31,8 @@ Three rules make an adapter safe:
   output. The driver treats a failed shape as a failed task and escalates.
 - **A verdict only when the reviewer gave one.** `refute` returns `{"refuted": bool, …}` only when
   the reply ends with an explicit, whole-word, upper-case `REFUTED` or `CLEAR` ("unclear" is not a
-  `CLEAR`, a copied template `REFUTED | CLEAR` or a negated `NOT CLEAR` is no verdict; read the model's own text, not a
+  `CLEAR`, and the token must stand alone — at a line start or after a sentence end or a label (`Verdict:
+  CLEAR`); a token inside a sentence (`NOT yet CLEAR`, a copied template `REFUTED | CLEAR`) is no verdict; read the model's own text, not a
   tool's output); a review that could not run (framework
   missing, server unreachable, CLI failed) or a reply with no final verdict token returns
   `{"error": "…"}`, which the driver escalates. Never `{"refuted": false}` for "could not review" —

@@ -27,18 +27,19 @@ except Exception:
         return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
-    """The reply's FINAL whole-word, upper-case REFUTED/CLEAR: True / False — or None when there is
-    none ("unclear" or a lower-case "all clear" is not a verdict)."""
+    """The reply's verdict: its FINAL whole-word, upper-case REFUTED/CLEAR — True / False — but only
+    when that token stands alone: at the start of a line, or right after a sentence end or a label
+    (". CLEAR", "Verdict: REFUTED", "— CLEAR"). A token inside a sentence ("NOT yet CLEAR", "far
+    from CLEAR", a copied template "REFUTED | CLEAR") is no verdict: None (fail-closed)."""
     import re as _r
-    ms = list(_r.finditer(r"\b(REFUTED|CLEAR)\b", t or ""))
+    t = t or ""
+    ms = list(_r.finditer(r"\b(REFUTED|CLEAR)\b", t))
     if not ms:
         return None
     a = ms[-1]
-    if len(ms) > 1 and ms[-2].group(1) != a.group(1) and \
-            _r.fullmatch(r"\W*(?:or|and)?\W*", (t or "")[ms[-2].end():a.start()], _r.I):
-        return None   # "REFUTED | CLEAR", "REFUTED or CLEAR": a copied answer template, no verdict
-    if _r.search(r"(?:\bnot|n't)\W*$", (t or "")[:a.start()], _r.I):
-        return None   # "NOT CLEAR", "isn't REFUTED": a negated token is no verdict
+    pre = _r.sub(r"[\s*_`#>\"'\u201c\u201d]+$", "", t[:a.start()].split("\n")[-1])
+    if pre and not _r.search(r"(?:[.!?:;\u2014\u2013]|\s-)$", pre):
+        return None
     return a.group(1) == "REFUTED"
 
 

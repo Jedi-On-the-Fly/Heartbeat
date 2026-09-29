@@ -35,6 +35,11 @@ def test_the_verdict_is_a_whole_upper_case_word():
     assert refute_result("I first thought CLEAR.\nThe gate is hollow. REFUTED")["refuted"] is True
     # a negated final token ("NOT CLEAR") is no verdict — read as CLEAR it would pass a refutation
     assert "error" in refute_result("The criterion never runs the edge case, so the gate is NOT CLEAR.")
+    # the token must stand alone: a token inside a sentence ("NOT yet CLEAR", "far from CLEAR") is none
+    for s in ("Several criteria fail, so the gate is NOT yet CLEAR.", "far from CLEAR", "It is never CLEAR."):
+        assert "error" in refute_result(s), s
+    assert refute_result("I checked every criterion.\n\n**Verdict:** CLEAR")["refuted"] is False
+    assert refute_result("Final verdict — REFUTED")["refuted"] is True
 
 
 def test_opencode_reads_the_models_text_not_tool_output(tmp_path, monkeypatch):
