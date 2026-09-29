@@ -246,7 +246,7 @@ function composePrompt(hbdir, dag, gate, opts) {
   const constrained = Array.isArray(cs) && cs.length > 0;
   if (!constrained) {
     if (free) throw new Error(gate + " has no plan-time constraints — the free review is part of the constraint-first review of a constrained gate");
-    return base;   // an unconstrained gate: byte-identical to the pre-constraint compose
+    return base + "\n\n" + HOLES_BLOCK;   // an unconstrained gate: the pre-constraint compose + the HOLES line
   }
   // Constraint-first review context (the change list; the gate-time set of THIS review cycle).
   const hbjs = require('./hb.js');
@@ -254,6 +254,7 @@ function composePrompt(hbdir, dag, gate, opts) {
   if (free) {
     parts.push("## Free review\nYou are the FREE reviewer: there is deliberately no constraint list. Look in breadth for anything " +
       "that makes this phase wrong or unsafe — including outside what the plan names. " + TRIAGE_RULE + ".");
+    parts.push(HOLES_BLOCK);
     return parts.join("\n\n");
   }
   const all = cs.slice().sort(byId).concat(hbjs.recordedConstraints(gate).slice().sort(byId));
@@ -273,6 +274,11 @@ function composePrompt(hbdir, dag, gate, opts) {
   return parts.join("\n\n");
 }
 const ANSWER_FORMAT = "<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>";
+// A review without per-id answers (an unconstrained gate; the free review) must still state, in one
+// checkable line, that no hole was found — `hb review … pass|free` refuses an artifact without it
+// (hb.js checkHoles). Twin: refuter_profiles.HOLES_BLOCK.
+const HOLES_BLOCK = "## Holes\nBefore your verdict, write ONE line: `HOLES: none` — only if you found no hole. A hole is a " +
+  "finding: if you found one, report it and end with REFUTED (a pass needs the `HOLES: none` line).";
 const TRIAGE_RULE = "An exploitable side finding means REFUTED, whatever the scope";
 // Stable order within a kind: by the number after the letter (P2 before P10).
 const byId = (a, b) => parseInt(String(a.id).slice(1), 10) - parseInt(String(b.id).slice(1), 10);
@@ -304,4 +310,4 @@ function composeBase(hbdir, dag, gate) {
   return parts.join("\n\n");
 }
 
-module.exports = { resolve, composePrompt, gateProfile, toBool, ANSWER_FORMAT, TRIAGE_RULE, aggregateVerdict, parseSkill, renderSkill, scaffold, DEFAULT_PERSONA, searchDirs, normalize };
+module.exports = { resolve, composePrompt, gateProfile, toBool, ANSWER_FORMAT, TRIAGE_RULE, HOLES_BLOCK, aggregateVerdict, parseSkill, renderSkill, scaffold, DEFAULT_PERSONA, searchDirs, normalize };

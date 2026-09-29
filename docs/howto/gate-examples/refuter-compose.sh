@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Proof: ONE compose — `hb refute-prompt <gate>` — serves the refute path, node ≡ python, and:
-#   (A) BACKWARD-COMPAT — a gate with NO review.profile and no HB_REFUTER yields EXACTLY today's prompt
-#       (review.prompt, or the "Refute that <gate> is truly complete." fallback) — no persona/questions
-#       injected, so existing projects are byte-unchanged.
+#   (A) BACKWARD-COMPAT — a gate with NO review.profile and no HB_REFUTER yields EXACTLY its prompt
+#       (review.prompt, or the "Refute that <gate> is truly complete." fallback) followed by the HOLES
+#       block every unconstrained review carries (1.33.0) — no persona/questions injected.
 #   (B) NAMED profile — the composed prompt CONTAINS persona + the gate's BASE review_questions + the
 #       profile's EXTRA questions + review.prompt; and profile.model reaches the refute DISPATCH
 #       (observed via a stub backend that echoes the payload prompt + $HB_EXEC_MODEL).
@@ -88,22 +88,27 @@ rp_py()   { hbpy refute-prompt GATE_P0 --dir "$1"; }
 rp_node() { node "$1/.hb/hb.js" refute-prompt GATE_P0; }
 
 # ── Part 1: `hb refute-prompt` content, both runtimes ───────────────────────────────────────────────
-# (A) backward-compat: no profile, no env → EXACTLY the gate's review.prompt
+# (A) backward-compat: no profile, no env → EXACTLY the gate's review.prompt + the HOLES block
 pbc="$work/bc"; bash "$ROOT/plugin/bootstrap.sh" "$pbc" >/dev/null 2>&1 </dev/null
 write_dag "$pbc/.hb/dag.json" ""
-EXPECT="REVIEW-PROMPT-MARKER refute that the phase is complete"
+HOLES_BLOCK="$(node -e 'process.stdout.write(require(process.argv[1]).HOLES_BLOCK)' "$ROOT/plugin/templates/refuter_profiles.js")"
+EXPECT="REVIEW-PROMPT-MARKER refute that the phase is complete
+
+$HOLES_BLOCK"
 obc_n="$(rp_node "$pbc")" || fail "node refute-prompt failed (command missing?) [A]"
 obc_p="$(rp_py "$pbc")"   || fail "python refute-prompt failed (command missing?) [A]"
-chk_bc "$obc_n" "$EXPECT" || fail "node backward-compat prompt not byte-identical to review.prompt (leaked profile material?) got=[$obc_n]"
-chk_bc "$obc_p" "$EXPECT" || fail "python backward-compat prompt not byte-identical to review.prompt got=[$obc_p]"
+chk_bc "$obc_n" "$EXPECT" || fail "node backward-compat prompt is not review.prompt + the HOLES block (leaked profile material?) got=[$obc_n]"
+chk_bc "$obc_p" "$EXPECT" || fail "python backward-compat prompt is not review.prompt + the HOLES block got=[$obc_p]"
 [ "$obc_n" = "$obc_p" ]   || fail "backward-compat prompt differs node vs python: n=[$obc_n] p=[$obc_p]"
 
-# fallback form: a gate with NO review.prompt → "Refute that GATE_P0 is truly complete."
+# fallback form: a gate with NO review.prompt → "Refute that GATE_P0 is truly complete." + the HOLES block
 pfb="$work/fb"; bash "$ROOT/plugin/bootstrap.sh" "$pfb" >/dev/null 2>&1 </dev/null
 python3 -c 'import json;json.dump({"phases":[{"id":"P0","gate_entry":None,"gate_exit":"GATE_P0","tasks":[{"id":"T1"}]}],"gates":{"GATE_P0":{"criteria":[{"id":"c","cmd":"true"}]}}},open("'"$pfb"'/.hb/dag.json","w"))'
 ofb_n="$(rp_node "$pfb")" || fail "node refute-prompt fallback failed"
 ofb_p="$(rp_py "$pfb")"   || fail "python refute-prompt fallback failed"
-[ "$ofb_n" = "Refute that GATE_P0 is truly complete." ] || fail "node fallback prompt wrong: [$ofb_n]"
+[ "$ofb_n" = "Refute that GATE_P0 is truly complete.
+
+$HOLES_BLOCK" ] || fail "node fallback prompt wrong: [$ofb_n]"
 [ "$ofb_n" = "$ofb_p" ] || fail "fallback prompt differs node vs python"
 
 # (B/C) named profile: composed prompt carries persona + base checklist + extra + review.prompt
@@ -130,7 +135,7 @@ mode="${1:-execute}"; payload="$(cat)"
 if [ "$mode" = execute ]; then echo ok > out.txt; echo '{"ok":true,"summary":"stub did the task"}'
 else
   { echo "MODEL=${HB_EXEC_MODEL:-none}"; printf '%s\n' "$payload"; } >> "$STUB_CAPTURE"
-  echo '{"refuted":false,"findings":"stub refuter examined the phase criteria and could not refute it — substantive artifact well over the forty character minimum"}'
+  echo '{"refuted":false,"findings":"stub refuter examined the phase criteria and could not refute it — substantive artifact well over the forty character minimum\nHOLES: none"}'
 fi
 STUB
 chmod +x "$bindir/stub"

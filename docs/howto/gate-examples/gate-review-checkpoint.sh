@@ -18,7 +18,8 @@ DAG='{ "phases": [
   "GATE_REV":{"desc":"reviewed phase","review":{"prompt":"refute"},"criteria":[{"id":"r1","desc":"ok","cmd":"true"}]},
   "GATE_PLAIN":{"desc":"plain phase","criteria":[{"id":"p1","desc":"ok","cmd":"true"}]}
 } }'
-ART="Refutation attempt for GATE_REV / phase P0 / task T0: I tried to break the phase and could not — the criterion genuinely holds. No holes found."
+ART="Refutation attempt for GATE_REV / phase P0 / task T0: I tried to break the phase and could not — the criterion genuinely holds.
+HOLES: none"
 
 has_tag() { git -C "$1" tag -l "$2" | grep -q "^$2$"; }
 seed() {  # ensure a valid HEAD so tags can point somewhere

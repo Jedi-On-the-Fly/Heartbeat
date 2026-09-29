@@ -17,7 +17,8 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 # the acceptance with it unset (the whole point is to exercise the real git path).
 run(){ env -u HB_NO_GIT -u HB_NO_HOOK "$@"; }
 
-ART='Refutation attempt for GATE_P0 (phase P0, task P0T1): I examined the phase and could not refute it. This artifact is deliberately over forty characters and cites a real anchor.'
+ART='Refutation attempt for GATE_P0 (phase P0, task P0T1): I examined the phase and could not refute it. This artifact is deliberately over forty characters and cites a real anchor.
+HOLES: none'
 
 # ── NODE: bootstrap → drive `hb.js review GATE_P0 pass` as a distinct actor → assert tag ──
 pn="$tmp/n"

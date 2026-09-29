@@ -41,7 +41,7 @@ DAG
   # stand-ins for the agents' outputs the page tells you to save
   printf '%s' '[{"id":"G1","claim":"upload() returns 200 at exactly the limit","subjects":["src/upload.py"],"violation":"a body of exactly LIMIT is rejected"}]' > "$p/author.json"
   printf 'Refutation attempt on GATE_API / api1: called upload() at, above and below the limit.\n- **P1**: NOT-REPRODUCED — upload(11) returned 413\nG1: NOT-REPRODUCED — upload(10) returned 200\n' > "$p/refute.md"
-  printf 'Free review of GATE_API / api1 in src/upload.py: looked for bypasses in breadth; nothing exploitable.\n' > "$p/free.md"
+  printf 'Free review of GATE_API / api1 in src/upload.py: looked for bypasses in breadth; nothing exploitable.\nHOLES: none\n' > "$p/free.md"
   # the page's bash blocks, in order, verbatim
   python3 - "$doc" > "$work/steps.sh" <<'EOF' || { rm -rf "$work"; return 1; }
 import re, sys

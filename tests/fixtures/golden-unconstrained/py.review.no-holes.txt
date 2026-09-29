@@ -1,0 +1,2 @@
+rc=1
+review pass refused on GATE_NP: the artifact has no "HOLES: none" line — a pass must state that no hole was found (a hole is a finding: record it with hb review <gate> fail "<finding>")

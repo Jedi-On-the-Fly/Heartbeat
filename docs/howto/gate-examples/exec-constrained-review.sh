@@ -56,12 +56,12 @@ head = "Refutation of P0 / t0 / G0: ran the gate criterion and inspected a.txt m
 if review == "free" and os.environ.get("STUB_FREE") == "refute":
     print(json.dumps({"refuted": True, "findings": "Free review of P0 / t0 / G0: an exploitable hole found in breadth."})); sys.exit(0)
 if review == "free":
-    print(json.dumps({"refuted": False, "findings": "Free review of P0 / t0 / G0: looked in breadth at a.txt; nothing exploitable."})); sys.exit(0)
+    print(json.dumps({"refuted": False, "findings": "Free review of P0 / t0 / G0: looked in breadth at a.txt; nothing exploitable.\nHOLES: none"})); sys.exit(0)
 ids = re.findall(r"(?m)^  - ([PG][0-9]+): ", p.get("prompt", ""))
 refutes = [l for l in open(log) if l.startswith("refute\t\t")]
 violate = os.environ.get("STUB_VIOLATE") == "1" or (os.environ.get("STUB_VIOLATE_PANELIST") and len(refutes) == int(os.environ["STUB_VIOLATE_PANELIST"]))
 lines = [head] + ["%s: %s — probe: cat a.txt" % (i, "VIOLATED" if (violate and k == 0) else "NOT-REPRODUCED") for k, i in enumerate(ids)]
-print(json.dumps({"refuted": False, "findings": "\n".join(lines)}))
+print(json.dumps({"refuted": False, "findings": "\n".join(lines + ["HOLES: none"])}))   # the answers (constrained) or the HOLES line (unconstrained)
 STUB
 chmod +x "$bindir/stub"
 

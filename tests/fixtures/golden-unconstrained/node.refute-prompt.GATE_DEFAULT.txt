@@ -5,3 +5,6 @@ Falsification checklist for GATE_DEFAULT — for each criterion, how could it FA
   - PHASE CLAIM: "the default phase". Could every criterion above pass while this is still broken? Is any criterion testing the WRONG behaviour? Is the REAL runtime exercised (not mocked/stubbed)?
 
 REVIEW-MARK default
+
+## Holes
+Before your verdict, write ONE line: `HOLES: none` — only if you found no hole. A hole is a finding: if you found one, report it and end with REFUTED (a pass needs the `HOLES: none` line).

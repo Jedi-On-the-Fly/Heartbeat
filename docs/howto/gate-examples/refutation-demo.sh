@@ -36,7 +36,7 @@ HB_ACTOR=agent-A hb done A0T1 --dir "$proj" >/dev/null 2>&1
 HB_ACTOR=agent-A hb gate GA0 --dir "$proj" >/dev/null 2>&1
 
 anchored="$proj/real.md"
-printf 'Refutation for GA0: inspected A0T1 in done.log and re-ran the behavioral gate. No hole found.\n' > "$anchored"
+printf 'Refutation for GA0: inspected A0T1 in done.log and re-ran the behavioral gate. No hole found.\nHOLES: none\n' > "$anchored"
 printf 'ok\n' > "$proj/thin.md"
 
 done_now(){ hb state --dir "$proj" 2>/dev/null | python3 -c "import sys,json; sys.exit(0 if 'A0' in json.load(sys.stdin).get('completed_phases',[]) else 1)"; }

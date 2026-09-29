@@ -260,15 +260,21 @@ def gate_profile(hbdir, review):
 
 ANSWER_FORMAT = "<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>"
 TRIAGE_RULE = "An exploitable side finding means REFUTED, whatever the scope"
+# A review without per-id answers (an unconstrained gate; the free review) must still state, in one
+# checkable line, that no hole was found — `hb review … pass|free` refuses an artifact without it
+# (review_policy.check_holes). Twin: refuter_profiles.js HOLES_BLOCK.
+HOLES_BLOCK = ("## Holes\nBefore your verdict, write ONE line: `HOLES: none` — only if you found no hole. A hole is a "
+               "finding: if you found one, report it and end with REFUTED (a pass needs the `HOLES: none` line).")
 
 
 def compose_prompt(hbdir, dag, gate, free=False):
     """The ONE refute-prompt compose, shared by every refute surface (node twin: composePrompt).
 
-    An UNCONSTRAINED gate (no plan-time review.constraints) gets exactly the pre-constraint compose
-    (_compose_base). A constrained gate gets that compose + the phase's `hb changed` list + every
+    An UNCONSTRAINED gate (no plan-time review.constraints) gets the pre-constraint compose (_compose_base)
+    + the HOLES block. A constrained gate gets that compose + the phase's `hb changed` list + every
     constraint id (P then G, the gate-time set of THIS review cycle) + the per-id answer format + the
-    triage rule; `free=True` composes the unconstrained breadth review instead (no constraint block).
+    triage rule; `free=True` composes the unconstrained breadth review instead (no constraint block; the
+    HOLES block).
     """
     from . import anchors
     from . import constraints as cons
@@ -278,12 +284,13 @@ def compose_prompt(hbdir, dag, gate, free=False):
         if free:
             raise ValueError(gate + " has no plan-time constraints — the free review is part of the "
                              "constraint-first review of a constrained gate")
-        return base
+        return base + "\n\n" + HOLES_BLOCK
     parts = [base, _change_block(hbdir, gate)]
     if free:
         parts.append("## Free review\nYou are the FREE reviewer: there is deliberately no constraint list. Look in breadth "
                      "for anything that makes this phase wrong or unsafe — including outside what the plan names. "
                      + TRIAGE_RULE + ".")
+        parts.append(HOLES_BLOCK)
         return "\n\n".join(parts)
     by_id = lambda c: int(str(c.get("id"))[1:])  # noqa: E731 — P2 before P10
     allc = sorted(cs, key=by_id) + sorted(cons.recorded_constraints(hbdir, dag, gate), key=by_id)

@@ -61,7 +61,7 @@ accept() {
   HB_ACTOR=doer hb "$rt" "$p" start "$t" >/dev/null 2>&1; HB_ACTOR=doer hb "$rt" "$p" done "$t" >/dev/null 2>&1
   if [ "$g" = G0 ]; then hb "$rt" "$p" gate G0 2>&1 >/dev/null; return; fi
   hb "$rt" "$p" gate G1 >/dev/null 2>&1
-  printf 'Refutation attempt on P1 / T2: a.txt is non-empty; could not refute G1.\n' > "$p/.rev.md"
+  printf 'Refutation attempt on P1 / T2: a.txt is non-empty; could not refute G1.\nHOLES: none\n' > "$p/.rev.md"
   HB_ACTOR=refuter hb "$rt" "$p" review G1 pass --artifact .rev.md 2>&1 >/dev/null
 }
 events() { python3 -c '

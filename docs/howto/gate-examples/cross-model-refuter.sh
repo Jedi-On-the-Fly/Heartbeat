@@ -20,13 +20,13 @@ cat > "$bindir/doer" <<'STUB'
 #!/usr/bin/env bash
 mode="${1:-execute}"; cat >/dev/null 2>&1 || true
 if [ "$mode" = execute ]; then echo ok > out.txt; echo '{"ok":true,"summary":"doer-stub did the task"}'
-else echo "{\"refuted\":false,\"findings\":\"DOER-STUB attempt on GATE_P0: examined the phase and could not refute (model=${HB_EXEC_MODEL:-none})\"}"; fi
+else echo "{\"refuted\":false,\"findings\":\"DOER-STUB attempt on GATE_P0: examined the phase and could not refute (model=${HB_EXEC_MODEL:-none})\\nHOLES: none\"}"; fi
 STUB
 cat > "$bindir/refuter" <<'STUB'
 #!/usr/bin/env bash
 mode="${1:-execute}"; cat >/dev/null 2>&1 || true
 if [ "$mode" = execute ]; then echo '{"ok":false,"summary":"refuter must not execute"}'
-else echo "{\"refuted\":false,\"findings\":\"REFUTER-STUB (distinct model) attempt on GATE_P0: could not refute; saw model=${HB_EXEC_MODEL:-none}\"}"; fi
+else echo "{\"refuted\":false,\"findings\":\"REFUTER-STUB (distinct model) attempt on GATE_P0: could not refute; saw model=${HB_EXEC_MODEL:-none}\\nHOLES: none\"}"; fi
 STUB
 chmod +x "$bindir/doer" "$bindir/refuter"
 

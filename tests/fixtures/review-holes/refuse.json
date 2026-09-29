@@ -1,0 +1,46 @@
+[
+ [
+  "missing",
+  "Refutation attempt on G0: probed a.txt."
+ ],
+ [
+  "empty-list",
+  "HOLES:"
+ ],
+ [
+  "listed",
+  "HOLES:\n- a.txt is stale"
+ ],
+ [
+  "inline",
+  "HOLES: a.txt is stale"
+ ],
+ [
+  "none-and-more",
+  "HOLES: none found, except a.txt"
+ ],
+ [
+  "comment-only",
+  "<!-- HOLES: none -->"
+ ],
+ [
+  "unclosed-comment",
+  "HOLES: none\n<!-- hidden"
+ ],
+ [
+  "singular",
+  "HOLE: none"
+ ],
+ [
+  "na",
+  "HOLES: n/a"
+ ],
+ [
+  "styled",
+  "HOLES: \ud835\udc27\ud835\udc28\ud835\udc27\ud835\udc1e"
+ ],
+ [
+  "dash",
+  "HOLES: -"
+ ]
+]

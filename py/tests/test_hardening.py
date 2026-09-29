@@ -57,7 +57,7 @@ def test_review_thin_artifact_rejected(tmp_path):
 
 def test_review_substantive_artifact_advances(tmp_path):
     hb = _ready_for_review(tmp_path)
-    (tmp_path / "real.md").write_text("Refutation for GA0: inspected A0T1 in done.log, re-ran the gate. No hole found.\n")
+    (tmp_path / "real.md").write_text("Refutation for GA0: inspected A0T1 in done.log, re-ran the gate. No hole found.\nHOLES: none\n")
     assert cli.main(["review", "GA0", "pass", "--artifact", str(tmp_path / "real.md"), "--dir", str(tmp_path)]) == 0
     assert "A0" in state.read_state(hb)["completed_phases"]
     assert (hb / "reviews" / "GA0.md").exists()
@@ -73,7 +73,7 @@ def test_review_self_review_rejected_then_distinct_accepted(tmp_path, monkeypatc
     hb = make_hb(tmp_path, _review_dag())
     state.reproject(hb)
     (tmp_path / "done.log").write_text("A0T1\n")
-    (tmp_path / "real.md").write_text("Refutation for GA0: inspected A0T1 in done.log, re-ran the gate. No hole.\n")
+    (tmp_path / "real.md").write_text("Refutation for GA0: inspected A0T1 in done.log, re-ran the gate. No hole.\nHOLES: none\n")
     monkeypatch.setenv("HB_ACTOR", "agent-A")
     state.mutate(hb, {"event": "task_done", "task": "A0T1"})   # doer = agent-A
     gate.run_gate(hb, "GA0")
@@ -86,7 +86,7 @@ def test_review_self_review_rejected_then_distinct_accepted(tmp_path, monkeypatc
 
 def test_doctor_flags_vanished_review_artifact(tmp_path):
     hb = _ready_for_review(tmp_path)
-    (tmp_path / "real.md").write_text("Refutation for GA0: inspected A0T1 in done.log, re-ran the gate. No hole.\n")
+    (tmp_path / "real.md").write_text("Refutation for GA0: inspected A0T1 in done.log, re-ran the gate. No hole.\nHOLES: none\n")
     cli.main(["review", "GA0", "pass", "--artifact", str(tmp_path / "real.md"), "--dir", str(tmp_path)])
     (hb / "reviews" / "GA0.md").unlink()
     assert any("artifact" in p for p in doctor.doctor(hb)["problems"])
@@ -97,7 +97,7 @@ EXEC_STUB = """#!/usr/bin/env bash
 mode="$1"; payload="$(cat)"
 case "$mode" in
   execute) id=$(printf '%s' "$payload" | python3 -c 'import sys,json;print(json.load(sys.stdin)["task"]["id"])'); printf '%s\\n' "$id" >> done.log; printf '{"ok":true,"summary":"did %s"}\\n' "$id" ;;
-  refute)  printf '{"refuted":false,"findings":"Attempted to refute GA0: inspected done.log for the task output, re-ran the behavioral gate. No hole found."}\\n' ;;
+  refute)  printf '{"refuted":false,"findings":"Attempted to refute GA0: inspected done.log for the task output, re-ran the behavioral gate. No hole found.\\\\nHOLES: none"}\\n' ;;
 esac
 """
 

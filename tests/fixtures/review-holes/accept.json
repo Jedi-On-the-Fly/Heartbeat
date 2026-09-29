@@ -1,0 +1,50 @@
+[
+ [
+  "plain",
+  "HOLES: none"
+ ],
+ [
+  "bold",
+  "**HOLES:** none."
+ ],
+ [
+  "lower-bullet",
+  "- holes: None"
+ ],
+ [
+  "quote",
+  "> HOLES: none"
+ ],
+ [
+  "spaced",
+  "HOLES : none"
+ ],
+ [
+  "tight",
+  "HOLES:none"
+ ],
+ [
+  "fullwidth-colon",
+  "HOLES\uff1a none"
+ ],
+ [
+  "zero-width",
+  "HOLES: n\u200bone"
+ ],
+ [
+  "code",
+  "`HOLES: none`"
+ ],
+ [
+  "trailing-comment",
+  "HOLES: none <!-- checked twice -->"
+ ],
+ [
+  "in-text",
+  "text\nHOLES: none\nmore text"
+ ],
+ [
+  "twice",
+  "HOLES: none\n[panelist 2/2] ...\nHOLES: none"
+ ]
+]

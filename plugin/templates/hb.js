@@ -48,7 +48,7 @@ const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0
 const PROTOCOL = {
   next_task:          'hb start <id> → do the work → hb done <id> (or hb fail <id> if you could not complete it). Never hand-edit state.json.',
   gate_pending:       'bash .hb/gate.sh <gate> — a pass advances the phase, UNLESS the gate has a review block (then a review is owed next).',
-  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?) — seed it with `node .hb/hb.js refute-prompt <gate>` (the composed refute prompt: the gate\'s profile persona + a falsification question per criterion + the review angle). Spawn the refuter ON the profile\'s model: read it via `node .hb/hb.js refute-prompt <gate> --json` (.model) and pass it to your agent-spawning tool; inherit the session model only when it is null. Write its full attempt to a findings file, then: node .hb/hb.js review <gate> fail "<holes>" --model <that model>  OR  node .hb/hb.js review <gate> pass --artifact <findings-file> --model <that model> (a pass MUST cite the refuter\'s written attempt — no rubber-stamps; --model records WHAT reviewed, so the per-model impact report has truth to count). CONSTRAINT-FIRST gate (plan-time review.constraints): BEFORE the refute, get the gate-time constraints — `node .hb/hb.js constraints <gate> --prompt` (--json .model = the profile author_model) → an agent that did NOT do the work → HB_ACTOR=<author> node .hb/hb.js constraints <gate> --record <file.json> --model <its model>; the refuter must then answer EVERY id on its own line (<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>); when the profile sets free_review, run `node .hb/hb.js refute-prompt <gate> --free` with another agent (the profile free_model) and record `HB_ACTOR=<free reviewer> node .hb/hb.js review <gate> free --artifact <file> --model <its model>`. The pass is refused until every id is answered and none is VIOLATED.',
+  review_pending:     'Spawn a skeptical sub-agent to REFUTE that the phase is done (hollow tests? faked output?) — seed it with `node .hb/hb.js refute-prompt <gate>` (the composed refute prompt: the gate\'s profile persona + a falsification question per criterion + the review angle). Spawn the refuter ON the profile\'s model: read it via `node .hb/hb.js refute-prompt <gate> --json` (.model) and pass it to your agent-spawning tool; inherit the session model only when it is null. Write its full attempt to a findings file, then: node .hb/hb.js review <gate> fail "<holes>" --model <that model>  OR  node .hb/hb.js review <gate> pass --artifact <findings-file> --model <that model> (a pass MUST cite the refuter\'s written attempt — no rubber-stamps; --model records WHAT reviewed, so the per-model impact report has truth to count). Without per-id answers (an unconstrained gate, or the free review) the findings file must carry a line `HOLES: none` or the pass is refused — a hole is a finding: record it with review <gate> fail. CONSTRAINT-FIRST gate (plan-time review.constraints): BEFORE the refute, get the gate-time constraints — `node .hb/hb.js constraints <gate> --prompt` (--json .model = the profile author_model) → an agent that did NOT do the work → HB_ACTOR=<author> node .hb/hb.js constraints <gate> --record <file.json> --model <its model>; the refuter must then answer EVERY id on its own line (<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>); when the profile sets free_review, run `node .hb/hb.js refute-prompt <gate> --free` with another agent (the profile free_model) and record `HB_ACTOR=<free reviewer> node .hb/hb.js review <gate> free --artifact <file> --model <its model>`. The pass is refused until every id is answered and none is VIOLATED.',
   gate_blocked:       'Run: node .hb/hb.js diagnose — fix the ROOT cause (do NOT weaken the gate), then re-run bash .hb/gate.sh <gate>.',
   at_capacity:        'Nothing to do — max tasks already in flight. No action.',
   state_corrupted:    'node .hb/hb.js rebuild (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable.',
@@ -332,6 +332,16 @@ function doctor() {
       if (e.event === 'review_failed') delete lastPass[e.gate];
     }
     for (const [g, e] of Object.entries(lastPass)) {
+      if (e.holes === 'none') {   // an unconstrained pass: the stored artifact must still say HOLES: none
+        let rawH = null;
+        try { rawH = fs.readFileSync(path.join(HB_DIR, e.artifact || `reviews/${g}.md`)); } catch (x) {}
+        if (rawH === null) continue;
+        const hs = checkHoles(rawH.toString('utf8'));
+        const shaH = !e.artifact_sha256 || require('crypto').createHash('sha256').update(rawH).digest('hex') === e.artifact_sha256;
+        if (!shaH || hs.length)
+          problems.push(`${g} review_passed HOLES line no longer holds in ${e.artifact || `reviews/${g}.md`} (${!shaH ? 'the artifact bytes changed since the pass' : hs[0]}) — the stored refutation was altered`);
+        continue;
+      }
       if (!Array.isArray(e.constraint_ids)) continue;
       let raw = null;
       try { raw = fs.readFileSync(path.join(HB_DIR, e.artifact || `reviews/${g}.md`)); } catch (x) {}
@@ -692,6 +702,30 @@ function checkAnswers(body, required) {
   for (const id of required) if (!seen[id]) errors.push(`${id} has no answer line (${FMT})`);
   return { errors, counts };
 }
+// A review without per-id answers (an unconstrained pass; the free review) must carry a visible line
+// `HOLES: none` — markdown-, width- and case-insensitive, read from the same normalised visible text as the
+// answers. No such line, or any HOLES line that lists anything, refuses the pass: a hole is a finding.
+// (Several `HOLES: none` lines are fine — a panel's pass joins its CLEAR panelists.) Twin:
+// review_policy.check_holes (messages verbatim).
+function checkHoles(body) {
+  const errors = [];
+  const styled = ANSWER_STYLED.test(String(body)) || ANSWER_STYLED.test(answerText(body, 'keep'));   // == checkAnswers
+  if (styled) errors.push('the artifact uses styled letters (mathematical, enclosed, letterlike or legacy-computing symbols) — write plain text');
+  if (/<!--(?![\s\S]*-->)/.test(String(body).replace(/`[^`\n]*`/g, m => m.replace(/<!--/g, '<!- -').replace(/-->/g, '- ->'))))
+    errors.push('the artifact has an unclosed <!-- — everything after it is hidden when rendered: close the comment or remove it');
+  let n = 0, listed = 0;
+  for (const raw of answerText(body, 'drop').split(ANSWER_BREAKS)) {
+    const ln = raw.replace(ANSWER_CTRL, '').replace(/[*`_]/g, '').replace(/^[ \t]+|[ \t]+$/g, '').replace(/^(?:[\t >+#-]+|[0-9]+[.)][ \t]+)+/, '');
+    const lo = ln.replace(/[A-Z]/g, c => c.toLowerCase());   // ASCII-only: no regex case folding
+    const m = /^holes[ \t]*[:：][ \t]*(.*)$/.exec(lo);
+    if (!m) continue;
+    n++;
+    if (!/^none[ \t.!]*$/.test(m[1])) listed++;
+  }
+  if (n === 0) errors.push('the artifact has no "HOLES: none" line — a pass must state that no hole was found (a hole is a finding: record it with hb review <gate> fail "<finding>")');
+  if (listed) errors.push('a HOLES line lists something other than "none" — a hole is a finding: record it with hb review <gate> fail "<finding>"');
+  return errors;
+}
 // evidence / a reason must contain a character that is not whitespace or invisible (ONE explicit set,
 // identical in python)
 const ANSWER_TEXT = /[^ \t   -   　⠀ㅤﾠᅟᅠ]/;
@@ -760,7 +794,7 @@ function composeAuthorPrompt(dag, gate) {
 
 // Exported BEFORE the CLI dispatch: refuter_profiles.js requires this module while hb.js is running
 // as the CLI (a circular require sees only what is already assigned).
-module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath, checkAnswers,
+module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath, checkAnswers, checkHoles,
   planConstraints, reviewCycle, composeAuthorPrompt };
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
@@ -971,6 +1005,8 @@ switch (cmd) {
       if (!reviewer || !norm(reviewer) || norm(reviewer) === 'unknown') die('review free: set HB_ACTOR to the free reviewer\'s identity');
       if ([...phaseDoers(dag, gate, cyc.events)].some(d => norm(d) === norm(reviewer)))
         die(`review free: '${reviewer}' did this phase's work — the free reviewer must be a different actor`);
+      const hf = checkHoles(body);
+      if (hf.length) die(`review free refused on ${gate}: ${hf.join('; ')}`);
       const revDirF = path.join(HB_DIR, 'reviews');
       fs.mkdirSync(revDirF, { recursive: true });
       fs.writeFileSync(path.join(revDirF, `${gate}.free.md`), body);
@@ -997,13 +1033,17 @@ switch (cmd) {
                                               norm(e.actor || '') !== norm(reviewer));
         if (!ok) die(`review pass refused on ${gate}: the profile requires a free review — record one in this review cycle from an actor other than '${reviewer}': hb review ${gate} free --artifact <file>`);
       }
+    } else {
+      const hp = checkHoles(body);
+      if (hp.length) die(`review pass refused on ${gate}: ${hp.join('; ')}`);
     }
     const revDir = path.join(HB_DIR, 'reviews');
     try { fs.mkdirSync(revDir, { recursive: true }); } catch (e) {}
     fs.writeFileSync(path.join(revDir, `${gate}.md`), body);
     const autocommit = gitPolicy();
     mutate({ event: 'review_passed', gate, model, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, git: { autocommit },
-             ...(answers ? { answers, constraint_ids: constraintIds, artifact_sha256: require('crypto').createHash('sha256').update(body, 'utf8').digest('hex') } : {}),
+             ...(answers ? { answers, constraint_ids: constraintIds, artifact_sha256: require('crypto').createHash('sha256').update(body, 'utf8').digest('hex') }
+                         : { holes: 'none', artifact_sha256: require('crypto').createHash('sha256').update(body, 'utf8').digest('hex') }),
              ...(note ? { note } : {}) });
     // Reviewed acceptance creates the phase's restore point (commit+tag) — deferred from the
     // deterministic pass so the tag only ever certifies a reviewed-good state.

@@ -38,6 +38,10 @@ hb review GATE_P3 fail "<the hole it found>"           # found a hole -> back to
   is rejected.
 - **It must come from a different actor** — a self-review (the `HB_ACTOR` who did the work)
   is rejected; refutation is only adversarial from an independent actor.
+- **It must say, in one line, that no hole was found** — `HOLES: none`. An artifact without the
+  line, or with a HOLES line that lists anything, is rejected: a hole is a finding, recorded with
+  `hb review … fail`. (A constraint-first gate answers each constraint id instead — see
+  [constraint-first-review.md](constraint-first-review.md).)
 
 The accepted artifact is stored under `.hb/reviews/` and re-checked later by `doctor` — if
 it vanishes, that is flagged as rot. See [AGENTS.md](../../AGENTS.md) rule 6. For an even stronger

@@ -102,6 +102,9 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
             return 1, "", "review free: set HB_ACTOR to the free reviewer's identity"
         if any(norm(d) == norm(reviewer) for d in cons.phase_doers(dag, gate, events)):
             return 1, "", f"review free: '{reviewer}' did this phase's work — the free reviewer must be a different actor"
+        hf = check_holes(body)
+        if hf:
+            return 1, "", f"review free refused on {gate}: " + "; ".join(hf)
         rd = Path(hb) / "reviews"
         rd.mkdir(parents=True, exist_ok=True)
         (rd / f"{gate}.free.md").write_text(body, encoding="utf-8")
@@ -133,6 +136,10 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
             if not ok:
                 return 1, "", (f"review pass refused on {gate}: the profile requires a free review — record one in this review "
                                f"cycle from an actor other than '{reviewer}': hb review {gate} free --artifact <file>")
+    else:
+        hp = check_holes(body)
+        if hp:
+            return 1, "", f"review pass refused on {gate}: " + "; ".join(hp)
     revdir = Path(hb) / "reviews"
     revdir.mkdir(parents=True, exist_ok=True)
     (revdir / f"{gate}.md").write_text(body, encoding="utf-8")
@@ -143,6 +150,9 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
     if answers is not None:
         ev["answers"] = answers
         ev["constraint_ids"] = constraint_ids
+        ev["artifact_sha256"] = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    else:
+        ev["holes"] = "none"
         ev["artifact_sha256"] = hashlib.sha256(body.encode("utf-8")).hexdigest()
     if note_str:
         ev["note"] = note_str
@@ -205,6 +215,34 @@ def _squash_letters(s):
         if len(f) == 1 and ("a" <= f <= "z" or "A" <= f <= "Z"):
             out.append(f.lower())
     return "".join(out)
+
+
+def check_holes(body):
+    """A review without per-id answers (an unconstrained pass; the free review) must carry a visible line
+    `HOLES: none`, and no HOLES line may list anything — twin of hb.js checkHoles, messages verbatim.
+    Returns the errors."""
+    errors = []
+    if _ANSWER_STYLED.search(str(body)) or _ANSWER_STYLED.search(_answer_text(body, "keep")):
+        errors.append("the artifact uses styled letters (mathematical, enclosed, letterlike or legacy-computing symbols) — write plain text")
+    neutral = re.sub(r"`[^`\n]*`", lambda m: m.group(0).replace("<!--", "<!- -").replace("-->", "- ->"), str(body))
+    if re.search(r"<!--(?![\s\S]*-->)", neutral):
+        errors.append("the artifact has an unclosed <!-- — everything after it is hidden when rendered: close the comment or remove it")
+    n = listed = 0
+    for raw in _ANSWER_BREAKS.split(_answer_text(body, "drop")):
+        ln = re.sub(r"^(?:[\t >+#-]+|[0-9]+[.)][ \t]+)+", "", re.sub(r"[*`_]", "", _ANSWER_CTRL.sub("", raw)).strip(" \t"))
+        lo = "".join(c.lower() if "A" <= c <= "Z" else c for c in ln)   # ASCII-only: no regex case folding
+        m = re.match(r"^holes[ \t]*[:：][ \t]*(.*)$", lo)
+        if not m:
+            continue
+        n += 1
+        if not re.fullmatch(r"none[ \t.!]*", m.group(1)):
+            listed += 1
+    if n == 0:
+        errors.append('the artifact has no "HOLES: none" line — a pass must state that no hole was found (a hole is a finding: '
+                      'record it with hb review <gate> fail "<finding>")')
+    if listed:
+        errors.append('a HOLES line lists something other than "none" — a hole is a finding: record it with hb review <gate> fail "<finding>"')
+    return errors
 
 
 def check_answers(body, required):

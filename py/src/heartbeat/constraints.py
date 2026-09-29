@@ -168,7 +168,7 @@ def record(hbdir, dag, gate, file, model=None):
 def doctor_problems(hbdir):
     """Recorded gate-time constraints must still be the bytes that were recorded; a constrained review
     pass's stored artifact must still answer the ids it answered."""
-    from .review_policy import check_answers
+    from .review_policy import check_answers, check_holes
     out = []
     last_pass = {}
     for e in st.read_events(hbdir):
@@ -177,6 +177,18 @@ def doctor_problems(hbdir):
         elif e.get("event") == "review_failed":
             last_pass.pop(e.get("gate"), None)
     for g, e in last_pass.items():
+        if e.get("holes") == "none":   # an unconstrained pass: the stored artifact must still say HOLES: none (== node)
+            rel = e.get("artifact") or f"reviews/{g}.md"
+            try:
+                raw = (Path(hbdir) / rel).read_bytes()
+            except OSError:
+                continue
+            hs = check_holes(raw.decode("utf-8", errors="replace"))
+            sha_ok = not e.get("artifact_sha256") or hashlib.sha256(raw).hexdigest() == e["artifact_sha256"]
+            if not sha_ok or hs:
+                why = "the artifact bytes changed since the pass" if not sha_ok else hs[0]
+                out.append(f"{g} review_passed HOLES line no longer holds in {rel} ({why}) — the stored refutation was altered")
+            continue
         if not isinstance(e.get("constraint_ids"), list):
             continue
         rel = e.get("artifact") or f"reviews/{g}.md"

@@ -474,7 +474,7 @@ async function run() {
           // Perspective-diverse panel: run N refuters, aggregate by refute_if. Fail CLOSED if any
           // panelist yields no boolean verdict — an inconclusive panelist can't certify a pass.
           const rule = verdictCfg.refute_if || 'majority';
-          const verdicts = [], findings = [];
+          const verdicts = [], findings = [], clears = [], dissent = [];
           for (let i = 0; i < panelN; i++) {
             const ri = await dispatch(c.refuteCmd, 'refute', payload, null, 0, undefined, refExtraArg);
             if (!ri.json || typeof ri.json.refuted !== 'boolean') {
@@ -484,9 +484,13 @@ async function run() {
             // Only a panelist that produced ACTUAL text contributes a labelled finding — the
             // `[panelist …]` prefix must never let boilerplate satisfy the pass substance floor.
             const fi = (ri.json.findings || '').trim();
-            if (fi) findings.push(`[panelist ${i + 1}/${panelN}] ${fi}`);
+            if (fi) { findings.push(`[panelist ${i + 1}/${panelN}] ${fi}`); (ri.json.refuted ? dissent : clears).push(`[panelist ${i + 1}/${panelN}] ${fi}`); }
           }
-          r = { json: { refuted: rprof.aggregateVerdict(verdicts, rule), findings: findings.join('\n\n') } };
+          // a PASS is backed by the panelists who could not refute; an outvoted panelist's findings ride
+          // the pass as its note (recorded, never part of the HOLES-checked artifact) — refute_if keeps its meaning
+          r = { json: { refuted: rprof.aggregateVerdict(verdicts, rule), findings: findings.join('\n\n'),
+                        passFindings: clears.join('\n\n'),
+                        dissent: dissent.length ? `outvoted under refute_if: ${rule} — ${dissent.length} of ${panelN} panelists refuted: ${dissent.join(' | ')}`.slice(0, 1500) : '' } };
         } else {
           r = await dispatch(c.refuteCmd, 'refute', payload, null, 0, undefined, refExtraArg);
         }
@@ -499,7 +503,7 @@ async function run() {
           // Sev-1: a "could not refute" pass must cite the refuter's ACTUAL written
           // attempt. Persist findings + pass --artifact so the verdict is reducible to
           // evidence on disk (doctor re-checks it). An empty pass is not a refutation.
-          const findings = (r.json.findings || '').trim();
+          const findings = (r.json.passFindings !== undefined ? r.json.passFindings : (r.json.findings || '')).trim();
           if (findings.length < 40) {
             escalate('review_error', `${gate}: refuter returned a pass with no substantive findings — refusing to rubber-stamp`); return 1;
           }
@@ -507,7 +511,8 @@ async function run() {
           try { fs.mkdirSync(fdir, { recursive: true }); } catch (e) {}
           const fpath = path.join(fdir, `${gate}.attempt.md`);
           fs.writeFileSync(fpath, `# Refutation attempt for ${gate}\n\nRefuter: ${refuterId}\nVerdict: could not refute (refuted=false)\n\n${findings}\n`);
-          hbAs(refuterActor, 'review', gate, 'pass', '--artifact', fpath, ...(rModel ? ['--model', rModel] : []));
+          try { hbAs(refuterActor, 'review', gate, 'pass', '--artifact', fpath, ...(rModel ? ['--model', rModel] : []), ...(r.json.dissent ? [r.json.dissent] : [])); }
+          catch (e) { escalate('review_error', `${gate}: review pass rejected by validation: ${String((e && e.stderr) || e.message || e).trim().split('\n').pop()}`); return 1; }
         }
         break;
       }

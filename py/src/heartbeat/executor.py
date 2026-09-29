@@ -510,7 +510,7 @@ def _run(hbdir):
                 # Perspective-diverse panel: run N refuters, aggregate by refute_if. Fail CLOSED if any
                 # panelist yields no boolean verdict — an inconclusive panelist can't certify a pass.
                 rule = verdict_cfg.get("refute_if") or "majority"
-                verdicts, findings = [], []
+                verdicts, findings, clears, dissent = [], [], [], []
                 for i in range(panel_n):
                     ri = dispatch(refute_cfg, "refute", _payload, hbdir, None, model=r_model, provider=r_provider)
                     if not isinstance(ri.get("refuted"), bool):
@@ -522,7 +522,13 @@ def _run(hbdir):
                     fi = (ri.get("findings") or "").strip()
                     if fi:
                         findings.append(f"[panelist {i + 1}/{panel_n}] {fi}")
-                r = {"refuted": rp.aggregate_verdict(verdicts, rule), "findings": "\n\n".join(findings)}
+                        (dissent if ri["refuted"] else clears).append(f"[panelist {i + 1}/{panel_n}] {fi}")
+                # a PASS is backed by the panelists who could not refute; an outvoted panelist's findings ride
+                # the pass as its note (recorded, never part of the HOLES-checked artifact) — == node
+                r = {"refuted": rp.aggregate_verdict(verdicts, rule), "findings": "\n\n".join(findings),
+                     "pass_findings": "\n\n".join(clears),
+                     "dissent": (f"outvoted under refute_if: {rule} — {len(dissent)} of {panel_n} panelists refuted: "
+                                 + " | ".join(dissent))[:1500] if dissent else ""}
             else:
                 r = dispatch(refute_cfg, "refute", _payload, hbdir, None, model=r_model, provider=r_provider)
             if not isinstance(r.get("refuted"), bool):
@@ -537,7 +543,7 @@ def _run(hbdir):
                 # Sev-1: a "could not refute" pass must cite the refuter's ACTUAL written
                 # attempt. Persist findings + route through the validated review path (as a
                 # distinct refuter actor), so the pass is reducible to evidence — no rubber-stamp.
-                findings = (r.get("findings") or "").strip()
+                findings = (r["pass_findings"] if "pass_findings" in r else (r.get("findings") or "")).strip()
                 if len(findings) < 40:
                     print(f"HB-EXEC STOP: review_error — {g}: refuter returned a pass with no substantive findings")
                     return 1
@@ -551,14 +557,14 @@ def _run(hbdir):
                 os.environ["HB_ACTOR"] = refuter_actor
                 try:
                     rc, _out, _err = review_policy.accept_review(hbdir, g, "pass", artifact=str(fpath),
-                                                                 model=r_model or None)
+                                                                 note=r.get("dissent") or None, model=r_model or None)
                 finally:
                     if saved is None:
                         os.environ["HB_ACTOR"] = worker_actor
                     else:
                         os.environ["HB_ACTOR"] = saved
                 if rc != 0:
-                    print(f"HB-EXEC STOP: review_error — {g}: review pass rejected by validation")
+                    print(f"HB-EXEC STOP: review_error — {g}: review pass rejected by validation: {(_err or '').strip()}")
                     return 1
         elif reason == "all_done":
             print(reportmod.render(hbdir))

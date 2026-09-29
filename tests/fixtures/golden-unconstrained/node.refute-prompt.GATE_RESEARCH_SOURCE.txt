@@ -10,3 +10,6 @@ Domain checks from the refuter profile:
   - Is any cited source stale, retracted, or superseded by a newer one?
 
 REVIEW-MARK research-source
+
+## Holes
+Before your verdict, write ONE line: `HOLES: none` — only if you found no hole. A hole is a finding: if you found one, report it and end with REFUTED (a pass needs the `HOLES: none` line).

@@ -33,7 +33,7 @@ mkproj(){ # $1 dir — two review-gated phases: G0 profiled (model m-auto), G1 p
   printf '%s' '{"phases":[{"id":"P0","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"T1","title":"t1","requires":[]}]},{"id":"P1","gate_entry":"G0","gate_exit":"G1","tasks":[{"id":"T2","title":"t2","requires":[]}]}],"gates":{"G0":{"desc":"g0","review":{"prompt":"Refute P0 done","profile":"prov"},"criteria":[{"id":"c","cmd":"true"}]},"G1":{"desc":"g1","review":{"prompt":"Refute P1 done"},"criteria":[{"id":"c","cmd":"true"}]}}}' > "$1/.hb/dag.json"
   printf '%s' '{"persona":"PROV refuter","model":"m-auto"}' > "$1/.hb/refuters/prov.json"
   printf '%s\n' '{"event":"initialized"}' > "$1/.hb/events.jsonl"
-  printf 'This refutation examined P0 and gate G0 in depth and could not refute completion.\n' > "$1/art.md"
+  printf 'This refutation examined P0 and gate G0 in depth and could not refute completion.\nHOLES: none\n' > "$1/art.md"
 }
 # last review event of a type → its model field rendered as `null` or the value; `absent` if no key
 evmodel(){ python3 -c '
@@ -59,7 +59,7 @@ HB_ACTOR=rev hb review G0 pass --artifact "$py/art.md" --model m-flag --dir "$py
 [ "$(evmodel "$py/.hb/events.jsonl" review_passed G0)" = "m-flag" ] || fail "python: review_passed did not record the flagged model"
 HB_ACTOR=doer hb start T2 --dir "$py" >/dev/null 2>&1; HB_ACTOR=doer hb done T2 --dir "$py" >/dev/null 2>&1
 HB_ACTOR=doer hb gate G1 --dir "$py" >/dev/null 2>&1
-printf 'This refutation examined P1 and gate G1 and could not refute completion at all.\n' > "$py/art2.md"
+printf 'This refutation examined P1 and gate G1 and could not refute completion at all.\nHOLES: none\n' > "$py/art2.md"
 HB_ACTOR=rev hb review G1 pass --artifact "$py/art2.md" --dir "$py" >/dev/null 2>&1 || fail "python review pass (no --model) failed"
 [ "$(evmodel "$py/.hb/events.jsonl" review_passed G1)" = "null" ] || fail "python: omitted --model must record null (never fabricated, never absent)"
 
@@ -101,7 +101,7 @@ mkexec(){ # $1 dir — stub script backend: execute ok, refute CLEAR with substa
   cat > "$1/stub.sh" <<'STUB'
 #!/usr/bin/env bash
 mode="${@: -1}"
-if [ "$mode" = "refute" ]; then printf '%s' '{"refuted":false,"findings":"Examined gate G0 of phase P0 thoroughly; could not refute the completion claim."}'
+if [ "$mode" = "refute" ]; then printf '%s' '{"refuted":false,"findings":"Examined gate G0 of phase P0 thoroughly; could not refute the completion claim.\nHOLES: none"}'
 else printf '%s' '{"ok":true,"summary":"did the task"}'; fi
 STUB
   chmod +x "$1/stub.sh"

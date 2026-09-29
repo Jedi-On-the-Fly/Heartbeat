@@ -76,16 +76,19 @@ $(ok_lines)
 G9: NOT-REPRODUCED — made up"
   try free-missing  refuter pass "$HEAD
 $(ok_lines)"
-  try free-doer     doer    free "Free review of P0 / t0 / G0: looked in breadth at a.txt and the gate, nothing found."
+  try free-doer     doer    free "Free review of P0 / t0 / G0: looked in breadth at a.txt and the gate, nothing found.
+HOLES: none"
   try free-thin     freer   free "fine"
   try free-ok       freer   free "Free review of P0 / t0 / G0: looked in breadth at a.txt and the gate, nothing found.
+HOLES: none
 P1: NOT-REPRODUCED — free answers never count"
   # a new cycle: the earlier cycle's free review does not carry over
   HB_ACTOR=refuter hb "$rt" "$p" review G0 fail "hole" >/dev/null 2>&1; hb "$rt" "$p" gate G0 >/dev/null 2>&1
   HB_ACTOR=author hb "$rt" "$p" constraints G0 --record "$o/g.json" >/dev/null 2>&1
   try free-old      refuter pass "$HEAD
 $(ok_lines)"
-  try free-self     refuter free "Free review of P0 / t0 / G0: looked in breadth at a.txt and the gate, nothing found."
+  try free-self     refuter free "Free review of P0 / t0 / G0: looked in breadth at a.txt and the gate, nothing found.
+HOLES: none"
   try free-same     refuter pass "$HEAD
 $(ok_lines)"
   if [ "$rt" = py ]; then   # the MCP review tool goes through the same enforcement
@@ -95,7 +98,8 @@ import sys, json; from heartbeat import mcp_server as m
 r = m.TOOLS['review'][0](sys.argv[1] + '/.hb', {'gate': 'G0', 'verdict': 'pass', 'artifact': sys.argv[1] + '/mcp.md'})
 print('mcp-missing\t' + ('0' if r.get('ok') else '1') + '\t' + (r.get('stderr') or '')[:300])" "$p" >> "$o/v.tsv" 2>/dev/null
   else printf 'mcp-missing\t1\t(python only)\n' >> "$o/v.tsv"; fi
-  try free-ok2      freer   free "Free review of P0 / t0 / G0: looked in breadth at a.txt and the gate, nothing found."
+  try free-ok2      freer   free "Free review of P0 / t0 / G0: looked in breadth at a.txt and the gate, nothing found.
+HOLES: none"
   try valid         refuter pass "$HEAD
 $(ok_lines)"
   cp "$p/.hb/events.jsonl" "$o/events.jsonl"

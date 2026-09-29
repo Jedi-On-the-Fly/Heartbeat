@@ -24,8 +24,9 @@ hb gate GATE_P3                                   # re-run the deterministic gat
 hb review GATE_P3 pass --artifact refutation.md   # a NEW, honest refutation attempt
 ```
 
-A pass isn't a rubber stamp: the artifact must be substantive, cite the phase, and come from a
-**different actor than the one who did the work** — a self-review is rejected. Only then does
+A pass isn't a rubber stamp: the artifact must be substantive, cite the phase, say `HOLES: none`
+in one line, and come from a **different actor than the one who did the work** — a self-review is
+rejected. Only then does
 the phase advance. The stored artifact is re-checked later by `doctor`, so the evidence can't
 silently rot ([AGENTS.md](../../AGENTS.md) rule 6).
 

@@ -268,6 +268,20 @@ edges_case(){
   [ "$ok" = OK ] || { echo "  ✗ review:answers-legit — honest answer sets refused: $ok"; FAIL=1; }
 }
 edges_case
+# the HOLES line (a review without per-id answers): node ≡ python on every case, the refuse set all refused,
+# the accept set all accepted
+holes_case(){
+  local k n p ok
+  for k in refuse accept; do
+    n="$(node -e 'const h=require(process.argv[1]);const cs=JSON.parse(require("fs").readFileSync(process.argv[2],"utf8"));console.log(JSON.stringify(cs.map(([k,b])=>[k,h.checkHoles(b)])))' "$ROOT/plugin/templates/hb.js" "$ROOT/tests/fixtures/review-holes/$k.json")"
+    p="$(PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c 'import sys,json;from heartbeat.review_policy import check_holes;cs=json.load(open(sys.argv[1]));print(json.dumps([[k,check_holes(b)] for k,b in cs],ensure_ascii=False,separators=(",",":")))' "$ROOT/tests/fixtures/review-holes/$k.json")"
+    n="$(printf '%s' "$n" | python3 -c 'import sys,json;print(json.dumps(json.load(sys.stdin),ensure_ascii=False,separators=(",",":")))')"
+    cmp "review:holes-$k" "$n" "$p"
+    ok="$(printf '%s' "$n" | K="$k" python3 -c 'import os,sys,json;d=json.load(sys.stdin);bad=[k for k,e in d if (not e) == (os.environ["K"]=="refuse")];print("OK" if d and not bad else "WRONG:"+",".join(bad))')"
+    [ "$ok" = OK ] || { echo "  ✗ review:holes-$k — $ok"; FAIL=1; }
+  done
+}
+holes_case
 
 echo "── panel aggregation parity ──"
 # aggregateVerdict must agree node ≡ python across rules and verdict mixes

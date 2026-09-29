@@ -86,7 +86,7 @@ scenario() {
   changed "$rt" "$p" G1 > "$o/changed_g1_pending.json"
   hb "$rt" "$p" gate G1 >/dev/null 2>&1
   anchor "$p" G1 > "$o/g1_review_pending.json"
-  printf 'Refutation attempt on P1 / T2: new.txt checked non-empty and real; could not refute G1.\n' > "$p/rev.md"
+  printf 'Refutation attempt on P1 / T2: new.txt checked non-empty and real; could not refute G1.\nHOLES: none\n' > "$p/rev.md"
   HB_ACTOR=refuter hb "$rt" "$p" review G1 pass --artifact rev.md >/dev/null 2>&1
   anchor "$p" G1 > "$o/g1.json"
   # expected hashes, computed independently of HeartBeat

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # golden-unconstrained.sh — freeze the review surfaces of an UNCONSTRAINED gate.
 #
-# Constraint-first review (1.32.0) must leave every gate without plan-time constraints
-# byte-for-byte as it was. There is no older release tag to diff against, so the
-# pre-change behaviour is captured once into tests/fixtures/golden-unconstrained/ and
-# every later tree is compared to it:
+# Constraint-first review (1.32.0) left every gate without plan-time constraints byte-for-byte
+# as it was; 1.33.0 changed it ON PURPOSE (the refute prompt asks for a `HOLES: none` line and a
+# pass without one is refused — tests/review-holes.sh). The behaviour is captured into
+# tests/fixtures/golden-unconstrained/ and every later tree is compared to it:
 #   - `refute-prompt <gate>` text, node and python, for a no-profile gate and each
 #     shipped refuter profile;
 #   - `refute-prompt <gate> --json`, restricted to the five keys that existed at capture
@@ -70,7 +70,9 @@ for g in $GATES; do
 done
 
 # ── review verdicts: a fresh project per case, the phase's task done by actor 'doer' ──
-VALID='Refutation attempt for GATE_NP (task np1): tried an empty out.txt and a missing one; the criterion rejects both. Could not refute.'
+NOHOLES='Refutation attempt for GATE_NP (task np1): tried an empty out.txt and a missing one; the criterion rejects both. Could not refute.'
+VALID="$NOHOLES
+HOLES: none"
 case_review(){  # rt name reviewer artifact-content-or-NONE verdict [note]
   local rt="$1" name="$2" who="$3" body="$4" verdict="$5" note="${6:-}" d="$WORK/r-$1-$2" args
   mkproj "$d"
@@ -90,6 +92,7 @@ for rt in node py; do
   case_review "$rt" short        refuter 'looks fine' pass
   case_review "$rt" uncited      refuter 'I looked at everything carefully and could not find any problem at all here.' pass
   case_review "$rt" self-review  doer    "$VALID" pass
+  case_review "$rt" no-holes     refuter "$NOHOLES" pass
   case_review "$rt" valid        refuter "$VALID" pass
   case_review "$rt" fail         refuter NONE fail 'hole: out.txt may be stale'
 done

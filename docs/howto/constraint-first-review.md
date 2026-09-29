@@ -85,7 +85,9 @@ constraints still means REFUTED. The refuter writes its attempt to a file (`refu
 ## 4. The free review (when the profile asks for it)
 
 A profile with `"free_review": true` also requires one unconstrained reviewer — breadth, not the
-constraint list — recorded from an actor other than the one who records the pass:
+constraint list — recorded from an actor other than the one who records the pass. With no ids to answer,
+the free reviewer's file states its result in one line, `HOLES: none`; a file without it, or with a HOLES
+line that lists anything, is refused (a hole is a finding: record it with `hb review GATE_API fail`):
 
 ```bash
 node .hb/hb.js refute-prompt GATE_API --free > free-prompt.txt

@@ -1,7 +1,29 @@
 # STATUS — HeartBeat
 
-**Version:** v1.32.1 (refutation fails closed: a verdict only when the reviewer gave one, read from its last line by one exact contract; review-failed gates say so)
+**Version:** v1.33.0 (a review without per-id answers must say `HOLES: none` — an unconstrained pass and the free review are checked like constrained answers)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.33.0 — HOLES: a pass without answers still states its result
+
+A constraint-first review is backstopped by its per-id answers; an unconstrained review and the free
+review had nothing comparable — a reply that argued a hole and still ended in a clean verdict line was
+recorded as a pass. Now every review without per-id answers states its result in one checkable line.
+
+- **The rule.** `hb review <gate> pass` on an unconstrained gate, and `hb review <gate> free`, require a
+  visible `HOLES: none` line (markdown-, width- and case-insensitive; the same normalised visible text as
+  the answers — a line inside an HTML comment does not count), and refuse any HOLES line that lists
+  anything: a hole is a finding, recorded with `hb review <gate> fail`. Enforced at the shared layer, so
+  the CLI, the MCP `review` tool and `hb exec` all apply it, in both runtimes (T176, parity fixtures).
+- **Prompts ask for it**: the unconstrained refute prompt and the `--free` prompt end with a `## Holes`
+  block (the constrained, answers prompt does not). The golden fixtures of unconstrained gates were
+  re-captured on purpose.
+- **Rot-checked**: an unconstrained pass records `holes: "none"` + the artifact's sha256, and `hb doctor`
+  re-checks the stored artifact.
+- **Panels keep their rule**: under `hb exec`, a panel's pass artifact is its CLEAR panelists' findings;
+  an outvoted panelist's findings ride as the pass note, so `refute_if: majority` still means majority.
+- **`hb exec` escalates a refused pass** with the validator's reason (node previously crashed out of the
+  run on it).
+- Plugin/marketplace → **1.33.0**, Python package → **0.23.0**.
 
 ## v1.32.1 — refutation fails closed
 

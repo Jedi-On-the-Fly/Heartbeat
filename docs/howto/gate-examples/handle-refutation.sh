@@ -34,7 +34,7 @@ HB_ACTOR=refuter hb review GA0 fail "hollow test: the gate asserts nothing about
 completed "$p" && fail "the phase advanced despite a review FAIL — a found hole did not hold it"
 
 # 3. After fixing and re-gating, a SELF-review pass (doer == reviewer) is rejected.
-art="$p/refutation.md"; printf 'Refutation attempt for GA0: re-inspected T1 against the log and re-ran the gate; the earlier hole is fixed and no new hole remains.\n' > "$art"
+art="$p/refutation.md"; printf 'Refutation attempt for GA0: re-inspected T1 against the log and re-ran the gate; the earlier hole is fixed and no new hole remains.\nHOLES: none\n' > "$art"
 HB_ACTOR=worker hb gate GA0 --dir "$p" >/dev/null 2>&1
 HB_ACTOR=worker hb review GA0 pass --artifact "$art" --dir "$p" >/dev/null 2>&1 && fail "a self-review (same actor as the doer) was accepted"
 completed "$p" && fail "the phase advanced on a self-review"

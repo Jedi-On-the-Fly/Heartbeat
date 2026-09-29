@@ -333,7 +333,7 @@ check "T24.3 tick → review_pending" 'test "$(reason24)" = "review_pending"'
 node "$H24/hb.js" review GATE_P0 fail hollow >/dev/null
 check "T24.4 review fail → gate_blocked (re-gate)" 'test "$(reason24)" = "gate_blocked"'
 bash "$H24/gate.sh" GATE_P0 >/dev/null 2>&1
-printf 'Refutation attempt for GATE_P0 / phase P0: searched for hollow criteria and faked output, re-ran the gate. No hole found.\n' > "$P24/refute.md"
+printf 'Refutation attempt for GATE_P0 / phase P0: searched for hollow criteria and faked output, re-ran the gate. No hole found.\nHOLES: none\n' > "$P24/refute.md"
 node "$H24/hb.js" review GATE_P0 pass --artifact "$P24/refute.md" >/dev/null
 check "T24.5 review pass → phase advanced (P0 completed)" 'hasP0 "$H24/hb.js"'
 P24b="$TMP/p24b"; bash "$HB_SRC/plugin/bootstrap.sh" "$P24b" >/dev/null 2>&1 </dev/null; H24b="$P24b/.hb"
@@ -421,7 +421,7 @@ rr29 >/dev/null; rr29 >/dev/null; rr29 >/dev/null
 o29=$(rr29)
 check "T29.1 review unresolved N times → review_stuck" 'test "$o29" = "review_stuck"'
 check "T29.2 next tick → silence (review_waiting)" 'test "$(rr29)" = "review_waiting"'
-printf 'Refutation attempt for GATE_P0 / phase P0: inspected the criteria and output, re-ran the gate. No hole found.\n' > "$P29/refute.md"
+printf 'Refutation attempt for GATE_P0 / phase P0: inspected the criteria and output, re-ran the gate. No hole found.\nHOLES: none\n' > "$P29/refute.md"
 node "$H29/hb.js" review GATE_P0 pass --artifact "$P29/refute.md" >/dev/null
 check "T29.3 hb review pass → phase advanced (P0)" \
   'node "$H29/hb.js" state | node -e "let d=\"\";process.stdin.on(\"data\",c=>d+=c).on(\"end\",()=>process.exit(JSON.parse(d).completed_phases.includes(\"P0\")?0:1))"'
@@ -533,7 +533,7 @@ case "$mode" in
     id=$(printf '%s' "$payload" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).task.id' 2>/dev/null)
     if [ "${STUB_DISTINCT:-0}" = 1 ]; then printf 'done\n' > "$id.out"; else printf '%s\n' "$id" >> done.log; fi
     printf '{"ok":true,"summary":"did %s"}\n' "$id" ;;
-  refute) printf '{"refuted":%s,"findings":"Attempted to refute: inspected done.log for the task output, checked the gate criteria for hollowness, re-ran the behavioral check. No hole found."}\n' "${STUB_REFUTE:-false}" ;;
+  refute) printf '{"refuted":%s,"findings":"Attempted to refute: inspected done.log for the task output, checked the gate criteria for hollowness, re-ran the behavioral check. No hole found.\\nHOLES: none"}\n' "${STUB_REFUTE:-false}" ;;
 esac
 STUBEOF
 # set_dag <hbdir> <js> — overwrite dag.json (strip skeleton) and reproject.
@@ -701,7 +701,7 @@ check "T45.4 phase did NOT advance on the rejected self-pass" \
 printf 'ok\n' > "$P45b/thin.md"
 check "T45.5 review pass with a THIN artifact is rejected (no rubber-stamp)" \
   '! node "$H45b/hb.js" review GA0 pass --artifact "$P45b/thin.md" >/dev/null 2>&1'
-printf 'Refutation attempt for GA0: searched for hollow criteria and faked output, re-ran the behavioral gate, inspected done.log. No hole found.\n' > "$P45b/real.md"
+printf 'Refutation attempt for GA0: searched for hollow criteria and faked output, re-ran the behavioral gate, inspected done.log. No hole found.\nHOLES: none\n' > "$P45b/real.md"
 node "$H45b/hb.js" review GA0 pass --artifact "$P45b/real.md" >/dev/null 2>&1
 check "T45.6 review pass WITH a substantive artifact advances the phase" \
   'node -e "const s=require(\"'"$H45b"'/state.json\");process.exit(s.completed_phases.includes(\"A0\")?0:1)"'
@@ -726,7 +726,7 @@ HB_ACTOR=agent-A node "$H46/hb.js" start A0T1 >/dev/null; HB_ACTOR=agent-A node 
 printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' > "$P46/pad.md"
 check "T46.1 padded artifact citing nothing real is rejected" \
   'o=$(HB_ACTOR=agent-B node "$H46/hb.js" review GA0 pass --artifact "$P46/pad.md" 2>&1); echo "$o" | grep -qi "cites nothing\|does not reference"'
-printf 'Refutation for GA0: inspected A0T1 in done.log, re-ran the gate, no hole.\n' > "$P46/real.md"
+printf 'Refutation for GA0: inspected A0T1 in done.log, re-ran the gate, no hole.\nHOLES: none\n' > "$P46/real.md"
 check "T46.2 self-review (same actor did the work) is rejected" \
   'o=$(HB_ACTOR=agent-A node "$H46/hb.js" review GA0 pass --artifact "$P46/real.md" 2>&1); echo "$o" | grep -qi "self-review"'
 check "T46.3 self-review did NOT advance the phase" \
@@ -1733,6 +1733,14 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$HB_SRC"'/tests/gate-blocked-cause.sh" 2>&1 | grep -q "^GATE-BLOCKED-CAUSE-OK"'
 else
   echo "  (python3 absent — T175 skipped)"
+fi
+
+grp "T176 — a review without per-id answers states HOLES: none (unconstrained pass, free review), enforced in both runtimes and under hb exec"
+if command -v python3 >/dev/null 2>&1; then
+  check "T176.1 no HOLES line / listed / twice / hidden → refused; HOLES: none → accepted; prompts ask for it; hb exec goes through it; doctor re-checks; node ≡ python (review-holes.sh → REVIEW-HOLES-OK)" \
+    'bash "'"$HB_SRC"'/tests/review-holes.sh" 2>&1 | grep -q "^REVIEW-HOLES-OK"'
+else
+  echo "  (python3 absent — T176 skipped)"
 fi
 
 grp "T160 — --all dedupes byte-identical criteria (same cmd + same effective timeout): run once per sweep, reuse LOUDLY"

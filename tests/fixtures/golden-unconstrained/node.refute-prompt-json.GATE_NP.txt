@@ -1,1 +1,1 @@
-{"model": null, "panel": null, "prompt": "REVIEW-MARK refute it", "provider": null, "refute_if": null}
+{"model": null, "panel": null, "prompt": "REVIEW-MARK refute it\n\n## Holes\nBefore your verdict, write ONE line: `HOLES: none` — only if you found no hole. A hole is a finding: if you found one, report it and end with REFUTED (a pass needs the `HOLES: none` line).", "provider": null, "refute_if": null}

@@ -69,7 +69,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | `rebuild` | reproject from log |
 | `park <PHASE\|GATE> [--reason …]` / `unpark <PHASE\|GATE>` | retire a phase without deleting it (sets `parked` in dag.json; resolver/audit/report/sweep all skip it, loudly; reversible) |
 | `start/done/fail/heartbeat <id>` | state mutations (+ lease) |
-| `review <gate> pass\|fail\|free [note]` | record adversarial verdict — constraint-first enforcement on a constrained gate lives in `review_policy.accept_review` (+ `check_answers`), so the CLI, the MCP `review` tool (verdict `free` in its schema) and the executor all enforce it |
+| `review <gate> pass\|fail\|free [note]` | record adversarial verdict — enforcement lives in `review_policy.accept_review`: the answers on a constrained gate (`check_answers`), the `HOLES: none` line on an unconstrained pass and a free review (`check_holes`; `doctor` re-checks a pass's stored artifact), so the CLI, the MCP `review` tool (verdict `free` in its schema) and the executor all enforce it |
 | `constraints <gate> --prompt [--json] \| --record <file.json> [--model M]` | gate-time constraint author; see `constraints.py` |
 | `changed <gate> [--json]` | what the phase exiting `<gate>` changed (entry anchor vs the gate's own anchor once accepted, else the live tree); see `anchors.py` |
 | `exec [run\|config] [--parallel N]` | `run` (default) drives the loop with a backend; `config` prints the resolved executor config |
@@ -95,7 +95,7 @@ refute prompt from a resolved profile lives at the dispatch site.
 - **Schema** — a profile file `.hb/refuters/<name>.json` (or an `executor.json` `{"refuters": {…}}`
   inline entry) with any of: `persona` (str), `questions` (str[], a domain falsification lens folded
   *additively* into the gate's `review_questions`), `model`/`provider` (route through the cross-model
-  `refute_*` path), `verdict` (`{panel:N, refute_if:"majority"|"any"|"all"}`). Missing fields
+  `refute_*` path), `verdict` (`{panel:N, refute_if:"majority"|"any"|"all"}`; under `hb exec` a panel's pass artifact is its CLEAR panelists' findings, the outvoted panelists' findings ride as the pass note — == node). Missing fields
   normalize to `""`/`[]`/`null` so every profile — and both runtimes — return the same keys.
 - **Built-in default** — a `default` profile (generic-skeptic `DEFAULT_PERSONA`, no extra questions)
   is *always* resolvable, so refutation can never fail-open for want of a profile. It is **opt-in**

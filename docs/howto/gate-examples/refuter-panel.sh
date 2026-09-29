@@ -57,7 +57,7 @@ i=$(cat "$STUB_COUNTER" 2>/dev/null || echo 0); echo $((i + 1)) > "$STUB_COUNTER
 IFS=',' read -ra V <<< "$STUB_VERDICTS"; v="${V[$i]:-none}"
 case "$v" in
   true)  echo '{"refuted":true,"findings":"panelist REFUTED: found a genuine hole in the phase, well over the forty character substance minimum"}' ;;
-  false) echo '{"refuted":false,"findings":"panelist could not refute: examined every criterion, well over the forty character substance minimum"}' ;;
+  false) echo '{"refuted":false,"findings":"panelist could not refute: examined every criterion, well over the forty character substance minimum\nHOLES: none"}' ;;
   ec)    echo '{"refuted":false,"findings":""}' ;;   # a CLEAR verdict with NO evidence (must not certify a pass)
   *)     echo '{"findings":"panelist returned no boolean verdict — inconclusive"}' ;;
 esac

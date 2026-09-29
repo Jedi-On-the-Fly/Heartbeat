@@ -10,3 +10,6 @@ Domain checks from the refuter profile:
   - Is any error path swallowed, mis-reported, or left to corrupt state on partial failure?
 
 REVIEW-MARK correctness
+
+## Holes
+Before your verdict, write ONE line: `HOLES: none` — only if you found no hole. A hole is a finding: if you found one, report it and end with REFUTED (a pass needs the `HOLES: none` line).
