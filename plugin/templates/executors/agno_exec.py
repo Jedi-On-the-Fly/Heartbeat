@@ -37,6 +37,8 @@ def _verdict(t):
     if len(ms) > 1 and ms[-2].group(1) != a.group(1) and \
             _r.fullmatch(r"\W*(?:or|and)?\W*", (t or "")[ms[-2].end():a.start()], _r.I):
         return None   # "REFUTED | CLEAR", "REFUTED or CLEAR": a copied answer template, no verdict
+    if _r.search(r"(?:\bnot|n't)\W*$", (t or "")[:a.start()], _r.I):
+        return None   # "NOT CLEAR", "isn't REFUTED": a negated token is no verdict
     return a.group(1) == "REFUTED"
 
 

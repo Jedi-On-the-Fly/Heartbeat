@@ -17,6 +17,7 @@ assert v("no verdict token here") is None
 assert v("Hollow. REFUTED. Whether the fix is small is unclear.") is True
 assert v("looks fine, all clear") is None
 assert v("## Verdict\nREFUTED | CLEAR") is None     # a copied answer template is no verdict
+assert v("so the gate is NOT CLEAR.") is None        # a negated final token is no verdict
 PY
 # completeness: NO backend (in-process registry OR executor template) still decides by grep-anywhere
 if grep -rqE '"REFUTED" in|grep -q .REFUTED.' "$ROOT/py/src/heartbeat/backends" "$ROOT/plugin/templates/executors"; then

@@ -68,6 +68,9 @@ case_token(){
     printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf "## Findings\\nnone\\n## Verdict\\nREFUTED | CLEAR\\n"\n' > "$bin/$a"; chmod +x "$bin/$a"
     out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
     printf '%s' "$out" | is_error || fail "token: $a read a copied template 'REFUTED | CLEAR' as a verdict → $out (must be an error)"
+    printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf "The criterion never runs the edge case, so the gate is NOT CLEAR."\n' > "$bin/$a"; chmod +x "$bin/$a"
+    out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
+    printf '%s' "$out" | is_error || fail "token: $a read a negated 'NOT CLEAR' as a verdict → $out (must be an error)"
   done
   # opencode: the verdict comes from the model's text parts, never from a tool's output
   ev(){ python3 -c 'import json,sys
@@ -121,6 +124,7 @@ assert v("all clear") is None and v("UNCLEAR") is None and v("") is None
 assert v("**CLEAR**") is False and v("REFUTED.") is True
 assert v("## Verdict\nREFUTED | CLEAR") is None and v("End with REFUTED or CLEAR") is None
 assert v("I first thought CLEAR.\nThe gate is hollow. REFUTED") is True
+assert v("the gate is NOT CLEAR.") is None and v("REFUTED | not CLEAR") is None and v("not REFUTED") is None
 EOF
   done
   echo "TOKEN-OK"

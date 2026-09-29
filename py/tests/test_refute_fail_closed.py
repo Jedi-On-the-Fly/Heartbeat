@@ -33,6 +33,8 @@ def test_the_verdict_is_a_whole_upper_case_word():
     # a verdict line carrying both tokens (a copied answer template) is no verdict
     assert "error" in refute_result("## Findings\nnone\n## Verdict\nREFUTED | CLEAR")
     assert refute_result("I first thought CLEAR.\nThe gate is hollow. REFUTED")["refuted"] is True
+    # a negated final token ("NOT CLEAR") is no verdict — read as CLEAR it would pass a refutation
+    assert "error" in refute_result("The criterion never runs the edge case, so the gate is NOT CLEAR.")
 
 
 def test_opencode_reads_the_models_text_not_tool_output(tmp_path, monkeypatch):

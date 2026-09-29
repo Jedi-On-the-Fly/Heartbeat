@@ -20,8 +20,9 @@ let t="";process.stdin.on("data",c=>t+=c).on("end",()=>{
 # Pull a field (JS path expr like `.context`) out of the JSON payload, safely.
 # The reviewer's verdict: its FINAL whole-word, upper-case REFUTED/CLEAR — none when the reply has
 # none, or when the last two tokens differ and only a connector separates them ("REFUTED | CLEAR",
-# "REFUTED or CLEAR": a copied answer template). Twin of _verdict in the python adapters.
-verdict_of() { node -e 'const t=require("fs").readFileSync(0,"utf8");const m=[...t.matchAll(/\b(REFUTED|CLEAR)\b/g)];let v="";if(m.length){const a=m[m.length-1];v=a[1];if(m.length>1){const b=m[m.length-2];if(b[1]!==a[1]&&/^\W*(?:or|and)?\W*$/i.test(t.slice(b.index+b[1].length,a.index)))v="";}}process.stdout.write(v)'; }
+# "REFUTED or CLEAR": a copied answer template), or when the final token is negated ("NOT CLEAR").
+# Twin of _verdict in the python adapters.
+verdict_of() { node -e 'const t=require("fs").readFileSync(0,"utf8");const m=[...t.matchAll(/\b(REFUTED|CLEAR)\b/g)];let v="";if(m.length){const a=m[m.length-1];v=a[1];if(m.length>1){const b=m[m.length-2];if(b[1]!==a[1]&&/^\W*(?:or|and)?\W*$/i.test(t.slice(b.index+b[1].length,a.index)))v="";}if(/(?:\bnot|n\x27t)\W*$/i.test(t.slice(0,a.index)))v="";}process.stdout.write(v)'; }
 field() { printf '%s' "$payload" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String((JSON.parse(d)$1)??''))}catch(e){process.stdout.write('')}})"; }
 jstr()  { node -pe 'JSON.stringify(require("fs").readFileSync(0,"utf8"))'; }
 
