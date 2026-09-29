@@ -1,28 +1,23 @@
 #!/usr/bin/env bash
-# Proof (C2): the python backends decide REFUTED/CLEAR from the reply's FINAL whole-word, upper-case
-# token via a shared helper, so prose that merely mentions the word "REFUTED" but ends CLEAR is NOT scored
-# as a refutation, "unclear" is not a CLEAR, and no token is no verdict (None → the backend returns an
-# error, fail-closed; mirrors the node adapters). Prints VERDICT-ROBUST-OK. Fails before the helper exists.
+# Proof (C2): the python backends decide REFUTED/CLEAR via a shared helper by one contract
+# (py/tests/verdict_cases.json): the reply's last non-empty line is ONLY the verdict, and the line
+# before it does not begin with one — so prose that merely mentions "REFUTED" is not a refutation, and
+# anything else is no verdict (None → the backend returns an error, fail-closed; mirrors the node
+# adapters). Prints VERDICT-ROBUST-OK. Fails before the helper exists.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 export PYTHONPATH="$ROOT/py/src"
 command -v python3 >/dev/null 2>&1 || { echo "python3 absent"; exit 1; }
-python3 - <<'PY' || { echo "FAIL: verdict helper not robust"; exit 1; }
+python3 - "$ROOT/py/tests/verdict_cases.json" <<'PY' || { echo "FAIL: verdict helper not robust"; exit 1; }
+import json, sys
 from heartbeat.backends import verdict_of as v
-assert v("I looked hard; the instructions say end with REFUTED or CLEAR. CLEAR") is False
-assert v("Found a hollow test — this is not done. REFUTED") is True
-assert v("earlier I wrote CLEAR ... final verdict: REFUTED") is True
-assert v("earlier I wrote REFUTED ... final verdict: CLEAR") is False
-assert v("no verdict token here") is None
-assert v("Whether the fix is small is unclear. Hollow. REFUTED") is True
-assert v("Hollow. REFUTED. Whether the fix is small is unclear.") is None   # the verdict must be the final word
-assert v("looks fine, all clear") is None
-assert v("## Verdict\nREFUTED | CLEAR") is None     # a copied answer template is no verdict
-assert v("so the gate is NOT CLEAR.") is None        # a negated final token is no verdict
-assert v("so the gate is NOT yet CLEAR.") is None and v("far from CLEAR") is None   # the token must stand alone
-assert v("**Verdict:** CLEAR") is False and v("Final verdict — REFUTED") is True
-assert v("CLEAR would be premature.") is None and v("so it is not\nCLEAR.") is None and v("* REFUTED\n* CLEAR") is None
-assert v("Verdict: REFUTED - CLEAR") is None and v("REFUTED; CLEAR") is None and v("Final verdict:\n\nREFUTED\n\nCLEAR") is None
+cases = json.load(open(sys.argv[1]))          # the contract: the last non-empty line is ONLY the verdict
+# the original trap: prose that mentions REFUTED, then a CLEAR verdict line, is not a refutation
+assert v("I looked hard; the instructions say end with REFUTED or CLEAR.\n\nCLEAR") is False
+assert v("Found a hollow test — this is not done.\nREFUTED") is True
+for want, key in ((True, "true"), (False, "false"), (None, "none")):
+    for c in cases[key]:
+        assert v(c) is want, (c, v(c), want)
 PY
 # completeness: NO backend (in-process registry OR executor template) still decides by grep-anywhere
 if grep -rqE '"REFUTED" in|grep -q .REFUTED.' "$ROOT/py/src/heartbeat/backends" "$ROOT/plugin/templates/executors"; then

@@ -73,7 +73,7 @@ def refute(payload):
         return {"error": f"openai-agents unavailable ({e})"}
     try:
         agent = Agent(name="Skeptic",
-                      instructions="You are a skeptical adversarial reviewer. End with exactly one token: REFUTED or CLEAR.",
+                      instructions="You are a skeptical adversarial reviewer. End with a final line that is only the verdict: REFUTED or CLEAR.",
                       model=model)
         res = Runner.run_sync(agent, f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}')
         text = _final(res)

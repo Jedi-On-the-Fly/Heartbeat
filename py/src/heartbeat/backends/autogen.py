@@ -55,7 +55,7 @@ def execute(payload):
 def refute(payload):
     ctx = payload.get("context", "")
     try:
-        text = _run("You are a skeptical adversarial reviewer. End with exactly one token: REFUTED or CLEAR.",
+        text = _run("You are a skeptical adversarial reviewer. End with a final line that is only the verdict: REFUTED or CLEAR.",
                     f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}')
     except Exception as e:
         return {"error": f"autogen unavailable ({e})"}

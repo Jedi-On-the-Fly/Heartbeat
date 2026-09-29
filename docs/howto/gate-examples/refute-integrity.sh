@@ -52,7 +52,7 @@ nobool < "$tmp/degrade.json" || fail "node: claude-exec.sh fails open on degrade
 sdir="$tmp/bin"; mkdir -p "$sdir"
 cat > "$sdir/claude" <<'STUB'
 #!/usr/bin/env bash
-echo "I examined the phase, the gate criteria, and the artifact in detail and found no hollow test or faked output. CLEAR"
+printf 'I examined the phase, the gate criteria, and the artifact in detail and found no hollow test or faked output.\n\nCLEAR\n'
 STUB
 chmod +x "$sdir/claude"
 printf '%s' '{"context":"c","prompt":"Refute G"}' | PATH="$sdir:$cleanbin" bash "$CE" refute > "$tmp/clear.json" 2>/dev/null
@@ -64,7 +64,7 @@ printf '%s' "$f" | grep -q 'examined the phase' || fail "node: CLEAR findings do
 # (c) verdict robustness: prose mentions REFUTED but ends CLEAR → must be refuted=false
 cat > "$sdir/claude" <<'STUB'
 #!/usr/bin/env bash
-echo "The instructions say to end with REFUTED or CLEAR. I looked hard for a hole and could not find one. CLEAR"
+printf 'The instructions say to end with REFUTED or CLEAR. I looked hard for a hole and could not find one.\nCLEAR\n'
 STUB
 chmod +x "$sdir/claude"
 printf '%s' '{"context":"c","prompt":"Refute G"}' | PATH="$sdir:$cleanbin" bash "$CE" refute > "$tmp/verdict.json" 2>/dev/null

@@ -16,35 +16,26 @@ from heartbeat import backends
 from heartbeat.backends import ollama, refute_result
 
 
+CASES = json.load(open(os.path.join(os.path.dirname(__file__), "verdict_cases.json")))
+
+
 def test_refute_result_is_three_state():
-    assert refute_result("the gate is hollow. REFUTED") == {"refuted": True, "findings": "the gate is hollow. REFUTED"}
-    assert refute_result("looks complete. CLEAR")["refuted"] is False
+    assert refute_result("the gate is hollow.\nREFUTED") == {"refuted": True, "findings": "the gate is hollow.\nREFUTED"}
+    assert refute_result("looks complete.\n\nCLEAR")["refuted"] is False
     r = refute_result("some thoughts, no conclusion")
     assert "error" in r and "refuted" not in r
     assert "error" in refute_result("") and "error" in refute_result(None)
 
 
-def test_the_verdict_is_a_whole_upper_case_word():
-    # "unclear" after a REFUTED must not read as the final CLEAR; a lower-case "clear" is no verdict
-    assert refute_result("The rest is unclear. Hollow. REFUTED")["refuted"] is True
-    assert "error" in refute_result("Looks fine to me, all clear.")
-    assert "error" in refute_result("UNCLEAR")
-    assert refute_result("**CLEAR**")["refuted"] is False
-    # a verdict line carrying both tokens (a copied answer template) is no verdict
-    assert "error" in refute_result("## Findings\nnone\n## Verdict\nREFUTED | CLEAR")
-    assert refute_result("I first thought CLEAR.\nThe gate is hollow. REFUTED")["refuted"] is True
-    # a negated final token ("NOT CLEAR") is no verdict — read as CLEAR it would pass a refutation
-    assert "error" in refute_result("The criterion never runs the edge case, so the gate is NOT CLEAR.")
-    # the token must stand alone: a token inside a sentence ("NOT yet CLEAR", "far from CLEAR") is none
-    for s in ("Several criteria fail, so the gate is NOT yet CLEAR.", "far from CLEAR", "It is never CLEAR."):
-        assert "error" in refute_result(s), s
-    assert refute_result("I checked every criterion.\n\n**Verdict:** CLEAR")["refuted"] is False
-    assert refute_result("Final verdict — REFUTED")["refuted"] is True
-    # the verdict must be the reply's final word, standing alone (review 5's forms are none)
-    for s in ("Hollow. REFUTED. The rest is unclear.", "P1: VIOLATED (reproduced). CLEAR would be premature.",
-              "P1: VIOLATED. The gate fails, so it is not\nCLEAR.", "Choose one:\n* REFUTED\n* CLEAR",
-              "Verdict: REFUTED - CLEAR", "REFUTED; CLEAR", "Final verdict:\n\nREFUTED\n\nCLEAR", "Verdict: REFUTED. CLEAR"):
-        assert "error" in refute_result(s), s
+def test_the_verdict_contract():
+    """verdict_cases.json is the contract (shared with tests/refute-fail-closed.sh and verdict-robust.sh):
+    the last non-empty line is only the verdict, and the line before it does not begin with one."""
+    for want, key in ((True, "true"), (False, "false")):
+        for s in CASES[key]:
+            assert refute_result(s).get("refuted") is want, s
+    for s in CASES["none"]:
+        r = refute_result(s)
+        assert "error" in r and "refuted" not in r, s
 
 
 def test_opencode_reads_the_models_text_not_tool_output(tmp_path, monkeypatch):
@@ -59,8 +50,8 @@ def test_opencode_reads_the_models_text_not_tool_output(tmp_path, monkeypatch):
         return "\n".join(out)
     monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
     for events, want in ((ev(("text", "Some thoughts, no conclusion."), ("tool", "const CLEAR = 1")), "error"),
-                         (ev(("text", "The gate is hollow. REFUTED"), ("tool", "clear() is called")), True),
-                         (ev(("tool", "REFUTED in a comment"), ("text", "Every criterion holds. CLEAR")), False)):
+                         (ev(("text", "The gate is hollow.\n\nREFUTED"), ("tool", "clear() is called")), True),
+                         (ev(("tool", "REFUTED in a comment"), ("text", "Every criterion holds.\nCLEAR")), False)):
         (tmp_path / "ev.jsonl").write_text(events + "\n")
         fake.write_text('#!/usr/bin/env bash\ncase "$*" in *--help*) exit 0;; esac\ncat "' + str(tmp_path / "ev.jsonl") + '"\n')
         fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
@@ -96,9 +87,9 @@ def _mock_ollama(monkeypatch, response, prompt_eval_count):
 
 
 def test_ollama_sends_an_explicit_context_and_honours_the_env(monkeypatch):
-    seen = _mock_ollama(monkeypatch, "fine. CLEAR", 900)
+    seen = _mock_ollama(monkeypatch, "fine.\nCLEAR", 900)
     monkeypatch.delenv("HB_OLLAMA_NUM_CTX", raising=False)
-    assert ollama.refute({"prompt": "Refute."}) == {"refuted": False, "findings": "fine. CLEAR"}
+    assert ollama.refute({"prompt": "Refute."}) == {"refuted": False, "findings": "fine.\nCLEAR"}
     assert seen["body"]["options"]["num_ctx"] >= 16384
     monkeypatch.setenv("HB_OLLAMA_NUM_CTX", "24576")
     ollama.refute({"prompt": "Refute."})
@@ -106,7 +97,7 @@ def test_ollama_sends_an_explicit_context_and_honours_the_env(monkeypatch):
 
 
 def test_ollama_refuses_a_truncated_prompt(monkeypatch):
-    _mock_ollama(monkeypatch, "fine. CLEAR", None)           # prompt_eval_count == num_ctx
+    _mock_ollama(monkeypatch, "fine.\nCLEAR", None)           # prompt_eval_count == num_ctx
     r = ollama.refute({"prompt": "Refute."})
     assert "error" in r and "truncated" in r["error"] and "refuted" not in r
     e = ollama.execute({"context": "task", "cwd": os.getcwd()})
@@ -128,8 +119,8 @@ def test_ollama_no_verdict_and_unreachable_are_errors(monkeypatch):
 def test_cli_backends_without_a_verdict_token_are_errors(name, tmp_path, monkeypatch):
     mod = backends.get(name)
     fake = tmp_path / name
-    for reply, want in (("thoughts but no conclusion", "error"), ("looks complete. CLEAR", False), ("hollow. REFUTED", True)):
-        fake.write_text("#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf %s " + json.dumps(reply) + "\n")
+    for reply, want in (("thoughts but no conclusion", "error"), ("looks complete.\nCLEAR", False), ("hollow.\nREFUTED", True)):
+        fake.write_text("#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf %b " + json.dumps(reply) + "\n")
         fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
         monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
         r = mod.refute({"prompt": "Refute.", "cwd": str(tmp_path)})

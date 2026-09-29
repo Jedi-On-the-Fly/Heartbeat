@@ -68,7 +68,7 @@ def refute(payload):
         return {"error": f"smolagents unavailable ({e})"}
     try:
         agent = ToolCallingAgent(tools=[], model=model)
-        out = str(agent.run(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd with REFUTED or CLEAR.'))
+        out = str(agent.run(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd with a final line that is only the verdict: REFUTED or CLEAR.'))
         return refute_result(out)
     except Exception as e:
         return {"error": f"reviewer error: {e}"}

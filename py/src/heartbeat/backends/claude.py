@@ -30,7 +30,7 @@ def refute(payload):
     if not which("claude"):
         return {"error": "claude CLI not available"}
     prompt = (f'{payload.get("prompt", "Refute.")}\n\nContext:\n{payload.get("context", "")}\n\n'
-              "You are a skeptical reviewer. End with REFUTED or CLEAR.")
+              "You are a skeptical reviewer. End with a final line that is only the verdict: REFUTED or CLEAR.")
     try:
         r = subprocess.run(_claude(prompt), capture_output=True, text=True, timeout=600)
         return refute_result(r.stdout)

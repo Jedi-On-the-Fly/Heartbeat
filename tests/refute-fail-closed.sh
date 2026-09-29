@@ -5,11 +5,10 @@
 # (fail-closed) — never as {"refuted": false}, which the driver would accept as "could not refute".
 # Also: the ollama backend sends an explicit context size (num_ctx) and refuses a verdict when the
 # prompt filled it (a truncated prompt means the reviewer never saw the whole request).
-# The verdict is the reply's final WHOLE-WORD, upper-case REFUTED/CLEAR: "unclear" or "all clear" is
-# not a verdict, and the token must be the reply's FINAL word and stand alone (after a sentence end or
-# a label, or at a line start after a finished sentence / heading / label / blank line): a token inside
-# a sentence ("NOT yet CLEAR", a hard-wrapped "not\nCLEAR", "CLEAR would be premature") or a copied
-# template ("REFUTED | CLEAR", a list of both) is no verdict. The three parser copies must agree. The
+# The verdict contract (py/tests/verdict_cases.json): the reply's last non-empty line is ONLY the
+# verdict — optional **/`/_ markup, an optional "Verdict:" label, the upper-case token, optional "."/"!"
+# — and the line before it does not begin with a verdict token. Anything else (a same-line "… CLEAR",
+# "NOT yet CLEAR", "REFUTED | CLEAR", a list of both) is no verdict. Every parser copy agrees. The
 # opencode adapter reads the model's TEXT parts of its --format json stream only — a tool output
 # (a file the reviewer read, a grep hit) is not the reviewer's verdict.
 #   bash tests/refute-fail-closed.sh [case]   cases: degrade cli ollama token e2e (default: all)
@@ -36,68 +35,84 @@ case_degrade(){
 }
 
 case_cli(){
-  # the shell adapters with a FAKE CLI on PATH: no verdict token → error; CLEAR → false; REFUTED → true
-  local bin="$W/bin" a reply out
+  # the shell adapters with a FAKE CLI on PATH (it prints a reply file): no verdict → error; a CLEAR
+  # verdict line → false; a REFUTED verdict line → true
+  local bin="$W/bin" a want out
   mkdir -p "$bin"
   for a in claude codex; do   # opencode speaks a JSON event stream: its cases are in case_token
-    for reply in "I looked around and have some thoughts but no conclusion." "Looks complete. CLEAR" "The gate is hollow. REFUTED"; do
-      printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf %%s "%s"\n' "$reply" > "$bin/$a"; chmod +x "$bin/$a"
-      out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
-      case "$reply" in
-        *REFUTED) printf '%s' "$out" | is_verdict True  || fail "cli: $a REFUTED reply → $out" ;;
-        *CLEAR)   printf '%s' "$out" | is_verdict False || fail "cli: $a CLEAR reply → $out" ;;
-        *)        printf '%s' "$out" | is_error         || fail "cli: $a reply without a verdict token → $out (must be an error)" ;;
+    for want in err False True; do
+      case "$want" in
+        err)   printf 'I looked around and have some thoughts but no conclusion.' > "$W/reply.txt" ;;
+        False) printf 'Looks complete.\n\nCLEAR\n' > "$W/reply.txt" ;;
+        True)  printf 'The gate is hollow.\n\nREFUTED\n' > "$W/reply.txt" ;;
       esac
+      printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; cat "%s"\n' "$W/reply.txt" > "$bin/$a"; chmod +x "$bin/$a"
+      out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
+      if [ "$want" = err ]; then printf '%s' "$out" | is_error || fail "cli: $a reply without a verdict → $out (must be an error)"
+      else printf '%s' "$out" | is_verdict "$want" || fail "cli: $a $want reply → $out"; fi
     done
   done
   echo "CLI-OK"
 }
 
 case_token(){
-  # the final token is whole-word and upper-case, in every parser (shell adapters, python adapters via
-  # the ollama mock, the python package): a REFUTED reply that then says "unclear" stays REFUTED, and
-  # a lower-case "all clear" is no verdict (an error)
-  local bin="$W/tbin" a out
+  # the verdict contract (py/tests/verdict_cases.json, shared with pytest and verdict-robust.sh): the
+  # reply's last non-empty line is ONLY the verdict, and the line before it does not begin with one.
+  local CASES="$ROOT/py/tests/verdict_cases.json" bin="$W/tbin" a out
   mkdir -p "$bin"
+  # 1. every parser copy — the python package, every python adapter's _verdict, the shell adapters'
+  #    node verdict_of — gives the contract's answer on every case
+  python3 - "$ROOT" "$CASES" <<'EOF' || fail "token: a verdict parser breaks the contract (or the copies disagree)"
+import ast, glob, json, subprocess, sys
+root, cases = sys.argv[1], json.load(open(sys.argv[2]))
+sys.path.insert(0, root + "/py/src")
+from heartbeat.backends import verdict_of
+parsers = {"package": verdict_of}
+for f in sorted(glob.glob(root + "/plugin/templates/executors/*_exec.py")):
+    ns = {}; fn = next(n for n in ast.parse(open(f).read()).body if isinstance(n, ast.FunctionDef) and n.name == "_verdict")
+    exec(compile(ast.Module([fn], []), f, "exec"), ns); parsers[f.rsplit("/", 1)[1]] = ns["_verdict"]
+for sh in ("claude", "codex", "opencode"):
+    node = next(l for l in open("%s/plugin/templates/executors/%s-exec.sh" % (root, sh)) if l.startswith("verdict_of()"))
+    parsers[sh + "-exec.sh"] = (lambda node: lambda c: {"REFUTED": True, "CLEAR": False, "": None}[
+        subprocess.run(["bash", "-c", node + "\nverdict_of"], input=c, capture_output=True, text=True).stdout])(node)
+bad = []
+for want, key in ((True, "true"), (False, "false"), (None, "none")):
+    for c in cases[key]:
+        for name, v in parsers.items():
+            if v(c) is not want: bad.append("%s: %r → %r (want %r)" % (name, c, v(c), want))
+print("\n".join(bad[:10])); sys.exit(1 if bad else 0)
+EOF
+  # 2. end to end through the claude/codex adapters: a template, a negation, a same-line verdict → error;
+  #    a labelled verdict line → false
   for a in claude codex; do
-    printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf %%s "Whether the fix is trivial is unclear. The gate is hollow. REFUTED"\n' > "$bin/$a"; chmod +x "$bin/$a"
-    out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
-    printf '%s' "$out" | is_verdict True || fail "token: $a read 'unclear' as a CLEAR → $out"
-    printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf %%s "I checked it, all clear."\n' > "$bin/$a"; chmod +x "$bin/$a"
-    out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
-    printf '%s' "$out" | is_error || fail "token: $a read a lower-case 'clear' as a verdict → $out (must be an error)"
-    printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf "## Findings\\nnone\\n## Verdict\\nREFUTED | CLEAR\\n"\n' > "$bin/$a"; chmod +x "$bin/$a"
-    out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
-    printf '%s' "$out" | is_error || fail "token: $a read a copied template 'REFUTED | CLEAR' as a verdict → $out (must be an error)"
-    printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf "The criterion never runs the edge case, so the gate is NOT CLEAR."\n' > "$bin/$a"; chmod +x "$bin/$a"
-    out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
-    printf '%s' "$out" | is_error || fail "token: $a read a negated 'NOT CLEAR' as a verdict → $out (must be an error)"
-    printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf "Several criteria fail, so the gate is NOT yet CLEAR."\n' > "$bin/$a"; chmod +x "$bin/$a"
-    out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
-    printf '%s' "$out" | is_error || fail "token: $a read 'NOT yet CLEAR' (a token inside a sentence) as a verdict → $out (must be an error)"
-    printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; printf "I checked every criterion.\\n\\n**Verdict:** CLEAR\\n"\n' > "$bin/$a"; chmod +x "$bin/$a"
-    out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
-    printf '%s' "$out" | is_verdict False || fail "token: $a rejected a labelled verdict '**Verdict:** CLEAR' → $out"
+    for r in "err|## Verdict\nREFUTED | CLEAR\n" "err|Several criteria fail, so the gate is NOT yet CLEAR." "err|The gate is hollow. REFUTED" \
+             "False|I checked every criterion.\n\n**Verdict:** CLEAR\n"; do
+      printf "${r#*|}" > "$W/reply.txt"
+      printf '#!/usr/bin/env bash\ncat >/dev/null 2>&1 </dev/null; cat "%s"\n' "$W/reply.txt" > "$bin/$a"; chmod +x "$bin/$a"
+      out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/$a-exec.sh" refute 2>/dev/null | last)
+      if [ "${r%%|*}" = err ]; then printf '%s' "$out" | is_error || fail "token: $a read a non-verdict as a verdict ($r) → $out"
+      else printf '%s' "$out" | is_verdict False || fail "token: $a rejected a verdict line ($r) → $out"; fi
+    done
   done
-  # opencode: the verdict comes from the model's text parts, never from a tool's output
+  # 3. opencode: the verdict comes from the model's text parts, never from a tool's output
   ev(){ python3 -c 'import json,sys
 for kind, val in zip(sys.argv[1::2], sys.argv[2::2]):
     part = {"type": "text", "text": val} if kind == "text" else {"type": "tool", "tool": "read", "state": {"status": "completed", "output": val}}
     print(json.dumps({"type": "text" if kind == "text" else "tool_use", "part": part}))' "$@"; }
-  for spec in "err|text|Some thoughts, no conclusion.|tool|const CLEAR = 1" \
-              "True|text|The gate is hollow. REFUTED|tool|clear() is called" \
-              "False|tool|REFUTED in a comment|text|I looked at every criterion. CLEAR"; do
+  for spec in "err|text|Some thoughts, no conclusion.|tool|CLEAR" \
+              "True|text|The gate is hollow.@@REFUTED|tool|clear() is called" \
+              "False|tool|REFUTED|text|I looked at every criterion.@@CLEAR"; do
     IFS='|' read -r want k1 v1 k2 v2 <<<"$spec"
-    ev "$k1" "$v1" "$k2" "$v2" > "$W/oc.jsonl"
+    ev "$k1" "${v1//@@/$'\n\n'}" "$k2" "${v2//@@/$'\n\n'}" > "$W/oc.jsonl"
     printf '#!/usr/bin/env bash\ncase "$*" in *--help*) exit 0;; esac\ncat >/dev/null 2>&1 </dev/null; cat "%s"\n' "$W/oc.jsonl" > "$bin/opencode"; chmod +x "$bin/opencode"
     out=$(cd "$W" && printf '{"prompt":"Refute."}' | PATH="$bin:$PATH" bash "$EX/opencode-exec.sh" refute 2>/dev/null | last)
     if [ "$want" = err ]; then printf '%s' "$out" | is_error || fail "token: opencode took a verdict from a TOOL output → $out"
     else printf '%s' "$out" | is_verdict "$want" || fail "token: opencode $spec → $out"; fi
   done
-  # python adapters (through ollama_exec.py and a mock server) share the parser
+  # 4. end to end through a python adapter (ollama_exec.py against a mock server)
   cat > "$W/tmock.py" <<'EOF'
 import json, sys, http.server
-reply = sys.argv[2]
+reply = open(sys.argv[2]).read()
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_POST(self):
@@ -106,73 +121,17 @@ class H(http.server.BaseHTTPRequestHandler):
         self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(out)
 http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 EOF
-  local port r want
-  for r in "True|The rest is unclear. Hollow. REFUTED" "err|Hollow. REFUTED. The rest is unclear." "err|Looks fine to me, all clear." "err|## Verdict
-REFUTED | CLEAR"; do
-    want="${r%%|*}"; port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
-    python3 "$W/tmock.py" "$port" "${r#*|}" & MOCK_PID=$!
+  local port r
+  for r in "True|Hollow.\n\nREFUTED\n" "err|Hollow. REFUTED. The rest is unclear." "err|Verdict: REFUTED - CLEAR"; do
+    printf "${r#*|}" > "$W/treply.txt"
+    port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+    python3 "$W/tmock.py" "$port" "$W/treply.txt" & MOCK_PID=$!
     for i in $(seq 1 50); do python3 -c "import socket; socket.create_connection(('127.0.0.1',$port),0.2)" 2>/dev/null && break; sleep 0.1; done
     out=$(cd "$W" && printf '{"prompt":"Refute."}' | OLLAMA_HOST="http://127.0.0.1:$port" python3 "$EX/ollama_exec.py" refute 2>/dev/null | last)
     kill "$MOCK_PID" 2>/dev/null; wait "$MOCK_PID" 2>/dev/null; MOCK_PID=""
-    if [ "$want" = err ]; then printf '%s' "$out" | is_error || fail "token: ollama_exec.py read a lower-case 'clear' as a verdict → $out"
-    else printf '%s' "$out" | is_verdict True || fail "token: ollama_exec.py read 'unclear' as the final CLEAR → $out"; fi
+    if [ "${r%%|*}" = err ]; then printf '%s' "$out" | is_error || fail "token: ollama_exec.py read a non-verdict as a verdict ($r) → $out"
+    else printf '%s' "$out" | is_verdict True || fail "token: ollama_exec.py rejected a verdict line ($r) → $out"; fi
   done
-  # every python adapter carries the same parser (derived from the directory)
-  local f
-  for f in "$EX"/*_exec.py; do
-    python3 - "$f" <<'EOF' || fail "token: $(basename "$f") parses the verdict differently"
-import ast, sys
-src = open(sys.argv[1]).read(); ns = {}
-fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "_verdict")
-exec(compile(ast.Module([fn], []), sys.argv[1], "exec"), ns)
-v = ns["_verdict"]
-assert v("The rest is unclear. Hollow. REFUTED") is True
-assert v("Hollow. REFUTED. The rest is unclear.") is None     # the verdict must be the final word
-assert v("all clear") is None and v("UNCLEAR") is None and v("") is None
-assert v("**CLEAR**") is False and v("REFUTED.") is True
-assert v("## Verdict\nREFUTED | CLEAR") is None and v("End with REFUTED or CLEAR") is None
-assert v("I first thought CLEAR.\nThe gate is hollow. REFUTED") is True
-assert v("the gate is NOT CLEAR.") is None and v("REFUTED | not CLEAR") is None and v("not REFUTED") is None
-# the token must stand alone (line start, or after a sentence end / a label) — never inside a sentence
-for s in ("so the gate is NOT yet CLEAR.", "far from CLEAR", "It is never CLEAR.", "a non-CLEAR result", 'Verdict: not "CLEAR"'):
-    assert v(s) is None, s
-assert v("**Verdict:** CLEAR") is False and v("Final verdict — REFUTED") is True and v("done.\n\nCLEAR\n") is False
-# review 5's forms: text after the token, a hard-wrapped negation, a template laid out as a list
-for s in ("P1: VIOLATED (reproduced). CLEAR would be premature.", "Verdict: CLEAR is not justified; P1 is violated.",
-          "P1: VIOLATED. The gate fails, so it is not\nCLEAR.", "Choose one:\n* REFUTED\n* CLEAR",
-          "Verdict (choose one):\n  - REFUTED\n  - CLEAR", "Verdict:\n- REFUTED\n- CLEAR"):
-    assert v(s) is None, s
-assert v("## Verdict\nCLEAR") is False and v("Verdict: **CLEAR**") is False and v("hollow.\n\n**REFUTED**") is True
-# review 6's forms: templates joined by - / — / – / ; or a period, stacked over blank lines, numbered;
-# negations behind a dash or a colon
-for s in ("Verdict: REFUTED - CLEAR", "Verdict: REFUTED \u2014 CLEAR", "Verdict: REFUTED \u2013 CLEAR", "REFUTED; CLEAR",
-          "Verdict: REFUTED. CLEAR", "CLEAR. REFUTED", "Verdict (pick one):\n\n- REFUTED\n\n- CLEAR",
-          "Final verdict:\n\nREFUTED\n\nCLEAR", "1. REFUTED\n2. CLEAR", "so the gate is \u2014 not \u2014 CLEAR.",
-          "the gate is not: CLEAR.", "It is not; CLEAR", "Done. CLEAR\ufeff", "Done. CLEAR\x1c"):
-    assert v(s) is None, s
-assert v("earlier I wrote CLEAR ... final verdict: REFUTED") is True and v("hollow)\nREFUTED") is True
-EOF
-  done
-  # the three parser copies (python package, python adapters, the shell adapters' node verdict_of) agree
-  python3 - "$ROOT" <<'EOF' || fail "token: the verdict parsers disagree (python package / python adapter / node)"
-import ast, json, subprocess, sys
-root = sys.argv[1]; sys.path.insert(0, root + "/py/src")
-from heartbeat.backends import verdict_of
-src = open(root + "/plugin/templates/executors/ollama_exec.py").read(); ns = {}
-fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "_verdict")
-exec(compile(ast.Module([fn], []), "x", "exec"), ns)
-node = next(l for l in open(root + "/plugin/templates/executors/claude-exec.sh") if l.startswith("verdict_of()"))
-cases = ["The gate is hollow. REFUTED", "done.\n\nCLEAR\n", "Verdict: REFUTED - CLEAR", "REFUTED; CLEAR",
-         "Verdict (pick one):\n\n- REFUTED\n\n- CLEAR", "Done. CLEAR\ufeff", "Done. CLEAR\x1c", "done.\u2028 CLEAR",
-         "\u00c9CLEAR", "Done. \u00c9CLEAR", "earlier I wrote CLEAR ... final verdict: REFUTED", "Verdict: REFUTED. CLEAR", "**Verdict:** REFUTED", "Final verdict \u2014 REFUTED",
-         "CLEAR would be premature.", "so it is not\nCLEAR.", "* REFUTED\n* CLEAR", "REFUTED | CLEAR", "it isn't CLEAR",
-         "Verdict: not \"CLEAR\"", "(CLEAR)", "1. REFUTED\n2. CLEAR", "x\n# Verdict\nREFUTED", "Verdict: 'CLEAR'",
-         "The gate is fine\nCLEAR", "\u201cCLEAR\u201d", "P1: VIOLATED \u2014 CLEAR", "CLEAR. REFUTED", "all clear", ""]
-for c in cases:
-    n = {"REFUTED": True, "CLEAR": False, "": None}[subprocess.run(["bash", "-c", node + "\nverdict_of"], input=c, capture_output=True, text=True).stdout]
-    if not (verdict_of(c) == ns["_verdict"](c) == n):
-        sys.exit("disagree on %r: pkg=%r adapter=%r node=%r" % (c, verdict_of(c), ns["_verdict"](c), n))
-EOF
   echo "TOKEN-OK"
 }
 
@@ -187,8 +146,8 @@ class H(http.server.BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         open(log, "w").write(json.dumps(body))
         ctx = (body.get("options") or {}).get("num_ctx") or 4096
-        reply = {"clear": ("Looks complete. CLEAR", 900), "none": ("Some thoughts, no conclusion.", 900),
-                 "full": ("Looks complete. CLEAR", ctx)}[mode]
+        reply = {"clear": ("Looks complete.\n\nCLEAR", 900), "none": ("Some thoughts, no conclusion.", 900),
+                 "full": ("Looks complete.\n\nCLEAR", ctx)}[mode]
         out = json.dumps({"response": reply[0], "prompt_eval_count": reply[1], "done": True}).encode()
         self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(out)
 http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()

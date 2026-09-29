@@ -18,11 +18,10 @@ let t="";process.stdin.on("data",c=>t+=c).on("end",()=>{
   process.stdout.write(JSON.stringify({ok:false,error:"no JSON array of constraints in the author reply: "+t.slice(0,200)})+"\n");
 });'; }
 # Pull a field (JS path expr like `.context`) out of the JSON payload, safely.
-# The reviewer's verdict (twin of _verdict in the python adapters): read from the reply's LAST non-empty
-# line by an exact grammar — (A) only the verdict (optional bullet/markup, optional "Verdict:" label, the
-# token, optional "."/"!") or (B) a finished sentence or a "verdict:" label then the token as the final
-# word; no verdict line just before it; a bare line not glued to an unfinished sentence. Else nothing.
-verdict_of() { node -e 'const t=require("fs").readFileSync(0,"utf8");const A=/^[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?[ \t*_\x60]*(?:(?:[Ff]inal[ \t]+)?(?:[Vv]erdict|VERDICT)[ \t*_\x60]*[:\u2014\u2013-])?[ \t*_\x60"\x27\u201c\u201d]*(REFUTED|CLEAR)[ \t*_\x60"\x27\u201c\u201d.!]*$/;const B=/^([^\n]*[A-Za-z][^\n]*(?:[.!?][)"\x27\u201d*_\x60]*|(?:[Vv]erdict|VERDICT)[ \t*_\x60]*[:\u2014\u2013-]))[ \t]+[*_\x60"\x27\u201c]*(REFUTED|CLEAR)[*_\x60"\x27\u201d.!]*[ \t]*$/;const L=t.split("\n").map(l=>l.replace(/[ \t\r]+$/,""));while(L.length&&!L[L.length-1])L.pop();let v="";if(L.length){let m=L[L.length-1].match(A);const bare=!!m;let ok=true;if(!m){m=L[L.length-1].match(B);if(!m||A.test(m[1].split(/(?<=[.!?])[ \t]+/).pop()))ok=false;}if(ok){let k=L.length-2;while(k>=0&&!L[k])k--;if(k>=0){const p=L[k];if(A.test(p)||B.test(p))ok=false;else if(bare&&k===L.length-2&&!(/^[ \t]*#/.test(p)||/[.!?:)\]]["\x27\u201d*_\x60]*$/.test(p)))ok=false;}}if(ok)v=m[m.length-1];}process.stdout.write(v)'; }
+# The reviewer's verdict (twin of _verdict in the python adapters; contract: py/tests/verdict_cases.json):
+# the reply's last non-empty line is ONLY the verdict (optional markup, optional "Verdict:" label, the
+# token, optional "."/"!") and the line before it neither begins with a verdict token nor ends with one after a separator. Else nothing.
+verdict_of() { node -e 'const t=require("fs").readFileSync(0,"utf8");const A=/^[ \t]*[*_\x60]*(?:(?:[Ff]inal[ \t]+)?(?:[Vv]erdict|VERDICT)[*_\x60]*[ \t]*[:\u2014\u2013-][ \t*_\x60]*)?["\x27\u201c\u201d]?(REFUTED|CLEAR)["\x27\u201c\u201d]?[*_\x60]*[.!]?[*_\x60]*[ \t]*$/;const P=/^[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?[ \t*_\x60]*(?:(?:[Ff]inal[ \t]+)?(?:[Vv]erdict|VERDICT)[*_\x60]*[ \t]*[:\u2014\u2013-][ \t*_\x60]*)?["\x27\u201c\u201d]?(?:REFUTED|CLEAR)(?![A-Za-z0-9_])/;const L=t.split("\n").map(l=>l.replace(/[ \t\r]+$/,""));while(L.length&&!L[L.length-1])L.pop();const m=L.length?L[L.length-1].match(A):null;let v="";if(m){let k=L.length-2;while(k>=0&&!L[k])k--;if(!(k>=0&&(P.test(L[k])||/(?:^|[.!?:;|\/\u2014\u2013-])[ \t*_\x60"\x27\u201c\u201d]*(?:REFUTED|CLEAR)["\x27\u201c\u201d*_\x60.!?:;)\]]*[ \t]*$/.test(L[k]))))v=m[1];}process.stdout.write(v)'; }
 field() { printf '%s' "$payload" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String((JSON.parse(d)$1)??''))}catch(e){process.stdout.write('')}})"; }
 jstr()  { node -pe 'JSON.stringify(require("fs").readFileSync(0,"utf8"))'; }
 
@@ -56,7 +55,7 @@ ${rp}
 Context:
 ${ctx}
 
-Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with the single token REFUTED (you found a hole) or CLEAR (you could not)." 2>/dev/null)"
+Hunt for a real hole: a hollow test, a criterion not truly met, a faked or hard-coded output. End your reply with a final line that is only the verdict: REFUTED (you found a hole) or CLEAR (you could not)." 2>/dev/null)"
   # Verdict = the reply's FINAL REFUTED/CLEAR token (the prompt itself contains "REFUTED", so a
   # grep-anywhere would misread a CLEAR reply that merely restates the instruction). Carry the
   # reviewer's ACTUAL text as findings on BOTH paths, so a genuine CLEAR has substantive evidence.

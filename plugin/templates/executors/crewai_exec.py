@@ -27,42 +27,31 @@ except Exception:
         return {"ok": False, "error": "the author helper (_fileblocks.author_reply) is unavailable"}
 
 def _verdict(t):
-    """The reviewer's verdict — True (REFUTED) / False (CLEAR) — read from the reply's LAST non-empty line
-    by an exact grammar, else None (fail-closed). The line is either (A) only the verdict: optional list
-    bullet / markup, an optional "Verdict:" label, the upper-case token, optional "." / "!"; or (B) a
-    finished sentence (ending ".", "!", "?") or a "verdict:" label, then the token as the final word —
-    where that last sentence is not itself a bare verdict ("Verdict: REFUTED. CLEAR"). The nearest earlier
-    non-empty line must not be a verdict line (a stacked or listed template), and for (A) an adjacent line
-    before must end a sentence or be a heading or a label (a hard-wrapped "not\\nCLEAR"). Whitespace is
-    space/tab only. A reply that argues one way and ends with a well-formed verdict line for the other is
-    still read as that verdict."""
+    """The reviewer's verdict — True (REFUTED) / False (CLEAR) — else None (fail-closed). The contract
+    (py/tests/verdict_cases.json): the reply's last non-empty line is ONLY the verdict — optional
+    **/`/_ markup, an optional "Verdict:" / "Final verdict —" label, the upper-case token, optional
+    "." or "!" — and the nearest earlier non-empty line neither begins with a verdict token nor ends with one
+    after a separator (a stacked or listed template; "… or CLEAR." inside a sentence does not count). Anything else is no verdict. Whitespace is space/tab. A last line that is only
+    a token is read at face value, whatever the reply argued before it."""
     import re as _r
-    A = ("[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?[ \t*_\x60]*(?:(?:[Ff]inal[ \t]+)?(?:[Vv]erdict|VERDICT)[ \t*_\x60]*"
-         "[:\u2014\u2013-])?[ \t*_\x60\"'\u201c\u201d]*(REFUTED|CLEAR)[ \t*_\x60\"'\u201c\u201d.!]*")
-    B = ("([^\n]*[A-Za-z][^\n]*(?:[.!?][)\"'\u201d*_\x60]*|(?:[Vv]erdict|VERDICT)[ \t*_\x60]*[:\u2014\u2013-]))"
-         "[ \t]+[*_\x60\"'\u201c]*(REFUTED|CLEAR)[*_\x60\"'\u201d.!]*[ \t]*")
+    A = ("[ \t]*[*_\x60]*(?:(?:[Ff]inal[ \t]+)?(?:[Vv]erdict|VERDICT)[*_\x60]*[ \t]*[:\u2014\u2013-][ \t*_\x60]*)?"
+         "[\"'\u201c\u201d]?(REFUTED|CLEAR)[\"'\u201c\u201d]?[*_\x60]*[.!]?[*_\x60]*[ \t]*")
+    P = ("[ \t]*(?:(?:[-*+]|[0-9]+[.)])[ \t]+)?[ \t*_\x60]*(?:(?:[Ff]inal[ \t]+)?(?:[Vv]erdict|VERDICT)[*_\x60]*[ \t]*"
+         "[:\u2014\u2013-][ \t*_\x60]*)?[\"'\u201c\u201d]?(?:REFUTED|CLEAR)(?![A-Za-z0-9_])")
+    E = ("(?:^|[.!?:;|/\u2014\u2013-])[ \t*_\x60\"'\u201c\u201d]*(?:REFUTED|CLEAR)"
+         "[\"'\u201c\u201d*_\x60.!?:;)\\]]*[ \t]*$")
     lines = [ln.rstrip(" \t\r") for ln in (t or "").split("\n")]
     while lines and not lines[-1]:
         lines.pop()
-    if not lines:
-        return None
-    m = _r.fullmatch(A, lines[-1])
-    bare = bool(m)
+    m = _r.fullmatch(A, lines[-1]) if lines else None
     if not m:
-        m = _r.fullmatch(B, lines[-1])
-        if not m or _r.fullmatch(A, _r.split(r"(?<=[.!?])[ \t]+", m.group(1))[-1]):
-            return None
+        return None
     k = len(lines) - 2
     while k >= 0 and not lines[k]:
         k -= 1
-    if k >= 0:
-        p = lines[k]
-        if _r.fullmatch(A, p) or _r.fullmatch(B, p):
-            return None   # another verdict line before it: a stacked / listed template
-        if bare and k == len(lines) - 2 and not (p.lstrip(" \t").startswith("#") or
-                                                  _r.search(r"[.!?:)\]][\"'\u201d*_\x60]*$", p)):
-            return None   # a bare verdict line glued to an unfinished sentence ("…is not\\nCLEAR")
-    return m.group(m.lastindex) == "REFUTED"
+    if k >= 0 and (_r.match(P, lines[k]) or _r.search(E, lines[k])):
+        return None   # the line before also begins or ends with a verdict: a stacked / listed template
+    return m.group(1) == "REFUTED"
 
 
 def _refute_result(text):
@@ -136,8 +125,8 @@ def main():
                          backstory="You refuse to rubber-stamp: you hunt hollow tests and faked output.",
                          llm=llm, verbose=False)
         task = Task(description=f'{payload.get("prompt", "Refute that the phase is complete.")}\n\n'
-                                f"Context:\n{ctx}\n\nEnd with exactly one token: REFUTED or CLEAR.",
-                    agent=reviewer, expected_output="REFUTED or CLEAR, with reasons.")
+                                f"Context:\n{ctx}\n\nEnd with a final line that is only the verdict: REFUTED or CLEAR.",
+                    agent=reviewer, expected_output="Reasons, then a final line that is only the verdict: REFUTED or CLEAR.")
         try:
             out = str(Crew(agents=[reviewer], tasks=[task], verbose=False).kickoff())
             emit(_refute_result(out))

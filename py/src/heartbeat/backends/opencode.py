@@ -83,7 +83,7 @@ def refute(payload):
         return {"error": "opencode CLI not available"}
     cwd = payload.get("cwd") or os.getcwd()
     prompt = (f'{payload.get("prompt", "Refute.")}\n\nContext:\n{payload.get("context", "")}\n\n'
-              "You are a skeptical reviewer. Do not modify files. End with REFUTED or CLEAR.")
+              "You are a skeptical reviewer. Do not modify files. End with a final line that is only the verdict: REFUTED or CLEAR.")
     try:
         r = subprocess.run(_cmd(prompt, cwd), cwd=cwd, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=600)

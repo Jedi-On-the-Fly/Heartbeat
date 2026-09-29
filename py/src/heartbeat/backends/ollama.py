@@ -66,7 +66,7 @@ def refute(payload):
     ctx = payload.get("context", "")
     prompt = (f'{payload.get("prompt", "Refute that the phase is complete.")}\n\nContext:\n{ctx}\n\n'
               "You are a skeptical adversarial reviewer. Hunt for a real hole (hollow test, "
-              "criterion not truly met, faked output). End with exactly one token: REFUTED or CLEAR.")
+              "criterion not truly met, faked output). End with a final line that is only the verdict: REFUTED or CLEAR.")
     try:
         out = _generate(prompt)
     except Truncated as e:

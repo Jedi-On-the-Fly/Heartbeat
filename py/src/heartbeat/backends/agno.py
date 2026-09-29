@@ -38,11 +38,11 @@ def refute(payload):
     ctx = payload.get("context", "")
     try:
         from agno.agent import Agent
-        agent = Agent(model=_model(), instructions="Skeptical adversarial reviewer. End with REFUTED or CLEAR.")
+        agent = Agent(model=_model(), instructions="Skeptical adversarial reviewer. End with a final line that is only the verdict: REFUTED or CLEAR.")
     except Exception as e:
         return {"error": f"agno unavailable ({e})"}
     try:
-        r = agent.run(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd with REFUTED or CLEAR.')
+        r = agent.run(f'{payload.get("prompt", "Refute.")}\n\nContext:\n{ctx}\n\nEnd with a final line that is only the verdict: REFUTED or CLEAR.')
         text = getattr(r, "content", str(r))
         return refute_result(text)
     except Exception as e:
