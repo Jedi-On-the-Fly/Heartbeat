@@ -38,6 +38,24 @@ yourself, do the same. Also: `-s workspace-write` keeps Codex sandboxed to the p
 reach for `--dangerously-bypass-approvals-and-sandbox` just to make it non-interactive — closing
 stdin is what makes it non-interactive.
 
+## Network (opt-in)
+
+`-s workspace-write` gives Codex **no network — not even loopback** (`curl http://127.0.0.1:…` fails).
+That is the right default for a worker, but it means a Codex refuter cannot exercise a server the
+phase starts locally. Opt in explicitly:
+
+```bash
+HB_CODEX_NETWORK=1 HB_EXEC_BACKEND=codex hb exec run --dir myproject
+```
+
+With `HB_CODEX_NETWORK=1` (exactly `1`), the execute and refute calls add
+`-c sandbox_workspace_write.network_access=true`; the constraint author stays read-only without
+network. This opens the sandbox's network generally — outbound too, not only loopback — so turn it on
+for projects whose review needs it, not by default. The suite proof checks the flag reaches Codex in
+both runtimes with a stub `codex` ([`tests/codex-network.sh`](../../tests/codex-network.sh)); the
+override itself was checked live (without it `curl` to a local server exits 7, with it the page is
+read) on codex-cli 0.157.1 — re-check on your version.
+
 ## Point it at your own setup
 
 The adapter is a small file — edit `backends/codex.py` (or `codex-exec.sh`) to add Codex config

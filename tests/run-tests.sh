@@ -1751,6 +1751,14 @@ else
   echo "  (python3 absent — T177 skipped)"
 fi
 
+grp "T178 — codex network is an explicit opt-in: HB_CODEX_NETWORK=1 opens the workspace-write sandbox for execute/refute; the author stays read-only; both runtimes"
+if command -v python3 >/dev/null 2>&1; then
+  check "T178.1 HB_CODEX_NETWORK=1 → -c sandbox_workspace_write.network_access=true on every execute/refute call; unset/0/true/yes/empty → none; author read-only without it; python author returns the constraints (codex-network.sh → CODEX-NETWORK-OK)" \
+    'bash "'"$HB_SRC"'/tests/codex-network.sh" 2>&1 | grep -q "^CODEX-NETWORK-OK"'
+else
+  echo "  (python3 absent — T178 skipped)"
+fi
+
 grp "T160 — --all dedupes byte-identical criteria (same cmd + same effective timeout): run once per sweep, reuse LOUDLY"
 P160="$TMP/p160"; bash "$HB_SRC/plugin/bootstrap.sh" "$P160" >/dev/null 2>&1 </dev/null; H160="$P160/.hb"
 node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const cmd='echo run >> \"\$PROJECT_DIR/runs.txt\"';d.gates.G0={desc:'0',criteria:[{id:'c',desc:'suite',cmd}]};d.gates.G1={desc:'1',criteria:[{id:'c',desc:'suite',cmd}]};d.gates.G2={desc:'2',criteria:[{id:'c',desc:'suite',cmd}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"

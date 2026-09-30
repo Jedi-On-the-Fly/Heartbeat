@@ -42,6 +42,11 @@ if [ "${HB_EXEC_PROVIDER:-}" = "oss" ]; then
 elif [ -n "${HB_EXEC_MODEL:-}" ]; then
   prov=(-m "${HB_EXEC_MODEL}")   # per-role models: the recorded model must be the model that ran
 fi
+# Network is an explicit opt-in: the workspace-write sandbox has none — not even loopback, so a refuter
+# cannot exercise a local server. HB_CODEX_NETWORK=1 (only "1") opens it for execute and refute; the
+# constraint author stays read-only. It opens the sandbox's network generally, not just loopback.
+net=()
+if [ "${HB_CODEX_NETWORK:-}" = "1" ]; then net=(-c sandbox_workspace_write.network_access=true); fi
 
 # The gate-time constraint AUTHOR: a read-only model call whose reply must carry a JSON array.
 if [ "$mode" = author ]; then
@@ -51,7 +56,7 @@ fi
 
 if [ "$mode" = refute ]; then
   rp="$(field .prompt)"
-  ans="$(codex exec -s workspace-write -C "$(pwd)" --skip-git-repo-check ${prov[@]+"${prov[@]}"} "You are a SKEPTICAL adversarial reviewer for a HeartBeat phase gate.
+  ans="$(codex exec -s workspace-write -C "$(pwd)" --skip-git-repo-check ${net[@]+"${net[@]}"} ${prov[@]+"${prov[@]}"} "You are a SKEPTICAL adversarial reviewer for a HeartBeat phase gate.
 ${rp}
 
 Context:
@@ -69,7 +74,7 @@ Do not modify files. Hunt for a real hole: a hollow test, a criterion not truly 
     printf '{"error":%s}\n' "$(printf 'no verdict line at the end of the reviewer reply (fail-closed); the reply ends: %s' "$(printf '%s' "$ans" | tail -c 300)" | jstr)"
   fi
 else
-  if codex exec -s workspace-write -C "$(pwd)" --skip-git-repo-check ${prov[@]+"${prov[@]}"} "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.
+  if codex exec -s workspace-write -C "$(pwd)" --skip-git-repo-check ${net[@]+"${net[@]}"} ${prov[@]+"${prov[@]}"} "You are a HeartBeat Stage-B worker. Do EXACTLY this one task, then stop. Work in $(pwd). Never edit .hb/ or gate.sh.
 
 ${ctx}" </dev/null >/tmp/hb-exec-codex.$$.log 2>&1; then
     echo '{"ok":true,"summary":"codex completed the task"}'

@@ -210,7 +210,7 @@ Wire protocol — driver spawns `bash -c "<cmd> <mode>"`, mode ∈ `execute|refu
 | Backend | Worker mechanism | Notes |
 |---|---|---|
 | `claude-code` | headless `claude -p` | default |
-| `codex` | headless `codex exec` (stdin closed) | `HB_EXEC_PROVIDER=oss` → keyless Ollama |
+| `codex` | headless `codex exec` (stdin closed) | `HB_EXEC_PROVIDER=oss` → keyless Ollama; `HB_CODEX_NETWORK=1` → `-c sandbox_workspace_write.network_access=true` on execute/refute (the author stays read-only) |
 | `opencode` | headless `opencode run --format json` | `HB_EXEC_MODEL=provider/model` |
 | `agno` | Agno agent + `FileTools` | `HB_EXEC_PROVIDER=anthropic\|ollama` |
 | `crewai` | CrewAI Agent+Task+Crew | `HB_EXEC_PROVIDER`; FILE-block writer |

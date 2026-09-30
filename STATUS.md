@@ -1,7 +1,21 @@
 # STATUS — HeartBeat
 
-**Version:** v1.34.0 (a gate-time constraint must name something real: at least one subject is an existing project path or in `hb changed`)
+**Version:** v1.35.0 (codex network is an explicit opt-in: `HB_CODEX_NETWORK=1` lets a codex refuter reach a local server)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.35.0 — codex network opt-in
+
+`codex exec -s workspace-write` has no network — not even loopback — so a codex refuter could not
+exercise a server the phase starts locally (its `curl` to 127.0.0.1 fails).
+
+- **Opt-in**: `HB_CODEX_NETWORK=1` (exactly `1`) adds `-c sandbox_workspace_write.network_access=true`
+  to the codex adapter's execute and refute calls, in both runtimes; any other value, or unset, adds
+  nothing. It opens the sandbox's network generally (outbound too), so it is off by default.
+- **The author stays read-only**: the constraint author never gets network. The python codex backend
+  gains its own read-only `author()` (it used to fall back to the refute call, workspace-write).
+- Proof: a stub `codex` logs the argv of every call (T178); the override was checked live on
+  codex-cli 0.157.1 (without it `curl` to a local server exits 7, with it the page is read).
+- Plugin/marketplace → **1.35.0**, Python package → **0.25.0**.
 
 ## v1.34.0 — grounded constraints
 

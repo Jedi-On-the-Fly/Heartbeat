@@ -15,8 +15,13 @@ from shutil import which
 from . import refute_result
 
 
-def _cmd(prompt, cwd):
-    argv = ["codex", "exec", "-s", "workspace-write", "-C", cwd, "--skip-git-repo-check"]
+def _cmd(prompt, cwd, sandbox="workspace-write"):
+    argv = ["codex", "exec", "-s", sandbox, "-C", cwd, "--skip-git-repo-check"]
+    # Network is an explicit opt-in (== codex-exec.sh): the workspace-write sandbox has none — not even
+    # loopback. HB_CODEX_NETWORK=1 (only "1") opens it; the read-only author never gets it. It opens the
+    # sandbox's network generally, not just loopback.
+    if sandbox == "workspace-write" and os.environ.get("HB_CODEX_NETWORK") == "1":
+        argv += ["-c", "sandbox_workspace_write.network_access=true"]
     if os.environ.get("HB_EXEC_PROVIDER", "").lower() == "oss":
         model = os.environ.get("HB_EXEC_MODEL", "qwen2.5:7b-instruct")
         argv += ["--oss", "--local-provider", "ollama", "-m", model]
@@ -46,6 +51,21 @@ def execute(payload):
         return {"ok": r.returncode == 0, "summary": summary or ("codex completed" if r.returncode == 0 else "codex exited non-zero")}
     except Exception as e:
         return {"ok": False, "summary": f"codex error: {e}"}
+
+
+def author(payload):
+    """The gate-time constraint author (== codex-exec.sh author): the author prompt as-is, run read-only,
+    reply → JSON constraint list (fail-closed)."""
+    from ._fileblocks import author_reply
+    if not which("codex"):
+        return {"ok": False, "error": "codex CLI not available — could not run the constraint author"}
+    cwd = payload.get("cwd") or os.getcwd()
+    try:
+        r = subprocess.run(_cmd(payload.get("prompt", ""), cwd, sandbox="read-only"), cwd=cwd,
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=600)
+        return author_reply(r.stdout)
+    except Exception as e:
+        return {"ok": False, "error": f"author error: {e}"}
 
 
 def refute(payload):
