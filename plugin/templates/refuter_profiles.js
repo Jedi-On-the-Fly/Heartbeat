@@ -270,6 +270,7 @@ function composePrompt(hbdir, dag, gate, opts) {
     "VIOLATED = you reproduced the violation (cite the command and its output); NOT-REPRODUCED = you tried and could not " +
     "(cite the probe you ran); N/A = the constraint does not apply to this phase (say why). The word \"violated\" is reserved " +
     "for a VIOLATED answer — anywhere else, say what held instead.");
+  parts.push(CLAIMS_RULE);
   parts.push("## Triage rule\n" + TRIAGE_RULE + ": if you find a real, exploitable defect outside the constraints, report it and end with REFUTED.");
   return parts.join("\n\n");
 }
@@ -280,6 +281,10 @@ const ANSWER_FORMAT = "<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or re
 const HOLES_BLOCK = "## Holes\nBefore your verdict, write ONE line: `HOLES: none` — only if you found no hole. A hole is a " +
   "finding: if you found one, report it and end with REFUTED (a pass needs the `HOLES: none` line).";
 const TRIAGE_RULE = "An exploitable side finding means REFUTED, whatever the scope";
+// The gate-time author may have read the implementation and written what it DOES as what it should do;
+// the refuter is told the constraints are claims to check against the plan (the tasks and the plan-time
+// constraints, written before the work existed). Twin: refuter_profiles.CLAIMS_RULE.
+const CLAIMS_RULE = "## Constraints are claims\nA constraint is a claim, not the specification. Check each against the phase's tasks and the plan-time (P) constraints: a gate-time (G) constraint that contradicts the plan, or that pins what the code does rather than what the plan asks for, is itself a finding — report it and end with REFUTED.";
 // Stable order within a kind: by the number after the letter (P2 before P10).
 const byId = (a, b) => parseInt(String(a.id).slice(1), 10) - parseInt(String(b.id).slice(1), 10);
 function changeBlock(hbjs, gate) {

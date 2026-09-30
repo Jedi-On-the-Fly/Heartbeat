@@ -1,7 +1,23 @@
 # STATUS — HeartBeat
 
-**Version:** v1.36.0 (a gate-time constraint must name what the phase changed — a file in `hb changed` or a directory holding one)
+**Version:** v1.36.1 (the refuter checks gate-time constraints against the plan — a constraint is a claim, not the specification)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.36.1 — constraints are claims, not the specification
+
+A gate-time author may read the implementation and write down what the code does — defect included — as
+what it should do; the refuter then held the phase to that. No path rule can catch it, so the review is
+told not to trust it.
+
+- **The claims rule** in every constrained refute prompt (both runtimes, byte-identical): a constraint is a
+  claim, not the specification — check each against the phase's tasks and the plan-time (P) constraints; a
+  gate-time (G) constraint that contradicts the plan, or pins what the code does rather than what the plan
+  asks for, is itself a finding (REFUTED). The free and unconstrained prompts are unchanged.
+- **Plan-time constraints are the anchor**: the plan instructions and the constraint-first how-to now say
+  why — written before the work exists, they cannot copy a defect from the implementation.
+- Proof: the constrained-refute proof requires the rule in constrained prompts and its absence elsewhere
+  (T170); removing it goes red.
+- Plugin/marketplace → **1.36.1**, Python package → **0.26.1**.
 
 ## v1.36.0 — constraints name what the phase changed
 

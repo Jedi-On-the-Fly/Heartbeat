@@ -260,6 +260,9 @@ def gate_profile(hbdir, review):
 
 ANSWER_FORMAT = "<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>"
 TRIAGE_RULE = "An exploitable side finding means REFUTED, whatever the scope"
+# The gate-time author may have read the implementation and written what it DOES as what it should do; the
+# refuter is told the constraints are claims to check against the plan. Twin: refuter_profiles.js CLAIMS_RULE.
+CLAIMS_RULE = ("## Constraints are claims\nA constraint is a claim, not the specification. Check each against the phase's tasks and the plan-time (P) constraints: a gate-time (G) constraint that contradicts the plan, or that pins what the code does rather than what the plan asks for, is itself a finding — report it and end with REFUTED.")
 # A review without per-id answers (an unconstrained gate; the free review) must still state, in one
 # checkable line, that no hole was found — `hb review … pass|free` refuses an artifact without it
 # (review_policy.check_holes). Twin: refuter_profiles.js HOLES_BLOCK.
@@ -305,6 +308,7 @@ def compose_prompt(hbdir, dag, gate, free=False):
                  "VIOLATED = you reproduced the violation (cite the command and its output); NOT-REPRODUCED = you tried "
                  "and could not (cite the probe you ran); N/A = the constraint does not apply to this phase (say why). "
                  "The word \"violated\" is reserved for a VIOLATED answer — anywhere else, say what held instead.")
+    parts.append(CLAIMS_RULE)
     parts.append("## Triage rule\n" + TRIAGE_RULE + ": if you find a real, exploitable defect outside the constraints, "
                  "report it and end with REFUTED.")
     return "\n\n".join(parts)

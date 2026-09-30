@@ -18,6 +18,13 @@ It has four parts:
 It applies to a gate whose review has plan-time constraints; every other gate reviews exactly as
 before.
 
+The two kinds of constraints do different jobs. The gate-time author sees what the phase changed and
+may read the code, so its constraints can be sharp — and can also be biased: an author who reads the
+implementation can write down what the code *does*, defect included, as what it *should* do. The
+plan-time constraints cannot: they were written before the work existed. They are the anchor, and the
+refute prompt tells the refuter to check every gate-time constraint against them and against the tasks —
+a `G` constraint that contradicts the plan is itself a finding.
+
 ## 1. Plan time: give the review its targets
 
 In `.hb/dag.json`, add `constraints` to the gate's `review` block:
@@ -76,7 +83,8 @@ must not be a doer of the phase, and HeartBeat stores its hash — `hb doctor` f
 node .hb/hb.js refute-prompt GATE_API > refute-prompt.txt
 ```
 
-The prompt now ends with every id (`P…` then `G…`), the answer format and the triage rule:
+The prompt now ends with every id (`P…` then `G…`), the answer format, the rule that a constraint is a
+claim to check against the plan (not the specification), and the triage rule:
 
 ```
 <ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>
@@ -84,7 +92,8 @@ The prompt now ends with every id (`P…` then `G…`), the answer format and th
 
 `NOT-REPRODUCED` means the refuter tried and could not break it, and must cite the probe it ran;
 `N/A` needs a reason; `VIOLATED` is a finding. An exploitable problem found *outside* the
-constraints still means REFUTED. The refuter writes its attempt to a file (`refute.md`).
+constraints still means REFUTED, and so does a `G` constraint that contradicts the plan or pins what
+the code does rather than what was asked. The refuter writes its attempt to a file (`refute.md`).
 
 ## 4. The free review (when the profile asks for it)
 

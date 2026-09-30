@@ -4,7 +4,9 @@
 # `hb changed` list, every constraint id exactly once in stable order (plan-time P ids, then the
 # gate-time G ids recorded in THIS review cycle), the per-id answer format
 #   <ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>
-# and the triage rule "an exploitable side finding means REFUTED, whatever the scope". A recorded set
+# the triage rule "an exploitable side finding means REFUTED, whatever the scope", and the rule that a
+# constraint is a claim, not the specification (a G constraint that contradicts the plan, or pins what the
+# code does rather than what was asked, is itself a finding). A recorded set
 # whose bytes no longer match its event is refused (fail closed), and a set from an EARLIER cycle is
 # never used. `refute-prompt <gate> --free` composes the unconstrained breadth review (the same
 # compose + the change list + the free-review instructions, WITHOUT the constraint block); --free on an
@@ -100,6 +102,7 @@ CHECK='
 import json, sys, re
 FMT = "<ID>: VIOLATED | NOT-REPRODUCED | N/A — <evidence or reason>"
 TRIAGE = "an exploitable side finding means refuted, whatever the scope"   # compared case-insensitively
+CLAIMS = "a constraint is a claim, not the specification"                   # compared case-insensitively
 def ids_in_order(text, ids):
     pos = []
     for i in ids:
@@ -116,6 +119,7 @@ def check(obs):
             if "PERSONA-MARK" not in t or "Q-EXTRA" not in t or "REVIEW-G0" not in t: return k + ": " + name + " prompt lost the base compose"
             if FMT not in t: return k + ": " + name + " prompt lacks the per-id answer format"
             if TRIAGE not in t.lower(): return k + ": " + name + " prompt lacks the triage rule"
+            if CLAIMS not in t.lower(): return k + ": " + name + " prompt does not tell the refuter the constraints are claims to check against the plan"
             if "M a.txt" not in t or "A n.txt" not in t: return k + ": " + name + " prompt lacks the hb changed list"
             if "k.txt" in t: return k + ": " + name + " prompt lists an unchanged file"
         if not ids_in_order(plan, ["P1", "P2"]) or "CL-G1" in plan: return k + ": plan-only prompt: ids not exactly P1,P2 in stable order"
@@ -127,9 +131,9 @@ def check(obs):
         fr = o["g0_free"] or ""
         if o["g0_free_rc"] != "0": return k + ": --free failed on a constrained gate"
         if "PERSONA-MARK" not in fr or "M a.txt" not in fr or TRIAGE not in fr.lower(): return k + ": --free lacks persona / change list / triage rule"
-        if FMT in fr or "CL-P1" in fr or "CL-G1" in fr: return k + ": --free carries the constraint block"
+        if FMT in fr or "CL-P1" in fr or "CL-G1" in fr or CLAIMS in fr.lower(): return k + ": --free carries the constraint block"
         if o["g2_free_rc"] == "0": return k + ": --free accepted an unconstrained gate"
-        if FMT in (o["g2"] or "") or TRIAGE in (o["g2"] or "").lower(): return k + ": an unconstrained gate got the constraint block"
+        if FMT in (o["g2"] or "") or TRIAGE in (o["g2"] or "").lower() or CLAIMS in (o["g2"] or "").lower(): return k + ": an unconstrained gate got the constraint block"
         g1 = o["g1"] or ""
         if not g1.startswith("REVIEW-G1") or FMT not in g1 or not ids_in_order(g1, ["P1"]): return k + ": a constrained gate WITHOUT a profile lacks the block"
         j = o["g0_json"]

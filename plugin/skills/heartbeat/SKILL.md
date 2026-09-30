@@ -68,8 +68,10 @@ phases). Otherwise write a fresh DAG.
   "violation": "…" }] }`. Each is requirement-level and falsifiable: `claim` is the property
   the phase promises, `subjects` the files/areas it covers, `violation` the concrete
   observation that would break it. Ids are `P1…Pn` (`G…` is reserved for constraints written
-  at review time). `hb-lint` rejects malformed ones; `hb-audit` warns `unconstrained_review`
-  on a review gate without any. The review of such a gate is constraint-first — see
+  at review time). They are the review's anchor: written before the work exists, they cannot copy
+  a defect from the implementation — the gate-time author, who may have read the code, can. So
+  write them on every gate whose review matters. `hb-lint` rejects malformed ones; `hb-audit`
+  warns `unconstrained_review` on a review gate without any. The review of such a gate is constraint-first — see
   [constraint-first-review.md](../../../docs/howto/constraint-first-review.md).
 - **No hardcoded values/counts** — derive from source/registry. Validate the shape
   against `<project-dir>/.hb/dag.schema.json`.

@@ -106,8 +106,10 @@ refute prompt from a resolved profile lives at the dispatch site.
   no-review. Node twin + parity: `plugin/templates/refuter_profiles.js`, T145.
 - **Compose** — `compose_prompt(hbdir, dag, gate)` (and `hb refute-prompt <gate>`) is the ONE compose
   every refute surface uses (the executor's `review_pending`, and the interactive skill). No profile
-  selected ⇒ EXACTLY today's prompt (backward-compat); else persona + the gate's BASE
-  `review_questions` + the profile's EXTRA questions (**appended**, never replacing) + `review.prompt`.
+  selected ⇒ the gate's `review.prompt`; else persona + the gate's BASE `review_questions` + the
+  profile's EXTRA questions (**appended**, never replacing) + `review.prompt`. An unconstrained gate then
+  gets the HOLES block (`HOLES_BLOCK`); a constrained gate gets the change list, every id, the answer
+  format, the claims rule (`CLAIMS_RULE`) and the triage rule (== node).
   `hb refute-prompt <gate> --json` adds the machine-readable binding for an interactive host —
   `{prompt, model, provider, panel, refute_if}` with `prompt` byte-identical to the text compose and
   all fields null when no profile (never fabricated) — so a spawner routes the refuter (and records
