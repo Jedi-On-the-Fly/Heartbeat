@@ -1,7 +1,24 @@
 # STATUS — HeartBeat
 
-**Version:** v1.35.0 (codex network is an explicit opt-in: `HB_CODEX_NETWORK=1` lets a codex refuter reach a local server)
+**Version:** v1.35.1 (the audit no longer calls `mktemp` nondeterministic: a random name is not a random verdict)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.35.1 — `mktemp` is not nondeterminism
+
+The audit's `nondeterministic` warning listed `mktemp` (except `mktemp -u`). But `mktemp` randomises a
+NAME, not a verdict — and isolating a check in a fresh temp directory is what keeps a gate deterministic;
+the fixed `/tmp/x` the warning nudged toward is the one that flakes (stale files, two gates sharing a
+path). In practice gate authors moved `mktemp` into helper scripts the audit cannot see, and the noise
+diluted the warning's real hits. The exemption also let through `mktemp -u`, the race-prone form.
+
+- `mktemp` is removed from the nondeterministic sources in both runtimes (with the `-u` special case);
+  `curl`, `date`, `$RANDOM`, `shuf`, `/dev/urandom`, `$SECONDS`, `$$`, non-local URLs are unchanged. A
+  verdict that compares against the random name is left to the refuter's review.
+- Proof: `tests/fixtures/audit/tempdir.json` (a gate isolating in `mktemp -d`) trips nothing — the
+  no-cry-wolf case of the audit proof and the audit parity set (7 fixtures).
+- Docs: write-fast-deterministic-gates says to isolate in `mktemp -d` and assert on the result, never on
+  the name; dev-plugin's rule row names what the rule does and does not flag.
+- Plugin/marketplace → **1.35.1**, Python package → **0.25.1**.
 
 ## v1.35.0 — codex network opt-in
 

@@ -225,7 +225,7 @@ Backend tests drive a stub via `HB_EXEC_CMD` (subprocess wire); framework/ollama
 
 | Surface | Compared |
 |---|---|
-| audit | `[errors, warns, sorted rules]` on 6 fixtures |
+| audit | `[errors, warns, sorted rules]` on 7 fixtures |
 | lint | sorted `errors` on `broken.json` + fixtures |
 | protocol | sorted reason KEYS (action text is runtime-specific) |
 | next (resolve) | `[type, id, gate, phase]` |
@@ -246,7 +246,7 @@ Non-ratcheted; skip when the Ollama server is unreachable. `tests/real-backend.s
 
 | Path | Purpose |
 |---|---|
-| `tests/fixtures/audit/{hollow,existence,nondeterministic,good,side-effect,arrow}.json` | auditor + parity (`arrow`: a JS `=>` in `node -e` is not a redirect — trips nothing) |
+| `tests/fixtures/audit/{hollow,existence,nondeterministic,good,side-effect,arrow,tempdir}.json` | auditor + parity (`arrow`: a JS `=>` in `node -e` is not a redirect; `tempdir`: isolating in a `mktemp -d` dir is not nondeterminism — both trip nothing) |
 | `tests/fixtures/parity/broken.json` | lint-error parity |
 
 ## Invariants

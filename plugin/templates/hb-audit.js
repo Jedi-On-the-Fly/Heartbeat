@@ -18,7 +18,10 @@ const { extractPaths } = require('./hb-lint.js');
 
 const VACUOUS   = /^\s*(true|:|exit\s+0|echo\b|test\s+1\s*=\s*1|\[\s+1\s+=\s+1\s+\])\s*;?\s*$/;
 const EXISTENCE = /^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls(\s|$))/;
-const NONDET    = /\bcurl\b|\bwget\b|\bnc\b|\bping\b|\bsleep\b|\bRANDOM\b|\bshuf\b|\/dev\/urandom|\bSECONDS\b|\$\$|\bmktemp\b(?!\s+-u)|\bdate\b|https?:\/\/(?!localhost|127\.0\.0\.1)/;
+// Sources that can change a VERDICT between runs (network, time, randomness). `mktemp` is deliberately
+// not listed: it randomises a NAME, and isolating a check in a fresh temp dir is what keeps a gate
+// deterministic — a verdict that compares against the random name is left to the refuter's review.
+const NONDET    = /\bcurl\b|\bwget\b|\bnc\b|\bping\b|\bsleep\b|\bRANDOM\b|\bshuf\b|\/dev\/urandom|\bSECONDS\b|\$\$|\bdate\b|https?:\/\/(?!localhost|127\.0\.0\.1)/;
 // A criterion that CREATES evidence can fabricate its own pass. Gates must observe
 // reality, not produce it. Read-only redirections (/dev/null, /tmp scratch, 2>&1) are
 // exempt, and so is `=>` (a JS arrow in an inline `node -e`); writes into the project tree are the risk.

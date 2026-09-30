@@ -50,5 +50,8 @@ for r in $rules; do case " $cgot " in *" $r "*) fail "clean DAG wrongly tripped 
 # ... and a JS arrow function in an inline `node -e` (`x => …`, `(n)=>…`) is not a shell redirect
 agot="$(rules_of "$ROOT/tests/fixtures/audit/arrow.json")"
 case " $agot " in *" side_effecting "*) fail "an arrow function (=>) was read as a file redirect (cry wolf): $agot";; esac
+# ... and isolating in a fresh `mktemp -d` directory is not nondeterminism: a random NAME, not a random verdict
+tgot="$(rules_of "$ROOT/tests/fixtures/audit/tempdir.json")"
+[ -z "$tgot" ] || fail "a gate isolating in a mktemp dir was flagged (cry wolf): $tgot"
 
 echo "AUDIT-RULES-PROVEN:$n (every auditor rule fires on a must-trip DAG; a clean DAG trips none)."

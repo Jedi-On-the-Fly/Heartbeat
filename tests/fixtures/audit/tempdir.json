@@ -1,0 +1,4 @@
+{"phases":[{"id":"P","title":"add","gate_entry":null,"gate_exit":"G","tasks":[{"id":"T","title":"write m.py","requires":[],"description":"write m.py exporting add(a,b)"}]}],
+ "gates":{"G":{"criteria":[
+   {"id":"c1","desc":"add works, run from an isolated temp dir","cmd":"d=$(mktemp -d) && cd \"$d\" && PYTHONPATH=\"$PROJECT_DIR\" python3 -c 'import m; assert m.add(2,3)==5' && rm -rf \"$d\""},
+   {"id":"c2","desc":"add is symmetric, scratch file in a mktemp dir","cmd":"t=$(mktemp -d \"${TMPDIR:-/tmp}/g.XXXXXX\") && PYTHONPATH=\"$PROJECT_DIR\" python3 -c 'import m; assert m.add(4,-1)==m.add(-1,4)==3'"}]}}}

@@ -11,8 +11,11 @@ changing, a phase can advance (or stall) on noise, and a green run means nothing
 
 - Depend only on the produced artifact. No `$RANDOM`, no wall-clock, no network, no
   ordering that isn't pinned (`sort` before you compare).
-- The auditor rejects the obvious sources (`$RANDOM`, `shuf`, `/dev/urandom`, `date`,
-  `mktemp` in a verdict). → [nondeterministic](gate-examples/nondeterministic/)
+- The auditor rejects the obvious sources (`$RANDOM`, `shuf`, `/dev/urandom`, `date`, the
+  network). → [nondeterministic](gate-examples/nondeterministic/)
+- Isolate, don't share: run a check in a fresh `mktemp -d` directory rather than a fixed `/tmp/x`
+  (stale files from an earlier run, or two gates using the same path, are real flakiness). The
+  directory's name is random, so assert on the result, never on the name.
 - A subtle trap: **do not gate on timing itself.** `[ "$duration" -lt 2 ]` is a flaky gate —
   it fails under load with no change to the work. Assert the *result*, not how long it took.
 

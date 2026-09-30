@@ -164,7 +164,7 @@ Errors (exit 1): duplicate task ID; `requires` non-existent; dependency cycle; u
 | `hollow_gate` | error | phase gate has criteria but none behavioral |
 | `ungated` | error | gate has zero criteria |
 | `unguarded_phase` | warn | phase has tasks, no `gate_exit` |
-| `nondeterministic` | warn | a criterion touches network/time |
+| `nondeterministic` | warn | a criterion touches network/time/randomness (`curl`, `date`, `$RANDOM`, `shuf`, `$$`, …) — not `mktemp`: a random name is not a random verdict |
 | `gate_offphase` | warn | gate references files no task in the phase mentions |
 | `unconstrained_review` | warn | a live phase's exit gate has a `review` block but no plan-time `review.constraints` — the refuter's target is implicit |
 | `control_char` | error | a criterion cmd/desc contains a `\x1e`/`\x1f` byte (would corrupt the gate runner's record transport) |
