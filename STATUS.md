@@ -1,7 +1,24 @@
 # STATUS — HeartBeat
 
-**Version:** v1.35.1 (the audit no longer calls `mktemp` nondeterministic: a random name is not a random verdict)
+**Version:** v1.36.0 (a gate-time constraint must name what the phase changed — a file in `hb changed` or a directory holding one)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.36.0 — constraints name what the phase changed
+
+1.34.0 required each gate-time constraint to name a real path — but any real path passed, so an author
+could point the review at a file the phase never touched while the phase's actual change went unchecked.
+
+- **The rule.** `hb constraints <gate> --record` now requires each constraint to name at least one file in
+  the phase's `hb changed` list (added, modified or deleted) or a directory holding one. Unchanged files
+  and free-text areas may sit alongside. The refusal names the constraint and lists up to five changed
+  paths to choose from. `.` never grounds (it would hold every change).
+- **Fallback**: with no change list (a project whose entry anchor predates anchors) or an empty one, a
+  project-relative path that exists is enough — in-flight projects are not stranded.
+- **Everywhere**: CLI, MCP and `hb exec`'s author step, both runtimes; the author prompt states the rule
+  (T177; parity case `constraints:subject-path`).
+- **What it does not catch**: among several changed files, one that is changed but beside the point; and
+  constraints that encode a defect as the specification — both remain the review's job.
+- Plugin/marketplace → **1.36.0**, Python package → **0.26.0**.
 
 ## v1.35.1 — `mktemp` is not nondeterminism
 

@@ -107,7 +107,7 @@ def compose_author_prompt(hbdir, dag, gate):
     L += ["", "## Your output", "A JSON array, ids G1..Gn in order:",
           '[{"id": "G1", "claim": "…", "subjects": ["…"], "violation": "…"}]',
           "- claim: a property of the changed behaviour that the plan-time constraints do not already pin",
-          "- subjects: the files/areas it covers — at least one must be a project-relative path that exists or is in the change list above (a :line or ::symbol suffix is fine); a constraint that names no real path is refused",
+          "- subjects: the files/areas it covers — at least one must be a file this phase changed (in the change list above) or a directory holding one (a :line or ::symbol suffix is fine); a constraint that names none is refused",
           "- violation: the concrete, observable result that would falsify it",
           "Record it (as an actor who did not do this phase's work):",
           f"  hb constraints {gate} --record <file.json>"]
@@ -121,32 +121,46 @@ def _no_constant(c):
 def _subject_path(s):
     p = re.sub(r"^(?:\./)+", "", str(s).strip())
     p = re.sub(r"/+$", "", re.sub(r"(?:::[^/]*|#[^/]*|:[0-9]+(?:-[0-9]+)?)$", "", p))
-    if not p or p.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", p) or ".." in re.split(r"[\\/]", p):
+    if (not p or p == "." or p.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", p)
+            or ".." in re.split(r"[\\/]", p)):
         return None
     return p
 
 
 def grounding_errors(hbdir, lst, gate):
-    """A gate-time constraint must name something real: at least one subject that is a project-relative
-    path that exists (file or directory) or is in the phase's `hb changed` list (a deleted file counts);
-    `:12` / `:12-30` and `::symbol` / `#anchor` suffixes are stripped; absolute paths and `..` never
+    """A gate-time constraint must name what this phase changed: at least one subject that is a file in
+    the phase's `hb changed` list (added, modified or deleted) or a directory holding one. Without a
+    change list (no entry anchor) or with an empty one, a project-relative path that exists is enough.
+    `:12` / `:12-30` and `::symbol` / `#anchor` suffixes are stripped; absolute paths, `..` and `.` never
     ground. Twin: hb.js groundingErrors (messages verbatim)."""
     try:
         ch = anchors.changed(hbdir, gate)
-        touched = set(ch["added"]) | set(ch["modified"]) | set(ch["deleted"])
-    except Exception:   # noqa: BLE001 — no anchors yet: existence alone decides (== node)
-        touched = set()
+        touched = sorted(set(ch["added"]) | set(ch["modified"]) | set(ch["deleted"]))
+    except Exception:   # noqa: BLE001 — no entry anchor: existence decides (== node)
+        touched = []
+    by_change = bool(touched)
     pd = Path(anchors._project_dir(hbdir))
+
+    def grounded(s):
+        p = _subject_path(s)
+        if p is None:
+            return False
+        if by_change:
+            return any(t == p or t.startswith(p + "/") for t in touched)
+        return os.path.exists(pd / p)
     errs = []
     for c in lst:
-        def ok(s):
-            p = _subject_path(s)
-            return p is not None and (p in touched or os.path.exists(pd / p))
-        if not any(ok(s) for s in (c.get("subjects") or [])):
-            errs.append(f"{c['id']}: no subject names a real project path (subjects: "
-                        + ", ".join(json.dumps(str(s), ensure_ascii=False) for s in (c.get("subjects") or []))
-                        + ") — name at least one file or directory of this project (one that exists, or is in hb changed); "
-                        "areas may sit alongside")
+        subjects = c.get("subjects") or []
+        if any(grounded(s) for s in subjects):
+            continue
+        subs = ", ".join(json.dumps(str(s), ensure_ascii=False) for s in subjects)
+        if by_change:
+            errs.append(f"{c['id']}: no subject names a file this phase changed (hb changed) or a directory holding one "
+                        f"(subjects: {subs}) — name at least one of: {', '.join(touched[:5])}{', …' if len(touched) > 5 else ''}; "
+                        "areas and unchanged files may sit alongside")
+        else:
+            errs.append(f"{c['id']}: no subject names a real project path (subjects: {subs}) — name at least one file or "
+                        "directory of this project (one that exists); areas may sit alongside")
     return errs
 
 

@@ -11,9 +11,10 @@ DAG = {"phases": [{"id": "P0", "title": "t", "gate_entry": None, "gate_exit": "G
 
 def test_record_is_write_once_per_cycle_and_author_is_not_a_doer(tmp_path, monkeypatch):
     hb = make_hb(tmp_path, DAG)
-    (hb.parent / "a.txt").write_text("the phase's file\n")   # a gate-time constraint must name a real path
     monkeypatch.setenv("HB_ACTOR", "doer")
-    state.mutate(hb, {"event": "task_started", "task": "t0"}); state.mutate(hb, {"event": "task_done", "task": "t0"})
+    state.mutate(hb, {"event": "task_started", "task": "t0"})
+    (hb.parent / "a.txt").write_text("the phase's file\n")   # the phase's work: a gate-time constraint names it
+    state.mutate(hb, {"event": "task_done", "task": "t0"})
     f = tmp_path / "g.json"
     f.write_text(json.dumps([{"id": "G1", "claim": "x", "subjects": ["a.txt"], "violation": "y"}]))
     dag = state.read_dag(hb)

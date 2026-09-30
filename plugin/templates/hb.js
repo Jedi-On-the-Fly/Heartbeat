@@ -750,26 +750,34 @@ function recordedConstraints(gate) {
     throw new Error(`the recorded constraints of ${gate} changed since recording (sha256 mismatch) — refusing to compose against altered targets`);
   return JSON.parse(raw.toString('utf8'));
 }
-// A gate-time constraint must name something real: at least one subject that is a project-relative path
-// that exists (file or directory) or is in the phase's `hb changed` list (a deleted file counts). A `:12` /
-// `:12-30` line suffix and a `::symbol` / `#anchor` suffix are stripped first; an absolute path or one with
-// `..` is never grounded. Free-text areas may sit alongside. Twin: constraints.grounding_errors.
+// A gate-time constraint must name what this phase changed: at least one subject that is a file in the
+// phase's `hb changed` list (added, modified or deleted) or a directory holding one. Without a change list
+// (no entry anchor — a project that predates anchors) or with an empty one, a project-relative path that
+// exists is enough. A `:12` / `:12-30` line suffix and a `::symbol` / `#anchor` suffix are stripped first;
+// an absolute path, one with `..`, or `.` never grounds. Areas and unchanged files may sit alongside.
+// Twin: constraints.grounding_errors / _subject_path (messages verbatim).
 function subjectPath(s) {
   let p = String(s).trim().replace(/^(?:\.\/)+/, '');
   p = p.replace(/(?:::[^/]*|#[^/]*|:[0-9]+(?:-[0-9]+)?)$/, '').replace(/\/+$/, '');
-  if (!p || p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.split(/[\\/]/).includes('..')) return null;
+  if (!p || p === '.' || p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.split(/[\\/]/).includes('..')) return null;
   return p;
 }
 function groundingErrors(list, gate) {
-  let touched = new Set();
-  try { const c = changed(gate); touched = new Set([...c.added, ...c.modified, ...c.deleted]); } catch (e) {}
+  let touched = [];
+  try { const c = changed(gate); touched = [...c.added, ...c.modified, ...c.deleted].sort(); } catch (e) {}
+  const byChange = touched.length > 0;
+  const grounded = (s) => {
+    const p = subjectPath(s);
+    if (p === null) return false;
+    if (byChange) return touched.some(t => t === p || t.startsWith(p + '/'));
+    return fs.existsSync(path.join(PROJECT_DIR, p));
+  };
   const errs = [];
   for (const c of list) {
-    const ok = (c.subjects || []).some(s => {
-      const p = subjectPath(s);
-      return p !== null && (touched.has(p) || fs.existsSync(path.join(PROJECT_DIR, p)));
-    });
-    if (!ok) errs.push(`${c.id}: no subject names a real project path (subjects: ${(c.subjects || []).map(s => JSON.stringify(String(s))).join(', ')}) — name at least one file or directory of this project (one that exists, or is in hb changed); areas may sit alongside`);
+    if ((c.subjects || []).some(grounded)) continue;
+    const subs = (c.subjects || []).map(s => JSON.stringify(String(s))).join(', ');
+    if (byChange) errs.push(`${c.id}: no subject names a file this phase changed (hb changed) or a directory holding one (subjects: ${subs}) — name at least one of: ${touched.slice(0, 5).join(', ')}${touched.length > 5 ? ', …' : ''}; areas and unchanged files may sit alongside`);
+    else errs.push(`${c.id}: no subject names a real project path (subjects: ${subs}) — name at least one file or directory of this project (one that exists); areas may sit alongside`);
   }
   return errs;
 }
@@ -808,7 +816,7 @@ function composeAuthorPrompt(dag, gate) {
   L.push('A JSON array, ids G1..Gn in order:');
   L.push('[{"id": "G1", "claim": "…", "subjects": ["…"], "violation": "…"}]');
   L.push('- claim: a property of the changed behaviour that the plan-time constraints do not already pin');
-  L.push('- subjects: the files/areas it covers — at least one must be a project-relative path that exists or is in the change list above (a :line or ::symbol suffix is fine); a constraint that names no real path is refused');
+  L.push('- subjects: the files/areas it covers — at least one must be a file this phase changed (in the change list above) or a directory holding one (a :line or ::symbol suffix is fine); a constraint that names none is refused');
   L.push('- violation: the concrete, observable result that would falsify it');
   L.push('Record it (as an actor who did not do this phase\'s work):');
   L.push(`  hb constraints ${gate} --record <file.json>`);

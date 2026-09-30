@@ -63,10 +63,11 @@ the phase's work**; it answers with a JSON array of `G1…Gn` constraints. Save 
 HB_ACTOR=author-agent node .hb/hb.js constraints GATE_API --record author.json --model author-model
 ```
 
-Each constraint must name something real: at least one subject that is a project-relative path that
-exists or appears in the phase's change list (`src/upload.py`, `src/upload.py:40`, `src/upload.py::save`);
-a set with a constraint that names only areas ("upload validation") is refused, and areas may sit
-alongside a real path. The set is write-once for this review cycle (re-running the gate does not reopen it), the author
+Each constraint must name what this phase changed: at least one subject that is a file in the change
+list the prompt shows (`src/upload.py`, `src/upload.py:40`, `src/upload.py::save`) or a directory
+holding one. A constraint that names only areas ("upload validation"), or only files the phase did not
+touch, is refused; areas and unchanged files may sit alongside. (With no change list — a project whose
+entry anchor predates anchors — or an empty one, a path that exists is enough.) The set is write-once for this review cycle (re-running the gate does not reopen it), the author
 must not be a doer of the phase, and HeartBeat stores its hash — `hb doctor` flags a later edit.
 
 ## 3. The constrained refute

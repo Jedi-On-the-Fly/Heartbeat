@@ -70,7 +70,7 @@ Dir resolution (`_hbdir`): `--dir <d>` (its `.hb`) > `$HB_DIR` > `./.hb`.
 | `park <PHASE\|GATE> [--reason …]` / `unpark <PHASE\|GATE>` | retire a phase without deleting it (sets `parked` in dag.json; resolver/audit/report/sweep all skip it, loudly; reversible) |
 | `start/done/fail/heartbeat <id>` | state mutations (+ lease) |
 | `review <gate> pass\|fail\|free [note]` | record adversarial verdict — enforcement lives in `review_policy.accept_review`: the answers on a constrained gate (`check_answers`), the `HOLES: none` line on an unconstrained pass and a free review (`check_holes`; `doctor` re-checks a pass's stored artifact), so the CLI, the MCP `review` tool (verdict `free` in its schema) and the executor all enforce it |
-| `constraints <gate> --prompt [--json] \| --record <file.json> [--model M]` | gate-time constraint author; see `constraints.py` (`record` refuses an ungrounded constraint — `grounding_errors` / `_subject_path`, == node) |
+| `constraints <gate> --prompt [--json] \| --record <file.json> [--model M]` | gate-time constraint author; see `constraints.py` (`record` refuses a constraint that names no file the phase changed — `grounding_errors` / `_subject_path`, existence when there is no change list; == node) |
 | `changed <gate> [--json]` | what the phase exiting `<gate>` changed (entry anchor vs the gate's own anchor once accepted, else the live tree); see `anchors.py` |
 | `exec [run\|config] [--parallel N]` | `run` (default) drives the loop with a backend; `config` prints the resolved executor config |
 | `mcp-serve [--http] [--host H] [--port P]` | run the MCP server so an MCP client drives HeartBeat; stdio by default, `--http` for a streamable-HTTP endpoint; see below |
