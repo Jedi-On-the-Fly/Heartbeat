@@ -750,6 +750,29 @@ function recordedConstraints(gate) {
     throw new Error(`the recorded constraints of ${gate} changed since recording (sha256 mismatch) — refusing to compose against altered targets`);
   return JSON.parse(raw.toString('utf8'));
 }
+// A gate-time constraint must name something real: at least one subject that is a project-relative path
+// that exists (file or directory) or is in the phase's `hb changed` list (a deleted file counts). A `:12` /
+// `:12-30` line suffix and a `::symbol` / `#anchor` suffix are stripped first; an absolute path or one with
+// `..` is never grounded. Free-text areas may sit alongside. Twin: constraints.grounding_errors.
+function subjectPath(s) {
+  let p = String(s).trim().replace(/^(?:\.\/)+/, '');
+  p = p.replace(/(?:::[^/]*|#[^/]*|:[0-9]+(?:-[0-9]+)?)$/, '').replace(/\/+$/, '');
+  if (!p || p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.split(/[\\/]/).includes('..')) return null;
+  return p;
+}
+function groundingErrors(list, gate) {
+  let touched = new Set();
+  try { const c = changed(gate); touched = new Set([...c.added, ...c.modified, ...c.deleted]); } catch (e) {}
+  const errs = [];
+  for (const c of list) {
+    const ok = (c.subjects || []).some(s => {
+      const p = subjectPath(s);
+      return p !== null && (touched.has(p) || fs.existsSync(path.join(PROJECT_DIR, p)));
+    });
+    if (!ok) errs.push(`${c.id}: no subject names a real project path (subjects: ${(c.subjects || []).map(s => JSON.stringify(String(s))).join(', ')}) — name at least one file or directory of this project (one that exists, or is in hb changed); areas may sit alongside`);
+  }
+  return errs;
+}
 function composeAuthorPrompt(dag, gate) {
   const ph = (dag.phases || []).find(p => p.gate_exit === gate) || { id: '?', tasks: [] };
   const gv = (dag.gates || {})[gate] || {};
@@ -785,7 +808,7 @@ function composeAuthorPrompt(dag, gate) {
   L.push('A JSON array, ids G1..Gn in order:');
   L.push('[{"id": "G1", "claim": "…", "subjects": ["…"], "violation": "…"}]');
   L.push('- claim: a property of the changed behaviour that the plan-time constraints do not already pin');
-  L.push('- subjects: the files/areas it covers (from the change list above)');
+  L.push('- subjects: the files/areas it covers — at least one must be a project-relative path that exists or is in the change list above (a :line or ::symbol suffix is fine); a constraint that names no real path is refused');
   L.push('- violation: the concrete, observable result that would falsify it');
   L.push('Record it (as an actor who did not do this phase\'s work):');
   L.push(`  hb constraints ${gate} --record <file.json>`);
@@ -794,7 +817,7 @@ function composeAuthorPrompt(dag, gate) {
 
 // Exported BEFORE the CLI dispatch: refuter_profiles.js requires this module while hb.js is running
 // as the CLI (a circular require sees only what is already assigned).
-module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath, checkAnswers, checkHoles,
+module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath, checkAnswers, checkHoles, subjectPath,
   planConstraints, reviewCycle, composeAuthorPrompt };
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
@@ -866,6 +889,8 @@ switch (cmd) {
     if (!Array.isArray(list) || !list.length) die('hb constraints --record: expected a non-empty JSON array of {id G<n>, claim, subjects, violation}');
     const errs = require('./hb-lint.js').constraintErrors(list, 'G');
     if (errs.length) die('hb constraints --record: ' + errs.join('; '));
+    const gerrs = groundingErrors(list, gate);
+    if (gerrs.length) die('hb constraints --record: ' + gerrs.join('; '));
     // Check-then-write under ONE write lock: two concurrent records cannot both see "not recorded".
     const verdict = withWlock(() => {
       const cyc = reviewCycle(dag, gate);

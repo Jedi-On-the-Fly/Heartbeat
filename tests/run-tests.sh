@@ -1743,6 +1743,14 @@ else
   echo "  (python3 absent — T176 skipped)"
 fi
 
+grp "T177 — a gate-time constraint names something real: at least one subject is an existing project path or in hb changed; both runtimes and under hb exec"
+if command -v python3 >/dev/null 2>&1; then
+  check "T177.1 real file / :line / ::symbol / directory / deleted-in-phase / real+area → recorded; areas only / missing / .. / absolute / one ungrounded of two → refused; author prompt states it; hb exec stops; node ≡ python (constraints-grounded.sh → CONSTRAINTS-GROUNDED-OK)" \
+    'bash "'"$HB_SRC"'/tests/constraints-grounded.sh" 2>&1 | grep -q "^CONSTRAINTS-GROUNDED-OK"'
+else
+  echo "  (python3 absent — T177 skipped)"
+fi
+
 grp "T160 — --all dedupes byte-identical criteria (same cmd + same effective timeout): run once per sweep, reuse LOUDLY"
 P160="$TMP/p160"; bash "$HB_SRC/plugin/bootstrap.sh" "$P160" >/dev/null 2>&1 </dev/null; H160="$P160/.hb"
 node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const cmd='echo run >> \"\$PROJECT_DIR/runs.txt\"';d.gates.G0={desc:'0',criteria:[{id:'c',desc:'suite',cmd}]};d.gates.G1={desc:'1',criteria:[{id:'c',desc:'suite',cmd}]};d.gates.G2={desc:'2',criteria:[{id:'c',desc:'suite',cmd}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"

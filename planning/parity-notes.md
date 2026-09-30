@@ -114,7 +114,8 @@ review_failed. The model-text verdict is the reply's **final REFUTED/CLEAR token
 Both runtimes implement the same pipeline and the same refusals, byte-for-byte where text is involved:
 anchors (`hb.js` anchor section ≡ `anchors.py`), plan-time constraint validation (`constraintErrors` ≡
 `lint.constraint_errors`), the author (`composeAuthorPrompt` ≡ `constraints.compose_author_prompt`, record
-≡ `constraints.record` — write-once per review cycle, the cycle starting after the last review verdict,
+≡ `constraints.record` — grounded subjects (`groundingErrors` ≡ `grounding_errors`, `subjectPath` ≡
+`_subject_path`, parity case `constraints:subject-path`, T177), write-once per review cycle, the cycle starting after the last review verdict,
 check-then-write under the write lock), the constrained refute prompt (`composePrompt` ≡ `compose_prompt`),
 the answer enforcement (`hb.js review` ≡ `review_policy.accept_review`) and the unattended pipeline
 (`constrainedReview` ≡ `executor._constrained_review`). Proofs: T166–T172.

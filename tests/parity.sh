@@ -282,6 +282,10 @@ holes_case(){
   done
 }
 holes_case
+# a gate-time constraint's subject → the project path it names (or none): node ≡ python
+cmp "constraints:subject-path" \
+  "$(node -e 'const h=require(process.argv[1]);const cs=JSON.parse(require("fs").readFileSync(process.argv[2],"utf8"));console.log(JSON.stringify(cs.map(h.subjectPath)))' "$ROOT/plugin/templates/hb.js" "$ROOT/tests/fixtures/constraints-grounded/subjects.json")" \
+  "$(PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c 'import sys,json;from heartbeat.constraints import _subject_path;print(json.dumps([_subject_path(c) for c in json.load(open(sys.argv[1]))],ensure_ascii=False,separators=(",",":")))' "$ROOT/tests/fixtures/constraints-grounded/subjects.json")"
 
 echo "── panel aggregation parity ──"
 # aggregateVerdict must agree node ≡ python across rules and verdict mixes

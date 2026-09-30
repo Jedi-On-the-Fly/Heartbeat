@@ -1,7 +1,24 @@
 # STATUS — HeartBeat
 
-**Version:** v1.33.0 (a review without per-id answers must say `HOLES: none` — an unconstrained pass and the free review are checked like constrained answers)
+**Version:** v1.34.0 (a gate-time constraint must name something real: at least one subject is an existing project path or in `hb changed`)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.34.0 — grounded constraints
+
+A gate-time constraint author could name nothing real — "user management system", endpoints the
+project does not have — and the set was recorded; the refuter was then held to constraints about a
+system that does not exist.
+
+- **The rule.** `hb constraints <gate> --record` refuses a set in which any constraint has no GROUNDED
+  subject: a project-relative path that exists (file or directory) or appears in the phase's
+  `hb changed` list (a deleted file counts). A `:12` / `:12-30` line suffix and a `::symbol` / `#anchor`
+  suffix are stripped first; an absolute path or one with `..` never grounds. Free-text areas are still
+  allowed alongside a real path. The refusal names the constraint and its subjects.
+- **Scope**: gate-time (`G`) constraints only — plan-time (`P`) constraints are written before the work
+  exists (spec-first) and are not checked.
+- **Everywhere**: the CLI, the MCP tools and `hb exec`'s author step (an ungrounded author reply stops the
+  run) in both runtimes; the author prompt states the rule (T177; parity case `constraints:subject-path`).
+- Plugin/marketplace → **1.34.0**, Python package → **0.24.0**.
 
 ## v1.33.0 — HOLES: a pass without answers still states its result
 
