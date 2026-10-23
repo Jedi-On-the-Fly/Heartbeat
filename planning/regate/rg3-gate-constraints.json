@@ -1,0 +1,20 @@
+[
+  {
+    "id": "G1",
+    "claim": "The report guard is strip-clean: deleting every line carrying the `regate-guard: report` marker from a copy of plugin/templates/hb-report.js and of py/src/heartbeat/report.py leaves a renderer that still exits 0 and prints a complete report (Phases and Gates sections intact) on both a never-regated project and a pending-regate fixture — just with no revision marker. The surfacing selftest's grep for 'rearm pending' cannot distinguish 'marker gone' from 'renderer crashed', so this property must hold independently of the selftest passing.",
+    "subjects": ["plugin/templates/hb-report.js", "py/src/heartbeat/report.py", "tests/regate-surfacing.sh"],
+    "violation": "After `sed -i '/regate-guard: report/d'` on a copy of either renderer, running it on any fixture exits non-zero, prints a ReferenceError/NameError/traceback, or emits a truncated report (a phase line or the Gates section missing) instead of the same report minus the marker — while tests/regate-surfacing.sh --selftest still prints REGATE-SURFACING-SELFTEST-OK over that broken state."
+  },
+  {
+    "id": "G2",
+    "claim": "The marker is JSON-neutral on both runtimes: the RG3 change lives only in the text render path, so on a pending-regate fixture `node hb-report.js <dir> --json` and `hb report --json` (python, which routes to build()) emit output byte-identical to a guard-stripped copy of the same renderer on the same fixture, and neither runtime's --json output contains the marker text ('revised', 'rearm pending', '⛔').",
+    "subjects": ["plugin/templates/hb-report.js", "py/src/heartbeat/report.py:72-85", "py/src/heartbeat/cli.py"],
+    "violation": "On a pending-regate fixture, either runtime's --json output contains 'rearm pending' or '⛔ revised', or it differs by any byte from the --json output of the same renderer with its `regate-guard: report` lines stripped — proving the feature leaked into the JSON surface on one runtime (or inconsistently between the two)."
+  },
+  {
+    "id": "G3",
+    "claim": "The changed docs conform to the verb list: every backticked phrase of the form `hb <subcommand>` (or a table-row command column entry) in docs/dev-plugin.md, docs/dev-python.md, docs/dev-tests.md and planning/parity-notes.md names a subcommand registered in the shipped python CLI (a sub.add_parser(...) in py/src/heartbeat/cli.py, listed by `hb --help`) — not only the regate-specific commands P2 pins, but every hb verb the revised prose touches (this is the prose-check rule that already caught two earlier drafts).",
+    "subjects": ["docs/dev-plugin.md", "docs/dev-python.md", "docs/dev-tests.md", "planning/parity-notes.md"],
+    "violation": "One of the four changed docs contains a backticked `hb <word>` where <word> is not a registered subparser name: running `python3 -m heartbeat.cli <word>` verbatim yields argparse's \"invalid choice\" usage error (exit 2) instead of the subcommand executing or printing its own usage."
+  }
+]

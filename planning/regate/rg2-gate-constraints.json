@@ -1,0 +1,26 @@
+[
+  {
+    "id": "G1",
+    "claim": "A successful rearm pins ONE sha256 in triple agreement: the hash of the bytes actually stored at .hb/reviews/<G>.regate.md equals the sha256 field on the gate_rearmed event AND the sha256 in the dag's regate.rearm record, on both runtimes — the pin is computed from the same bytes that are stored, so doctor's byte re-check is false-positive-free: immediately after a clean rearm, with the evidence file untouched, doctor raises NO rearm-artifact problem on either runtime.",
+    "subjects": ["plugin/templates/hb.js", "py/src/heartbeat/cli.py", "py/src/heartbeat/doctor.py"],
+    "violation": "After a valid rearm with the stored file untouched, sha256(.hb/reviews/<G>.regate.md) differs from the gate_rearmed event's sha256 or from the dag record's regate.rearm.sha256 (e.g. the hash was computed from re-encoded text while different bytes were written), or either runtime's doctor reports a rearm-artifact missing/thin/sha256-mismatch problem for that gate before anyone altered the file."
+  },
+  {
+    "id": "G2",
+    "claim": "The rearm itself is check-then-write under the single write lock: the pending check is re-evaluated against a re-read dag INSIDE the lock, so of two rearm attempts racing on the same pending regate exactly one wins — exactly one gate_rearmed event is appended, the dag carries one rearm record, and the stored evidence bytes hash to that one event's sha256; the loser exits nonzero with the no-pending/changed-underneath refusal and mutates nothing (no second event, no overwrite of the winner's stored artifact, no dag write). This holds on both runtimes, sequentially (a second rearm after a success is refused) and concurrently.",
+    "subjects": ["plugin/templates/hb.js", "py/src/heartbeat/cli.py"],
+    "violation": "Two rearm invocations against one pending regate both exit 0; or events.jsonl ends up with two gate_rearmed events for the gate; or .hb/reviews/<G>.regate.md holds bytes whose sha256 differs from the single recorded pin (the losing attempt overwrote the winner's evidence); or the losing attempt leaves the dag or event log changed in any way."
+  },
+  {
+    "id": "G3",
+    "claim": "The cycle start has exactly ONE computation per runtime and every consumer shares it: in python, constraints._cycle_start (later of the gate's last review verdict and last gate_rearmed) is the sole start scan — review_cycle and review_cycle_full both derive from it and agree on every event order, including a gate_rearmed AFTER the last verdict (start = the rearm's index) and a verdict after the rearm (start = the verdict's index), with no second independent re-computation of the start remaining in constraints.py; node's reviewCycle.start is the single node-side equivalent read by both its 'recorded' and free-review consumers.",
+    "subjects": ["py/src/heartbeat/constraints.py", "plugin/templates/hb.js"],
+    "violation": "On a fixture with a review verdict at event index i and a later gate_rearmed at j>i (or the reverse order), review_cycle_full's returned start is not the index _cycle_start yields, or review_cycle and review_cycle_full disagree on whether a constraints_recorded between i and j is in-cycle; or constraints.py is found to contain a second independent scan computing a cycle start (two definitions that an edit can move apart)."
+  },
+  {
+    "id": "G4",
+    "claim": "The selftest mutation contract holds for every guard named in tests/regate-rearm.sh's marker list (regate-guard: rearm-actor, rearm-audit, stale-pass, cycle-start, rearm-rot, stale-resume, marker-sync): each marker is present in the shipped file the selftest mutates, every line of that guard carries the marker so sed '/marker/d' removes the WHOLE guard and leaves the file loadable (no half-deleted guard that dies unconditionally or fails to parse), and each strip is load-bearing — the named forbidden behaviour actually gets through after the strip, so bash tests/regate-rearm.sh --selftest completes on the shipped tree printing REGATE-REARM-SELFTEST-OK.",
+    "subjects": ["tests/regate-rearm.sh", "plugin/templates/hb.js", "py/src/heartbeat/cli.py", "plugin/templates/hb-exec.js", "py/src/heartbeat/executor.py"],
+    "violation": "--selftest fails or omits REGATE-REARM-SELFTEST-OK on the shipped tree: a named marker is absent from its target file; stripping a marker leaves a syntax error or a dangling partial guard (e.g. a condition deleted but its die/refusal line left behind, refusing everything), so the 'still refused after strip' check trips; or a stripped guard changes nothing (the mutant survives — the guard was not load-bearing)."
+  }
+]

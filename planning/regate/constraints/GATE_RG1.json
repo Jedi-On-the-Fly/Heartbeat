@@ -1,0 +1,48 @@
+[
+  {
+    "id": "G1",
+    "claim": "Guard-marker contract: every regate refusal, sleep, and escalation site in the shipped implementations carries a regate-guard marker comment on the guard's own line(s) — gate.sh single-gate/sweep guards, gate.py eval_gate/run_gate/eval_all, review_policy.py accept_review, constraints.py record, hb.js review/constraints guards, executor.py refuse-path/gate-path/refuted-branch, hb-exec.js exit3 and review-fail-wrap, tick.sh and tick.py tick-sleep, hb-lint.js and lint.py — and the guard logic lives ENTIRELY on marker-carrying lines, so the selftest's `sed -i \"/<marker>/d\"` strip removes the whole guard cleanly: the mutated copy still parses/runs, the guarded behaviour re-opens, and the matching named selftest check goes red for the bypass, not for a crash.",
+    "subjects": [
+      "tests/regate-fail-closed.sh:312",
+      "plugin/templates/gate.sh",
+      "plugin/templates/hb-exec.js",
+      "plugin/templates/tick.sh",
+      "py/src/heartbeat/gate.py",
+      "py/src/heartbeat/executor.py",
+      "py/src/heartbeat/tick.py"
+    ],
+    "violation": "Any refusal/sleep/escalation site lacks the marker (mutate() aborts with 'no guard marker'); or stripping a marker leaves the guard still refusing (the named selftest check stays green on the mutated copy, i.e. the marker decorates a line the guard does not depend on); or stripping breaks the file syntactically so the check reddens via an unrelated parse/runtime error instead of the guard bypass."
+  },
+  {
+    "id": "G2",
+    "claim": "Exit-code 3 is RESERVED in gate.sh for the pending-regate refusal and used by nothing else: a failing criterion exits 1, usage/arg errors (missing gate arg, unknown gate) exit 2, the --all sweep exits 0/1, and no non-regate path can exit 3 — so hb-exec.js's dispatch on `e.status === 3` can never misclassify an ordinary blocked gate or usage error as a regate escalation, and conversely never routes a real regate refusal into the generic gate_blocked handling.",
+    "subjects": [
+      "plugin/templates/gate.sh:314",
+      "plugin/templates/hb-exec.js:439"
+    ],
+    "violation": "Any invocation of gate.sh on a fixture WITHOUT a pending regate — unknown gate, missing argument, a gate with a failing criterion, --check on a blocked gate, --all with failures — exits with status 3; or the pending-regate refusal path exits 0/1/2; or hb-exec run on a plainly blocked (non-regated) gate prints the regate_pending escalation."
+  },
+  {
+    "id": "G3",
+    "claim": "The prev_criteria snapshot is a genuine deep copy that survives dag round-trips and later mutation: both declares copy via JSON re-serialization (node JSON.parse(JSON.stringify(...)), python json.loads(json.dumps(...))), so after a declare by EITHER runtime, (a) re-reading dag.json from the OTHER runtime yields regate.prev_criteria deep-equal to the pre-declare criteria array, and (b) subsequently editing gates[G].criteria in dag.json (the sanctioned revision step) and performing any further CLI mutation that rewrites the dag leaves prev_criteria unchanged — no aliasing between the live criteria array and the snapshot, and no loss/reordering of criterion object fields through the indent-2 re-serialization.",
+    "subjects": [
+      "plugin/templates/hb.js:1271",
+      "py/src/heartbeat/cli.py:170",
+      "py/tests/test_regate.py"
+    ],
+    "violation": "After declare, prev_criteria read back (same or cross runtime) is not deep-equal to the criteria captured immediately before the declare; or editing gates[G].criteria after the declare changes the stored prev_criteria (shared reference); or a round-trip through either runtime's dag writer drops, reorders, or retypes fields inside the snapshotted criterion objects."
+  },
+  {
+    "id": "G4",
+    "claim": "Refusals are side-effect-free and every loud surface carries actionable recovery: a REFUSED declare (empty reason, unset/'unknown' HB_ACTOR, unknown id, phase without gate_exit, second declare while pending) exits nonzero, leaves dag.json byte-identical, and appends no gate_regated event, with a message naming the specific missing/conflicting thing (the reason, HB_ACTOR, the offending id, or the existing pending declare's actor and reason); and every loud regate surface — the declare success banner, gate.sh's exit-3 line, the node/python review and constraints refusals, both executors' escalations — names the gate AND the concrete rearm recovery (a DIFFERENT actor, `regate <gate> --rearm --artifact <findings-file>`), while both ticks' regate sleep_out carries the pending gate's id under the same 'gate' key in its JSON data.",
+    "subjects": [
+      "plugin/templates/hb.js:1250",
+      "py/src/heartbeat/cli.py:143",
+      "plugin/templates/gate.sh:314",
+      "py/src/heartbeat/executor.py",
+      "plugin/templates/tick.sh:308",
+      "py/src/heartbeat/tick.py:154"
+    ],
+    "violation": "A refused declare changes dag.json (diff nonempty) or lands a gate_regated line in events.jsonl; a declare-refusal message omits the specific cause (no mention of the reason/HB_ACTOR/id/pending-declare actor); any perimeter refusal or executor escalation output lacks the gate id or the --rearm recovery path; or either runtime's regate_pending_waiting sleep JSON lacks the 'gate' key or names a gate other than the pending one."
+  }
+]
