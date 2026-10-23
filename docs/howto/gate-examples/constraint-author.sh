@@ -242,7 +242,7 @@ EOF
     "py: doctor missed the tampered constraints"
   mutant "node records before the gate passed" plugin/templates/hb.js "      if (!cyc.pending) return" "      if (false) return" \
     "node: record before-pass was not refused"
-  mutant "node cycle anchored at the last gate pass" plugin/templates/hb.js "  events.forEach((e, i) => { if ((e.event === 'review_failed' || e.event === 'review_passed') && e.gate === gate) start = i; });" "  events.forEach((e, i) => { if (e.event === 'gate_passed' && e.gate === gate) start = i; });" \
+  mutant "node cycle anchored at the last gate pass" plugin/templates/hb.js "  events.forEach((e, i) => { if ((e.event === 'review_failed' || e.event === 'review_passed' || e.event === 'gate_rearmed') && e.gate === gate) start = i; });   // regate-guard: cycle-start" "  events.forEach((e, i) => { if (e.event === 'gate_passed' && e.gate === gate) start = i; });" \
     "node: record rerun-gate was not refused"
   mutant "python checks outside the lock" py/src/heartbeat/constraints.py '    err = st.with_wlock(hbdir, _locked)' '    err = _locked()' \
     "py: a record completed while the write lock was held"

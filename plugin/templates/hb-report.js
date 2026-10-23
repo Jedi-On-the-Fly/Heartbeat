@@ -140,8 +140,11 @@ console.log(`═══ HeartBeat Report — ${report.project} ═══`);
 console.log(`Progress: ${doneTasks}/${totalTasks} tasks (${report.progress.pct}%)`);
 console.log('');
 console.log('Phases:');
+const regateNote = (g) => { const r = require('./hb.js').regateBlocks((dag.gates || {})[g]); return r ? `  ⛔ revised — rearm pending (by ${r.actor || '?'}: ${r.reason || ''})` : ''; };   // regate-guard: report — a revision is never silent
 for (const p of phases) {
-  console.log(`  ${icon[p.status]} ${p.id} ${p.title} — ${p.done}/${p.total}${p.gate_exit ? `  [gate: ${p.gate_exit}]` : ''}`);
+  let rn = '';
+  if (p.gate_exit) rn = regateNote(p.gate_exit);   // regate-guard: report
+  console.log(`  ${icon[p.status]} ${p.id} ${p.title} — ${p.done}/${p.total}${p.gate_exit ? `  [gate: ${p.gate_exit}]${rn}` : ''}`);
 }
 if (Object.keys(gates).length) {
   console.log(''); console.log('Gates:');

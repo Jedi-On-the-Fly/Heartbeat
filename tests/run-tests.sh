@@ -1924,6 +1924,17 @@ else
   echo "  (python3 absent — T180 skipped)"
 fi
 
+grp "T181 — a pending regate is LOUD in hb report (gate id + revised + rearm pending + reason), GONE after a valid rearm, and invisible on a never-regated project; both runtimes"
+RGSF="$HB_SRC/tests/regate-surfacing.sh"
+if command -v python3 >/dev/null 2>&1; then
+  check "T181.1 marker present while pending / cleared after rearm / absent when never regated (regate-surfacing.sh → REGATE-SURFACING-OK)" \
+    'bash "'"$RGSF"'" 2>&1 | grep -q "^REGATE-SURFACING-OK"'
+  check "T181.2 teeth: stripping either renderer's report guard reddens the marker check (--selftest)" \
+    'bash "'"$RGSF"'" --selftest 2>&1 | grep -q "^REGATE-SURFACING-SELFTEST-OK"'
+else
+  echo "  (python3 absent — T181 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

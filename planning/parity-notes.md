@@ -305,3 +305,23 @@ round-trip bit-faithfully across BOTH runtimes stay within ASCII strings, boolea
 and integers |n| < 2^53 (every shipped field — ids, descs, cmds, timeout_s — does).
 A dag that needs exotic numbers is outside the parity contract; lint does not police
 this (numbers beyond timeout_s are not part of any shipped schema).
+
+## Regate (the gate-revision surface)
+
+Shared behavior, runtime-specific grammar (the park precedent): node declares with trailing
+words (`hb regate <id> <reason…>`), python with `--reason`; the rearm grammar is identical
+(`--rearm --artifact <f> [--model m]`). The refusal SIGNAL is equivalent, not byte-identical:
+`gate.sh` exits **3** (reserved — 1 blocked, 2 usage) where python's `run_gate` returns the
+`regate_pending` status, which its CLI maps to exit 3. Everything behavioral is pinned in
+`tests/parity.sh` (`regate:lint-malformed` with a non-empty-error guard, `regate:declare-cross`
+— a declare by one runtime honored by the other: marker, exit 3, no events, the identical
+`regate_pending_waiting` tick sleep — and `regate:rearm-cross` — acceptance, same-actor and
+stale refusals, the restarted review cycle, doctor's altered-evidence line). Shared helpers are
+twins by name: `regateBlocks`/`regate_blocks` (strict fail-closed predicate — only a well-formed
+`pending:false` clears; the runtimes' truthiness rules disagree on `[]`/`{}`, a refuter catch),
+`staleRearm`/`stale_rearm` (fresh-pass rule over PROVENANCED passes), `unansweredRegate`/
+`unanswered_regate` (the log outranks a hand-edited marker), `substantiveLen`/`substantive_len`
+(artifact thin checks: ONE explicit ASCII whitespace set and CODE-POINT counting — JS `trim()`
+vs `str.strip()` and UTF-16 units vs code points both diverged at the boundary, refuter
+catches), and the single cycle-start (`reviewCycle.start` ≡ `constraints._cycle_start`, the
+later of the last review verdict and the last `gate_rearmed`).
