@@ -1,7 +1,58 @@
 # STATUS — HeartBeat
 
-**Version:** v1.36.1 (the refuter checks gate-time constraints against the plan — a constraint is a claim, not the specification)
+**Version:** v1.37.0 (regate — sanctioned, audited gate revision: a gate changes only through the rigor that created it)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.37.0 — regate: a gate changes only through the rigor that created it
+
+Field report: a project's gates hard-coded environment premises (a dev-mode flag, specific data
+volumes); the premises died mid-project, the gates failed as gate_blocked, every agent recited
+"never weaken the gate" — and the human hand-edited the criteria. The revision happened anyway,
+outside the system: no review, no re-audit, no record. The sanctioned path now exists.
+
+- **`hb regate <GATE|PHASE> <reason…>`** (python: `--reason`) declares a revision: snapshots
+  `prev_criteria` + the reviser (`HB_ACTOR` required) under the write lock, appends audit-only
+  `gate_regated`. Editing the criteria in dag.json is now loud, attributed and gated.
+- **Fail-closed perimeter while pending**: `gate.sh` exits a RESERVED **3** (single and `--check`);
+  the `--all` sweep counts the gate FAILING whether armed or planned (parked is annotated, never
+  hidden); review pass/fail/free, constraints recording and the internal anchor writer refuse at the
+  CHOKEPOINTS (`eval_gate`, `accept_review`, `constraints.record` — so the CLI, the MCP tools, the
+  executors and even `diagnose` are all covered); executors escalate and stop (never busy-loop,
+  never fabricate a verdict); ticks sleep `regate_pending_waiting` (a sleep reason — no new PROTOCOL
+  keys). Only a well-formed `pending: false` clears — `[]`/`{}`/`"yes"` block, because the two
+  runtimes' truthiness rules disagree on empty containers.
+- **`--rearm --artifact <findings>`**: a DIFFERENT actor than the declarer (case-insensitive),
+  substantive cited evidence (≥ 40 code points — ONE explicit ASCII trim, `substantiveLen` ≡
+  `substantive_len`), and the dag audit-clean re-checked INSIDE the write lock; the bytes land at
+  `reviews/<G>.regate.md` with ONE sha256 pinned on the stored file, the `gate_rearmed` event and
+  the dag record.
+- **Acceptance still owes a fresh pass**: every verdict is refused until a PROVENANCED
+  `gate_passed` (criteria/runtime stamped) lands after the rearm — node `import`'s bare synthetic
+  pass never unlocks; the review cycle RESTARTS at the rearm (one cycle-start computation per
+  runtime), so a pre-declare gate-time constraint set or free review never satisfies the post-rearm
+  acceptance; and the event log outranks a hand-edited marker — clearing, deleting or fabricating
+  `regate` in dag.json cannot launder an acceptance, and doctor flags each state.
+- **Surfaced everywhere**: doctor (pending note; missing/thin/byte-changed rearm evidence;
+  stale-accepted gates; log-vs-marker divergence), diagnose (a `regate_pending` branch, inferred and
+  explicit, with `gate_blocked`/`review_stuck` routing so no branch prints a command the perimeter
+  refuses), `hb report` (`⛔ revised — rearm pending (by <actor>: <reason>)`, gone after a rearm,
+  text render only).
+- Refuter catches folded (5 holes across 8 reviews; sonnet on the mechanism gates per the declared
+  tiering, the session model on the whole-feature gate): a declare lock race; `park`'s unlocked
+  dag rewrite erasing a fresh marker (park/unpark now lock); TWO cross-runtime divergences at the
+  artifact thin boundary (JS `trim()` vs `str.strip()`, then UTF-16 units vs code points — every
+  artifact thin check now shares one explicit trim); the hand-cleared-marker exploit (closed by the
+  log-truth guard); the report marker absent from the runtime docs.
+- Proof-driven: `tests/regate-fail-closed.sh` (T179, 11 guard-strip teeth), `tests/regate-rearm.sh`
+  (T180, 10 teeth incl. the hand-clear exploit and the thin-boundary parity), `tests/regate-surfacing.sh`
+  (T181); 23 pytest cases; parity cases `regate:lint-malformed` / `regate:declare-cross` /
+  `regate:rearm-cross` with non-vacuity floors. Built as a HeartBeat wave (plan refuted to SOUND in
+  four strong-model rounds before any code; every gate constraint-first reviewed).
+- Honest limits, in the docs: the rearm bar is procedural evidence inside the self-declared
+  `HB_ACTOR` trust model — the human reviews the `prev_criteria` diff; last-rearm-wins on the
+  evidence file; a forged event log is outside the model; the node dag writer's number fidelity is
+  recorded in parity-notes.
+- Plugin/marketplace → **1.37.0**, Python package → **0.27.0**.
 
 ## v1.36.1 — constraints are claims, not the specification
 
