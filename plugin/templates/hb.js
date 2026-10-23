@@ -406,6 +406,22 @@ function doctor() {
     }
   }
 
+  // detach: a retracted dependency claim is a legitimate in-flight state — NOTES, never problems
+  // (topology edits carry no acceptance-laundering risk: the phase's own gate still verifies). But
+  // the log is still truth: a dag whose detach fields and detach events disagree was hand-edited or
+  // restored from a backup, in either direction, and both are said out loud.
+  {
+    const evsD = readEvents();
+    const liveD = {};
+    for (const e of evsD) { if (e.event === 'phase_detached') liveD[e.phase] = true; else if (e.event === 'phase_reattached') liveD[e.phase] = false; }
+    for (const p of phases) {
+      const hasF = Object.prototype.hasOwnProperty.call(p, 'detached_from');
+      if (hasF && !p.gate_entry) notes.push(`${p.id} is detached from ${p.detached_from} (by ${p.detached_by || '?'}: ${p.detached_reason || ''}) — the dependency claim is retracted; re-audit before relying on the order${(() => { const a = readAnchor(`_detach_${p.id}`); return (a && a.detached_at === p.detached_at) ? '' : ' (no detach anchor — change reports widen to _start)'; })()}`);   // detach-guard: doctor — the suffix fires on a MISSING or STAMP-MISMATCHED anchor (changed()'s predicate; a silent widening was a refuter catch)
+      if (hasF && liveD[p.id] !== true) notes.push(`${p.id} carries detach fields but the log attests no live detach (no phase_detached, or the last one answered by phase_reattached) — a hand edit or a restored dag: the phase runs UNLOCKED on an unattested claim`);   // detach-guard: doctor
+      if (!hasF && liveD[p.id] === true) notes.push(`${p.id}: the log attests an unanswered phase_detached but the dag carries no detach fields — a restored dag silently RE-LOCKED the phase (re-lock)`);   // detach-guard: doctor
+    }
+  }
+
   // Recorded gate-time constraints must still be the bytes that were recorded (they are the review's
   // targets; an edit after recording silently moves them).
   {

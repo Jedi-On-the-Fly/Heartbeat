@@ -72,7 +72,9 @@ def build(hbdir):
 
 def render(hbdir):
     r = build(hbdir)
-    gates_def = st.read_dag(hbdir).get("gates") or {}
+    _dag_raw = st.read_dag(hbdir)
+    gates_def = _dag_raw.get("gates") or {}
+    phases_raw = {p.get("id"): p for p in (_dag_raw.get("phases") or [])}
     out = [f"═══ HeartBeat Report — {r['project']} ═══",
            f"Progress: {r['tasks_done']}/{r['tasks_total']} tasks ({r['percent']}%)", "", "Phases:"]
     for p in r["phases"]:
@@ -80,6 +82,8 @@ def render(hbdir):
         suffix = "  (parked)" if p["parked"] else ""
         _rg = st.regate_blocks((gates_def.get(p.get("gate")) or {})) if p.get("gate") else None   # regate-guard: report — a revision is never silent
         if _rg is not None: suffix += f"  ⛔ revised — rearm pending (by {_rg.get('actor', '?')}: {_rg.get('reason', '')})"   # regate-guard: report
+        _dp = phases_raw.get(p["id"]) or {}   # detach-guard: report — a retracted claim is never silent
+        if "detached_from" in _dp: suffix += f"  ⟂ detached from {_dp['detached_from']} (by {_dp.get('detached_by', '?')}: {_dp.get('detached_reason', '')})"   # detach-guard: report
         out.append(f"  {mark} {p['id']} {p['title']} — {p['done']}/{p['total']}  [gate: {p['gate']}]{suffix}")
     imp = r["refuters"]
     if imp["caught"] or imp["cleared"]:

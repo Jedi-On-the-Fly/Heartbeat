@@ -1954,6 +1954,17 @@ else
   echo "  (python3 absent — T182 skipped)"
 fi
 
+grp "T183 — a detached phase is LOUD in hb report (⟂ detached from <gate>, by <actor>: <reason>; text only, gone after reattach, absent otherwise) and doctor NOTES the live detach + both dag/log divergence directions without failing; the audit ruleset provably untouched; both runtimes"
+DTSF="$HB_SRC/tests/detach-surfacing.sh"
+if command -v python3 >/dev/null 2>&1; then
+  check "T183.1 marker present/cleared/quiet + json-free; doctor notes (live, anchor-missing suffix, direction A both fixtures, direction B) all exit 0; audit byte-identical on detached vs stripped fixtures (detach-surfacing.sh → DETACH-SURFACING-OK)" \
+    'bash "'"$DTSF"'" 2>&1 | grep -q "^DETACH-SURFACING-OK"'
+  check "T183.2 teeth: stripping either renderer's or either doctor's detach guard reddens its named check (--selftest)" \
+    'bash "'"$DTSF"'" --selftest 2>&1 | grep -q "^DETACH-SURFACING-SELFTEST-OK"'
+else
+  echo "  (python3 absent — T183 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

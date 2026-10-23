@@ -141,10 +141,13 @@ console.log(`Progress: ${doneTasks}/${totalTasks} tasks (${report.progress.pct}%
 console.log('');
 console.log('Phases:');
 const regateNote = (g) => { const r = require('./hb.js').regateBlocks((dag.gates || {})[g]); return r ? `  ⛔ revised — rearm pending (by ${r.actor || '?'}: ${r.reason || ''})` : ''; };   // regate-guard: report — a revision is never silent
+const detachNote = (id) => { const rp = (dag.phases || []).find(x => x.id === id); return (rp && Object.prototype.hasOwnProperty.call(rp, 'detached_from')) ? `  ⟂ detached from ${rp.detached_from} (by ${rp.detached_by || '?'}: ${rp.detached_reason || ''})` : ''; };   // detach-guard: report — a retracted claim is never silent
 for (const p of phases) {
   let rn = '';
   if (p.gate_exit) rn = regateNote(p.gate_exit);   // regate-guard: report
-  console.log(`  ${icon[p.status]} ${p.id} ${p.title} — ${p.done}/${p.total}${p.gate_exit ? `  [gate: ${p.gate_exit}]${rn}` : ''}`);
+  let dn = '';
+  dn = detachNote(p.id);   // detach-guard: report
+  console.log(`  ${icon[p.status]} ${p.id} ${p.title} — ${p.done}/${p.total}${p.gate_exit ? `  [gate: ${p.gate_exit}]${rn}` : ''}${dn}`);
 }
 if (Object.keys(gates).length) {
   console.log(''); console.log('Gates:');

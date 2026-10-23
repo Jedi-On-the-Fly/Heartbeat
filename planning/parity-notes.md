@@ -325,3 +325,19 @@ twins by name: `regateBlocks`/`regate_blocks` (strict fail-closed predicate — 
 vs `str.strip()` and UTF-16 units vs code points both diverged at the boundary, refuter
 catches), and the single cycle-start (`reviewCycle.start` ≡ `constraints._cycle_start`, the
 later of the last review verdict and the last `gate_rearmed`).
+
+## Detach (the dependency-claim surface)
+
+Shared behavior, runtime-specific grammar (the park/regate precedent): node declares with trailing
+words, python with `--reason`; `reattach` is identical. Parity cases: `detach:cross` (a detach by
+one runtime honored by the other — fields, the resolver unlock, the detach-anchor change base, a
+cross-runtime reattach round-trip), `detach:lint-malformed` (non-empty identical errors on the
+partial-fields shape), `detach:lint-reserved` (the reserved `_start`/`_detach_*` gate names on a
+regex-hostile fixture: a gate named `"_start\n"` once split the runtimes because `re.match`'s `$`
+matches before a trailing newline and JS's `$` does not — both checks are now exact-equality +
+prefix, no regex), and the changed-base assertions inside `detach:cross`. The changed-base rule:
+a detached phase's `hb changed` base is `gate_entry || the stamped _detach_<PHASE> anchor ||
+_start` — the anchor is rewritten per declare and a stamp mismatch reads as missing (fail-closed
+against a late-landing stale hash). The warning twins (`detachWarn` ≡ `_detach_warn`) are
+per-channel over the event log; fuzzed cross-runtime during review (400 seeded cases, no
+divergence).

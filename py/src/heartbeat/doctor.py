@@ -144,6 +144,21 @@ def doctor(hbdir):
             e_pin = last_re.get(g)
             if not e_pin or ((rmk.get("rearm") or {}).get("sha256") and e_pin.get("sha256") and rmk["rearm"]["sha256"] != e_pin["sha256"]): problems.append(f"{g}: the dag records a rearmed regate but the event log " + ("pins different bytes (sha256 mismatch with gate_rearmed)" if e_pin else "has no gate_rearmed event") + " — a fabricated rearm record (the log is truth)")   # regate-guard: marker-sync
 
+    # detach: a retracted dependency claim is a legitimate in-flight state — NOTES, never problems;
+    # the log is still truth in both divergence directions. Node twin: doctor() in hb.js.
+    from . import anchors as _anch
+    live_d = {}
+    for e in evs_r:
+        if e.get("event") == "phase_detached":
+            live_d[e.get("phase")] = True
+        elif e.get("event") == "phase_reattached":
+            live_d[e.get("phase")] = False
+    for p in phases:
+        has_f = "detached_from" in p
+        if has_f and not p.get("gate_entry"): notes.append(f"{p['id']} is detached from {p['detached_from']} (by {p.get('detached_by', '?')}: {p.get('detached_reason', '')}) — the dependency claim is retracted; re-audit before relying on the order" + ("" if (_anch.read_anchor(hbdir, f"_detach_{p['id']}") or {}).get("detached_at") == p.get("detached_at") else " (no detach anchor — change reports widen to _start)"))   # detach-guard: doctor — the suffix fires on a MISSING or STAMP-MISMATCHED anchor (changed()'s predicate; a silent widening was a refuter catch)
+        if has_f and live_d.get(p.get("id")) is not True: notes.append(f"{p['id']} carries detach fields but the log attests no live detach (no phase_detached, or the last one answered by phase_reattached) — a hand edit or a restored dag: the phase runs UNLOCKED on an unattested claim")   # detach-guard: doctor
+        if not has_f and live_d.get(p.get("id")) is True: notes.append(f"{p['id']}: the log attests an unanswered phase_detached but the dag carries no detach fields — a restored dag silently RE-LOCKED the phase (re-lock)")   # detach-guard: doctor
+
     return {"problems": problems, "notes": notes}
 
 
