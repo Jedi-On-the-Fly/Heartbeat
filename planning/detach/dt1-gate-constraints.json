@@ -1,0 +1,46 @@
+[
+  {
+    "id": "G1",
+    "claim": "The detach anchor's CONTENT honors the anchor contract plus the stamp, in triple agreement: after every successful detach on either runtime, anchors/_detach_<PHASE>.json has a `gate` field that is exactly `_detach_<PHASE>` (never the detached-from gate, never `_start`), a `files` map snapshotting the project tree, and a `detached_at` equal to the dag phase's `detached_at` — the one value decided inside the lock — while the appended phase_detached event's `phase` and `from` agree with the anchor's name and the dag's `detached_from` (anchor, dag record and event never disagree); and both runtimes write the same key shape, so a stamp-matching anchor written by one runtime is honored as the change base by the other's `hb changed`.",
+    "subjects": [
+      "plugin/templates/hb.js::writeDetachAnchor",
+      "py/src/heartbeat/cli.py",
+      "py/src/heartbeat/anchors.py::write_anchor",
+      "tests/detach.sh"
+    ],
+    "violation": "A successful declare on either runtime leaves an anchor whose `gate` field names anything other than `_detach_<PHASE>` (e.g. the detached-from gate's own name), whose `files` is missing or not an object, or whose `detached_at` differs from the dag's; or the anchor/dag/event triple disagrees on the phase or the detached-from gate; or a stamp-matching anchor written by node is not used as the base by python's `hb changed` (or vice versa), observable as the report widening to _start despite a valid anchor."
+  },
+  {
+    "id": "G2",
+    "claim": "The weasel warning is one contract on both runtimes — same words, same verdict, on any log: when it fires, the declare still SUCCEEDS (exit 0, detach committed) and the warning line contains the literal phrase 'REMOVED, not satisfied' and names the detached-from gate; and the twins detachWarn (hb.js) and _detach_warn (cli.py) return the same warn/clean decision on raw event streams beyond the fixtures — verdict events of OTHER gates interleaved between the target gate's own events change nothing, an empty events log detaches clean, and events missing a `gate` or `event` field are skipped identically — with neither runtime crashing on any of these.",
+    "subjects": [
+      "plugin/templates/hb.js::detachWarn",
+      "py/src/heartbeat/cli.py::_detach_warn",
+      "tests/detach.sh"
+    ],
+    "violation": "A firing warning on either runtime that lacks the exact phrase 'REMOVED, not satisfied' or does not name the detached-from gate, or whose presence turns the declare into a failure (nonzero exit or no dag/event mutation); or a constructed events.jsonl — other-gate gate_failed/review_failed interleaved inside the target gate's own verdict sequence, an event with no gate field, or an empty log — on which one runtime's detach warns and the other's stays silent, or on which either runtime errors instead of declaring."
+  },
+  {
+    "id": "G3",
+    "claim": "The anchor-write surface is additive and fails on the right channel: a forced detach-anchor write failure leaves the declare committed and successful (exit 0; dag fields, phase_detached event and the 'detached <phase> from <gate>' stdout lead all intact) with a warning on STDERR naming the phase and saying change reports will widen to _start, and the next `hb changed <gate_exit>` exits 0 reporting against _start with no traceback — on both runtimes; meanwhile write_anchor's new `extra` parameter is invisible to every pre-existing caller: _start and gate-acceptance anchors written after this change keep exactly the keys {gate, ts, commit, files}, gain no detached_at, and their serialization is unchanged from the pre-change code given the same inputs.",
+    "subjects": [
+      "py/src/heartbeat/anchors.py::write_anchor",
+      "py/src/heartbeat/cli.py",
+      "plugin/templates/hb.js::writeDetachAnchor"
+    ],
+    "violation": "With the anchor write forced to fail (anchors path unwritable or occupied by a file), either runtime's detach exits nonzero, loses the event or any of the four dag fields, prints no warning, or prints the warning on stdout instead of stderr; or the subsequent `hb changed` crashes or reports against any base but _start; or any _start/acceptance anchor produced by an unchanged call site carries a detached_at key, a new key, or a changed byte shape."
+  },
+  {
+    "id": "G4",
+    "claim": "The guard-marker contract the proof's header states holds for the shipped sources: every line carrying a `detach-guard:` marker in plugin/templates/hb.js, plugin/templates/hb-lint.js, py/src/heartbeat/cli.py, py/src/heartbeat/anchors.py and py/src/heartbeat/lint.py is self-contained — deleting all lines of any one marker class (lock, validate, warn, anchor, reattach, changed-base, and the lint call sites) leaves the file syntactically valid (node --check passes / the python module still imports), because declarations stay unmarked and only checks, dies and guarded calls carry markers — and each class `tests/detach.sh --selftest` strips goes red for its NAMED reason (the guarded behavior re-opening), never as a parse error or an unrelated crash.",
+    "subjects": [
+      "tests/detach.sh",
+      "plugin/templates/hb.js",
+      "py/src/heartbeat/cli.py",
+      "plugin/templates/hb-lint.js",
+      "py/src/heartbeat/lint.py",
+      "py/src/heartbeat/anchors.py"
+    ],
+    "violation": "Deleting every line of some one detach-guard marker class from a shipped source leaves a file that fails node --check or fails to import (a marker sits on a declaration or structural line, the s1 lesson regressed); or a --selftest strip's red manifests as a crash, parse failure or unrelated error rather than the named guard going soft; or `tests/detach.sh --selftest` does not print DETACH-SELFTEST-OK on the unmodified tree."
+  }
+]

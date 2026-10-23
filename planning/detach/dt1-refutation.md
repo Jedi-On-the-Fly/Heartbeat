@@ -1,0 +1,33 @@
+# GATE_DT1 refutation (all work in mktemp fixtures / repo copies; repo tree untouched)
+
+Suites: detach.sh DETACH-OK; --selftest DETACH-SELFTEST-OK; pytest -k detach 6 passed; parity.sh PARITY OK; regate-rearm.sh and regate-fail-closed.sh OK.
+Env header in tests/detach.sh (line 24) is the verbatim `unset HB_DIR PROJECT_DIR GATE G DAG_FILE EVENTS_FILE`. Resolver/tick/audit/MCP files have no diff.
+Gate criteria dt1x/dt1y key on final markers (DETACH-OK / DETACH-SELFTEST-OK) that print only after every case passes, so no false pass from an early header. dt1p's parity.sh exits 1 on divergence.
+
+## Attempts and evidence
+- Refusal ladder on both runtimes (empty/blank reason, unset/Unknown/UNKNOWN actor, unknown id, never-had-entry, already-detached by phase id and by gate id, completed, unsafe id): all rc=1, loud, event-free, dag sha unchanged; already-detached routes to reattach. Held.
+- Races: 6 concurrent detaches mixing node and python, 1 phase_detached event, anchor detached_at equals dag detached_at. Detach vs park and detach vs regate (suite) held.
+- Anchor write forced to fail (chmod 555 on anchors/): both runtimes exit 0, 'detached D from GATE_P' lead intact, event and dag fields present, stderr warning names D and says reports widen to _start, `hb changed` rc=0 reporting `_start -> worktree`, no traceback. Held (G3).
+- Anchor content (G1): both runtimes write keys {commit, detached_at, files, gate, ts}, gate == `_detach_D`, detached_at equals the dag's, and the event phase/from agree. The _start anchor keeps {commit, files, gate, ts}. Each runtime's `hb changed` honors the other's anchor (`_detach_D -> worktree`). Held.
+- Weasel twins (G2): a seeded random-event fuzz over the target gate's verdicts, other-gate interleaving, events missing gate or event, nulls and empty logs. 400 cases, 0 verdict differences between node and python. Warning text contains 'REMOVED, not satisfied' and names the gate. A detach over a pending regate leaves acceptance refused (fail-closed). Held.
+  - Side note, not a detach defect: a `gate` or `event` value that is a list, or a bare `null` line in events.jsonl, crashes the pre-existing projection (python `unhashable type: list` / `'NoneType' has no attribute get`; node `reading 'event'`). Both runtimes crash on a null line; only the list-valued gate splits them (node succeeds, python crashes in project()).
+- Reattach brick refusal on both runtimes (gate defined but no phase's gate_exit; gate undefined): refused, no event. Held.
+- Parity teeth: copy of the repo with the python changed-base marker lines stripped makes parity.sh print `detach:changed-base` red (changed_py=2). Held.
+- state.json after detach/reattach differs only in last_event/last_updated.
+
+## Findings
+1. G4: deleting the `detach-guard: lock` class from hb.js leaves a file that fails to parse. The marker sits on `const verdictD = withWlock(() => {` and `const verdictA = withWlock(() => {`, structural opening lines. Evidence on a copy: `sed -i '/detach-guard: *lock/d' hb.js; node --check hb.js` gives `hb.js:1555 }); ^ SyntaxError`, and a fixture run gives `SyntaxError: Unexpected token ')'`. Stripping all detach-guard lines from hb.js fails the same way. Python lock strip imports fine but crashes at runtime with `UnboundLocalError: res` (cli.py `res = st.with_wlock(...)` is marked), not a re-opened race. `tests/detach.sh --selftest` strips no lock class at all (s1-s8 cover validate, warn, anchor, changed-base, reattach, lint, python warn, python changed-base). The races case's "lock is load-bearing" comment has no selftest behind it, and the python validate and reattach markers have no strip tests either. This is the s1 lesson regressed.
+2. P3 / lint twin divergence on a reserved gate name: a gate id `"_start\n"` (trailing newline). Node `/^_start$|^_detach_/` does not match it, so `node hb-lint.js` exits 0. Python `re.match(r"^_start$")` matches before a trailing newline, so `hb lint` exits 1 with 'gate ids matching ^_start$ ... reserved'. Reproduced with a 66-case lint fuzz (3 diffs, one a verdict diff; the other two are cosmetic: `{"a":1}` vs `{"a": 1}` and `None` vs `null` in messages, though the comment claims "messages verbatim"). The parity case `detach:lint-malformed` covers only the partial-fields shape, so this class of divergence is invisible to parity.sh; only detach.sh's lint_err, which checks "both nonzero", covers the other shapes, and it cannot see a one-sided accept of a name variant.
+3. Minor: the writeDetachAnchor comment (hb.js:879) says "doctor's live-detach note says so", but no doctor change exists in the diff, so the comment describes a nonexistent surface. python `now_iso` has 1s resolution, so a detach, reattach and re-detach in the same second whose anchor write fails would leave a stamp-matching stale anchor (contrived).
+
+## Per-id answers
+P1: NOT-REPRODUCED — ladder, lock (6 concurrent mixed-runtime detaches give 1 event, park/regate races keep both edits), 4 fields, event, direct rewritten anchor, unsafe-id refusal, reattach restore/clear/brick refusal all held on both runtimes.
+P2: NOT-REPRODUCED — per-channel predicate held in suite arms plus a 400-case twin fuzz (other-gate interleave, steady-state review_failed -> gate_passed, empty log, missing fields) with 0 node/python differences; resolver/tick/audit/MCP files untouched; regate perimeter intact after detach.
+P3: VIOLATED — the base behavior held (never-accepted fixture, late acceptance, stamp mismatch, delete, reattach, re-detach all correct on both), but the lint twins disagree: a gate named "_start\n" lints clean on node (rc 0) and errors on python (rc 1), and parity.sh would stay green through it (detach:lint-malformed pins only the partial-fields shape).
+G1: NOT-REPRODUCED — anchor keys/gate/files/detached_at agree with dag and event; node-written anchor honored by python changed and vice versa.
+G2: NOT-REPRODUCED — warning phrase and gate name present, declare exits 0 and commits; 400-case fuzz of other-gate interleaving, missing gate/event, empty log: identical verdicts, no crash (only a null/list-valued event line crashes, in the pre-existing projection).
+G3: NOT-REPRODUCED — with anchors/ chmod 555, both runtimes exit 0 with event/fields/lead intact, stderr warning naming D, `hb changed` rc 0 against _start; _start anchor keys unchanged {commit,files,gate,ts}.
+G4: VIOLATED — `sed '/detach-guard: *lock/d' hb.js` then `node --check` gives SyntaxError (marker on `withWlock(() => {` opening lines); python lock strip crashes with UnboundLocalError; --selftest never strips the lock class (or python validate/reattach), so those guards have no named-reason teeth.
+
+## Verdict
+UNSOUND

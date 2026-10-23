@@ -1,0 +1,20 @@
+[
+  {
+    "id": "G1",
+    "claim": "The two loud markers compose on one phase line: on a fixture whose phase carries the detach fields AND whose gate_exit holds a blocking regate marker, both runtimes' text reports render that single phase line with the regate note (⛔ revised — rearm pending (by <actor>: <reason>)) followed by the detach note (⟂ detached from <gate> (by <actor>: <reason>)) — regate before detach, each carrying its full payload, the line unbroken — and the two clear independently: clearing only the detach state (reattach / fields removed) leaves ⛔ intact on the line, clearing only the regate state leaves ⟂ intact; a fixture with only one state shows only that marker; neither marker reaches --json in the composed state.",
+    "subjects": ["plugin/templates/hb-report.js::detachNote", "py/src/heartbeat/report.py::render", "tests/detach-surfacing.sh"],
+    "violation": "On a dag.json whose phase P has detached_from/detached_by/detached_reason set and whose gate_exit G has gates.G.regate pending, node .hb/hb-report.js or python hb report drops either marker, emits them on separate or broken lines, orders detach before regate on one runtime only, or either marker's text appears in the --json bytes; or removing just the detach fields (or just the regate marker) also removes or corrupts the other marker on P's line."
+  },
+  {
+    "id": "G2",
+    "claim": "The detach surfacing is strip-clean and self-contained behind its guard markers: every line that emits or decides a detach report marker or doctor note carries detach-guard: report (hb-report.js, report.py) or detach-guard: doctor (hb.js doctor, doctor.py), no structural line (loop headers, the event scan building the live-detach map, lock or declaration lines) carries one, and deleting all marker-carrying lines from a copy of each file leaves a program that still parses (node --check / python import) and runs: the report renders the detached fixture with no ⟂ marker, the doctor exits 0 and emits zero detach notes on the divergence fixtures, and every non-detach finding (the regate-guard notes/problems, drift, rot) is byte-for-byte unchanged by the strip — which is exactly what tests/detach-surfacing.sh --selftest relies on when it reddens the named checks.",
+    "subjects": ["plugin/templates/hb.js::doctor", "py/src/heartbeat/doctor.py::doctor", "plugin/templates/hb-report.js", "py/src/heartbeat/report.py", "tests/detach-surfacing.sh"],
+    "violation": "sed '/detach-guard: doctor/d' (or the report-marker strip) applied to a copy of any of the four files yields a parse/import error or a program that still prints a detach note or ⟂ marker on the detached fixtures; or the strip changes any non-detach doctor finding or report line on the same fixture; or bash tests/detach-surfacing.sh --selftest prints DETACH-SURFACING-SELFTEST-OK while one of these holds (a guard check going red for a parse error instead of the named reason counts as a violation)."
+  },
+  {
+    "id": "G3",
+    "claim": "The surfacing is additive-only on untouched projects: on a project with no detach fields in dag.json and no phase_detached/phase_reattached events, the full text output of the changed renderers and doctors is byte-identical to the pre-DT2 versions' output (git show HEAD:plugin/templates/hb-report.js, HEAD:py/src/heartbeat/report.py, HEAD:plugin/templates/hb.js, HEAD:py/src/heartbeat/doctor.py run on the same fixture) — no incidental reformatting, reordering, or added whitespace rode in on the diff, on either runtime, for report text, report --json, and doctor.",
+    "subjects": ["plugin/templates/hb-report.js", "py/src/heartbeat/report.py", "plugin/templates/hb.js", "py/src/heartbeat/doctor.py"],
+    "violation": "Running the HEAD version and the changed version of any of the four files against the same never-detached fixture (a seeded project and the existing regate-surfacing fixtures both qualify) produces any byte difference in report text, report --json, or doctor output on that runtime."
+  }
+]
