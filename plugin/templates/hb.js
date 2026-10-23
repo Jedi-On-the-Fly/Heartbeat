@@ -631,7 +631,9 @@ function readAnchor(name) {
 function changed(gate) {
   const phase = (readDag().phases || []).find(p => p.gate_exit === gate);
   if (!phase) throw new Error(`no phase exits through gate ${gate}`);
-  const base = phase.gate_entry || '_start';
+  let base = phase.gate_entry || '_start';
+  const dAnchor = (!phase.gate_entry && Object.prototype.hasOwnProperty.call(phase, 'detached_from')) ? readAnchor(`_detach_${phase.id}`) : null;   // detach-guard: changed-base
+  if (dAnchor && dAnchor.detached_at === phase.detached_at) base = `_detach_${phase.id}`;   // detach-guard: changed-base — a stamp mismatch (a stale late write) reads as MISSING, never lies
   const from = readAnchor(base);
   if (!from) throw new Error(`no entry anchor '${base}' for ${gate} (recorded at the first task start / the entry gate's acceptance)`);
   const own = readAnchor(gate);
@@ -846,6 +848,45 @@ function staleRearm(events, gate) {
         ((Array.isArray(e.criteria) && e.criteria.length) || e.runtime)) return false;
   }
   return true;
+}
+
+// The weasel-vector loudness for `hb detach`: detaching FROM a gate in any of these states removes
+// a dependency claim that was doing real work, so the declare carries a warning. PER-CHANNEL
+// liveness (a merged last-verdict stream under-fires on the refuted steady state — review_failed,
+// then the gate re-run and det-passed with the review still owed — a plan-refuter catch): a live
+// gate_failed is one with no later gate_passed for THAT gate; a live review_failed is one with no
+// later review_passed — a later gate_passed does NOT clear it, mirroring the projection's
+// acceptance semantics. Plus the regate family: a blocking marker, an unanswered declare in the
+// log (hand-cleared markers must not disarm the loudness), and the stale-rearm window.
+// Twin: the python cli's _detach_warn.
+function detachWarn(events, gv, gate) {
+  let gf = false, rf = false;
+  for (const e of events) {
+    if (e.gate !== gate) continue;
+    if (e.event === 'gate_failed') gf = true;
+    else if (e.event === 'gate_passed') gf = false;
+    else if (e.event === 'review_failed') rf = true;
+    else if (e.event === 'review_passed') rf = false;
+  }
+  return gf || rf || !!regateBlocks(gv) || unansweredRegate(events, gate) || staleRearm(events, gate);
+}
+
+// The detach-time anchor: the base `hb changed` reports a DETACHED phase against — the tree at the
+// detach moment (never _start: that widens the report to other phases' work). DIRECT write, never
+// tryAnchor: it is REWRITTEN by each successful declare (write-once would lie on a re-detach), and
+// STAMPED with the declare's detached_at so a late-landing stale write reads as missing instead of
+// lying. A write failure is warned on stderr and never blocks the declare (changed() then falls
+// back to _start and doctor's live-detach note says so). Twin: the python cli's detach handler.
+function writeDetachAnchor(phaseId, detachedAt) {
+  try {
+    let commit = null;
+    if (inGitWorktree()) {
+      try { commit = require('child_process').execFileSync('git', ['-C', PROJECT_DIR, 'rev-parse', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || null; } catch (e) {}
+    }
+    const a = { gate: `_detach_${phaseId}`, ts: nowIso(), commit, files: listProjectFiles(), detached_at: detachedAt };
+    fs.mkdirSync(ANCHORS, { recursive: true });
+    atomicWrite(path.join(ANCHORS, `_detach_${phaseId}.json`), JSON.stringify(a, null, 2) + '\n');
+  } catch (e) { process.stderr.write(`⚠ detach anchor for ${phaseId} not recorded: ${e.message} — change reports will widen to _start\n`); }
 }
 
 // A path shown to an agent: control characters (a newline in a file name) would let a doer forge
@@ -1480,6 +1521,74 @@ switch (cmd) {
     break;
   }
 
+  case 'detach': {
+    // Retract a phase's DEPENDENCY CLAIM (park's fail-closed sibling for topology): gate_entry →
+    // null — the resolver's EXISTING unlocked semantics, zero resolver change — recorded, loud,
+    // reversible. The dag is the editable plan; detach makes the edit attributed and reviewed.
+    if (!arg1) die('usage: hb detach <PHASE_ID|GATE_ID> <reason…>');
+    const reasonD = rest.join(' ').trim();
+    if (!reasonD) die('detach: a reason is required — why is the dependency claim no longer true?');   // detach-guard: validate
+    const actorD = process.env.HB_ACTOR || '';
+    if (!actorD.trim() || actorD.trim().toLowerCase() === 'unknown') die('detach: set HB_ACTOR to the reviser\'s identity');   // detach-guard: validate
+    const dag0 = readDag();
+    const t0 = (dag0.phases || []).find(p => p.id === arg1) || (dag0.phases || []).find(p => p.gate_exit === arg1);
+    let warnD = false;
+    if (t0 && t0.gate_entry) warnD = detachWarn(readEvents(), (dag0.gates || {})[t0.gate_entry] || {}, t0.gate_entry);   // detach-guard: warn
+    const verdictD = withWlock(() => {   // check-then-write under the write lock: concurrent declares and parks must not lose edits (teeth: the 6-way race in tests/detach.sh — a structural line is not strip-testable)
+      const dag = readDag();
+      const phases = dag.phases || [];
+      const target = phases.find(p => p.id === arg1) || phases.find(p => p.gate_exit === arg1);
+      if (!target) return `detach: unknown phase or gate: ${arg1}`;
+      if (!SAFE_GATE_ID.test(target.id)) return `detach: phase id '${target.id}' is not usable as an anchor file name — rename the phase first`;   // detach-guard: validate
+      if (project(readEvents(), dag).completed_phases.includes(target.id)) return `detach: ${target.id} is already complete — a satisfied dependency has nothing to unlock`;   // detach-guard: validate
+      if (!target.gate_entry) return Object.prototype.hasOwnProperty.call(target, 'detached_from') ? `detach: ${target.id} is already detached (from ${target.detached_from}) — reverse with: node .hb/hb.js reattach ${target.id}` : `detach: ${target.id} has no gate_entry — nothing to detach`;   // detach-guard: validate
+      const from = target.gate_entry;
+      const at = nowIso();
+      target.detached_from = from;
+      target.detached_reason = reasonD;
+      target.detached_by = actorD;
+      target.detached_at = at;
+      target.gate_entry = null;
+      fs.writeFileSync(DAG, JSON.stringify(dag, null, 2));
+      appendEvent({ event: 'phase_detached', phase: target.id, from, reason: reasonD });   // audit-only: attribution in the log
+      reproject();
+      return { id: target.id, from, at };
+    });
+    if (typeof verdictD === 'string') die(verdictD);
+    writeDetachAnchor(verdictD.id, verdictD.at);   // detach-guard: anchor — the honest change base (hashed after the lock; changed() falls back to _start without it, and DT2's doctor note will say so)
+    process.stdout.write(`⟂ detached ${verdictD.id} from ${verdictD.from} (by ${actorD}): ${reasonD}\n` +
+      `   the dependency claim is RETRACTED — ${verdictD.id} is unlocked; re-audit the plan: node .hb/hb-audit.js .hb/dag.json\n` +
+      `   reverse with: node .hb/hb.js reattach ${verdictD.id}\n`);
+    if (warnD) process.stdout.write(`   ⚠ ${verdictD.from} is failing, refuted or under revision — the claim is REMOVED, not satisfied: this does not unblock or accept ${verdictD.from}; the reason is on record.\n`);
+    break;
+  }
+
+  case 'reattach': {
+    if (!arg1) die('usage: hb reattach <PHASE_ID|GATE_ID>');
+    const verdictA = withWlock(() => {   // locked read-modify-write (teeth: the races case)
+      const dag = readDag();
+      const phases = dag.phases || [];
+      const target = phases.find(p => p.id === arg1) || phases.find(p => p.gate_exit === arg1);
+      if (!target) return `reattach: unknown phase or gate: ${arg1}`;
+      if (!Object.prototype.hasOwnProperty.call(target, 'detached_from')) return `reattach: ${target.id} is not detached`;
+      const to = target.detached_from;
+      const isExit = phases.some(p => p.gate_exit === to);   // detach-guard: reattach — a defined-but-orphaned gate would lock the phase forever
+      if (!(dag.gates || {})[to] || !isExit) return `reattach: ${to} is ${!(dag.gates || {})[to] ? 'no longer defined' : "no phase's gate_exit"} — restoring it would lock ${target.id} forever (the lint 'phase locked forever' brick); fix the dag first`;   // detach-guard: reattach
+      target.gate_entry = to;
+      delete target.detached_from;
+      delete target.detached_reason;
+      delete target.detached_by;
+      delete target.detached_at;
+      fs.writeFileSync(DAG, JSON.stringify(dag, null, 2));
+      appendEvent({ event: 'phase_reattached', phase: target.id, to });   // audit-only
+      reproject();
+      return { id: target.id, to };
+    });
+    if (typeof verdictA === 'string') die(verdictA);
+    process.stdout.write(`▶ reattached ${verdictA.id} to ${verdictA.to} — the dependency claim is restored; re-audit before running: node .hb/hb-audit.js .hb/dag.json\n`);
+    break;
+  }
+
   case 'park':
   case 'unpark': {
     // The CLI path for retiring a phase — no hand-editing, no deletion (deleting a gate
@@ -1530,7 +1639,7 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|regate|refuters|refute-prompt|changed|constraints|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|regate|detach|reattach|refuters|refute-prompt|changed|constraints|import> [args]');
 }
 }
 

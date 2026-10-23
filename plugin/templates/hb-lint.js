@@ -78,6 +78,7 @@ function lint(dag) {
   checkGateArtifacts(dag, warnings);
   checkConstraints(dag, errors);
   checkRegate(dag, errors);   // regate-guard
+  checkDetach(dag, errors);   // detach-guard
   return { errors, warnings };
 }
 
@@ -130,6 +131,36 @@ function checkRegate(dag, errors) {
       if (w === null || typeof w !== 'object' || Array.isArray(w) || !strOk(w.actor) || !strOk(w.artifact) || !strOk(w.sha256))
         errors.push(`[${g}] regate.rearm must be an object with non-empty actor, artifact and sha256 strings`);
     }
+  }
+}
+
+// A phase's detach record (written by `hb detach`, honored by changed()'s base and the report):
+// {detached_from, detached_reason, detached_by, detached_at} together, gate_entry null while they
+// stand, detached_from a defined gate that is some phase's gate_exit (a bare 'defined' restore
+// would re-create the 'phase locked forever' resolver brick), and the phase id usable as an anchor
+// file name. Gate ids matching ^_start$ or ^_detach_ are RESERVED (the anchors/ namespace — an
+// acceptance anchor for such a gate would collide with the detach/start anchors).
+// Twin: lint.py _check_detach (messages verbatim).
+const DETACH_SAFE_ID = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;   // == hb.js SAFE_GATE_ID (duplicated: hb.js requires this module)
+function checkDetach(dag, errors) {
+  const gates = dag.gates ?? {};
+  for (const g of Object.keys(gates)) {
+    // exact equality + prefix, NOT a regex: python's $ matches before a trailing newline and JS's
+    // does not, so the twin regexes diverged on a gate named "_start\n" (a refuter fuzz catch)
+    if (g === '_start' || g.startsWith('_detach_')) errors.push(`[${g}] gate ids matching ^_start$ or ^_detach_ are reserved for the anchors namespace — rename the gate`);
+  }
+  const exits = new Set((dag.phases ?? []).map(p => p.gate_exit).filter(Boolean));
+  for (const p of (dag.phases ?? [])) {
+    const fields = ['detached_from', 'detached_reason', 'detached_by', 'detached_at'];
+    const has = fields.filter(k => Object.prototype.hasOwnProperty.call(p, k));
+    if (!has.length) continue;
+    if (has.length < fields.length) { errors.push(`[${p.id}] detach fields are partial (${has.join(', ')}) — a detach records detached_from, detached_reason, detached_by and detached_at together`); continue; }
+    if (p.gate_entry !== null && p.gate_entry !== undefined) errors.push(`[${p.id}] detach fields alongside a non-null gate_entry — a half-reattach; reattach properly or clear the fields`);
+    if (typeof p.detached_from !== 'string' || !blankFree(p.detached_from) || !gates[p.detached_from] || !exits.has(p.detached_from)) errors.push(`[${p.id}] detached_from must name a defined gate that is some phase's gate_exit (got ${JSON.stringify(p.detached_from)})`);
+    if (typeof p.detached_reason !== 'string' || !blankFree(p.detached_reason)) errors.push(`[${p.id}] detached_reason must be a non-empty string`);
+    if (typeof p.detached_by !== 'string' || !blankFree(p.detached_by)) errors.push(`[${p.id}] detached_by must be a non-empty string`);
+    if (typeof p.detached_at !== 'string' || !blankFree(p.detached_at)) errors.push(`[${p.id}] detached_at must be a non-empty string timestamp`);
+    if (typeof p.id !== 'string' || !DETACH_SAFE_ID.test(p.id)) errors.push(`[${p.id}] a detached phase id must be usable as an anchor file name ([A-Za-z0-9_][A-Za-z0-9_.-]*)`);
   }
 }
 

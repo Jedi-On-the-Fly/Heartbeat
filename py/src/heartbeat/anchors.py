@@ -95,13 +95,17 @@ def list_project_files(hbdir):
     return files
 
 
-def write_anchor(hbdir, name):
+def write_anchor(hbdir, name, extra=None):
+    """`extra` merges additional fields into the anchor (the detach anchor stamps `detached_at`
+    so a late-landing stale write reads as missing — see changed())."""
     pd = _project_dir(hbdir)
     commit = None
     if _in_git_worktree(pd):
         out = _git_out(pd, "rev-parse", "HEAD")
         commit = (out.decode().strip() or None) if out else None
     a = {"gate": name, "ts": st.now_iso(), "commit": commit, "files": list_project_files(hbdir)}
+    if extra:
+        a.update(extra)
     d = _anchors_dir(hbdir)
     d.mkdir(parents=True, exist_ok=True)
     st.atomic_write(d / f"{name}.json", json.dumps(a, indent=2, ensure_ascii=False) + "\n")
@@ -141,6 +145,8 @@ def changed(hbdir, gate):
     if not phase:
         raise ValueError(f"no phase exits through gate {gate}")
     base = phase.get("gate_entry") or "_start"
+    _da = read_anchor(hbdir, f"_detach_{phase.get('id')}") if (not phase.get("gate_entry") and "detached_from" in phase) else None   # detach-guard: changed-base
+    if _da and _da.get("detached_at") == phase.get("detached_at"): base = f"_detach_{phase.get('id')}"   # detach-guard: changed-base — a stamp mismatch (a stale late write) reads as MISSING, never lies
     frm = read_anchor(hbdir, base)
     if not frm:
         raise ValueError(f"no entry anchor '{base}' for {gate} (recorded at the first task start / "

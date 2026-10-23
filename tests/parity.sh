@@ -143,6 +143,65 @@ echo "$RM_N" | grep -q 'rec_node=\[false\]' && echo "$RM_N" | grep -q 'rec_py=\[
 echo "$RM_N" | grep -q 'fresh_verdict_rc=0' || { echo "  ✗ regate:fresh — a verdict after a fresh provenanced pass was refused: $RM_N"; FAIL=1; }
 echo "$RM_N" | grep -q 'doc_node=\[regate rearm artifact' && echo "$RM_N" | grep -q 'doc_py=\[regate rearm artifact' || { echo "  ✗ regate:doctor — altered rearm evidence not flagged identically: $RM_N"; FAIL=1; }
 
+echo "── detach parity ──"
+# a malformed detach record errors on BOTH lints, identically — and non-emptily
+DTDAG_BAD='{"phases":[{"id":"P","title":"p","gate_entry":null,"gate_exit":"GATE_P","tasks":[{"id":"p1","title":"t","requires":[]}]},{"id":"D","title":"d","gate_entry":null,"gate_exit":"GATE_D","detached_from":"GATE_P","tasks":[{"id":"d1","title":"t","requires":[]}]}],"gates":{"GATE_P":{"desc":"g","criteria":[{"id":"c","desc":"d","cmd":"python3 -c \"assert 1\""}]},"GATE_D":{"desc":"g","criteria":[{"id":"c","desc":"d","cmd":"python3 -c \"assert 1\""}]}}}'
+DTF=$(mktemp -d); printf '%s' "$DTDAG_BAD" > "$DTF/bad.json"
+cmp "detach:lint-malformed" "$(l_node "$DTF/bad.json")" "$(l_py "$DTF/bad.json")"
+case "$(l_node "$DTF/bad.json")" in   # guard: identical EMPTY lists must not read as parity
+  *'detach fields are partial'*) ;; *) echo "  ✗ detach:lint-malformed — node found no detach errors"; FAIL=1;;
+esac
+# the reserved-name twins on regex-hostile names: a gate named "_start\n" split the runtimes once
+# (python's $ matches before a trailing newline, JS's does not — a refuter fuzz catch); the check
+# is now exact-equality + prefix on both, and this fixture pins the agreement
+python3 -c "
+import json
+d = {'phases': [{'id': 'P', 'title': 'p', 'gate_entry': None, 'gate_exit': 'GATE_P',
+                 'tasks': [{'id': 'p1', 'title': 't', 'requires': []}]}],
+     'gates': {'GATE_P': {'desc': 'g', 'criteria': [{'id': 'c', 'desc': 'd', 'cmd': 'python3 -c \"assert 1\"'}]},
+               '_start\n': {'desc': 'regex-hostile name', 'criteria': [{'id': 'c', 'desc': 'd', 'cmd': 'python3 -c \"assert 1\"'}]},
+               '_detach_X': {'desc': 'reserved', 'criteria': [{'id': 'c', 'desc': 'd', 'cmd': 'python3 -c \"assert 1\"'}]}}}
+json.dump(d, open('$DTF/hostile.json', 'w'))"
+cmp "detach:lint-reserved" "$(l_node "$DTF/hostile.json")" "$(l_py "$DTF/hostile.json")"
+case "$(l_node "$DTF/hostile.json")" in
+  *'reserved for the anchors namespace'*) ;; *) echo "  ✗ detach:lint-reserved — node flagged no reserved name"; FAIL=1;;
+esac
+rm -rf "$DTF"
+# cross-runtime: a detach by ONE runtime is honored by the other — fields, resolver unlock,
+# the detach-anchor change base, and a reattach round-trip from the OTHER side
+DTDAG='{"phases":[{"id":"P","title":"p","gate_entry":null,"gate_exit":"GATE_P","tasks":[{"id":"p1","title":"t","requires":[],"description":"w"}]},{"id":"D","title":"d","gate_entry":"GATE_P","gate_exit":"GATE_D","tasks":[{"id":"d1","title":"t","requires":[],"description":"w"}]}],"gates":{"GATE_P":{"desc":"g","criteria":[{"id":"c","desc":"d","cmd":"python3 -c \"assert 1\""}]},"GATE_D":{"desc":"g","criteria":[{"id":"c","desc":"d","cmd":"python3 -c \"assert 1\""}]}}}'
+detach_case(){ # $1 = the runtime that DETACHES; the other runtime must honor everything
+  local d; d=$(mktemp -d); mkdir "$d/.hb"
+  printf '%s' "$DTDAG" > "$d/.hb/dag.json"
+  printf '{"event":"initialized"}\n' > "$d/.hb/events.jsonl"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" "$d/.hb/"
+  node "$d/.hb/hb.js" rebuild >/dev/null 2>&1
+  ( cd "$d" && HB_NO_GIT=1 HB_ACTOR=doer node .hb/hb.js start p1 >/dev/null 2>&1 )   # the _start anchor
+  printf 'noise\n' > "$d/noise.txt"   # pre-detach work _start would wrongly attribute to D
+  if [ "$1" = node ]; then ( cd "$d" && HB_ACTOR=alice node .hb/hb.js detach D premises changed >/dev/null 2>&1 )
+  else ( cd "$d" && HB_ACTOR=alice eval "$PY detach D --reason \"premises changed\" --dir \"$d\"" >/dev/null 2>&1 ); fi
+  printf 'dwork\n' > "$d/dwork.txt"
+  local m rn rp cn cp ra
+  m=$(python3 -c "
+import json; p=next(x for x in json.load(open('$d/.hb/dag.json'))['phases'] if x['id']=='D')
+print(json.dumps({k:p.get(k) for k in ('gate_entry','detached_from','detached_by','detached_reason')},sort_keys=True,separators=(',',':')))")
+  rn=$( cd "$d" && node .hb/hb.js ready 9 2>/dev/null | grep -c '"d1"' ); rp=$( cd "$d" && eval "$PY ready 9 --dir \"$d\"" 2>/dev/null | grep -c '"d1"' )
+  cn=$( cd "$d" && node .hb/hb.js changed GATE_D 2>/dev/null | grep -c 'dwork.txt\|noise.txt' )
+  cp=$( cd "$d" && eval "$PY changed GATE_D --dir \"$d\"" 2>/dev/null | grep -c 'dwork.txt\|noise.txt' )
+  if [ "$1" = node ]; then ( cd "$d" && eval "$PY reattach D --dir \"$d\"" >/dev/null 2>&1 ); else ( cd "$d" && node .hb/hb.js reattach D >/dev/null 2>&1 ); fi
+  ra=$(python3 -c "
+import json; p=next(x for x in json.load(open('$d/.hb/dag.json'))['phases'] if x['id']=='D')
+print(p.get('gate_entry'), 'detached_from' in p)")
+  echo "marker=$m ready_node=$rn ready_py=$rp changed_node=$cn changed_py=$cp reattached=[$ra]"
+  rm -rf "$d"
+}
+DT_N=$(detach_case node); DT_P=$(detach_case py)
+cmp "detach:cross" "$DT_N" "$DT_P"
+echo "$DT_N" | grep -q '"detached_from":"GATE_P"' || { echo "  ✗ detach:cross — no detach marker after a node declare: $DT_N"; FAIL=1; }
+echo "$DT_N" | grep -q 'ready_node=1' && echo "$DT_N" | grep -q 'ready_py=1' || { echo "  ✗ detach:unlock — the detached phase is not ready on both runtimes: $DT_N"; FAIL=1; }
+echo "$DT_N" | grep -q 'changed_node=1' && echo "$DT_N" | grep -q 'changed_py=1' || { echo "  ✗ detach:changed-base — the change list is not exactly {dwork.txt} on both (noise widened, or dwork missing): $DT_N"; FAIL=1; }
+echo "$DT_N" | grep -q 'reattached=\[GATE_P False\]' || { echo "  ✗ detach:reattach — the cross-runtime reattach did not round-trip: $DT_N"; FAIL=1; }
+
 echo "── state projection parity ──"
 DAG='{"phases":[{"id":"P0","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"P0T1","requires":[]},{"id":"P0T2","requires":["P0T1"]}]},{"id":"P1","gate_entry":"G0","gate_exit":"G1","tasks":[{"id":"P1T1","requires":[]}]}],"gates":{"G0":{"criteria":[{"id":"c","cmd":"true"}]},"G1":{"review":{"prompt":"r"},"criteria":[{"id":"c","cmd":"true"}]}}}'
 state_case(){ # name events

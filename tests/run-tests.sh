@@ -1935,6 +1935,25 @@ else
   echo "  (python3 absent — T181 skipped)"
 fi
 
+grp "T182 — hb detach/reattach: retract a dependency claim loudly and reversibly (write-locked, attributed, per-channel weasel warning, the detach-time anchor keeps hb changed honest, twin lint); both runtimes"
+DTCH="$HB_SRC/tests/detach.sh"
+if command -v python3 >/dev/null 2>&1; then
+  check "T182.1 declare/reattach: fields+event+stamped anchor, the refusal ladder (incl. unsafe ids and completed phases), the already-detached routing, the resolver-brick reattach refusal; both runtimes" \
+    'bash "'"$DTCH"'" declare 2>&1 | grep -q "^DECLARE-OK"'
+  check "T182.2 races: 6 concurrent declares (one event, one anchor); detach vs park and detach vs regate on the same dag — no lost updates" \
+    'bash "'"$DTCH"'" races 2>&1 | grep -q "^RACES-OK"'
+  check "T182.3 the weasel predicate per channel: live failure / refuted / refuted STEADY STATE / pending regate / hand-cleared marker / stale rearm all WARN; healed, never-evaluated, review-accepted and the cross-gate discriminator stay CLEAN; the warned gate's own perimeter intact" \
+    'bash "'"$DTCH"'" weasel 2>&1 | grep -q "^WEASEL-OK"'
+  check "T182.4 resolver reuse (zero resolver change) + the changed base: never widening to _start, surviving late acceptance, rewritten on re-detach, stamp-mismatch = missing, gate_entry wins after reattach" \
+    'bash "'"$DTCH"'" resolver 2>&1 | grep -q "^RESOLVER-OK" && bash "'"$DTCH"'" base 2>&1 | grep -q "^BASE-OK"'
+  check "T182.5 lint runnables: partial fields / non-null entry / non-gate_exit detached_from / empty timestamp / reserved gate names / unsafe ids — non-empty identical errors; a well-formed record clean" \
+    'bash "'"$DTCH"'" lint 2>&1 | grep -q "^LINT-OK"'
+  check "T182.6 teeth: each detach guard stripped from a copy flips its named check red for the right reason (--selftest)" \
+    'bash "'"$DTCH"'" --selftest 2>&1 | grep -q "^DETACH-SELFTEST-OK"'
+else
+  echo "  (python3 absent — T182 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

@@ -15,6 +15,29 @@ from . import doctor as doc
 from . import protocol as proto
 
 
+def _detach_warn(events, gv, gate):
+    """The weasel-vector loudness for `hb detach` — PER-CHANNEL liveness (a merged last-verdict
+    stream under-fires on the refuted steady state: review_failed, then the gate re-run and
+    det-passed with the review still owed — a plan-refuter catch): a live gate_failed has no later
+    gate_passed for THAT gate; a live review_failed has no later review_passed (a later gate_passed
+    does NOT clear it). Plus the regate family: a blocking marker, an unanswered declare in the log,
+    and the stale-rearm window. Twin: hb.js detachWarn."""
+    gf = rf = False
+    for e in events:
+        if e.get("gate") != gate:
+            continue
+        ev = e.get("event")
+        if ev == "gate_failed":
+            gf = True
+        elif ev == "gate_passed":
+            gf = False
+        elif ev == "review_failed":
+            rf = True
+        elif ev == "review_passed":
+            rf = False
+    return gf or rf or st.regate_blocks(gv) is not None or st.unanswered_regate(events, gate) or st.stale_rearm(events, gate)
+
+
 def _hbdir(args):
     d = getattr(args, "dir", None)
     if d:
@@ -57,6 +80,8 @@ def main(argv=None):
     p = sub.add_parser("refuters"); p.add_argument("rest", nargs=argparse.REMAINDER); _add_dir(p)
     p = sub.add_parser("refute-prompt"); p.add_argument("gate"); p.add_argument("--json", action="store_true"); p.add_argument("--free", action="store_true"); _add_dir(p)
     p = sub.add_parser("regate"); p.add_argument("id"); p.add_argument("--reason", default=None); p.add_argument("--rearm", action="store_true"); p.add_argument("--artifact"); p.add_argument("--model"); _add_dir(p)
+    p = sub.add_parser("detach"); p.add_argument("id"); p.add_argument("--reason", default=None); _add_dir(p)
+    p = sub.add_parser("reattach"); p.add_argument("id"); _add_dir(p)
     p = sub.add_parser("park"); p.add_argument("id"); p.add_argument("--reason", default=""); _add_dir(p)
     p = sub.add_parser("unpark"); p.add_argument("id"); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
@@ -260,6 +285,82 @@ def main(argv=None):
         print(f"   criteria snapshotted (prev_criteria) — {gate} now REFUSES evaluation and acceptance (fail-closed).")
         print("   Next: 1. edit the criteria in .hb/dag.json   2. re-audit: hb audit")
         print(f"         3. a DIFFERENT actor rearms with evidence: hb regate {gate} --rearm --artifact <findings-file>")
+        return 0
+    elif args.cmd == "detach":
+        # Retract a phase's DEPENDENCY CLAIM (node twin: hb.js detach): gate_entry → null — the
+        # resolver's EXISTING unlocked semantics — recorded, loud, reversible, write-locked.
+        import re as _re
+        from . import anchors as anchmod
+        dagpath = Path(hb) / "dag.json"
+        reason = (args.reason or "").strip()
+        if not reason: sys.stderr.write("detach: a reason is required — why is the dependency claim no longer true?\n"); return 1   # detach-guard: validate
+        actor = (os.environ.get("HB_ACTOR") or "").strip()
+        if not actor or actor.lower() == "unknown": sys.stderr.write("detach: set HB_ACTOR to the reviser's identity\n"); return 1   # detach-guard: validate
+        dag0 = st.read_dag(hb)
+        t0 = next((p for p in (dag0.get("phases") or []) if p.get("id") == args.id), None) \
+            or next((p for p in (dag0.get("phases") or []) if p.get("gate_exit") == args.id), None)
+        warn = False
+        if t0 and t0.get("gate_entry"): warn = _detach_warn(st.read_events(hb), (dag0.get("gates") or {}).get(t0["gate_entry"]) or {}, t0["gate_entry"])   # detach-guard: warn
+
+        def _detach_locked():
+            dag = st.read_dag(hb)
+            phases = dag.get("phases") or []
+            t = next((p for p in phases if p.get("id") == args.id), None) \
+                or next((p for p in phases if p.get("gate_exit") == args.id), None)
+            if t is None:
+                return f"detach: unknown phase or gate: {args.id}"
+            if not _re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", str(t["id"])): return f"detach: phase id '{t['id']}' is not usable as an anchor file name — rename the phase first"   # detach-guard: validate
+            if t["id"] in st.project(st.read_events(hb), dag)["completed_phases"]: return f"detach: {t['id']} is already complete — a satisfied dependency has nothing to unlock"   # detach-guard: validate
+            if not t.get("gate_entry"): return (f"detach: {t['id']} is already detached (from {t['detached_from']}) — reverse with: hb reattach {t['id']}" if "detached_from" in t else f"detach: {t['id']} has no gate_entry — nothing to detach")   # detach-guard: validate
+            frm = t["gate_entry"]
+            at = st.now_iso()
+            t["detached_from"] = frm
+            t["detached_reason"] = reason
+            t["detached_by"] = actor
+            t["detached_at"] = at
+            t["gate_entry"] = None
+            dagpath.write_text(json.dumps(dag, indent=2))
+            st.append_event(hb, {"event": "phase_detached", "phase": t["id"], "from": frm, "reason": reason})   # audit-only
+            st.reproject(hb)
+            return {"id": t["id"], "from": frm, "at": at}
+        res = st.with_wlock(hb, _detach_locked)   # locked check-then-write (teeth: the 6-way race in tests/detach.sh)
+        if isinstance(res, str):
+            sys.stderr.write(res + "\n"); return 1
+        try: anchmod.write_anchor(hb, f"_detach_{res['id']}", extra={"detached_at": res["at"]})   # detach-guard: anchor — the honest change base
+        except OSError as e: sys.stderr.write(f"⚠ detach anchor for {res['id']} not recorded: {e} — change reports will widen to _start\n")   # detach-guard: anchor
+        print(f"⟂ detached {res['id']} from {res['from']} (by {actor}): {reason}")
+        print(f"   the dependency claim is RETRACTED — {res['id']} is unlocked; re-audit the plan: hb audit")
+        print(f"   reverse with: hb reattach {res['id']}")
+        if warn:
+            print(f"   ⚠ {res['from']} is failing, refuted or under revision — the claim is REMOVED, not satisfied: "
+                  f"this does not unblock or accept {res['from']}; the reason is on record.")
+        return 0
+    elif args.cmd == "reattach":
+        dagpath = Path(hb) / "dag.json"
+
+        def _reattach_locked():
+            dag = st.read_dag(hb)
+            phases = dag.get("phases") or []
+            t = next((p for p in phases if p.get("id") == args.id), None) \
+                or next((p for p in phases if p.get("gate_exit") == args.id), None)
+            if t is None:
+                return f"reattach: unknown phase or gate: {args.id}"
+            if "detached_from" not in t:
+                return f"reattach: {t['id']} is not detached"
+            to = t["detached_from"]
+            is_exit = any(p.get("gate_exit") == to for p in phases)   # detach-guard: reattach — a defined-but-orphaned gate would lock the phase forever
+            if to not in (dag.get("gates") or {}) or not is_exit: return f"reattach: {to} is " + ("no longer defined" if to not in (dag.get("gates") or {}) else "no phase's gate_exit") + f" — restoring it would lock {t['id']} forever (the lint 'phase locked forever' brick); fix the dag first"   # detach-guard: reattach
+            t["gate_entry"] = to
+            for k in ("detached_from", "detached_reason", "detached_by", "detached_at"):
+                t.pop(k, None)
+            dagpath.write_text(json.dumps(dag, indent=2))
+            st.append_event(hb, {"event": "phase_reattached", "phase": t["id"], "to": to})   # audit-only
+            st.reproject(hb)
+            return {"id": t["id"], "to": to}
+        res = st.with_wlock(hb, _reattach_locked)   # locked read-modify-write (teeth: the races case)
+        if isinstance(res, str):
+            sys.stderr.write(res + "\n"); return 1
+        print(f"▶ reattached {res['id']} to {res['to']} — the dependency claim is restored; re-audit before running: hb audit")
         return 0
     elif args.cmd in ("park", "unpark"):
         # The CLI path for retiring a phase — no hand-editing, no deletion (deleting a gate

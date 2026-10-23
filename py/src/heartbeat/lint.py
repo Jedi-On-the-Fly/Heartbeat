@@ -1,4 +1,5 @@
 """Static DAG validation — ported from the node hb-lint.js with the same rules."""
+import json
 import re
 
 PLACEHOLDER_MARKERS = [
@@ -66,6 +67,7 @@ def lint(dag):
     _check_gate_artifacts(dag, warnings)
     _check_constraints(dag, errors)
     _check_regate(dag, errors)   # regate-guard
+    _check_detach(dag, errors)   # detach-guard
     return {"errors": errors, "warnings": warnings}
 
 
@@ -102,6 +104,46 @@ def _check_regate(dag, errors):
             w = r["rearm"]
             if not isinstance(w, dict) or not all(_blank_free(w.get(k)) for k in ("actor", "artifact", "sha256")):
                 errors.append(f"[{g}] regate.rearm must be an object with non-empty actor, artifact and sha256 strings")
+
+
+_DETACH_SAFE_ID = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
+
+
+def _check_detach(dag, errors):
+    """A phase's detach record (written by `hb detach`): the four fields together, gate_entry null
+    while they stand, detached_from a defined gate that is some phase's gate_exit (a bare 'defined'
+    restore would re-create the 'phase locked forever' resolver brick), the phase id usable as an
+    anchor file name, and gate ids matching ^_start$ / ^_detach_ RESERVED for the anchors
+    namespace. Twin: hb-lint.js checkDetach (messages verbatim)."""
+    def _blank_free(s):
+        return isinstance(s, str) and bool(s.strip(_ASCII_WS))
+    gates = dag.get("gates") or {}
+    for g in gates:
+        # exact equality + prefix, NOT a regex: re.match's $ matches before a trailing newline and
+        # JS's does not, so the twin regexes diverged on a gate named "_start\n" (a refuter fuzz catch)
+        if g == "_start" or str(g).startswith("_detach_"):
+            errors.append(f"[{g}] gate ids matching ^_start$ or ^_detach_ are reserved for the anchors namespace — rename the gate")
+    exits = {p.get("gate_exit") for p in (dag.get("phases") or []) if p.get("gate_exit")}
+    fields = ["detached_from", "detached_reason", "detached_by", "detached_at"]
+    for p in (dag.get("phases") or []):
+        has = [k for k in fields if k in p]
+        if not has:
+            continue
+        if len(has) < len(fields):
+            errors.append(f"[{p.get('id')}] detach fields are partial ({', '.join(has)}) — a detach records detached_from, detached_reason, detached_by and detached_at together")
+            continue
+        if p.get("gate_entry") is not None:
+            errors.append(f"[{p.get('id')}] detach fields alongside a non-null gate_entry — a half-reattach; reattach properly or clear the fields")
+        if not _blank_free(p.get("detached_from")) or p.get("detached_from") not in gates or p.get("detached_from") not in exits:
+            errors.append(f"[{p.get('id')}] detached_from must name a defined gate that is some phase's gate_exit (got {json.dumps(p.get('detached_from'), ensure_ascii=False, separators=(',', ':'))})")
+        if not _blank_free(p.get("detached_reason")):
+            errors.append(f"[{p.get('id')}] detached_reason must be a non-empty string")
+        if not _blank_free(p.get("detached_by")):
+            errors.append(f"[{p.get('id')}] detached_by must be a non-empty string")
+        if not _blank_free(p.get("detached_at")):
+            errors.append(f"[{p.get('id')}] detached_at must be a non-empty string timestamp")
+        if not isinstance(p.get("id"), str) or not _DETACH_SAFE_ID.fullmatch(p["id"]):
+            errors.append(f"[{p.get('id')}] a detached phase id must be usable as an anchor file name ([A-Za-z0-9_][A-Za-z0-9_.-]*)")
 
 
 def _check_constraints(dag, errors):
