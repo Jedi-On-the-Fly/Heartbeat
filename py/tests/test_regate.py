@@ -349,3 +349,214 @@ def test_regate_executor_gate_path_escalates(tmp_path, monkeypatch, capsys):
         "the executor's refused gate run appended a gate event"
     assert any("hb-exec" in ln.lower() and "regate" in ln.lower() for ln in capsys.readouterr().out.splitlines()), \
         "the executor swallowed the gate-path refusal (no HB-EXEC escalation line names the regate)"
+
+
+# ═══ RG2: rearm — evidence-gated re-grounding + stale-pass invalidation ═══════
+
+def rearm_fixture(tmp_path, monkeypatch, declare_gate="GATE_B"):
+    """Review-owed GATE_B (provenanced pass), declared, criteria revised, evidence on disk."""
+    hb = review_owed_fixture(tmp_path, monkeypatch)   # declares GATE_B as alice
+    d = json.loads((hb / "dag.json").read_text())
+    d["gates"]["GATE_B"]["criteria"] = [{"id": "rev1", "desc": "revised", "cmd": "python3 -c 'assert 2+2==4'"}]
+    (hb / "dag.json").write_text(json.dumps(d))
+    (tmp_path / "m.txt").write_text("the real work of b1")
+    (tmp_path / "evidence.md").write_text(
+        "Rearm evidence for GATE_B (task b1): the volume premise died; the revised criterion was run by hand.")
+    return hb
+
+
+def rearm(hb, actor="bob", artifact="evidence.md", model=None, monkeypatch=None):
+    monkeypatch.setenv("HB_ACTOR", actor)
+    argv = ["regate", "GATE_B", "--rearm", "--artifact", artifact, "--dir", str(hb)]
+    if model:
+        argv += ["--model", model]
+    return run_cli(argv)
+
+
+def test_regate_rearm_refusal_matrix(tmp_path, monkeypatch, capsys):
+    hb = rearm_fixture(tmp_path, monkeypatch)
+    assert rearm(hb, actor="ALICE", monkeypatch=monkeypatch) != 0, "the declarer rearmed their own revision (case-varied)"
+    assert "different" in capsys.readouterr().err.lower()
+    (tmp_path / "thin.md").write_text("too thin")
+    assert rearm(hb, artifact="thin.md", monkeypatch=monkeypatch) != 0, "a thin artifact was accepted"
+    (tmp_path / "filler.md").write_text("Fifty characters of generic filler that references nothing real at all.")
+    assert rearm(hb, artifact="filler.md", monkeypatch=monkeypatch) != 0, "an artifact citing nothing was accepted"
+    assert rearm(hb, artifact="missing.md", monkeypatch=monkeypatch) != 0, "a missing artifact was accepted"
+    d = json.loads((hb / "dag.json").read_text())
+    d["gates"]["GATE_B"]["criteria"] = [{"id": "h1", "desc": "hollow", "cmd": "true"}]
+    (hb / "dag.json").write_text(json.dumps(d))
+    capsys.readouterr()
+    assert rearm(hb, monkeypatch=monkeypatch) != 0, "a HOLLOW revision was rearmed"
+    assert "audit" in capsys.readouterr().err.lower()
+    m = marker(hb, "GATE_B")
+    assert m["pending"] is True and "rearm" not in m, "a refused rearm touched the record"
+    assert "gate_rearmed" not in ev_names(hb)
+    # no pending regate at all
+    hb2 = review_owed_fixture(tmp_path / "np", monkeypatch, declare_now=False) if (tmp_path / "np").mkdir() is None else None
+    (tmp_path / "np" / "evidence.md").write_text("Rearm evidence for GATE_B (task b1): premise died, long enough.")
+    monkeypatch.setenv("HB_ACTOR", "bob")
+    assert run_cli(["regate", "GATE_B", "--rearm", "--artifact", "evidence.md", "--dir", str(hb2)]) != 0, \
+        "rearm with NO pending regate accepted"
+
+
+def test_regate_rearm_success_provenance(tmp_path, monkeypatch):
+    import hashlib
+    hb = rearm_fixture(tmp_path, monkeypatch)
+    assert rearm(hb, model="sonnet", monkeypatch=monkeypatch) == 0
+    m = marker(hb, "GATE_B")
+    assert m["pending"] is False
+    assert m["rearm"]["actor"] == "bob" and m["rearm"]["model"] == "sonnet"
+    assert m["rearm"]["artifact"] == "reviews/GATE_B.regate.md"
+    stored = (hb / "reviews" / "GATE_B.regate.md").read_bytes()
+    assert stored == (tmp_path / "evidence.md").read_bytes()
+    ev = [e for e in events(hb) if e.get("event") == "gate_rearmed"]
+    assert len(ev) == 1 and ev[0]["sha256"] == hashlib.sha256(stored).hexdigest() == m["rearm"]["sha256"]
+    assert run_cli(["gate", "GATE_B", "--dir", str(hb)]) == 0, "the rearmed gate did not evaluate"
+
+
+def test_regate_stale_pass_rule_and_synthetic_import(tmp_path, monkeypatch):
+    hb = rearm_fixture(tmp_path, monkeypatch)
+    assert rearm(hb, monkeypatch=monkeypatch) == 0
+    from heartbeat import review_policy
+    monkeypatch.setenv("HB_ACTOR", "rev")
+    (tmp_path / "findings.md").write_text(
+        "I tried to refute GATE_B (task b1): probed the revised criterion.\nHOLES: none\n")
+    for v in ("pass", "fail", "free"):
+        rc, out, err = review_policy.accept_review(hb, "GATE_B", v, artifact="findings.md")
+        assert rc != 0, "review %s accepted over a STALE pre-rearm pass" % v
+        assert any(w in (out + err).lower() for w in ("stale", "fresh pass", "re-run")), (out, err)
+    # a bare synthetic pass (what hb import writes) must NOT unlock
+    with open(hb / "events.jsonl", "a") as f:
+        f.write(json.dumps({"event": "gate_passed", "gate": "GATE_B"}) + "\n")
+    rc, out, err = review_policy.accept_review(hb, "GATE_B", "fail", note="x")
+    assert rc != 0, "a synthetic unprovenanced pass unlocked the verdicts"
+    # a PROVENANCED fresh pass unlocks
+    assert run_cli(["gate", "GATE_B", "--dir", str(hb)]) == 0
+    rc, out, err = review_policy.accept_review(hb, "GATE_B", "fail", note="a finding after the fresh pass")
+    assert rc == 0, "a verdict after a fresh provenanced pass was refused: %s" % err
+    assert "review_failed" in ev_names(hb)
+
+
+def test_regate_cycle_start_boundary(tmp_path, monkeypatch):
+    from heartbeat import constraints as cons, state as stt
+    hb = review_owed_fixture(tmp_path, monkeypatch, declare_now=False)
+    (tmp_path / "m.txt").write_text("the real work of b1")
+    (tmp_path / "g.json").write_text(json.dumps(
+        [{"id": "G1", "claim": "m.txt holds b1 work", "subjects": ["m.txt"], "violation": "absent"}]))
+    monkeypatch.setenv("HB_ACTOR", "author")
+    assert run_cli(["constraints", "GATE_B", "--record", str(tmp_path / "g.json"), "--dir", str(hb)]) == 0
+    declare(hb, target="GATE_B", monkeypatch=monkeypatch)
+    d = json.loads((hb / "dag.json").read_text())
+    d["gates"]["GATE_B"]["criteria"] = [{"id": "rev1", "desc": "revised", "cmd": "python3 -c 'assert 1'"}]
+    (hb / "dag.json").write_text(json.dumps(d))
+    (tmp_path / "evidence.md").write_text("Rearm evidence for GATE_B (task b1): premise died; criterion re-run.")
+    assert rearm(hb, monkeypatch=monkeypatch) == 0
+    assert run_cli(["gate", "GATE_B", "--dir", str(hb)]) == 0   # fresh pass
+    dag = stt.read_dag(hb)
+    pending, recorded, _ev, start = cons.review_cycle_full(str(hb), dag, "GATE_B")
+    assert pending and not recorded, "the pre-declare constraint set survived the rearm"
+    _p2, r2, _e2 = cons.review_cycle(str(hb), dag, "GATE_B")
+    assert r2 == recorded, "review_cycle and review_cycle_full disagree (two start computations)"
+    monkeypatch.setenv("HB_ACTOR", "author2")
+    assert run_cli(["constraints", "GATE_B", "--record", str(tmp_path / "g.json"), "--dir", str(hb)]) == 0, \
+        "a fresh set was not recordable after the rearm (write-once must apply afresh)"
+
+
+def test_regate_executor_stale_resume(tmp_path, monkeypatch, capsys):
+    hb = rearm_fixture(tmp_path, monkeypatch)
+    assert rearm(hb, monkeypatch=monkeypatch) == 0
+    from heartbeat import executor
+    calls = []
+    monkeypatch.setattr(executor, "dispatch", lambda *a, **k: calls.append(a) or {"refuted": False, "findings": "x" * 60})
+    bounded_tick(monkeypatch)
+    executor.run(str(hb))
+    assert calls == [], "the executor dispatched a refuter over a STALE pre-rearm pass"
+    assert not any(n in ("review_passed", "review_failed", "free_review_recorded") for n in ev_names(hb))
+    out = capsys.readouterr().out
+    assert any("hb-exec" in ln.lower() and ("stale" in ln.lower() or "re-run" in ln.lower() or "revised" in ln.lower())
+               for ln in out.splitlines()), "no loud stale-window escalation: %r" % out
+
+
+def test_regate_doctor_rearm_states(tmp_path, monkeypatch):
+    from heartbeat import doctor as doc
+    hb = rearm_fixture(tmp_path, monkeypatch)
+    # pending → NOTE
+    r = doc.doctor(str(hb))
+    assert any("regate" in n.lower() for n in r["notes"]), "no pending-regate note"
+    assert not any("regate" in p.lower() for p in r["problems"]), "a pending regate alone must not be a problem"
+    # rearm → artifact rot is a PROBLEM
+    assert rearm(hb, monkeypatch=monkeypatch) == 0
+    art = hb / "reviews" / "GATE_B.regate.md"
+    good = art.read_bytes()
+    art.unlink()
+    assert any("regate" in p.lower() for p in doc.doctor(str(hb))["problems"]), "missing rearm artifact not flagged"
+    art.write_bytes(good + b"x")
+    assert any("regate" in p.lower() for p in doc.doctor(str(hb))["problems"]), "byte-changed rearm artifact not flagged"
+    art.write_bytes(good)
+    assert not any("regate" in p.lower() for p in doc.doctor(str(hb))["problems"])
+    # marker cross-check: the log attests a PENDING regate (gate_regated unanswered), the dag lost
+    # the marker (e.g. restored from backup) — a problem on a fresh fixture, since a rearm ANSWERS
+    # the declare and ends the divergence window
+    (tmp_path / "sync").mkdir()
+    hb2 = review_owed_fixture(tmp_path / "sync", monkeypatch)   # declares GATE_B (pending)
+    d = json.loads((hb2 / "dag.json").read_text())
+    d["gates"]["GATE_B"].pop("regate", None)
+    (hb2 / "dag.json").write_text(json.dumps(d))
+    assert any("regate" in p.lower() for p in doc.doctor(str(hb2))["problems"]), \
+        "a log-attested pending regate with no dag marker is not a problem"
+
+
+def test_regate_hand_cleared_marker_cannot_launder(tmp_path, monkeypatch):
+    """The exploit a refuter reproduced: setting regate.pending=false by hand skipped the whole
+    rearm bar. The log is truth — an UNANSWERED gate_regated closes the verdict window whatever
+    the marker says, and doctor flags the cleared marker."""
+    hb = rearm_fixture(tmp_path, monkeypatch)   # declared; criteria revised
+    d = json.loads((hb / "dag.json").read_text())
+    d["gates"]["GATE_B"]["regate"]["pending"] = False   # the hand edit
+    (hb / "dag.json").write_text(json.dumps(d))
+    assert run_cli(["gate", "GATE_B", "--dir", str(hb)]) == 0   # eval re-enabled — acceptance must still refuse
+    from heartbeat import review_policy, doctor as doc
+    monkeypatch.setenv("HB_ACTOR", "rev")
+    (tmp_path / "findings.md").write_text(
+        "I tried to refute GATE_B (task b1): probed the revised criterion.\nHOLES: none\n")
+    for v in ("pass", "fail"):
+        rc, out, err = review_policy.accept_review(hb, "GATE_B", v, artifact="findings.md")
+        assert rc != 0, "review %s ACCEPTED over a hand-cleared marker (the exploit)" % v
+        assert "unanswered" in (out + err).lower()
+    assert not any(n in ("review_passed", "review_failed") for n in ev_names(hb))
+    assert any("cleared marker" in p.lower() or "fabricated" in p.lower()
+               for p in doc.doctor(str(hb))["problems"]), "doctor silent over the hand-cleared marker"
+
+
+def test_regate_executor_writers_hold_in_stale_window(tmp_path, monkeypatch, capsys):
+    """A mid-dispatch declare+rearm pair leaves pending=false but a stale window — the executor's
+    direct review_failed writer must still refuse (the log is truth, not the marker)."""
+    dag = regate_dag(tmp_path)
+    del dag["gates"]["GATE_B"]["review"]["constraints"]
+    hb = review_owed_fixture(tmp_path, monkeypatch, dag=dag, declare_now=False)
+    (tmp_path / "evidence.md").write_text(
+        "Rearm evidence for GATE_B (task b1): the volume premise died; criterion re-run by hand.")
+    from heartbeat import executor
+    raced = {"done": False}
+
+    def racing_dispatch(cfg, mode, payload, hbdir, task_id, cwd=None, model=None, provider=None):
+        if mode != "refute":
+            return {"ok": True, "summary": "x"}
+        if not raced["done"]:
+            raced["done"] = True
+            monkeypatch.setenv("HB_ACTOR", "racer")
+            assert run_cli(["regate", "GATE_B", "--reason", "mid-dispatch death", "--dir", str(hb)]) == 0
+            d2 = json.loads((hb / "dag.json").read_text())
+            d2["gates"]["GATE_B"]["criteria"] = [{"id": "rev1", "desc": "revised", "cmd": "python3 -c 'assert 1'"}]
+            (hb / "dag.json").write_text(json.dumps(d2))
+            monkeypatch.setenv("HB_ACTOR", "racer2")
+            assert run_cli(["regate", "GATE_B", "--rearm", "--artifact", "evidence.md", "--dir", str(hb)]) == 0
+        return {"refuted": True, "findings": "raced findings about GATE_B and b1 after a mid-dispatch rearm"}
+    monkeypatch.setattr(executor, "dispatch", racing_dispatch)
+    bounded_tick(monkeypatch)
+    executor.run(str(hb))
+    assert raced["done"], "the race never ran"
+    assert "review_failed" not in ev_names(hb), \
+        "the executor landed a verdict in the stale window (pending=false but no fresh pass)"
+    assert any("hb-exec" in ln.lower() and ("stale" in ln.lower() or "regate" in ln.lower())
+               for ln in capsys.readouterr().out.splitlines())

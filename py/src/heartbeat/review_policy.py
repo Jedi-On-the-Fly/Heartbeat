@@ -42,6 +42,9 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
     _gv0 = (_dag0.get("gates") or {}).get(gate) or next(((_dag0.get("gates") or {}).get(p.get("gate_exit")) for p in (_dag0.get("phases") or []) if p.get("id") == gate and p.get("gate_exit")), None)   # regate-guard: a phase id must not bypass the guard (refuter catch)
     _rg = st.regate_blocks(_gv0)   # regate-guard: fail-closed — a malformed record blocks too
     if _rg is not None: return 1, "", f"review {verdict} refused on {gate}: the gate is being revised (regate pending, by {_rg.get('actor', '?')}: {_rg.get('reason', '')}) — a DIFFERENT actor rearms first: hb regate {gate} --rearm --artifact <findings-file>; a fresh pass of the revised criteria is then owed before any verdict."   # regate-guard
+    _rname = gate if (_dag0.get("gates") or {}).get(gate) else next((p.get("gate_exit") for p in (_dag0.get("phases") or []) if p.get("id") == gate and p.get("gate_exit")), gate)   # regate-guard — shared by the log-truth and stale-pass guards below
+    if st.unanswered_regate(st.read_events(hb), _rname): return 1, "", f"review {verdict} refused on {gate}: the event log attests an UNANSWERED revision of {_rname} (gate_regated with no gate_rearmed) — a hand-edited dag marker cannot clear it: a DIFFERENT actor rearms (hb regate {_rname} --rearm --artifact <findings-file>), then a fresh pass is owed."   # regate-guard: log-truth
+    if st.stale_rearm(st.read_events(hb), _rname): return 1, "", f"review {verdict} refused on {gate}: the gate was revised and re-armed but its last provenanced pass predates the rearm (stale evidence) — re-run the revised gate first: hb gate {_rname}; a fresh pass is owed before any verdict."   # regate-guard: stale-pass
 
     if verdict == "fail":
         ev = {"event": "review_failed", "gate": gate, "model": model}
@@ -62,8 +65,8 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
         body = ap.read_bytes().decode("utf-8", errors="replace")   # no universal-newline translation (== node)
     except OSError as e:
         return 1, "", f"{vw}: cannot read artifact {artifact} ({e})"
-    if len(body.strip()) < 40:
-        return 1, "", (f"{vw}: artifact {artifact} is too thin ({len(body.strip())} chars) "
+    if st.substantive_len(body) < 40:
+        return 1, "", (f"{vw}: artifact {artifact} is too thin ({st.substantive_len(body)} chars) "
                        "to be a real refutation — a rubber-stamp is not a review.")
     dag = st.read_dag(hb)
     phase = next((p for p in (dag.get("phases") or []) if p.get("gate_exit") == gate), None)
@@ -150,7 +153,7 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
     (revdir / f"{gate}.md").write_text(body, encoding="utf-8")
     from . import gate as _g
     ev = {"event": "review_passed", "gate": gate, "model": model, "artifact": f"reviews/{gate}.md",
-          "artifact_chars": len(body.strip()), "cited": cited, "reviewer": reviewer,
+          "artifact_chars": st.substantive_len(body), "cited": cited, "reviewer": reviewer,
           "git": {"autocommit": _g.git_policy(hb)}}
     if answers is not None:
         ev["answers"] = answers
@@ -168,7 +171,7 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
     _gate._git_snapshot(hb, gate)
     from . import anchors
     anchors.try_anchor(hb, gate)   # acceptance anchor — after the restore point, so its commit is the accepted HEAD
-    return 0, (f"review pass {gate} (backed by reviews/{gate}.md, {len(body.strip())} chars, "
+    return 0, (f"review pass {gate} (backed by reviews/{gate}.md, {st.substantive_len(body)} chars, "
                f"cites: {', '.join(cited[:3])})"), ""
 
 

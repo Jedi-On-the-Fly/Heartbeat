@@ -471,8 +471,9 @@ import json; p='$P/.hb/dag.json'; d=json.load(open(p)); d['gates']['GATE_A']['re
   declare_node "$P" GATE_B
   printf '[{"id":"G1","claim":"x behaves","subjects":["m.txt"],"violation":"it does not"}]' > "$P/g.json"
   mutate "$P/.hb/hb.js" "regate-guard: constraints"
+  mutate "$P/.hb/hb.js" "regate-guard: log-truth"   # the constraints verb is DOUBLE-guarded (marker + log) — strip both to prove the family's teeth
   ( cd "$P" && HB_ACTOR=author node .hb/hb.js constraints GATE_B --record g.json >/dev/null 2>&1 )
-  [ "$(evcount "$P" constraints_recorded)" != 0 ] || fail "selftest m11: stripping the node constraints guard did not let a record land (mutation not load-bearing — check the fixture grounds m.txt)"
+  [ "$(evcount "$P" constraints_recorded)" != 0 ] || fail "selftest m11: stripping the node constraints guards did not let a record land (mutation not load-bearing — check the fixture grounds m.txt)"
   echo "REGATE-FAIL-CLOSED-SELFTEST-OK"
 }
 

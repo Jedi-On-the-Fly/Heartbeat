@@ -30,24 +30,33 @@ def phase_doers(dag, gate, events):
             and e.get("actor") and e.get("actor") != "unknown"}
 
 
+def _cycle_start(events, gate):
+    """The cycle START — the ONE definition every consumer shares (recorded, the free-review
+    check): the later of the gate's last review verdict and its last gate_rearmed. A rearm starts
+    a cycle because gate-time constraints and free reviews were authored against the pre-revision
+    criteria — nothing recorded before the rearm may satisfy the acceptance after it.
+    Twin: hb.js reviewCycle."""
+    return max((i for i, e in enumerate(events)
+                if e.get("event") in ("review_failed", "review_passed", "gate_rearmed") and e.get("gate") == gate), default=-1)   # regate-guard: cycle-start
+
+
 def review_cycle(hbdir, dag, gate):
-    """A cycle starts after the gate's last REVIEW VERDICT — re-running the gate while the review is
-    owed (a new gate_passed) must NOT start a new cycle, or a second author could re-record a weaker set."""
+    """A cycle starts after the gate's last REVIEW VERDICT or gate_rearmed (see _cycle_start) —
+    re-running the gate while the review is owed (a new gate_passed) must NOT start a new cycle,
+    or a second author could re-record a weaker set."""
     events = st.read_events(hbdir)
     pending = gate in (st.project(events, dag).get("pending_reviews") or [])
-    start = max((i for i, e in enumerate(events)
-                 if e.get("event") in ("review_failed", "review_passed") and e.get("gate") == gate), default=-1)
+    start = _cycle_start(events, gate)
     recorded = any(i > start and e.get("event") == "constraints_recorded" and e.get("gate") == gate
                    for i, e in enumerate(events))
     return pending, recorded, events
 
 
 def review_cycle_full(hbdir, dag, gate):
-    """(pending, recorded, events, start) — start = index of the gate's last review verdict (-1)."""
+    """(pending, recorded, events, start) — start from the SAME single computation as
+    review_cycle (_cycle_start); a second independent start was a latent divergence."""
     pending, recorded, events = review_cycle(hbdir, dag, gate)
-    start = max((i for i, e in enumerate(events)
-                 if e.get("event") in ("review_failed", "review_passed") and e.get("gate") == gate), default=-1)
-    return pending, recorded, events, start
+    return pending, recorded, events, _cycle_start(events, gate)
 
 
 SAFE_GATE_ID = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
@@ -171,6 +180,7 @@ def record(hbdir, dag, gate, file, model=None):
         return 1, "", f"hb constraints --record: gate id '{gate}' is not usable as a file name"
     _rg = st.regate_blocks((dag.get("gates") or {}).get(gate))   # regate-guard: fail-closed — a malformed record blocks too
     if _rg is not None: return 1, "", f"hb constraints --record refused on {gate}: the gate is being revised (regate pending, by {_rg.get('actor', '?')}: {_rg.get('reason', '')}) — a DIFFERENT actor rearms first: hb regate {gate} --rearm --artifact <findings-file>; constraints are authored against the criteria that will be enforced."   # regate-guard
+    if st.unanswered_regate(st.read_events(hbdir), gate): return 1, "", f"hb constraints --record refused on {gate}: the event log attests an UNANSWERED revision (gate_regated with no gate_rearmed) — a hand-edited dag marker cannot clear it; rearm first."   # regate-guard: log-truth
     actor = os.environ.get("HB_ACTOR")
     norm = lambda a: str(a).strip().lower()  # noqa: E731
     try:

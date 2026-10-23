@@ -291,7 +291,7 @@ function doctor() {
       let body = null;
       try { body = fs.readFileSync(path.join(HB_DIR, rel), 'utf8'); } catch (x) {}
       if (body == null) problems.push(`${g} review_passed but backing artifact ${rel} is missing — the refutation can no longer be inspected (Sev-1 rot)`);
-      else if (body.trim().length < 40) problems.push(`${g} review_passed but backing artifact ${rel} is empty/thin — not a real refutation`);
+      else if (substantiveLen(body) < 40) problems.push(`${g} review_passed but backing artifact ${rel} is empty/thin — not a real refutation`);
     }
   }
 
@@ -367,6 +367,45 @@ function doctor() {
     }
   }
 
+  // regate: a pending revision is a NOTE (legitimate in-flight state); the rearm evidence must stay
+  // the pinned bytes; an ACCEPTED gate whose criteria were rearmed after its last provenanced pass
+  // carries STALE evidence; and the event log (truth) must agree with the dag marker — the documented
+  // dag_corrupted recovery restores dag.json from backup, which can silently drop a pending regate.
+  {
+    const evsR = readEvents();
+    for (const [g, gv] of Object.entries(gates)) {
+      const blk = regateBlocks(gv);
+      if (blk) notes.push(`${g} is being revised — regate pending (by ${blk.actor || '?'}: ${blk.reason || ''}); evaluation refuses until a DIFFERENT actor rearms`);
+    }
+    const lastRe = {};
+    for (const e of evsR) if (e.event === 'gate_rearmed') lastRe[e.gate] = e;
+    for (const [g, e] of Object.entries(lastRe)) {
+      const rel = e.artifact || `reviews/${g}.regate.md`;
+      let raw = null;
+      try { raw = fs.readFileSync(path.join(HB_DIR, rel)); } catch (x) {}
+      if (raw === null) problems.push(`${g} regate rearm artifact ${rel} is missing — the rearm evidence can no longer be inspected`);   // regate-guard: rearm-rot
+      else if (raw.toString('utf8').trim().length < 40) problems.push(`${g} regate rearm artifact ${rel} is empty/thin — not real rearm evidence`);   // regate-guard: rearm-rot
+      else if (e.sha256 && require('crypto').createHash('sha256').update(raw).digest('hex') !== e.sha256) problems.push(`${g} regate rearm artifact ${rel} changed since recording (sha256 mismatch) — the rearm evidence was altered`);   // regate-guard: rearm-rot
+    }
+    const accR = {};
+    for (const e of evsR) {
+      const rev = !!((gates[e.gate] || {}).review);
+      if ((e.event === 'review_passed' && rev) || (e.event === 'gate_passed' && !rev)) accR[e.gate] = true;
+      else if (e.event === 'review_failed') delete accR[e.gate];
+    }
+    for (const g of Object.keys(lastRe)) if (accR[g] && staleRearm(evsR, g)) problems.push(`${g} accepted but its criteria were rearmed after its last provenanced pass — STALE evidence: re-run the gate (bash .hb/gate.sh ${g})`);   // regate-guard: stale-accepted
+    const unanswered = {};
+    for (const e of evsR) { if (e.event === 'gate_regated') unanswered[e.gate] = true; else if (e.event === 'gate_rearmed') delete unanswered[e.gate]; }
+    for (const g of Object.keys(unanswered)) if (!(gates[g] && regateBlocks(gates[g]))) problems.push(`${g}: the event log attests a pending regate (gate_regated unanswered by any gate_rearmed) but dag.json carries ${gates[g] && Object.prototype.hasOwnProperty.call(gates[g], 'regate') ? 'a CLEARED marker (pending edited by hand?)' : 'no regate marker (restored from backup?)'} — re-declare and rearm properly, or investigate (the log is truth)`);   // regate-guard: marker-sync
+    for (const [g, gv] of Object.entries(gates)) {   // regate-guard: marker-sync — a rearmed marker must be backed by the event that pins it
+      const rmk = gv.regate;
+      if (rmk && typeof rmk === 'object' && !Array.isArray(rmk) && rmk.pending === false) {
+        const ePin = lastRe[g];
+        if (!ePin || ((rmk.rearm || {}).sha256 && ePin.sha256 && rmk.rearm.sha256 !== ePin.sha256)) problems.push(`${g}: the dag records a rearmed regate but the event log ${ePin ? 'pins different bytes (sha256 mismatch with gate_rearmed)' : 'has no gate_rearmed event'} — a fabricated rearm record (the log is truth)`);   // regate-guard: marker-sync
+      }
+    }
+  }
+
   // Recorded gate-time constraints must still be the bytes that were recorded (they are the review's
   // targets; an edit after recording silently moves them).
   {
@@ -394,20 +433,36 @@ function diagnose(reason) {
   const out = [];
   const P = s => out.push(s);
 
+  // A pending regate on a gate outranks the generic branch ABOUT THAT GATE: the generic recovery
+  // commands (gate.sh --check, run the refuter) are exactly what the perimeter refuses.
+  const regatedGates = Object.entries(dag.gates || {}).filter(([, gv]) => regateBlocks(gv)).map(([g]) => g);
+  const regateRecovery = (g) => {
+    const blk = regateBlocks((dag.gates || {})[g]) || {};
+    P(`  Gate: ${g} — being revised (regate pending, by ${blk.actor || '?'}: ${blk.reason || ''})`);
+    P('  Recover:');
+    P('   1. Edit the revised criteria in .hb/dag.json (if not already done).');
+    P('   2. Re-audit: node .hb/hb-audit.js .hb/dag.json');
+    P(`   3. A DIFFERENT actor rearms: node .hb/hb.js regate ${g} --rearm --artifact <findings-file>`);
+    P(`   4. Re-run the gate: bash .hb/gate.sh ${g} — a fresh pass is owed before any review verdict.`);
+  };
   if (!reason) {   // infer the most pressing blocker
     if ((state.gate && state.gate.errors) > 0) reason = 'gate_blocked';
     else if (doctor().problems.some(p => /no longer reproducible/.test(p))) reason = 'gate_rot';
     else if ((state.pending_reviews || []).length) reason = 'review_stuck';
     else if ((state.build_stuck_count || 0) >= 5) reason = 'build_stuck';
+    else if (regatedGates.length) reason = 'regate_pending';
     else { try { const { resolve } = require('./hb-next-task.js'); const r = resolve(state, dag, HB_DIR); if (r && r.type === 'deadlock') reason = 'deadlock'; } catch (e) {} }
   }
   P(`Diagnosis: ${reason || 'no blocker detected'}`);
   if (!reason) { P('  Not currently blocked. Run: node .hb/hb.js state'); return out.join('\n'); }
 
-  if (reason === 'gate_blocked') {
+  if (reason === 'regate_pending') {
+    for (const g of (regatedGates.length ? regatedGates : ['(none found — pass the gate id)'])) regateRecovery(g);
+  } else if (reason === 'gate_blocked') {
     let g = null, rf = null;
     for (let i = events.length - 1; i >= 0 && !g; i--) if (['gate_failed', 'gate_passed', 'review_failed'].includes(events[i].event)) { g = events[i].gate; if (events[i].event === 'review_failed') rf = events[i]; }
     if (!g) { const p = (dag.phases || []).find(p => !state.completed_phases.includes(p.id)); g = p && p.gate_exit; }
+    if (g && regateBlocks((dag.gates || {})[g])) { regateRecovery(g); return out.join('\n'); }
     P(`  Gate: ${g}`);
     if (rf) {   // the criteria passed; the adversarial review did not
       P('  Cause: review_failed — the criteria pass; the review refuted the phase (or could not run).');
@@ -455,6 +510,12 @@ function diagnose(reason) {
     P(`   3. If it is an orphan (started, never finished): node .hb/hb.js fail ${task || '<id>'}.`);
   } else if (reason === 'review_stuck') {
     const g = (state.pending_reviews || [])[0];
+    if (g && regateBlocks((dag.gates || {})[g])) { regateRecovery(g); return out.join('\n'); }
+    if (g && staleRearm(events, g)) {
+      P(`  Gate awaiting review: ${g} — revised and re-armed, but its last provenanced pass predates the rearm (stale evidence).`);
+      P(`  Recover: re-run the revised gate first — bash .hb/gate.sh ${g}; verdicts are refused until a fresh pass.`);
+      return out.join('\n');
+    }
     P(`  Gate awaiting review: ${g}`);
     P('  Recover:');
     P('   1. Spawn a skeptical sub-agent to REFUTE that the phase is done.');
@@ -603,11 +664,14 @@ function phaseDoers(dag, gate, events) {
 // The current review cycle of <gate>: pending (review owed) + whether a set was recorded in it. A
 // cycle starts after the gate's last REVIEW VERDICT — re-running the gate while the review is owed
 // (a new gate_passed) must NOT start a new cycle, or a second author could re-record a weaker set.
+// A gate_rearmed ALSO starts a cycle: gate-time constraints and free reviews were authored against
+// the pre-revision criteria, so nothing recorded before the rearm may satisfy the acceptance after
+// it (ONE start definition — everything that keys on the cycle moves together).
 function reviewCycle(dag, gate) {
   const events = readEvents();
   const pending = (project(events, dag).pending_reviews || []).includes(gate);
   let start = -1;
-  events.forEach((e, i) => { if ((e.event === 'review_failed' || e.event === 'review_passed') && e.gate === gate) start = i; });
+  events.forEach((e, i) => { if ((e.event === 'review_failed' || e.event === 'review_passed' || e.event === 'gate_rearmed') && e.gate === gate) start = i; });   // regate-guard: cycle-start
   const recorded = events.some((e, i) => i > start && e.event === 'constraints_recorded' && e.gate === gate);
   return { pending, recorded, events, start };
 }
@@ -743,6 +807,47 @@ function regateBlocks(gv) {
   return (r && typeof r === 'object' && !Array.isArray(r)) ? r : {};
 }
 
+// Substantive length with ONE explicit whitespace set (ASCII " \t\n\r\f\v" — the lint blankFree
+// precedent): JS trim() and python strip() disagree on ﻿ / \x85 / \x1c-\x1f, so a thin-artifact
+// boundary judged with the native trims DIVERGES between the runtimes — the same bytes accepted by
+// one and refused by the other (a refuter catch). Twin: state.substantive_len.
+function substantiveLen(s) {
+  const m = String(s).match(/^[ \t\n\r\f\v]*([\s\S]*?)[ \t\n\r\f\v]*$/);
+  // CODE POINTS, not UTF-16 units: python counts code points, and an astral character (emoji)
+  // must weigh the same on both runtimes or the thin boundary diverges (a refuter catch).
+  return [...(m ? m[1] : String(s))].length;
+}
+
+// True while the log attests an UNANSWERED revision: a gate_regated with no later gate_rearmed.
+// The event log is truth — a hand-cleared, hand-restored or fabricated dag marker must not launder
+// an acceptance past the rearm bar (a refuter catch: setting pending=false by hand skipped the
+// whole bar while doctor and lint stayed silent). Twin: state.unanswered_regate.
+function unansweredRegate(events, gate) {
+  let un = false;
+  for (const e of events) {
+    if (e.event === 'gate_regated' && e.gate === gate) un = true;
+    else if (e.event === 'gate_rearmed' && e.gate === gate) un = false;
+  }
+  return un;
+}
+
+// True when <gate> has a gate_rearmed with NO LATER provenanced gate_passed. "Provenanced" =
+// the criteria/runtime evidence fields a real evaluation stamps — `hb import`'s bare synthetic
+// {event:gate_passed, gate} never counts, so it cannot launder a revision into an acceptance.
+// Review verdicts and the executors refuse in this window: acceptance after a revision requires
+// a FRESH pass of the revised criteria. Twin: state.stale_rearm.
+function staleRearm(events, gate) {
+  let last = -1;
+  events.forEach((e, i) => { if (e.event === 'gate_rearmed' && e.gate === gate) last = i; });
+  if (last === -1) return false;
+  for (let i = last + 1; i < events.length; i++) {
+    const e = events[i];
+    if (e.event === 'gate_passed' && e.gate === gate &&
+        ((Array.isArray(e.criteria) && e.criteria.length) || e.runtime)) return false;
+  }
+  return true;
+}
+
 // A path shown to an agent: control characters (a newline in a file name) would let a doer forge
 // prompt sections, so such a path is rendered JSON-quoted. Twin: anchors.safe_path.
 function safePath(p) { return /[\x00-\x1f\x7f]/.test(p) ? JSON.stringify(p) : p; }
@@ -839,7 +944,7 @@ function composeAuthorPrompt(dag, gate) {
 // Exported BEFORE the CLI dispatch: refuter_profiles.js requires this module while hb.js is running
 // as the CLI (a circular require sees only what is already assigned).
 module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath, checkAnswers, checkHoles, subjectPath,
-  planConstraints, reviewCycle, composeAuthorPrompt, regateBlocks };
+  planConstraints, reviewCycle, composeAuthorPrompt, regateBlocks, staleRearm, substantiveLen, unansweredRegate };
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 // v1.7: guard the dispatch so hb.js is safely requirable (the tick requires it to
@@ -897,8 +1002,9 @@ switch (cmd) {
     }
     const file = val('--record');
     if (!file || file.startsWith('--')) die('hb constraints: --record needs <file.json>');
-    { const rgc = regateBlocks((dag.gates || {})[gate]);   // regate-guard: constraints — no targets over a revision (fail-closed on malformed records)
-      if (rgc) die(`hb constraints --record refused on ${gate}: the gate is being revised (regate pending, by ${rgc.actor || '?'}: ${rgc.reason || ''}) — a DIFFERENT actor rearms first: node .hb/hb.js regate ${gate} --rearm --artifact <findings-file>; constraints are authored against the criteria that will be enforced.`); }   // regate-guard: constraints
+    const rgc = regateBlocks((dag.gates || {})[gate]);   // regate-guard: constraints — no targets over a revision (fail-closed on malformed records)
+    if (rgc) die(`hb constraints --record refused on ${gate}: the gate is being revised (regate pending, by ${rgc.actor || '?'}: ${rgc.reason || ''}) — a DIFFERENT actor rearms first: node .hb/hb.js regate ${gate} --rearm --artifact <findings-file>; constraints are authored against the criteria that will be enforced.`);   // regate-guard: constraints
+    if (unansweredRegate(readEvents(), gate)) die(`hb constraints --record refused on ${gate}: the event log attests an UNANSWERED revision (gate_regated with no gate_rearmed) — a hand-edited dag marker cannot clear it; rearm first.`);   // regate-guard: log-truth
     if (cArgs.includes('--model') && (val('--model') === undefined || val('--model').startsWith('--')))
       die('hb constraints: --model needs a value');
     const model = val('--model') ?? null;
@@ -1006,10 +1112,13 @@ switch (cmd) {
     const note = noteToks[0] || '';
     if (!gate || (verdict !== 'pass' && verdict !== 'fail' && verdict !== 'free'))
       die('usage: hb review <gate> pass|fail|free [--artifact <findings-file>] [--model <m>] [note]');
-    { const dag0 = readDag(), gates0 = dag0.gates || {};   // regate-guard: review — no verdict over a revision
-      const gv0 = gates0[gate] || gates0[((dag0.phases || []).find(p => p.id === gate) || {}).gate_exit];   // regate-guard: review — a phase id must not bypass the guard (refuter catch)
-      const rgv = regateBlocks(gv0);   // regate-guard: review — fail-closed: a malformed record blocks too
-      if (rgv) die(`review ${verdict} refused on ${gate}: the gate is being revised (regate pending, by ${rgv.actor || '?'}: ${rgv.reason || ''}) — a DIFFERENT actor rearms first: node .hb/hb.js regate ${gate} --rearm --artifact <findings-file>; a fresh pass of the revised criteria is then owed before any verdict.`); }   // regate-guard: review
+    const dag0 = readDag(), gates0 = dag0.gates || {};   // regate-guard: review — no verdict over a revision
+    const gv0 = gates0[gate] || gates0[((dag0.phases || []).find(p => p.id === gate) || {}).gate_exit];   // regate-guard: review — a phase id must not bypass the guard (refuter catch)
+    const rgv = regateBlocks(gv0);   // regate-guard: review — fail-closed: a malformed record blocks too
+    if (rgv) die(`review ${verdict} refused on ${gate}: the gate is being revised (regate pending, by ${rgv.actor || '?'}: ${rgv.reason || ''}) — a DIFFERENT actor rearms first: node .hb/hb.js regate ${gate} --rearm --artifact <findings-file>; a fresh pass of the revised criteria is then owed before any verdict.`);   // regate-guard: review
+    const rGateName = gates0[gate] ? gate : ((((dag0.phases || []).find(p => p.id === gate) || {}).gate_exit) || gate);   // regate-guard: review — shared by the log-truth and stale-pass guards below
+    if (unansweredRegate(readEvents(), rGateName)) die(`review ${verdict} refused on ${gate}: the event log attests an UNANSWERED revision of ${rGateName} (gate_regated with no gate_rearmed) — a hand-edited dag marker cannot clear it: a DIFFERENT actor rearms (node .hb/hb.js regate ${rGateName} --rearm --artifact <findings-file>), then a fresh pass is owed.`);   // regate-guard: log-truth
+    if (staleRearm(readEvents(), rGateName)) die(`review ${verdict} refused on ${gate}: the gate was revised and re-armed but its last provenanced pass predates the rearm (stale evidence) — re-run the revised gate first: bash .hb/gate.sh ${rGateName}; a fresh pass is owed before any verdict.`);   // regate-guard: stale-pass
     if (verdict === 'fail') {
       mutate({ event: 'review_failed', gate, model, ...(note ? { note } : {}) });
       process.stdout.write(`review fail ${gate}\n`);
@@ -1022,7 +1131,7 @@ switch (cmd) {
     const ap = path.isAbsolute(artifact) ? artifact : path.join(PROJECT_DIR, artifact);
     let body = '';
     try { body = fs.readFileSync(ap, 'utf8'); } catch (e) { die(`${vw}: cannot read artifact ${artifact} (${e.code || e.message})`); }
-    if (body.trim().length < 40) die(`${vw}: artifact ${artifact} is too thin (${body.trim().length} chars) to be a real refutation attempt — a rubber-stamp is not a review.`);
+    if (substantiveLen(body) < 40) die(`${vw}: artifact ${artifact} is too thin (${substantiveLen(body)} chars) to be a real refutation attempt — a rubber-stamp is not a review.`);
     // Substance: a genuine refutation inspects THIS phase's actual work, so require the
     // artifact to cite real anchors — the gate id, a phase task id, or a path the gate's
     // criteria reference. Filler references none.
@@ -1095,7 +1204,7 @@ switch (cmd) {
     try { fs.mkdirSync(revDir, { recursive: true }); } catch (e) {}
     fs.writeFileSync(path.join(revDir, `${gate}.md`), body);
     const autocommit = gitPolicy();
-    mutate({ event: 'review_passed', gate, model, artifact: `reviews/${gate}.md`, artifact_chars: body.trim().length, cited, reviewer, git: { autocommit },
+    mutate({ event: 'review_passed', gate, model, artifact: `reviews/${gate}.md`, artifact_chars: substantiveLen(body), cited, reviewer, git: { autocommit },
              ...(answers ? { answers, constraint_ids: constraintIds, artifact_sha256: require('crypto').createHash('sha256').update(body, 'utf8').digest('hex') }
                          : { holes: 'none', artifact_sha256: require('crypto').createHash('sha256').update(body, 'utf8').digest('hex') }),
              ...(note ? { note } : {}) });
@@ -1106,7 +1215,7 @@ switch (cmd) {
       gitSnapshot(gate, p ? `heartbeat(${p.id}): ${p.title} [${gate}]` : `heartbeat: ${gate} accepted`);
     }
     tryAnchor(gate);   // acceptance anchor — after the restore point, so its commit is the accepted HEAD
-    process.stdout.write(`review pass ${gate} (backed by reviews/${gate}.md, ${body.trim().length} chars, cites: ${cited.slice(0, 3).join(', ')})\n`);
+    process.stdout.write(`review pass ${gate} (backed by reviews/${gate}.md, ${substantiveLen(body)} chars, cites: ${cited.slice(0, 3).join(', ')})\n`);
     break;
   }
   case 'evidence': {
@@ -1264,7 +1373,7 @@ switch (cmd) {
     // hand-edit: declare snapshots the criteria and marks the gate pending; while pending, every
     // evaluation/acceptance path refuses (gate.sh exit 3; review; constraints --record); the
     // rearm half (RG2) re-enables evaluation behind an evidence bar.
-    if (!arg1) die('usage: hb regate <GATE_ID|PHASE_ID> <reason…>');
+    if (!arg1) die('usage: hb regate <GATE_ID|PHASE_ID> <reason…>  |  hb regate <GATE_ID|PHASE_ID> --rearm --artifact <findings-file> [--model <m>]');
     const dag = readDag();
     const phases = dag.phases || [];
     let gate = null;
@@ -1275,8 +1384,72 @@ switch (cmd) {
       gate = ph && ph.gate_exit;
     }
     if (!gate || !(dag.gates || {})[gate]) die(`regate: unknown gate or phase: ${arg1}`);
-    for (const t of rest) if (/^--/.test(t)) die(`regate: unknown option ${t}`);
+
+    if (rest.includes('--rearm')) {
+      // ── the rearm half: evidence-gated re-grounding ──
+      const toks = rest.filter(t => t !== '--rearm');
+      let artifact = null, model = null;
+      for (let i = 0; i < toks.length; i++) {
+        if (toks[i] === '--artifact') artifact = toks[++i];
+        else if (toks[i] === '--model') model = toks[++i] ?? null;
+        else die(`regate --rearm: unexpected argument ${toks[i]}`);
+      }
+      if (!artifact || /^--/.test(String(artifact)))
+        die('regate --rearm requires --artifact <findings-file>: the written evidence that the revision RE-GROUNDS the gate (what premise died, what the revised criteria now exercise).');
+      const actor = process.env.HB_ACTOR;
+      if (!actor || !actor.trim() || actor.trim().toLowerCase() === 'unknown')
+        die('regate --rearm: set HB_ACTOR to the rearm reviewer\'s identity');
+      const gv = dag.gates[gate];
+      if (!regateBlocks(gv)) die(`regate --rearm: no pending regate on ${gate} — nothing to rearm`);
+      if (!(gv.regate && typeof gv.regate === 'object' && !Array.isArray(gv.regate)) || gv.regate.pending !== true || typeof gv.regate.actor !== 'string')
+        die(`regate --rearm: the regate record on ${gate} is malformed — lint names the shape; fix .hb/dag.json (or restore it from git) before rearming.`);
+      if (gv.regate.actor.trim().toLowerCase() === actor.trim().toLowerCase())   // regate-guard: rearm-actor — the declarer cannot certify their own revision
+        die(`regate --rearm: '${actor}' declared this revision — the rearm must come from a DIFFERENT actor (the review-pass precedent).`);   // regate-guard: rearm-actor
+      const ap = path.isAbsolute(artifact) ? artifact : path.join(PROJECT_DIR, artifact);
+      let body = '';
+      try { body = fs.readFileSync(ap, 'utf8'); } catch (e) { die(`regate --rearm: cannot read artifact ${artifact} (${e.code || e.message})`); }
+      if (substantiveLen(body) < 40)
+        die(`regate --rearm: artifact ${artifact} is too thin (${substantiveLen(body)} chars) to justify re-arming a revised gate.`);
+      // Substance: the evidence must cite a real anchor of the phase — gate id, phase id, a task id,
+      // or a path the REVISED criteria reference (the review-pass precedent).
+      const phaseR = phases.find(p => p.gate_exit === gate);
+      const anchorsR = new Set([gate]);
+      if (phaseR) { anchorsR.add(phaseR.id); for (const t of (phaseR.tasks || [])) anchorsR.add(t.id); }
+      const { extractPaths } = require('./hb-lint.js');
+      for (const c of (gv.criteria || [])) for (const pth of extractPaths(c.cmd || '')) { anchorsR.add(pth); anchorsR.add(pth.split('/').pop()); }
+      const hayR = body.toLowerCase();
+      const citedR = [...anchorsR].filter(a => a && String(a).length > 1 && hayR.includes(String(a).toLowerCase()));
+      if (!citedR.length)
+        die(`regate --rearm: artifact ${artifact} does not reference the phase under revision (expected one of: ${[...anchorsR].filter(a => a && String(a).length > 1).join(', ')}).`);
+      const sha = require('crypto').createHash('sha256').update(body, 'utf8').digest('hex');
+      const verdictR = withWlock(() => {
+        const dag2 = readDag();
+        const gv2 = (dag2.gates || {})[gate];
+        const rg2 = gv2 && gv2.regate;
+        if (!rg2 || typeof rg2 !== 'object' || Array.isArray(rg2) || rg2.pending !== true)
+          return `regate --rearm: no pending regate on ${gate} (it changed underneath — re-check the dag)`;
+        const auditRes = require('./hb-audit.js').audit(dag2);   // regate-guard: rearm-audit — audited INSIDE the lock: an edit landing between an earlier audit and the write would rearm unaudited (a refuter catch)
+        if (auditRes.errors) return `regate --rearm refused on ${gate}: the DAG is not audit-clean (${auditRes.errors} error(s)) — a hollow revision cannot rearm:\n` + auditRes.findings.filter(f => f.severity === 'error').map(f => '  ✗ ' + f.message).join('\n');   // regate-guard: rearm-audit
+        const rd = path.join(HB_DIR, 'reviews');
+        fs.mkdirSync(rd, { recursive: true });
+        fs.writeFileSync(path.join(rd, `${gate}.regate.md`), body);
+        rg2.pending = false;
+        rg2.rearm = { at: nowIso(), actor, model: model ?? null, artifact: `reviews/${gate}.regate.md`, sha256: sha };
+        fs.writeFileSync(DAG, JSON.stringify(dag2, null, 2));
+        appendEvent({ event: 'gate_rearmed', gate, model: model ?? null, artifact: `reviews/${gate}.regate.md`, sha256: sha });   // audit-only
+        reproject();
+        return null;
+      });
+      if (verdictR) die(verdictR);
+      process.stdout.write(
+        `🔁 rearm ${gate} (by ${actor}${model ? ', model ' + model : ''}): evidence stored at .hb/reviews/${gate}.regate.md\n` +
+        `   evaluation re-enabled — the revised criteria are now the gate; a FRESH pass is owed before any review verdict:\n` +
+        `   bash .hb/gate.sh ${gate}\n`);
+      break;
+    }
+
     const reason = rest.join(' ').trim();
+    for (const t of rest) if (/^--/.test(t)) die(`regate: unknown option ${t}`);
     if (!reason) die('regate: a reason is required — say why the gate\'s premises changed');
     const actor = process.env.HB_ACTOR;
     if (!actor || !actor.trim() || actor.trim().toLowerCase() === 'unknown')

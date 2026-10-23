@@ -86,6 +86,62 @@ echo "$RG_N" | grep -q 'exit_node=3' && echo "$RG_N" | grep -q 'exit_py=3' || { 
 echo "$RG_N" | grep -q 'gate_events=0' || { echo "  ✗ regate:no-event — a refusal appended a gate event: $RG_N"; FAIL=1; }
 echo "$RG_N" | grep -q 'tick_node=\[False regate_pending_waiting\]' && echo "$RG_N" | grep -q 'tick_py=\[False regate_pending_waiting\]' \
   || { echo "  ✗ regate:tick — ticks do not sleep the identical regate_pending_waiting reason: $RG_N"; FAIL=1; }
+# rearm cross-runtime: the SAME fixture bytes rearmed by node vs python must agree on everything
+# observable — acceptance, the normalized record, the sha pin, the same-actor refusal, the
+# stale-pass refusal on BOTH runtimes, the restarted review cycle, and doctor's altered-evidence line.
+RGDAG2='{"phases":[{"id":"R","title":"r","gate_entry":null,"gate_exit":"GATE_R","tasks":[{"id":"r1","title":"t","requires":[],"description":"writes m.txt"}]}],"gates":{"GATE_R":{"desc":"g","review":{"prompt":"Refute R.","constraints":[{"id":"P1","claim":"m.txt holds r1 work","subjects":["m.txt"],"violation":"absent"}]},"criteria":[{"id":"c1","desc":"d","cmd":"python3 -c \"assert 1+1==2\""}]}}}'
+rearm_case(){ # $1 = the runtime that REARMS; the declare is always node (the cross is the rearm side)
+  local d; d=$(mktemp -d); mkdir "$d/.hb"
+  printf '%s' "$RGDAG2" > "$d/.hb/dag.json"
+  printf '{"event":"initialized"}\n{"event":"task_started","task":"r1","actor":"doer"}\n{"event":"task_done","task":"r1","actor":"doer"}\n' > "$d/.hb/events.jsonl"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" \
+     "$ROOT/plugin/templates/gate.sh" "$ROOT/plugin/templates/hb-audit.js" "$d/.hb/"
+  node "$d/.hb/hb.js" rebuild >/dev/null 2>&1
+  printf 'r1 work\n' > "$d/m.txt"
+  ( cd "$d" && HB_NO_GIT=1 bash .hb/gate.sh GATE_R >/dev/null 2>&1 )
+  printf '[{"id":"G1","claim":"m.txt holds r1 work","subjects":["m.txt"],"violation":"absent"}]' > "$d/g.json"
+  ( cd "$d" && HB_ACTOR=author node .hb/hb.js constraints GATE_R --record g.json >/dev/null 2>&1 )
+  ( cd "$d" && HB_ACTOR=alice node .hb/hb.js regate GATE_R premises died >/dev/null 2>&1 )
+  python3 -c "
+import json; p='$d/.hb/dag.json'; dd=json.load(open(p))
+dd['gates']['GATE_R']['criteria']=[{'id':'rev1','desc':'revised','cmd':'python3 -c \"assert 2+2==4\"'}]
+json.dump(dd,open(p,'w'),indent=2)"
+  printf 'Rearm evidence for GATE_R (task r1): the premise died; the revised criterion was run by hand.\n' > "$d/evidence.md"
+  local same_rc re_rc rec m shaok st_n st_p rec_n rec_p fresh_ok doc_n doc_p
+  if [ "$1" = node ]; then ( cd "$d" && HB_ACTOR=ALICE node .hb/hb.js regate GATE_R --rearm --artifact evidence.md >/dev/null 2>&1 ); same_rc=$?
+  else ( cd "$d" && HB_ACTOR=ALICE eval "$PY regate GATE_R --rearm --artifact evidence.md --dir \"$d\"" >/dev/null 2>&1 ); same_rc=$?; fi
+  if [ "$1" = node ]; then ( cd "$d" && HB_ACTOR=bob node .hb/hb.js regate GATE_R --rearm --artifact evidence.md --model m1 >/dev/null 2>&1 ); re_rc=$?
+  else ( cd "$d" && HB_ACTOR=bob eval "$PY regate GATE_R --rearm --artifact evidence.md --model m1 --dir \"$d\"" >/dev/null 2>&1 ); re_rc=$?; fi
+  m=$(python3 -c "
+import json,hashlib
+m=json.load(open('$d/.hb/dag.json'))['gates']['GATE_R']['regate']; m.pop('at',None); (m.get('rearm') or {}).pop('at',None)
+ev=[json.loads(l) for l in open('$d/.hb/events.jsonl') if l.strip()]
+re=[e for e in ev if e.get('event')=='gate_rearmed']
+want=hashlib.sha256(open('$d/.hb/reviews/GATE_R.regate.md','rb').read()).hexdigest() if re else 'nofile'
+ok=len(re)==1 and re[0].get('sha256')==want==(m.get('rearm') or {}).get('sha256')
+print(json.dumps(m,sort_keys=True,separators=(',',':')), 'shapin='+str(ok))" 2>/dev/null)
+  ( cd "$d" && HB_ACTOR=rev node .hb/hb.js review GATE_R fail stale-try >/dev/null 2>&1 ); st_n=$?
+  ( cd "$d" && HB_ACTOR=rev eval "$PY review GATE_R fail stale-try --dir \"$d\"" >/dev/null 2>&1 ); st_p=$?
+  rec_n=$(node -e "const hb=require('$d/.hb/hb.js');process.env.HB_DIR='$d/.hb';const dag=JSON.parse(require('fs').readFileSync('$d/.hb/dag.json','utf8'));console.log(hb.reviewCycle(dag,'GATE_R').recorded)" 2>/dev/null)
+  rec_p=$(PYTHONPATH=${HB_PY_SRC:-$ROOT/py/src} python3 -c "
+from heartbeat import constraints as c, state as s
+print(str(c.review_cycle('$d/.hb', s.read_dag('$d/.hb'), 'GATE_R')[1]).lower())" 2>/dev/null)
+  ( cd "$d" && HB_NO_GIT=1 bash .hb/gate.sh GATE_R >/dev/null 2>&1 )   # fresh provenanced pass
+  ( cd "$d" && HB_ACTOR=rev node .hb/hb.js review GATE_R fail "post-fresh finding" >/dev/null 2>&1 ); fresh_ok=$?
+  printf 'x' >> "$d/.hb/reviews/GATE_R.regate.md"
+  doc_n=$( cd "$d" && node .hb/hb.js doctor 2>&1 | grep -o "regate rearm artifact[^(]*(sha256 mismatch)" | head -1 )
+  doc_p=$( cd "$d" && eval "$PY doctor --dir \"$d\"" 2>&1 | grep -o "regate rearm artifact[^(]*(sha256 mismatch)" | head -1 )
+  echo "same_actor_rc=$same_rc rearm_rc=$re_rc marker=$m stale_node=$st_n stale_py=$st_p rec_node=[$rec_n] rec_py=[$rec_p] fresh_verdict_rc=$fresh_ok doc_node=[$doc_n] doc_py=[$doc_p]"
+  rm -rf "$d"
+}
+RM_N=$(rearm_case node); RM_P=$(rearm_case py)
+cmp "regate:rearm-cross" "$RM_N" "$RM_P"
+echo "$RM_N" | grep -q 'same_actor_rc=1' && echo "$RM_N" | grep -q 'rearm_rc=0' || { echo "  ✗ regate:rearm — same-actor must refuse (1) and a different actor succeed (0): $RM_N"; FAIL=1; }
+echo "$RM_N" | grep -q '"pending":false' && echo "$RM_N" | grep -q 'shapin=True' || { echo "  ✗ regate:rearm — record not cleared or sha pin broken: $RM_N"; FAIL=1; }
+echo "$RM_N" | grep -q 'stale_node=1' && echo "$RM_N" | grep -q 'stale_py=1' || { echo "  ✗ regate:stale — a verdict landed over a stale pre-rearm pass: $RM_N"; FAIL=1; }
+echo "$RM_N" | grep -q 'rec_node=\[false\]' && echo "$RM_N" | grep -q 'rec_py=\[false\]' || { echo "  ✗ regate:cycle — a pre-declare constraint set survived the rearm: $RM_N"; FAIL=1; }
+echo "$RM_N" | grep -q 'fresh_verdict_rc=0' || { echo "  ✗ regate:fresh — a verdict after a fresh provenanced pass was refused: $RM_N"; FAIL=1; }
+echo "$RM_N" | grep -q 'doc_node=\[regate rearm artifact' && echo "$RM_N" | grep -q 'doc_py=\[regate rearm artifact' || { echo "  ✗ regate:doctor — altered rearm evidence not flagged identically: $RM_N"; FAIL=1; }
 
 echo "── state projection parity ──"
 DAG='{"phases":[{"id":"P0","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"P0T1","requires":[]},{"id":"P0T2","requires":["P0T1"]}]},{"id":"P1","gate_entry":"G0","gate_exit":"G1","tasks":[{"id":"P1T1","requires":[]}]}],"gates":{"G0":{"criteria":[{"id":"c","cmd":"true"}]},"G1":{"review":{"prompt":"r"},"criteria":[{"id":"c","cmd":"true"}]}}}'

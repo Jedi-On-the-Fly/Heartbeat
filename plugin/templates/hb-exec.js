@@ -444,6 +444,8 @@ async function run() {
       case 'review_pending': {
         const gate = data.next_task && data.next_task.gate;
         const dag  = readJson(DAG, { gates: {} });
+        const evsRE = (() => { try { return fs.readFileSync(path.join(HB_DIR, 'events.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch (e) { return {}; } }); } catch (e) { return []; } })();   // regate-guard: stale-resume
+        if (require('./hb.js').staleRearm(evsRE, gate)) { escalate('regate_stale', `${gate} was revised and re-armed but its last provenanced pass predates the rearm — re-run the revised gate (bash .hb/gate.sh ${gate}); no refuter dispatched, no verdict recorded`); return 1; }   // regate-guard: stale-resume
         const rv   = ((dag.gates || {})[gate] || {}).review || {};
         if (Array.isArray(rv.constraints) && rv.constraints.length) {
           const rc = await constrainedReview(c, dag, gate, rv, { refuterActor, authorActor, freeActor });

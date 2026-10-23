@@ -61,7 +61,7 @@ def doctor(hbdir):
             body = None
         if body is None:
             problems.append(f"{g} review_passed but backing artifact {rel} is missing — the refutation can no longer be inspected (Sev-1 rot)")
-        elif len(body.strip()) < 40:
+        elif st.substantive_len(body) < 40:
             problems.append(f"{g} review_passed but backing artifact {rel} is empty/thin — not a real refutation")
 
     # Restore points: every ACCEPTED gate (review gate: last review verdict is a pass; review-less:
@@ -104,6 +104,46 @@ def doctor(hbdir):
     from . import constraints as cons
     problems.extend(cons.doctor_problems(hbdir))
 
+    # regate: a pending revision is a NOTE (legitimate in-flight state); the rearm evidence must
+    # stay the pinned bytes; an ACCEPTED gate whose criteria were rearmed after its last provenanced
+    # pass carries STALE evidence; the event log (truth) must agree with the dag marker (the
+    # dag_corrupted recovery restores dag.json from backup, which can silently drop a pending
+    # regate). Node twin: doctor() in hb.js.
+    import hashlib
+    evs_r = st.read_events(hbdir)
+    for g, gv in gates.items():
+        blk = st.regate_blocks(gv)
+        if blk is not None:
+            notes.append(f"{g} is being revised — regate pending (by {blk.get('actor', '?')}: {blk.get('reason', '')}); evaluation refuses until a DIFFERENT actor rearms")
+    last_re = {}
+    for e in evs_r:
+        if e.get("event") == "gate_rearmed":
+            last_re[e.get("gate")] = e
+    for g, e in last_re.items():
+        rel = e.get("artifact") or f"reviews/{g}.regate.md"
+        try:
+            raw = (Path(hbdir) / rel).read_bytes()
+        except OSError:
+            raw = None
+        if raw is None: problems.append(f"{g} regate rearm artifact {rel} is missing — the rearm evidence can no longer be inspected")   # regate-guard: rearm-rot
+        elif st.substantive_len(raw.decode("utf-8", errors="replace")) < 40: problems.append(f"{g} regate rearm artifact {rel} is empty/thin — not real rearm evidence")   # regate-guard: rearm-rot
+        elif e.get("sha256") and hashlib.sha256(raw).hexdigest() != e["sha256"]: problems.append(f"{g} regate rearm artifact {rel} changed since recording (sha256 mismatch) — the rearm evidence was altered")   # regate-guard: rearm-rot
+    for g in last_re:
+        if acc.get(g) and st.stale_rearm(evs_r, g): problems.append(f"{g} accepted but its criteria were rearmed after its last provenanced pass — STALE evidence: re-run the gate (hb gate {g})")   # regate-guard: stale-accepted
+    unanswered = {}
+    for e in evs_r:
+        if e.get("event") == "gate_regated":
+            unanswered[e.get("gate")] = True
+        elif e.get("event") == "gate_rearmed":
+            unanswered.pop(e.get("gate"), None)
+    for g in unanswered:
+        if st.regate_blocks(gates.get(g)) is None: problems.append(f"{g}: the event log attests a pending regate (gate_regated unanswered by any gate_rearmed) but dag.json carries " + ("a CLEARED marker (pending edited by hand?)" if "regate" in (gates.get(g) or {}) else "no regate marker (restored from backup?)") + " — re-declare and rearm properly, or investigate (the log is truth)")   # regate-guard: marker-sync
+    for g, gv in gates.items():
+        rmk = (gv or {}).get("regate")
+        if isinstance(rmk, dict) and rmk.get("pending") is False:
+            e_pin = last_re.get(g)
+            if not e_pin or ((rmk.get("rearm") or {}).get("sha256") and e_pin.get("sha256") and rmk["rearm"]["sha256"] != e_pin["sha256"]): problems.append(f"{g}: the dag records a rearmed regate but the event log " + ("pins different bytes (sha256 mismatch with gate_rearmed)" if e_pin else "has no gate_rearmed event") + " — a fabricated rearm record (the log is truth)")   # regate-guard: marker-sync
+
     return {"problems": problems, "notes": notes}
 
 
@@ -118,6 +158,19 @@ def diagnose(hbdir, reason=None):
     pd = _project_dir(hbdir)
     out = []
 
+    # A pending regate on a gate outranks the generic branch ABOUT THAT GATE: the generic recovery
+    # commands (re-run gate.sh, spawn the refuter) are exactly what the perimeter refuses.
+    regated = [g for g, gv in (dag.get("gates") or {}).items() if st.regate_blocks(gv) is not None]
+
+    def regate_recovery(g):
+        blk = st.regate_blocks((dag.get("gates") or {}).get(g)) or {}
+        out.append(f"  Gate: {g} — being revised (regate pending, by {blk.get('actor', '?')}: {blk.get('reason', '')})")
+        out.append("  Recover:")
+        out.append("   1. Edit the revised criteria in .hb/dag.json (if not already done).")
+        out.append("   2. Re-audit: hb audit")
+        out.append(f"   3. A DIFFERENT actor rearms: hb regate {g} --rearm --artifact <findings-file>")
+        out.append(f"   4. Re-run the gate: hb gate {g} — a fresh pass is owed before any review verdict.")
+
     if not reason:
         if state["gate"]["errors"] > 0:
             reason = "gate_blocked"
@@ -127,6 +180,8 @@ def diagnose(hbdir, reason=None):
             reason = "review_stuck"
         elif state["build_stuck_count"] >= 5:
             reason = "build_stuck"
+        elif regated:
+            reason = "regate_pending"
         else:
             r = rv.resolve(state, dag, hbdir)
             if r and r.get("type") == "deadlock":
@@ -137,7 +192,10 @@ def diagnose(hbdir, reason=None):
         out.append("  Not currently blocked. Run: hb state")
         return "\n".join(out)
 
-    if reason == "gate_blocked":
+    if reason == "regate_pending":
+        for g in (regated or ["(none found — pass the gate id)"]):
+            regate_recovery(g)
+    elif reason == "gate_blocked":
         g, rf = None, None
         for ev in reversed(events):
             if ev.get("event") in ("gate_failed", "gate_passed", "review_failed"):
@@ -147,6 +205,9 @@ def diagnose(hbdir, reason=None):
         if not g:
             ph = next((p for p in (dag.get("phases") or []) if p["id"] not in state["completed_phases"]), None)
             g = ph and ph.get("gate_exit")
+        if g and st.regate_blocks((dag.get("gates") or {}).get(g)) is not None:
+            regate_recovery(g)
+            return "\n".join(out)
         out.append(f"  Gate: {g}")
         if rf:   # the criteria passed; the adversarial review did not
             note = " ".join(str(rf.get("note") or "(none recorded)").split())[:600]
@@ -184,6 +245,13 @@ def diagnose(hbdir, reason=None):
         out.append("  Recover: produce a blocker report and surface for a human.")
     elif reason == "review_stuck":
         g = (state["pending_reviews"] or [None])[0]
+        if g and st.regate_blocks((dag.get("gates") or {}).get(g)) is not None:
+            regate_recovery(g)
+            return "\n".join(out)
+        if g and st.stale_rearm(events, g):
+            out.append(f"  Gate awaiting review: {g} — revised and re-armed, but its last provenanced pass predates the rearm (stale evidence).")
+            out.append(f"  Recover: re-run the revised gate first — hb gate {g}; verdicts are refused until a fresh pass.")
+            return "\n".join(out)
         out.append(f"  Gate awaiting review: {g}")
         out.append(f"  Recover: spawn a refuter, then: hb review {g} pass|fail \"<findings>\".")
     else:

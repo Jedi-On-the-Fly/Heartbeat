@@ -308,6 +308,8 @@ def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refute
         m = models["refute"] if model is _refute_role else model
         _rg = st.regate_blocks((st.read_dag(hbdir).get("gates") or {}).get(g))   # regate-guard: refuse-path (fail-closed predicate)
         if _rg is not None: print(f"HB-EXEC STOP: regate_pending — {g} was revised mid-review (by {_rg.get('actor', '?')}: {_rg.get('reason', '')}); no verdict recorded — a DIFFERENT actor rearms (hb regate {g} --rearm --artifact <findings-file>), then a fresh pass is owed"); return 1   # regate-guard: refuse-path
+        _evw = st.read_events(hbdir)   # regate-guard: refuse-path — the log is truth: an unanswered or stale revision closes the verdict window even if the dag marker was hand-cleared
+        if st.unanswered_regate(_evw, g) or st.stale_rearm(_evw, g): print(f"HB-EXEC STOP: regate_stale — {g} was revised mid-review (unanswered or stale revision in the log); no verdict recorded — rearm and re-run the revised gate first"); return 1   # regate-guard: refuse-path
         st.mutate(hbdir, {"event": "review_failed", "gate": g, "model": m or None, "note": reason[:1500]})
         return None
 
@@ -479,6 +481,7 @@ def _run(hbdir):
             if (_res or {}).get("status") == "regate_pending": print(f"HB-EXEC STOP: regate_pending — {g} is being revised; a DIFFERENT actor rearms (hb regate {g} --rearm --artifact <findings-file>), then a fresh pass of the revised criteria is owed"); return 1   # regate-guard: gate-path
         elif reason == "review_pending":
             g = data["next_task"].get("gate")
+            if st.stale_rearm(st.read_events(hbdir), g): print(f"HB-EXEC STOP: regate_stale — {g} was revised and re-armed but its last provenanced pass predates the rearm — re-run the revised gate (hb gate {g}); no refuter dispatched, no verdict recorded"); return 1   # regate-guard: stale-resume
             from . import refuter_profiles as rp
             dag = st.read_dag(hbdir)
             rv_block = ((dag.get("gates") or {}).get(g, {}).get("review") or {})
@@ -541,6 +544,8 @@ def _run(hbdir):
             if r["refuted"]:
                 _rg = st.regate_blocks((st.read_dag(hbdir).get("gates") or {}).get(g))   # regate-guard: refuted-branch (fail-closed predicate)
                 if _rg is not None: print(f"HB-EXEC STOP: regate_pending — {g} was revised mid-review (by {_rg.get('actor', '?')}: {_rg.get('reason', '')}); no verdict recorded — a DIFFERENT actor rearms (hb regate {g} --rearm --artifact <findings-file>), then a fresh pass is owed"); return 1   # regate-guard: refuted-branch
+                _evw = st.read_events(hbdir)   # regate-guard: refuted-branch — the log is truth even when the marker was cleared mid-dispatch
+                if st.unanswered_regate(_evw, g) or st.stale_rearm(_evw, g): print(f"HB-EXEC STOP: regate_stale — {g} was revised mid-review (unanswered or stale revision in the log); no verdict recorded — rearm and re-run the revised gate first"); return 1   # regate-guard: refuted-branch
                 # Auto-stamp the resolved refuter model (config-derived — not a self-report).
                 st.mutate(hbdir, {"event": "review_failed", "gate": g, "model": r_model or None,
                                   "note": (r.get("findings", "") or "")[:200]})

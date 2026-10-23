@@ -1901,6 +1901,29 @@ else
   echo "  (python3 absent — T179 skipped)"
 fi
 
+grp "T180 — hb regate --rearm: the evidence bar (different actor, cited artifact, audit-clean), sha256 provenance + doctor re-checks, stale-pass invalidation (a synthetic import pass never unlocks), the review cycle restarting at the rearm, diagnose routing, executor stale-window escalation; both runtimes"
+RGRM="$HB_SRC/tests/regate-rearm.sh"
+if command -v python3 >/dev/null 2>&1; then
+  check "T180.1 refusal matrix: no pending / unset or same (case-varied) actor / missing-thin-uncited artifact / hollow revision — each loud, pending untouched, nothing stored (both runtimes)" \
+    'bash "'"$RGRM"'" matrix 2>&1 | grep -q "^MATRIX-OK"'
+  check "T180.2 success: bytes stored at reviews/<G>.regate.md, sha256+actor+model pinned on gate_rearmed and the dag record, projection unchanged, evaluation re-enabled (both runtimes)" \
+    'bash "'"$RGRM"'" success 2>&1 | grep -q "^SUCCESS-OK"'
+  check "T180.3 stale-pass: every verdict refused until a FRESH PROVENANCED pass; hb import's bare synthetic pass unlocks nothing; doctor flags the stale-accepted gate" \
+    'bash "'"$RGRM"'" stale 2>&1 | grep -q "^STALE-OK"'
+  check "T180.4 cycle restart: a pre-declare constraint set or free review never satisfies the post-rearm acceptance; a fresh set/free review is owed and recordable (write-once afresh); both runtimes agree" \
+    'bash "'"$RGRM"'" cycle 2>&1 | grep -q "^CYCLE-OK"'
+  check "T180.5 doctor + diagnose: pending note, artifact rot problems (missing/thin/byte-flip), marker cross-check problem; diagnose names gate+reason+--rearm recovery explicitly, by inference, and from the gate_blocked branch" \
+    'bash "'"$RGRM"'" doctor 2>&1 | grep -q "^DOCTOR-OK" && bash "'"$RGRM"'" diagnose 2>&1 | grep -q "^DIAGNOSE-OK"'
+  check "T180.6 post-rearm resumption: both executors escalate in the stale window — no dispatch, no review event, loud HB-EXEC STOP" \
+    'bash "'"$RGRM"'" resume 2>&1 | grep -q "^RESUME-OK"'
+  check "T180.7 the log is truth: a hand-cleared pending marker cannot launder an acceptance (verdicts+constraints refused, doctor flags cleared/fabricated markers, recovery = re-declare + rearm); the thin-artifact boundary judges the SAME bytes identically on both runtimes (explicit ASCII trim)" \
+    'bash "'"$RGRM"'" truth 2>&1 | grep -q "^TRUTH-OK"'
+  check "T180.8 teeth: each rearm guard stripped from a copy flips its named check red (--selftest)" \
+    'bash "'"$RGRM"'" --selftest 2>&1 | grep -q "^REGATE-REARM-SELFTEST-OK"'
+else
+  echo "  (python3 absent — T180 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

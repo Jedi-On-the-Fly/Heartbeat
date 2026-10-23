@@ -56,7 +56,7 @@ def main(argv=None):
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
     p = sub.add_parser("refuters"); p.add_argument("rest", nargs=argparse.REMAINDER); _add_dir(p)
     p = sub.add_parser("refute-prompt"); p.add_argument("gate"); p.add_argument("--json", action="store_true"); p.add_argument("--free", action="store_true"); _add_dir(p)
-    p = sub.add_parser("regate"); p.add_argument("id"); p.add_argument("--reason", default=None); _add_dir(p)
+    p = sub.add_parser("regate"); p.add_argument("id"); p.add_argument("--reason", default=None); p.add_argument("--rearm", action="store_true"); p.add_argument("--artifact"); p.add_argument("--model"); _add_dir(p)
     p = sub.add_parser("park"); p.add_argument("id"); p.add_argument("--reason", default=""); _add_dir(p)
     p = sub.add_parser("unpark"); p.add_argument("id"); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
@@ -156,6 +156,80 @@ def main(argv=None):
             gate = ph.get("gate_exit") if ph else None
         if not gate or gate not in gates:
             sys.stderr.write(f"regate: unknown gate or phase: {args.id}\n"); return 1
+
+        if args.rearm:
+            # ── the rearm half: evidence-gated re-grounding (node twin: hb.js regate --rearm) ──
+            import hashlib
+            if not args.artifact:
+                sys.stderr.write("regate --rearm requires --artifact <findings-file>: the written evidence "
+                                 "that the revision RE-GROUNDS the gate.\n"); return 1
+            actor = (os.environ.get("HB_ACTOR") or "").strip()
+            if not actor or actor.lower() == "unknown":
+                sys.stderr.write("regate --rearm: set HB_ACTOR to the rearm reviewer's identity\n"); return 1
+            gv = gates[gate]
+            if st.regate_blocks(gv) is None:
+                sys.stderr.write(f"regate --rearm: no pending regate on {gate} — nothing to rearm\n"); return 1
+            rg = gv.get("regate")
+            if not isinstance(rg, dict) or rg.get("pending") is not True or not isinstance(rg.get("actor"), str):
+                sys.stderr.write(f"regate --rearm: the regate record on {gate} is malformed — lint names the shape; "
+                                 "fix .hb/dag.json (or restore it from git) before rearming.\n"); return 1
+            if rg["actor"].strip().lower() == actor.lower(): sys.stderr.write(f"regate --rearm: '{actor}' declared this revision — the rearm must come from a DIFFERENT actor (the review-pass precedent).\n"); return 1   # regate-guard: rearm-actor
+            project_dir = Path(hb).parent
+            ap = Path(args.artifact) if os.path.isabs(args.artifact) else project_dir / args.artifact
+            try:
+                body = ap.read_bytes()
+            except OSError as e:
+                sys.stderr.write(f"regate --rearm: cannot read artifact {args.artifact} ({e.strerror or e})\n"); return 1
+            text = body.decode("utf-8", errors="replace")
+            if st.substantive_len(text) < 40:
+                sys.stderr.write(f"regate --rearm: artifact {args.artifact} is too thin ({st.substantive_len(text)} chars) "
+                                 "to justify re-arming a revised gate.\n"); return 1
+            phase_r = next((p for p in phases if p.get("gate_exit") == gate), None)
+            anchors_r = {gate}
+            if phase_r:
+                anchors_r.add(phase_r["id"])
+                anchors_r.update(t["id"] for t in (phase_r.get("tasks") or []))
+            for c in (gv.get("criteria") or []):
+                for pth in lintmod.extract_paths(c.get("cmd", "")):
+                    anchors_r.add(pth); anchors_r.add(pth.split("/")[-1])
+            hay = text.lower()
+            if not any(a and len(str(a)) > 1 and str(a).lower() in hay for a in anchors_r):
+                usable = ", ".join(a for a in anchors_r if a and len(str(a)) > 1)
+                sys.stderr.write(f"regate --rearm: artifact {args.artifact} does not reference the phase under "
+                                 f"revision (expected one of: {usable}).\n"); return 1
+            from . import audit as auditmod
+            sha = hashlib.sha256(body).hexdigest()
+
+            def _rearm_locked():
+                dag2 = st.read_dag(hb)
+                gv2 = (dag2.get("gates") or {}).get(gate)
+                rg2 = (gv2 or {}).get("regate")
+                if not isinstance(rg2, dict) or rg2.get("pending") is not True:
+                    return f"regate --rearm: no pending regate on {gate} (it changed underneath — re-check the dag)"
+                # audited INSIDE the lock: an edit landing between an earlier audit and the write
+                # would rearm unaudited (a refuter catch)
+                _ar = auditmod.audit(dag2)   # regate-guard: rearm-audit
+                if _ar["errors"]: return f"regate --rearm refused on {gate}: the DAG is not audit-clean ({_ar['errors']} error(s)) — a hollow revision cannot rearm:\n" + "\n".join("  ✗ " + f["message"] for f in _ar["findings"] if f["severity"] == "error")   # regate-guard: rearm-audit
+                rd = Path(hb) / "reviews"
+                rd.mkdir(parents=True, exist_ok=True)
+                st.atomic_write_bytes(rd / f"{gate}.regate.md", body)
+                rg2["pending"] = False
+                rg2["rearm"] = {"at": st.now_iso(), "actor": actor, "model": args.model or None,
+                                "artifact": f"reviews/{gate}.regate.md", "sha256": sha}
+                dagpath.write_text(json.dumps(dag2, indent=2))
+                st.append_event(hb, {"event": "gate_rearmed", "gate": gate, "model": args.model or None,
+                                     "artifact": f"reviews/{gate}.regate.md", "sha256": sha})   # audit-only
+                st.reproject(hb)
+                return None
+            _err = st.with_wlock(hb, _rearm_locked)
+            if _err:
+                sys.stderr.write(_err + "\n"); return 1
+            print(f"🔁 rearm {gate} (by {actor}{', model ' + args.model if args.model else ''}): "
+                  f"evidence stored at .hb/reviews/{gate}.regate.md")
+            print(f"   evaluation re-enabled — the revised criteria are now the gate; a FRESH pass is owed "
+                  f"before any review verdict: hb gate {gate}")
+            return 0
+
         reason = (args.reason or "").strip()
         if not reason:
             sys.stderr.write("regate: a reason is required (--reason) — say why the gate's premises changed\n"); return 1

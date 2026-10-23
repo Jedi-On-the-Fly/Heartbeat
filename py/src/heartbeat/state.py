@@ -213,6 +213,50 @@ def regate_blocks(gate_value):
     return r if isinstance(r, dict) else {}
 
 
+_SUBSTANTIVE_WS = " \t\n\r\f\v"
+
+
+def substantive_len(s):
+    """Length after trimming ONE explicit whitespace set (ASCII only — the lint _ASCII_WS
+    precedent): str.strip() and JS trim() disagree on \\ufeff / \\x85 / \\x1c-\\x1f, so a
+    thin-artifact boundary judged with the native trims DIVERGES between the runtimes (a
+    refuter catch). Twin: hb.js substantiveLen."""
+    return len(str(s).strip(_SUBSTANTIVE_WS))
+
+
+def unanswered_regate(events, gate):
+    """True while the log attests an UNANSWERED revision: a gate_regated with no later
+    gate_rearmed. The event log is truth — a hand-cleared, hand-restored or fabricated dag
+    marker must not launder an acceptance past the rearm bar (a refuter catch).
+    Twin: hb.js unansweredRegate."""
+    un = False
+    for e in events:
+        if e.get("event") == "gate_regated" and e.get("gate") == gate:
+            un = True
+        elif e.get("event") == "gate_rearmed" and e.get("gate") == gate:
+            un = False
+    return un
+
+
+def stale_rearm(events, gate):
+    """True when <gate> has a gate_rearmed with NO LATER provenanced gate_passed. "Provenanced" =
+    the criteria/runtime evidence fields a real evaluation stamps — `hb import`'s bare synthetic
+    pass never counts, so it cannot launder a revision into an acceptance. Review verdicts and the
+    executors refuse in this window: acceptance after a revision requires a FRESH pass of the
+    revised criteria. Twin: hb.js staleRearm."""
+    last = -1
+    for i, e in enumerate(events):
+        if e.get("event") == "gate_rearmed" and e.get("gate") == gate:
+            last = i
+    if last == -1:
+        return False
+    for e in events[last + 1:]:
+        if e.get("event") == "gate_passed" and e.get("gate") == gate and \
+                ((isinstance(e.get("criteria"), list) and e["criteria"]) or e.get("runtime")):
+            return False
+    return True
+
+
 def with_wlock(hbdir, fn):
     wlock = Path(hbdir) / ".wlock"
     deadline = time.time() + 5
