@@ -197,6 +197,22 @@ def reproject(hbdir):
     return s
 
 
+def regate_blocks(gate_value):
+    """Fail-closed regate predicate: a gate carrying a `regate` key BLOCKS evaluation/acceptance
+    unless the record is a well-formed dict whose pending is exactly False (a rearmed revision).
+    A malformed record (wrong type, truthy junk) blocks — lint names it; a permissive read would
+    let a hand-mangled marker silently disarm the perimeter, and the two runtimes' truthiness
+    rules disagree on []/{} (a refuter catch). Returns the blocking record ({} when unreadable)
+    or None when clear. Twin: hb.js regateBlocks."""
+    gv = gate_value or {}
+    if "regate" not in gv:
+        return None
+    r = gv["regate"]
+    if isinstance(r, dict) and r.get("pending") is False:
+        return None
+    return r if isinstance(r, dict) else {}
+
+
 def with_wlock(hbdir, fn):
     wlock = Path(hbdir) / ".wlock"
     deadline = time.time() + 5

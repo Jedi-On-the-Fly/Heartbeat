@@ -51,6 +51,20 @@ def _run_cmd(cmd, hbdir, timeout):
         return False, str(e)
 
 
+def _regate_refusal(gate_id, rg, add, lines):
+    """A pending regate refuses evaluation FAIL-CLOSED: the criteria were revised and not yet
+    re-refuted, so running them proves nothing — and the dead premises can make execution itself
+    harmful (the field report's no-real-calls assumption). No event: nothing was evaluated, so
+    nothing failed; the dag marker carries the state. The CLI maps this status to exit 3
+    (distinct from 1 blocked / 2 usage) so a driver can escalate rather than retry."""
+    add(f"⛔ {gate_id} is being revised — regate pending ({rg.get('actor', '?')}: {rg.get('reason', '')})")
+    add("   evaluation refused (fail-closed). Edit the criteria → re-audit → a DIFFERENT actor rearms:")
+    add(f"   hb regate {gate_id} --rearm --artifact <findings-file>")
+    return {"status": "regate_pending", "gate": gate_id, "passed": 0, "failed": 0,
+            "lines": lines, "results": [],
+            "regate": {"actor": rg.get("actor"), "reason": rg.get("reason")}}
+
+
 def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None, probe=False):
     """Run the criteria; no side effects. Returns None for an unknown gate.
 
@@ -81,6 +95,9 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None
         lines.append(ln)
         if emit:
             emit(ln)
+
+    _rg = st.regate_blocks(gate)   # regate-guard: fail-closed — only a well-formed pending:false record clears
+    if _rg is not None: return _regate_refusal(gate_id, _rg, _add, lines)   # regate-guard
 
     criteria = gate.get("criteria") or []
     if not criteria:
@@ -163,6 +180,7 @@ def run_gate(hbdir, gate_id, check=False, emit=None, progress=None):
     res = eval_gate(hbdir, gate_id, emit=emit, progress=progress)
     if res is None:
         return {"status": "unknown", "gate": gate_id}
+    if res.get("status") == "regate_pending": return res   # regate-guard: no event, no state change — the dag marker carries it
     if check:
         res.update(status="would_pass" if res["failed"] == 0 else "would_block", gate=gate_id)
         return res
@@ -210,6 +228,11 @@ def run_all(hbdir, emit=None, progress=None):
     # a gate that has never passed — a drafted/planned future phase — has nothing to regress from
     # and is SKIPPED, loudly (returned in "skipped" so callers must report it, never hide it).
     armed, skipped, parked = armed_gates(hbdir)
+    _gts = st.read_dag(hbdir).get("gates") or {}   # regate-guard
+    _rgl = sorted(g for g in _gts if st.regate_blocks(_gts[g]) is not None)   # regate-guard: fail-closed predicate (== single-gate path)
+    _rg_live = [g for g in _rgl if g not in set(parked)]   # regate-guard: counted FAILING below, never evaluated, never a skip
+    _rg_parked = [g for g in _rgl if g in set(parked)]   # regate-guard: retired, but ANNOTATED — retirement never hides a revision
+    armed = [g for g in armed if g not in _rg_live]; skipped = [g for g in skipped if g not in _rg_live]   # regate-guard
     total_fail = 0
     report = {}
     memo = {}   # one sweep's dedup scope: byte-identical (cmd, effective timeout) runs once
@@ -218,10 +241,12 @@ def run_all(hbdir, emit=None, progress=None):
         res = eval_gate(hbdir, g, emit=emit, progress=progress, dedup=memo, probe=True)
         report[g] = res
         total_fail += res["failed"]
-    return {"ok": total_fail == 0, "gates": report, "skipped": skipped, "parked": parked,
-            "deduped": sum(r["deduped"] for r in report.values()),
-            "flaky": sum(r["flaky"] for r in report.values()),
-            "elapsed_s": int(time.monotonic() - t0 + 0.5)}
+    out = {"ok": total_fail == 0, "gates": report, "skipped": skipped, "parked": parked,
+           "deduped": sum(r["deduped"] for r in report.values()),
+           "flaky": sum(r["flaky"] for r in report.values()),
+           "elapsed_s": int(time.monotonic() - t0 + 0.5)}
+    out["regated"] = _rg_live; out["parked_regated"] = _rg_parked; out["ok"] = out["ok"] and not _rg_live   # regate-guard
+    return out
 
 
 def _git(pd, *args, **kw):

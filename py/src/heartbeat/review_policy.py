@@ -38,6 +38,11 @@ def accept_review(hb, gate, verdict, artifact=None, note=None, model=None):
     note_str = (" ".join(note) if isinstance(note, list) else note) or None
     vw = "review free" if verdict == "free" else "review pass"
 
+    _dag0 = st.read_dag(hb)   # regate-guard
+    _gv0 = (_dag0.get("gates") or {}).get(gate) or next(((_dag0.get("gates") or {}).get(p.get("gate_exit")) for p in (_dag0.get("phases") or []) if p.get("id") == gate and p.get("gate_exit")), None)   # regate-guard: a phase id must not bypass the guard (refuter catch)
+    _rg = st.regate_blocks(_gv0)   # regate-guard: fail-closed — a malformed record blocks too
+    if _rg is not None: return 1, "", f"review {verdict} refused on {gate}: the gate is being revised (regate pending, by {_rg.get('actor', '?')}: {_rg.get('reason', '')}) — a DIFFERENT actor rearms first: hb regate {gate} --rearm --artifact <findings-file>; a fresh pass of the revised criteria is then owed before any verdict."   # regate-guard
+
     if verdict == "fail":
         ev = {"event": "review_failed", "gate": gate, "model": model}
         if note_str:

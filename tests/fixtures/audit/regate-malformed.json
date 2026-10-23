@@ -1,0 +1,14 @@
+{
+  "project": "regate-malformed-fixture",
+  "phases": [
+    {"id": "R", "title": "r", "gate_entry": null, "gate_exit": "GATE_R",
+     "tasks": [{"id": "r1", "title": "t", "requires": [], "description": "work the gate verifies"}]}
+  ],
+  "gates": {
+    "GATE_R": {
+      "desc": "a gate with a MALFORMED regate record — both lints must ERROR, identically",
+      "regate": {"pending": "yes"},
+      "criteria": [{"id": "c1", "desc": "behavioral", "cmd": "python3 -c \"assert 1+1==2\""}]
+    }
+  }
+}

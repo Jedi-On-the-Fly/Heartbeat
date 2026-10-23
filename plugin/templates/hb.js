@@ -730,6 +730,19 @@ function checkHoles(body) {
 // identical in python)
 const ANSWER_TEXT = /[^ \t   -   　⠀ㅤﾠᅟᅠ]/;
 
+// Fail-closed regate predicate: a gate carrying a `regate` key BLOCKS evaluation/acceptance unless
+// the record is a well-formed object whose pending is exactly false (a rearmed revision). A
+// malformed record (wrong type, truthy junk) blocks — lint names it; a permissive read would let a
+// hand-mangled marker silently disarm the perimeter, and the two runtimes' truthiness rules
+// disagree on []/{} (a refuter catch). Returns the blocking record ({} when unreadable) or null
+// when clear. Twin: state.regate_blocks.
+function regateBlocks(gv) {
+  if (!gv || !Object.prototype.hasOwnProperty.call(gv, 'regate')) return null;
+  const r = gv.regate;
+  if (r && typeof r === 'object' && !Array.isArray(r) && r.pending === false) return null;
+  return (r && typeof r === 'object' && !Array.isArray(r)) ? r : {};
+}
+
 // A path shown to an agent: control characters (a newline in a file name) would let a doer forge
 // prompt sections, so such a path is rendered JSON-quoted. Twin: anchors.safe_path.
 function safePath(p) { return /[\x00-\x1f\x7f]/.test(p) ? JSON.stringify(p) : p; }
@@ -826,7 +839,7 @@ function composeAuthorPrompt(dag, gate) {
 // Exported BEFORE the CLI dispatch: refuter_profiles.js requires this module while hb.js is running
 // as the CLI (a circular require sees only what is already assigned).
 module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProtocolMd, withWlock, changed, recordedConstraints, safePath, checkAnswers, checkHoles, subjectPath,
-  planConstraints, reviewCycle, composeAuthorPrompt };
+  planConstraints, reviewCycle, composeAuthorPrompt, regateBlocks };
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 // v1.7: guard the dispatch so hb.js is safely requirable (the tick requires it to
@@ -857,6 +870,8 @@ switch (cmd) {
   case 'anchor':
     // Internal: gate.sh records a review-less gate's acceptance anchor through this.
     if (!arg1) die('usage: hb anchor <gate>');
+    { const rga = regateBlocks((readDag().gates || {})[arg1]);   // regate-guard: anchor — write-once acceptance records must not freeze a revised, unverified tree (refuter catch)
+      if (rga) die(`anchor: ${arg1} is being revised (regate pending, by ${rga.actor || '?'}: ${rga.reason || ''}) — no acceptance anchor until a rearm and a fresh pass of the revised criteria.`); }   // regate-guard: anchor
     if (!tryAnchor(arg1)) process.exit(1);
     break;
 
@@ -882,6 +897,8 @@ switch (cmd) {
     }
     const file = val('--record');
     if (!file || file.startsWith('--')) die('hb constraints: --record needs <file.json>');
+    { const rgc = regateBlocks((dag.gates || {})[gate]);   // regate-guard: constraints — no targets over a revision (fail-closed on malformed records)
+      if (rgc) die(`hb constraints --record refused on ${gate}: the gate is being revised (regate pending, by ${rgc.actor || '?'}: ${rgc.reason || ''}) — a DIFFERENT actor rearms first: node .hb/hb.js regate ${gate} --rearm --artifact <findings-file>; constraints are authored against the criteria that will be enforced.`); }   // regate-guard: constraints
     if (cArgs.includes('--model') && (val('--model') === undefined || val('--model').startsWith('--')))
       die('hb constraints: --model needs a value');
     const model = val('--model') ?? null;
@@ -989,6 +1006,10 @@ switch (cmd) {
     const note = noteToks[0] || '';
     if (!gate || (verdict !== 'pass' && verdict !== 'fail' && verdict !== 'free'))
       die('usage: hb review <gate> pass|fail|free [--artifact <findings-file>] [--model <m>] [note]');
+    { const dag0 = readDag(), gates0 = dag0.gates || {};   // regate-guard: review — no verdict over a revision
+      const gv0 = gates0[gate] || gates0[((dag0.phases || []).find(p => p.id === gate) || {}).gate_exit];   // regate-guard: review — a phase id must not bypass the guard (refuter catch)
+      const rgv = regateBlocks(gv0);   // regate-guard: review — fail-closed: a malformed record blocks too
+      if (rgv) die(`review ${verdict} refused on ${gate}: the gate is being revised (regate pending, by ${rgv.actor || '?'}: ${rgv.reason || ''}) — a DIFFERENT actor rearms first: node .hb/hb.js regate ${gate} --rearm --artifact <findings-file>; a fresh pass of the revised criteria is then owed before any verdict.`); }   // regate-guard: review
     if (verdict === 'fail') {
       mutate({ event: 'review_failed', gate, model, ...(note ? { note } : {}) });
       process.stdout.write(`review fail ${gate}\n`);
@@ -1237,29 +1258,83 @@ switch (cmd) {
     break;
   }
 
+  case 'regate': {
+    // Sanctioned gate revision — the fail-closed sibling of park. A gate whose PREMISES died
+    // (a deleted volume, a dev-mode assumption) is re-grounded through regate, never by a silent
+    // hand-edit: declare snapshots the criteria and marks the gate pending; while pending, every
+    // evaluation/acceptance path refuses (gate.sh exit 3; review; constraints --record); the
+    // rearm half (RG2) re-enables evaluation behind an evidence bar.
+    if (!arg1) die('usage: hb regate <GATE_ID|PHASE_ID> <reason…>');
+    const dag = readDag();
+    const phases = dag.phases || [];
+    let gate = null;
+    if ((dag.gates || {})[arg1]) gate = arg1;
+    else {
+      const ph = phases.find(p => p.id === arg1);
+      if (ph && !ph.gate_exit) die(`regate: phase ${arg1} has no gate_exit — nothing to revise`);
+      gate = ph && ph.gate_exit;
+    }
+    if (!gate || !(dag.gates || {})[gate]) die(`regate: unknown gate or phase: ${arg1}`);
+    for (const t of rest) if (/^--/.test(t)) die(`regate: unknown option ${t}`);
+    const reason = rest.join(' ').trim();
+    if (!reason) die('regate: a reason is required — say why the gate\'s premises changed');
+    const actor = process.env.HB_ACTOR;
+    if (!actor || !actor.trim() || actor.trim().toLowerCase() === 'unknown')
+      die('regate: set HB_ACTOR to the reviser\'s identity (the rearm must come from a DIFFERENT actor)');
+    // Check-then-write under ONE write lock (the constraints --record precedent): two concurrent
+    // declares must not both see "no pending regate" — a refuter catch (3 events from 6 racers).
+    const verdict = withWlock(() => {
+      const dag2 = readDag();
+      const gv2 = (dag2.gates || {})[gate];
+      if (!gv2) return `regate: unknown gate or phase: ${arg1}`;
+      if (regateBlocks(gv2)) {
+        const r2 = (gv2.regate && typeof gv2.regate === 'object' && !Array.isArray(gv2.regate)) ? gv2.regate : {};
+        return `regate: ${gate} already has a pending regate (by ${r2.actor || '?'}: ${r2.reason || ''}) — edit the criteria and rearm that revision first`;
+      }
+      gv2.regate = { at: nowIso(), reason, actor,
+                     prev_criteria: JSON.parse(JSON.stringify(gv2.criteria || [])), pending: true };
+      fs.writeFileSync(DAG, JSON.stringify(dag2, null, 2));
+      appendEvent({ event: 'gate_regated', gate, reason });   // audit-only: the projection ignores it
+      reproject();
+      return null;
+    });
+    if (verdict) die(verdict);
+    process.stdout.write(
+      `🔧 regate ${gate} (by ${actor}): ${reason}\n` +
+      `   criteria snapshotted (prev_criteria) — ${gate} now REFUSES evaluation and acceptance (fail-closed).\n` +
+      `   Next: 1. edit the criteria in .hb/dag.json   2. re-audit: node .hb/hb-audit.js .hb/dag.json\n` +
+      `         3. a DIFFERENT actor rearms with evidence: node .hb/hb.js regate ${gate} --rearm --artifact <findings-file>\n`);
+    break;
+  }
+
   case 'park':
   case 'unpark': {
     // The CLI path for retiring a phase — no hand-editing, no deletion (deleting a gate
     // dangles the phase's gate_exit; parking keeps every reference intact and reversible).
     // Accepts a phase id OR a gate id (resolved to the phase carrying it as gate_exit).
     if (!arg1) die(`usage: hb ${cmd} <PHASE_ID|GATE_ID> [reason…]`);
-    const dag = readDag();
-    const phases = dag.phases || [];
-    const target = phases.find(p => p.id === arg1) || phases.find(p => p.gate_exit === arg1);
-    if (!target) die(`unknown phase or gate: ${arg1}`);
-    if (cmd === 'park') {
-      target.parked = true;
-      const reason = rest.join(' ').trim();
-      if (reason) target.parked_reason = reason;
-    } else {
-      delete target.parked;
-      delete target.parked_reason;
-    }
-    fs.writeFileSync(DAG, JSON.stringify(dag, null, 2));
-    const gateNote = target.gate_exit ? ` [gate: ${target.gate_exit}]` : '';
+    // Read-modify-write of dag.json under the write lock: an UNLOCKED rewrite raced against a
+    // concurrent declare erased the fresh regate marker (lost update — a refuter catch, 2/40).
+    const parkRes = withWlock(() => {
+      const dag = readDag();
+      const phases = dag.phases || [];
+      const target = phases.find(p => p.id === arg1) || phases.find(p => p.gate_exit === arg1);
+      if (!target) return `unknown phase or gate: ${arg1}`;
+      if (cmd === 'park') {
+        target.parked = true;
+        const reason = rest.join(' ').trim();
+        if (reason) target.parked_reason = reason;
+      } else {
+        delete target.parked;
+        delete target.parked_reason;
+      }
+      fs.writeFileSync(DAG, JSON.stringify(dag, null, 2));
+      return { id: target.id, gateNote: target.gate_exit ? ` [gate: ${target.gate_exit}]` : '' };
+    });
+    if (typeof parkRes === 'string') die(parkRes);
     process.stdout.write(cmd === 'park'
-      ? `⏸ parked phase ${target.id}${gateNote} — out of the plan's live surface (resolver, audit, report, and the --all sweep all skip it). Reverse with: node .hb/hb.js unpark ${target.id}\n`
-      : `▶ unparked phase ${target.id}${gateNote} — back in the plan (re-audit before running: node .hb/hb-audit.js .hb/dag.json)\n`);
+      ? `⏸ parked phase ${parkRes.id}${parkRes.gateNote} — out of the plan's live surface (resolver, audit, report, and the --all sweep all skip it). Reverse with: node .hb/hb.js unpark ${parkRes.id}\n`
+      : `▶ unparked phase ${parkRes.id}${parkRes.gateNote} — back in the plan (re-audit before running: node .hb/hb-audit.js .hb/dag.json)\n`);
     break;
   }
 
@@ -1282,7 +1357,7 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|refuters|refute-prompt|changed|constraints|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|regate|refuters|refute-prompt|changed|constraints|import> [args]');
 }
 }
 

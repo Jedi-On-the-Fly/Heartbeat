@@ -65,12 +65,43 @@ def lint(dag):
     _check_placeholders(dag, warnings)
     _check_gate_artifacts(dag, warnings)
     _check_constraints(dag, errors)
+    _check_regate(dag, errors)   # regate-guard
     return {"errors": errors, "warnings": warnings}
 
 
 # "Non-blank" with ONE explicit whitespace set — str.strip() and JS trim() disagree on \ufeff /
 # \x1c-\x1f / \x85, and the two lints must return identical errors (twin: blankFree).
 _ASCII_WS = " \t\n\r\f\v"
+
+
+def _check_regate(dag, errors):
+    """A gate's regate record (written by `hb regate`, honored by every evaluation/acceptance
+    path): {at?, reason, actor, prev_criteria, pending, rearm?}. A malformed record must ERROR
+    on BOTH lints — a shape the runtimes read permissively would let a hand-mangled marker
+    silently disarm the fail-closed perimeter. Twin: hb-lint.js checkRegate (messages verbatim)."""
+    def _blank_free(s):
+        return isinstance(s, str) and bool(s.strip(_ASCII_WS))
+    for g, gv in (dag.get("gates") or {}).items():
+        if "regate" not in (gv or {}):
+            continue
+        r = gv["regate"]
+        if not isinstance(r, dict) or not r:
+            errors.append(f"[{g}] regate must be a non-empty object ({{at?, reason, actor, prev_criteria, pending, rearm?}})")
+            continue
+        if not isinstance(r.get("pending"), bool):
+            errors.append(f"[{g}] regate.pending must be true or false")
+        if not _blank_free(r.get("reason")):
+            errors.append(f"[{g}] regate.reason must be a non-empty string (why the premises changed)")
+        if not _blank_free(r.get("actor")):
+            errors.append(f"[{g}] regate.actor must be a non-empty string (who declared the revision)")
+        if not isinstance(r.get("prev_criteria"), list):
+            errors.append(f"[{g}] regate.prev_criteria must be a list (the criteria snapshot at declare time)")
+        if "at" in r and not _blank_free(r.get("at")):
+            errors.append(f"[{g}] regate.at must be a non-empty string timestamp")
+        if "rearm" in r:
+            w = r["rearm"]
+            if not isinstance(w, dict) or not all(_blank_free(w.get(k)) for k in ("actor", "artifact", "sha256")):
+                errors.append(f"[{g}] regate.rearm must be an object with non-empty actor, artifact and sha256 strings")
 
 
 def _check_constraints(dag, errors):

@@ -247,13 +247,23 @@ if [ "$ALL" = 1 ]; then
     // A parked phase's gate leaves the sweep entirely (retirement) — even if it was armed.
     const parkedG = new Set((dag.phases || []).filter(p => p.parked && p.gate_exit).map(p => p.gate_exit));
     const all = Object.keys(dag.gates || {});
-    console.log(all.filter(g => seen.has(g) && !parkedG.has(g)).join(' '));
-    console.log(all.filter(g => !seen.has(g) && !parkedG.has(g)).join(' '));
+    // A pending regate is COUNTED FAILING regardless of armed/planned status — the sweep must never
+    // say ALL GREEN over an unrefuted revision. A parked one stays retired but is ANNOTATED.
+    // Fail-closed predicate (== hb.js regateBlocks): only a well-formed pending:false record clears.
+    const rp = (g) => { const gv = dag.gates[g] || {}; if (!Object.prototype.hasOwnProperty.call(gv, 'regate')) return false;
+      const r = gv.regate; return !(r && typeof r === 'object' && !Array.isArray(r) && r.pending === false); };
+    const regated = new Set(all.filter(rp));
+    console.log(all.filter(g => seen.has(g) && !parkedG.has(g) && !regated.has(g)).join(' '));
+    console.log(all.filter(g => !seen.has(g) && !parkedG.has(g) && !regated.has(g)).join(' '));
     console.log(all.filter(g => parkedG.has(g)).join(' '));
+    console.log(all.filter(g => regated.has(g) && !parkedG.has(g)).join(' '));
+    console.log(all.filter(g => regated.has(g) && parkedG.has(g)).join(' '));
   " "$DAG_FILE" "$EVENTS_FILE")
   GATES=$(printf '%s\n' "$LISTS" | sed -n 1p)
   PLANNED=$(printf '%s\n' "$LISTS" | sed -n 2p)
   PARKED=$(printf '%s\n' "$LISTS" | sed -n 3p)
+  REGATED=$(printf '%s\n' "$LISTS" | sed -n 4p)     # regate-guard
+  PARKED_RG=$(printf '%s\n' "$LISTS" | sed -n 5p)   # regate-guard
   # Announce scope UP FRONT — a multi-minute silent sweep (the pre-push hook path) is
   # indistinguishable from a hung run — and report the elapsed total in the verdict.
   set -- $GATES; NGATES=$#
@@ -264,6 +274,7 @@ if [ "$ALL" = 1 ]; then
   TOTAL_FAIL=0
   for g in $GATES; do eval_gate "$g"; TOTAL_FAIL=$((TOTAL_FAIL + FAIL)); echo ""; done
   T_ALL=$((SECONDS - S0))
+  if [ -n "${REGATED:-}" ]; then set -- $REGATED; echo "— ⛔ $# regate-pending gate(s) (revised, not re-refuted — counted FAILING): $REGATED"; echo ""; TOTAL_FAIL=$((TOTAL_FAIL + $#)); fi   # regate-guard: a pending revision is a FAILURE, never a skip (single line: a stripped guard must leave a PARSING script)
   if [ -n "$PLANNED" ]; then
     set -- $PLANNED
     echo "— skipped $# planned gate(s) (never passed): $PLANNED"
@@ -271,7 +282,8 @@ if [ "$ALL" = 1 ]; then
   fi
   if [ -n "$PARKED" ]; then
     set -- $PARKED
-    echo "— skipped $# parked gate(s): $PARKED"
+    RGNOTE=""; [ -n "${PARKED_RG:-}" ] && RGNOTE=" (regate pending: $PARKED_RG)"   # regate-guard: retirement never hides a revision
+    echo "— skipped $# parked gate(s): $PARKED${RGNOTE:-}"
     echo ""
   fi
   DSUF=""; [ "$DEDUP_HITS" -gt 0 ] && DSUF=", $DEDUP_HITS deduped"
@@ -294,6 +306,13 @@ node -e "
   const dag = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
   if (!dag.gates[process.argv[2]]) { console.error('Unknown gate: ' + process.argv[2]); process.exit(2); }
 " "$DAG_FILE" "$GATE" || exit 2
+
+# A pending regate refuses evaluation FAIL-CLOSED: the criteria were revised and not yet re-refuted,
+# so running them proves nothing (and the dead premises may make execution itself harmful). Exit 3 —
+# distinct from 1 (blocked) and 2 (usage) — so a driver can escalate rather than retry. No event:
+# nothing was evaluated, so nothing failed; the dag marker carries the state.
+RG_PENDING=$(node -e "const d=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const g=((d.gates||{})[process.argv[2]]||{});if(Object.prototype.hasOwnProperty.call(g,'regate')){const r=g.regate;const clear=r&&typeof r==='object'&&!Array.isArray(r)&&r.pending===false;if(!clear){const rr=(r&&typeof r==='object'&&!Array.isArray(r))?r:{};process.stdout.write((rr.actor||'?')+': '+(rr.reason||'(unreadable regate record — run lint)'));}}" "$DAG_FILE" "$GATE")   # regate-guard
+[ -n "$RG_PENDING" ] && { printf '⛔ %s is being revised — regate pending (%s)\n   evaluation refused (fail-closed). Edit the criteria → re-audit → a DIFFERENT actor rearms:\n   node %s/hb.js regate %s --rearm --artifact <findings-file>\n' "$GATE" "$RG_PENDING" "$HB_DIR" "$GATE"; exit 3; }   # regate-guard
 
 eval_gate "$GATE"
 

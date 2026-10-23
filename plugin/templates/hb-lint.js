@@ -77,6 +77,7 @@ function lint(dag) {
   checkPlaceholders(dag, warnings);
   checkGateArtifacts(dag, warnings);
   checkConstraints(dag, errors);
+  checkRegate(dag, errors);   // regate-guard
   return { errors, warnings };
 }
 
@@ -102,6 +103,33 @@ function checkConstraints(dag, errors) {
     const cs = rv.constraints;
     if (!Array.isArray(cs)) { errors.push(`[${g}] review.constraints must be a list of {id, claim, subjects, violation}`); continue; }
     for (const m of constraintErrors(cs, 'P')) errors.push(`[${g}] ${m}`);
+  }
+}
+
+// A gate's regate record (written by `hb regate`, honored by every evaluation/acceptance path):
+// {at?, reason, actor, prev_criteria, pending, rearm?}. A malformed record must ERROR on BOTH
+// lints — a shape the runtimes read permissively would let a hand-mangled marker silently
+// disarm the fail-closed perimeter. Twin: lint.py _check_regate (messages verbatim).
+function checkRegate(dag, errors) {
+  const gates = dag.gates ?? {};
+  for (const g of Object.keys(gates)) {
+    const r = (gates[g] || {}).regate;
+    if (r === undefined) continue;
+    if (r === null || typeof r !== 'object' || Array.isArray(r) || !Object.keys(r).length) {
+      errors.push(`[${g}] regate must be a non-empty object ({at?, reason, actor, prev_criteria, pending, rearm?})`);
+      continue;
+    }
+    if (typeof r.pending !== 'boolean') errors.push(`[${g}] regate.pending must be true or false`);
+    if (typeof r.reason !== 'string' || !blankFree(r.reason)) errors.push(`[${g}] regate.reason must be a non-empty string (why the premises changed)`);
+    if (typeof r.actor !== 'string' || !blankFree(r.actor)) errors.push(`[${g}] regate.actor must be a non-empty string (who declared the revision)`);
+    if (!Array.isArray(r.prev_criteria)) errors.push(`[${g}] regate.prev_criteria must be a list (the criteria snapshot at declare time)`);
+    if (r.at !== undefined && (typeof r.at !== 'string' || !blankFree(r.at))) errors.push(`[${g}] regate.at must be a non-empty string timestamp`);
+    if (r.rearm !== undefined) {
+      const w = r.rearm;
+      const strOk = (v) => typeof v === 'string' && blankFree(v);
+      if (w === null || typeof w !== 'object' || Array.isArray(w) || !strOk(w.actor) || !strOk(w.artifact) || !strOk(w.sha256))
+        errors.push(`[${g}] regate.rearm must be an object with non-empty actor, artifact and sha256 strings`);
+    }
   }
 }
 

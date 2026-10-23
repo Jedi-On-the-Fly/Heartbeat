@@ -169,6 +169,8 @@ def record(hbdir, dag, gate, file, model=None):
     records cannot both see "not recorded"."""
     if not SAFE_GATE_ID.fullmatch(gate):
         return 1, "", f"hb constraints --record: gate id '{gate}' is not usable as a file name"
+    _rg = st.regate_blocks((dag.get("gates") or {}).get(gate))   # regate-guard: fail-closed — a malformed record blocks too
+    if _rg is not None: return 1, "", f"hb constraints --record refused on {gate}: the gate is being revised (regate pending, by {_rg.get('actor', '?')}: {_rg.get('reason', '')}) — a DIFFERENT actor rearms first: hb regate {gate} --rearm --artifact <findings-file>; constraints are authored against the criteria that will be enforced."   # regate-guard
     actor = os.environ.get("HB_ACTOR")
     norm = lambda a: str(a).strip().lower()  # noqa: E731
     try:

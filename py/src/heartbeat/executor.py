@@ -306,6 +306,8 @@ def _constrained_review(hbdir, cfg, dag, g, rv_block, data, worker_actor, refute
     def refuse(reason, model=_refute_role):   # a refused review is a recorded failure, never a crash
         # the model of the role that refused, verbatim — None stays None (== node's explicit null)
         m = models["refute"] if model is _refute_role else model
+        _rg = st.regate_blocks((st.read_dag(hbdir).get("gates") or {}).get(g))   # regate-guard: refuse-path (fail-closed predicate)
+        if _rg is not None: print(f"HB-EXEC STOP: regate_pending — {g} was revised mid-review (by {_rg.get('actor', '?')}: {_rg.get('reason', '')}); no verdict recorded — a DIFFERENT actor rearms (hb regate {g} --rearm --artifact <findings-file>), then a fresh pass is owed"); return 1   # regate-guard: refuse-path
         st.mutate(hbdir, {"event": "review_failed", "gate": g, "model": m or None, "note": reason[:1500]})
         return None
 
@@ -473,7 +475,8 @@ def _run(hbdir):
                 if blocks:
                     print(f"HB-EXEC STOP: strict_gate — {g}: {'; '.join(blocks)}")
                     return 1
-            gatemod.run_gate(hbdir, g)
+            _res = gatemod.run_gate(hbdir, g)   # regate-guard: gate-path
+            if (_res or {}).get("status") == "regate_pending": print(f"HB-EXEC STOP: regate_pending — {g} is being revised; a DIFFERENT actor rearms (hb regate {g} --rearm --artifact <findings-file>), then a fresh pass of the revised criteria is owed"); return 1   # regate-guard: gate-path
         elif reason == "review_pending":
             g = data["next_task"].get("gate")
             from . import refuter_profiles as rp
@@ -536,6 +539,8 @@ def _run(hbdir):
                 print(f"HB-EXEC STOP: review_error — {g}: refuter could not run ({r.get('error') or 'no verdict'})")
                 return 1
             if r["refuted"]:
+                _rg = st.regate_blocks((st.read_dag(hbdir).get("gates") or {}).get(g))   # regate-guard: refuted-branch (fail-closed predicate)
+                if _rg is not None: print(f"HB-EXEC STOP: regate_pending — {g} was revised mid-review (by {_rg.get('actor', '?')}: {_rg.get('reason', '')}); no verdict recorded — a DIFFERENT actor rearms (hb regate {g} --rearm --artifact <findings-file>), then a fresh pass is owed"); return 1   # regate-guard: refuted-branch
                 # Auto-stamp the resolved refuter model (config-derived — not a self-report).
                 st.mutate(hbdir, {"event": "review_failed", "gate": g, "model": r_model or None,
                                   "note": (r.get("findings", "") or "")[:200]})

@@ -1884,6 +1884,23 @@ check "T173.1 the page's commands run in order (author, record, refute, free, pa
 check "T173.2 teeth: a removed step, a renamed flag, a doer as author, a required vendor model (page or SKILL) each go RED (--selftest → SELFTEST-OK)" \
   'bash "'"$GEX"'/constraint-first-review.sh" --selftest 2>&1 | grep -q "SELFTEST-OK"'
 
+grp "T179 — hb regate declare + the fail-closed perimeter: while a regate is pending no path evaluates or accepts the gate (gate.sh exit 3; eval_gate/accept_review/constraints chokepoints; executors escalate; ticks sleep regate_pending_waiting); both runtimes"
+RGFC="$HB_SRC/tests/regate-fail-closed.sh"
+if command -v python3 >/dev/null 2>&1; then
+  check "T179.1 declare: marker {at,reason,actor,prev_criteria,pending} + audit-only gate_regated; phase-id resolution; refusals (no reason / no HB_ACTOR / unknown / gateless / second declare); both runtimes" \
+    'bash "'"$RGFC"'" declare 2>&1 | grep -q "^DECLARE-OK"'
+  check "T179.2 perimeter: gate.sh single/--check exit 3, --all counts the regated gate failing (ever-passed AND never-passed), diagnose never executes, review pass/fail/free + accept_review + constraints --record refused — no event appended" \
+    'bash "'"$RGFC"'" perimeter 2>&1 | grep -q "^PERIMETER-OK"'
+  check "T179.3 unattended: ticks sleep regate_pending_waiting (both states, both runtimes, executors idle); the mid-review race fabricates no verdict through ANY writer; the gate-path shim reaches the escalation branch" \
+    'bash "'"$RGFC"'" unattended 2>&1 | grep -q "^UNATTENDED-OK"'
+  check "T179.4 lint validates the regate record shape (malformed = non-empty error, well-formed clean, both runtimes); park composes (eval still refused; parked sweep listing annotates, never fails)" \
+    'bash "'"$RGFC"'" lint 2>&1 | grep -q "^LINT-OK" && bash "'"$RGFC"'" park 2>&1 | grep -q "^PARK-OK"'
+  check "T179.5 teeth: each regate guard stripped from a copy flips its named check red (--selftest)" \
+    'bash "'"$RGFC"'" --selftest 2>&1 | grep -q "^REGATE-FAIL-CLOSED-SELFTEST-OK"'
+else
+  echo "  (python3 absent — T179 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

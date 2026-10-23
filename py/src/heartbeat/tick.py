@@ -147,10 +147,17 @@ def _body(hbdir):
         return _sleep({"reason": "at_capacity", "detail": nxt})
     if typ == "gate_pending":
         _rm(_flag(hbdir, ".deadlock-alerted"))
+        # A pending regate needs a DIFFERENT actor's rearm — waking gate_pending forever over it
+        # would busy-loop every unattended run (refusals append no event, so no breaker trips).
+        # Sleep a non-PROTOCOL reason instead (the gate_blocked_waiting_human precedent; == tick.sh).
+        _rgt = st.regate_blocks((st.read_dag(hbdir).get("gates") or {}).get(nxt.get("gate")))   # regate-guard: tick-sleep (fail-closed predicate)
+        if _rgt is not None: return _sleep({"reason": "regate_pending_waiting", "gate": nxt.get("gate")})   # regate-guard: tick-sleep
         return _wake({"reason": "gate_pending", "next_task": nxt})
     if typ == "review_pending":
         _rm(_flag(hbdir, ".deadlock-alerted"))
         gate = nxt.get("gate")
+        _rgr = st.regate_blocks((st.read_dag(hbdir).get("gates") or {}).get(gate))   # regate-guard: tick-sleep (fail-closed predicate)
+        if _rgr is not None: return _sleep({"reason": "regate_pending_waiting", "gate": gate})   # regate-guard: tick-sleep
         # Mirror tick.sh: an adversarial review that never resolves is escalated past STUCK_TICKS
         # (review_stuck, single-alert) instead of waking review_pending forever — a liveness guard.
         noreview = _review_wakes_since_verdict(hbdir, gate)

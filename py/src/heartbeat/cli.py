@@ -56,6 +56,7 @@ def main(argv=None):
     p = sub.add_parser("ready"); p.add_argument("n", nargs="?", type=int, default=0); _add_dir(p)
     p = sub.add_parser("refuters"); p.add_argument("rest", nargs=argparse.REMAINDER); _add_dir(p)
     p = sub.add_parser("refute-prompt"); p.add_argument("gate"); p.add_argument("--json", action="store_true"); p.add_argument("--free", action="store_true"); _add_dir(p)
+    p = sub.add_parser("regate"); p.add_argument("id"); p.add_argument("--reason", default=None); _add_dir(p)
     p = sub.add_parser("park"); p.add_argument("id"); p.add_argument("--reason", default=""); _add_dir(p)
     p = sub.add_parser("unpark"); p.add_argument("id"); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
@@ -102,10 +103,13 @@ def main(argv=None):
                 if res["failed"]:
                     fl = f" ({res['flaky']} flaky — failed once, passed on re-run)" if res.get("flaky") else ""
                     print(f"✗ {g}: {res['failed']} failing criteria{fl}")
+            if r.get("regated"):   # a pending revision is a FAILURE, never a skip
+                print(f"— ⛔ {len(r['regated'])} regate-pending gate(s) (revised, not re-refuted — counted FAILING): {' '.join(r['regated'])}")
             if r["skipped"]:   # loud, never silent — a skipped gate must be visible in the sweep
                 print(f"— skipped {len(r['skipped'])} planned gate(s) (never passed): {' '.join(r['skipped'])}")
             if r["parked"]:
-                print(f"— skipped {len(r['parked'])} parked gate(s): {' '.join(r['parked'])}")
+                rgnote = f" (regate pending: {' '.join(r['parked_regated'])})" if r.get("parked_regated") else ""
+                print(f"— skipped {len(r['parked'])} parked gate(s): {' '.join(r['parked'])}{rgnote}")
             dsuf = f", {r['deduped']} deduped" if r.get("deduped") else ""
             fsuf = f", {r['flaky']} flaky" if r.get("flaky") else ""
             print(f"✅ ALL GATES PASS ({len(r['gates'])} gate(s) in {r['elapsed_s']}s{dsuf})" if r["ok"]
@@ -133,27 +137,84 @@ def main(argv=None):
 
         res = gatemod.run_gate(hb, args.gate, check=args.check, emit=_emit, progress=_progress)
         print(f"gate {args.gate}: {res['status']}")
+        if res["status"] == "regate_pending":   # distinct signal (== gate.sh exit 3): escalate, don't retry
+            return 3
         return 0 if res["status"] in ("passed", "review_pending", "would_pass") else 1
+    elif args.cmd == "regate":
+        # Sanctioned gate revision — the fail-closed sibling of park (node twin: hb.js regate).
+        # Declare snapshots the criteria and marks the gate pending; while pending, every
+        # evaluation/acceptance path refuses (eval_gate / accept_review / constraints.record).
+        dagpath = Path(hb) / "dag.json"
+        dag = st.read_dag(hb)
+        gates = dag.get("gates") or {}
+        phases = dag.get("phases") or []
+        gate = args.id if args.id in gates else None
+        if gate is None:
+            ph = next((p for p in phases if p.get("id") == args.id), None)
+            if ph is not None and not ph.get("gate_exit"):
+                sys.stderr.write(f"regate: phase {args.id} has no gate_exit — nothing to revise\n"); return 1
+            gate = ph.get("gate_exit") if ph else None
+        if not gate or gate not in gates:
+            sys.stderr.write(f"regate: unknown gate or phase: {args.id}\n"); return 1
+        reason = (args.reason or "").strip()
+        if not reason:
+            sys.stderr.write("regate: a reason is required (--reason) — say why the gate's premises changed\n"); return 1
+        actor = (os.environ.get("HB_ACTOR") or "").strip()
+        if not actor or actor.lower() == "unknown":
+            sys.stderr.write("regate: set HB_ACTOR to the reviser's identity (the rearm must come from a DIFFERENT actor)\n"); return 1
+        # Check-then-write under ONE write lock (the constraints --record precedent): two concurrent
+        # declares must not both see "no pending regate" — a refuter catch (node twin identical).
+        def _declare_locked():
+            dag2 = st.read_dag(hb)
+            gv2 = (dag2.get("gates") or {}).get(gate)
+            if gv2 is None:
+                return f"regate: unknown gate or phase: {args.id}"
+            if st.regate_blocks(gv2) is not None:
+                rg2 = gv2.get("regate") if isinstance(gv2.get("regate"), dict) else {}
+                return (f"regate: {gate} already has a pending regate (by {rg2.get('actor', '?')}: {rg2.get('reason', '')}) "
+                        "— edit the criteria and rearm that revision first")
+            gv2["regate"] = {"at": st.now_iso(), "reason": reason, "actor": actor,
+                             "prev_criteria": json.loads(json.dumps(gv2.get("criteria") or [])), "pending": True}
+            dagpath.write_text(json.dumps(dag2, indent=2))
+            st.append_event(hb, {"event": "gate_regated", "gate": gate, "reason": reason})   # audit-only: the projection ignores it
+            st.reproject(hb)
+            return None
+        _err = st.with_wlock(hb, _declare_locked)
+        if _err:
+            sys.stderr.write(_err + "\n"); return 1
+        print(f"🔧 regate {gate} (by {actor}): {reason}")
+        print(f"   criteria snapshotted (prev_criteria) — {gate} now REFUSES evaluation and acceptance (fail-closed).")
+        print("   Next: 1. edit the criteria in .hb/dag.json   2. re-audit: hb audit")
+        print(f"         3. a DIFFERENT actor rearms with evidence: hb regate {gate} --rearm --artifact <findings-file>")
+        return 0
     elif args.cmd in ("park", "unpark"):
         # The CLI path for retiring a phase — no hand-editing, no deletion (deleting a gate
         # dangles the phase's gate_exit; parking keeps every reference intact and reversible).
         # Accepts a phase id OR a gate id (resolved to the phase carrying it as gate_exit).
         dagpath = Path(hb) / "dag.json"
-        dag = st.read_dag(hb)
-        phases = dag.get("phases") or []
-        target = next((p for p in phases if p.get("id") == args.id), None) \
-            or next((p for p in phases if p.get("gate_exit") == args.id), None)
+
+        # Read-modify-write of dag.json under the write lock: an UNLOCKED rewrite raced against a
+        # concurrent declare erased the fresh regate marker (lost update — a refuter catch; node twin).
+        def _park_locked():
+            dag = st.read_dag(hb)
+            phases = dag.get("phases") or []
+            t = next((p for p in phases if p.get("id") == args.id), None) \
+                or next((p for p in phases if p.get("gate_exit") == args.id), None)
+            if t is None:
+                return None
+            if args.cmd == "park":
+                t["parked"] = True
+                if args.reason:
+                    t["parked_reason"] = args.reason
+            else:
+                t.pop("parked", None)
+                t.pop("parked_reason", None)
+            dagpath.write_text(json.dumps(dag, indent=2))
+            return {"id": t["id"], "gate_exit": t.get("gate_exit")}
+        target = st.with_wlock(hb, _park_locked)
         if target is None:
             sys.stderr.write(f"unknown phase or gate: {args.id}\n")
             return 2
-        if args.cmd == "park":
-            target["parked"] = True
-            if args.reason:
-                target["parked_reason"] = args.reason
-        else:
-            target.pop("parked", None)
-            target.pop("parked_reason", None)
-        dagpath.write_text(json.dumps(dag, indent=2))
         gate_note = f" [gate: {target.get('gate_exit')}]" if target.get("gate_exit") else ""
         if args.cmd == "park":
             print(f"⏸ parked phase {target['id']}{gate_note} — out of the plan's live surface "

@@ -434,7 +434,10 @@ async function run() {
         }
         // gate.sh advances the phase on pass (and announces a review if one is owed);
         // on fail it records the error → the next tick surfaces gate_blocked.
-        try { execFileSync('bash', [GATE, gate], { cwd: PROJECT_DIR, stdio: 'inherit' }); } catch (e) {}
+        try { execFileSync('bash', [GATE, gate], { cwd: PROJECT_DIR, stdio: 'inherit' }); }
+        catch (e) {
+          if (e && e.status === 3) { escalate('regate_pending', `${gate} is being revised — a DIFFERENT actor rearms (node .hb/hb.js regate ${gate} --rearm --artifact <findings-file>), then a fresh pass of the revised criteria is owed`); return 1; }   // regate-guard: exit3 — the distinct refusal signal: escalate, never retry
+        }
         break;
       }
 
@@ -498,7 +501,8 @@ async function run() {
           escalate('review_error', `${gate}: backend returned no verdict`); return 1;
         }
         if (r.json.refuted) {
-          hb('review', gate, 'fail', r.json.findings || 'refuted', ...(rModel ? ['--model', rModel] : []));
+          try { hb('review', gate, 'fail', r.json.findings || 'refuted', ...(rModel ? ['--model', rModel] : [])); }   // regate-guard: review-fail-wrap
+          catch (e) { escalate('review_error', `${gate}: could not record the refusal (${String((e && e.stderr) || (e && e.message) || e).trim().split('\n').pop()})`); return 1; }   // regate-guard: review-fail-wrap — a CLI refusal (a mid-review regate) escalates, never an unhandled throw
         } else {
           // Sev-1: a "could not refute" pass must cite the refuter's ACTUAL written
           // attempt. Persist findings + pass --artifact so the verdict is reducible to

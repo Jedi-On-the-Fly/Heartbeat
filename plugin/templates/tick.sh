@@ -301,6 +301,11 @@ case "$TYPE" in
     ;;
   gate_pending)
     rm -f "$DEADLOCK_FLAG"
+    # A pending regate needs a DIFFERENT actor's rearm — waking gate_pending forever over it would
+    # busy-loop every unattended run (refusals append no event, so no breaker ever trips). Sleep a
+    # non-PROTOCOL reason instead (the gate_blocked_waiting_human precedent).
+    RG_TICK=$(echo "$NEXT" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const n=JSON.parse(d);const dag=JSON.parse(require('fs').readFileSync(process.env.DAG,'utf8'));const g=((dag.gates||{})[n.gate]||{});if(!Object.prototype.hasOwnProperty.call(g,'regate'))return process.stdout.write('');const r=g.regate;const clear=r&&typeof r==='object'&&!Array.isArray(r)&&r.pending===false;process.stdout.write(clear?'':String(n.gate));}catch(e){process.stdout.write('');}});" 2>/dev/null)   # regate-guard: tick-sleep
+    [ -n "$RG_TICK" ] && sleep_out "{\"reason\":\"regate_pending_waiting\",\"gate\":\"$RG_TICK\"}"   # regate-guard: tick-sleep
     wake_out "{\"reason\":\"gate_pending\",\"next_task\":$NEXT,\"ts\":\"$TS\"}"
     ;;
   review_pending)
@@ -324,6 +329,9 @@ case "$TYPE" in
       }
       console.log(n);
     " "$RGATE" 2>/dev/null || echo 0)
+
+    RGP=$([ -n "$RGATE" ] && node -e "const dag=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));const g=((dag.gates||{})[process.argv[2]]||{});let out='';if(Object.prototype.hasOwnProperty.call(g,'regate')){const r=g.regate;const clear=r&&typeof r==='object'&&!Array.isArray(r)&&r.pending===false;out=clear?'':'1';}process.stdout.write(out);" "$DAG" "$RGATE" 2>/dev/null || true)   # regate-guard: tick-sleep
+    [ -n "${RGP:-}" ] && sleep_out "{\"reason\":\"regate_pending_waiting\",\"gate\":\"$RGATE\"}"   # regate-guard: tick-sleep
 
     if [ -n "$RGATE" ] && [ "$noreview" -ge "$STUCK_TICKS" ]; then
       if [ ! -f "$REVIEW_STUCK_FLAG" ]; then

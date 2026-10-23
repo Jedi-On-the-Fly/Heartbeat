@@ -49,6 +49,44 @@ case "$(l_node "$ROOT/tests/fixtures/audit/constraints.json")" in   # guard: ide
   *'reserved for gate-time'*'duplicate id'*) ;; *) echo "  ✗ constraints:lint — node found no constraint errors"; FAIL=1;;
 esac
 
+echo "── regate parity ──"
+# a malformed gates.<G>.regate record errors on BOTH lints, identically — and non-emptily
+cmp "regate:lint-malformed" "$(l_node "$ROOT/tests/fixtures/audit/regate-malformed.json")" "$(l_py "$ROOT/tests/fixtures/audit/regate-malformed.json")"
+case "$(l_node "$ROOT/tests/fixtures/audit/regate-malformed.json")" in   # guard: identical EMPTY lists must not read as parity
+  *'regate.pending must be'*) ;; *) echo "  ✗ regate:lint-malformed — node found no regate errors"; FAIL=1;;
+esac
+# cross-runtime: a declare performed by ONE runtime is honored by BOTH — same normalized marker,
+# well-formed under both lints, gate eval refused with the SAME distinct signal (exit 3), no
+# gate event appended, and both ticks sleep the IDENTICAL regate_pending_waiting reason.
+RGDAG='{"phases":[{"id":"R","title":"r","gate_entry":null,"gate_exit":"GATE_R","tasks":[{"id":"r1","title":"t","requires":[],"description":"work"}]}],"gates":{"GATE_R":{"desc":"g","criteria":[{"id":"c1","desc":"d","cmd":"python3 -c \"assert 1+1==2\""}]}}}'
+regate_case(){ # $1 = the runtime that DECLARES (node|py); everything else must agree
+  local d; d=$(mktemp -d); mkdir "$d/.hb"
+  printf '%s' "$RGDAG" > "$d/.hb/dag.json"
+  printf '{"event":"initialized"}\n{"event":"task_started","task":"r1"}\n{"event":"task_done","task":"r1"}\n' > "$d/.hb/events.jsonl"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" \
+     "$ROOT/plugin/templates/gate.sh" "$ROOT/plugin/templates/tick.sh" "$d/.hb/"
+  node "$d/.hb/hb.js" rebuild >/dev/null 2>&1
+  if [ "$1" = node ]; then ( cd "$d" && HB_ACTOR=alice node .hb/hb.js regate GATE_R premises died >/dev/null 2>&1 )
+  else ( cd "$d" && HB_ACTOR=alice eval "$PY regate GATE_R --reason \"premises died\" --dir \"$d\"" >/dev/null 2>&1 ); fi
+  local m ne pe ev tn tp
+  m=$(python3 -c "import json;m=(json.load(open('$d/.hb/dag.json'))['gates']['GATE_R'].get('regate') or {});m.pop('at',None);print(json.dumps(m,sort_keys=True,separators=(',',':')))")
+  ( cd "$d" && bash .hb/gate.sh GATE_R >/dev/null 2>&1 ); ne=$?
+  ( cd "$d" && eval "$PY gate GATE_R --dir \"$d\"" >/dev/null 2>&1 ); pe=$?
+  ev=$(grep -Ec '"event": ?"gate_(passed|failed)"' "$d/.hb/events.jsonl" 2>/dev/null); ev=${ev:-0}
+  tn=$( cd "$d" && HB_NO_GIT=1 bash .hb/tick.sh 2>/dev/null | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("wakeAgent"),(d.get("data") or {}).get("reason"))' 2>/dev/null )
+  tp=$( cd "$d" && eval "$PY tick --dir \"$d\"" 2>/dev/null | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("wakeAgent"),(d.get("data") or {}).get("reason"))' 2>/dev/null )
+  echo "marker=$m lint_node=$(l_node "$d/.hb/dag.json") lint_py=$(l_py "$d/.hb/dag.json") exit_node=$ne exit_py=$pe gate_events=$ev tick_node=[$tn] tick_py=[$tp]"
+  rm -rf "$d"
+}
+RG_N=$(regate_case node); RG_P=$(regate_case py)
+cmp "regate:declare-cross" "$RG_N" "$RG_P"
+# guards: the shared substance, not just node≡py (two identically-broken runtimes must not read as parity)
+echo "$RG_N" | grep -q '"pending":true' || { echo "  ✗ regate:marker — no pending marker after a node declare: $RG_N"; FAIL=1; }
+echo "$RG_N" | grep -q 'exit_node=3' && echo "$RG_N" | grep -q 'exit_py=3' || { echo "  ✗ regate:signal — eval refusal is not exit 3 on both: $RG_N"; FAIL=1; }
+echo "$RG_N" | grep -q 'gate_events=0' || { echo "  ✗ regate:no-event — a refusal appended a gate event: $RG_N"; FAIL=1; }
+echo "$RG_N" | grep -q 'tick_node=\[False regate_pending_waiting\]' && echo "$RG_N" | grep -q 'tick_py=\[False regate_pending_waiting\]' \
+  || { echo "  ✗ regate:tick — ticks do not sleep the identical regate_pending_waiting reason: $RG_N"; FAIL=1; }
+
 echo "── state projection parity ──"
 DAG='{"phases":[{"id":"P0","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"P0T1","requires":[]},{"id":"P0T2","requires":["P0T1"]}]},{"id":"P1","gate_entry":"G0","gate_exit":"G1","tasks":[{"id":"P1T1","requires":[]}]}],"gates":{"G0":{"criteria":[{"id":"c","cmd":"true"}]},"G1":{"review":{"prompt":"r"},"criteria":[{"id":"c","cmd":"true"}]}}}'
 state_case(){ # name events

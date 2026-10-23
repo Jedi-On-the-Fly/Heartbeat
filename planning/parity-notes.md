@@ -290,3 +290,18 @@ false-confident in the plans we actually run:
 
 Takeaway: the auditor caught the one genuinely hollow gate we ship (the scaffold
 placeholder, by design) and cleared every plan we actually executed. No changes required.
+
+## Intentional divergence: dag-writer number fidelity (regate wave, G3 refuter catch)
+
+Every node CLI path that rewrites `dag.json` (`regate`, `park`/`unpark`, any future dag
+editor) serializes through `JSON.stringify`, so JS number semantics apply to the WHOLE
+dag: an integer beyond 2^53 loses precision (`12345678901234567890` →
+`12345678901234567000`), `-0.0` becomes `0`, and `1.0` becomes `1`. The python writer
+(`json.dumps`) preserves ints exactly and keeps the float distinction. This is a
+pre-existing, dag-wide property of the node runtime — the regate `prev_criteria`
+snapshot adds no loss of its own (snapshot and live criteria stay deep-equal relative to
+each other, both passing through the same writer). Contract: dag values that must
+round-trip bit-faithfully across BOTH runtimes stay within ASCII strings, booleans,
+and integers |n| < 2^53 (every shipped field — ids, descs, cmds, timeout_s — does).
+A dag that needs exotic numbers is outside the parity contract; lint does not police
+this (numbers beyond timeout_s are not part of any shipped schema).
