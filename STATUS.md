@@ -1,7 +1,48 @@
 # STATUS — HeartBeat
 
-**Version:** v1.37.0 (regate — sanctioned, audited gate revision: a gate changes only through the rigor that created it)
+**Version:** v1.38.0 (detach — retract a dependency claim, loudly and reversibly)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.38.0 — detach: a dependency claim is retractable, never silently droppable
+
+Companion to regate: where regate revises a gate's CONTENT through rigor, detach retracts a
+phase's dependency CLAIM — the `gate_entry` edge that learning proved false (the discovery case:
+a predecessor the plan no longer needs still locks the one phase that still makes sense). The
+mechanism is one field — a null `gate_entry` already means unlocked in both resolvers, zero
+resolver/tick/audit-ruleset change — the feature is the loudness around it.
+
+- **`hb detach <PHASE|GATE> <reason…>`** (python: `--reason`): under the write lock, `gate_entry`
+  → null with the claim recorded (`detached_from`/`detached_reason`/`detached_by`/`detached_at`,
+  `HB_ACTOR` required) + audit-only `phase_detached`; refuses unknown/already-null/already-detached/
+  completed phases and ids unusable as anchor file names. **`hb reattach`** restores from
+  `detached_from` and refuses when that gate is not BOTH defined AND some phase's `gate_exit`
+  (a bare restore would re-create the "phase locked forever" resolver brick).
+- **THE DOCTRINE, enforced as loudness**: never detach to escape a blocked or revising predecessor
+  gate — that is auto-weaken by topology. The declare WARNS per channel ("the claim is REMOVED,
+  not satisfied") exactly when the detached-from gate is in trouble: a live `gate_failed`, a live
+  `review_failed` (a later `gate_passed` does NOT clear the refuted steady state), a blocking
+  regate marker, an unanswered `gate_regated` in the log, or a stale rearm.
+- **Honest change reports**: a stamped detach-time anchor (`anchors/_detach_<PHASE>.json`,
+  rewritten per declare) keeps `hb changed`'s base at the detach point instead of widening to
+  `_start`; a missing OR stamp-mismatched anchor reads as missing — and doctor says so.
+- **Surfaced everywhere**: `hb report` marks `⟂ detached from <gate> (by <actor>: <reason>)`
+  (text render only, gone after reattach); doctor NOTES — never problems — the live detach and
+  BOTH dag/log divergence directions (fields without a live log detach: a hand edit or fail-open
+  restore; an unanswered `phase_detached` without fields: the silent re-lock); lint twins the
+  shape rules and reserves the `_start`/`_detach_*` gate-id namespace.
+- Refuter catches folded (2 holes across 4 reviews; sonnet on the mechanism gate, the session
+  model on the surfacing + docs gate — each lens caught one): the reserved-name lint twins
+  diverging on a gate named `"_start\n"` (python regex `$` matches before a trailing newline, JS's
+  does not — both checks now regex-free exact-equality, the hostile name pinned in parity), and
+  the doctor keying the anchor suffix on existence only (a tampered stamp widened silently — the
+  doc's claim made TRUE, not weakened). Plus strip-unclean lock markers caught at round 1: guard
+  markers never sit on structural lines; the lock's teeth are the 6-way race.
+- Proof-driven: `tests/detach.sh` (T182, 10 guard-strip teeth incl. two python classes),
+  `tests/detach-surfacing.sh` (T183, audit byte-identity + the stamp-mismatch doctor fixture);
+  6 pytest cases; parity cases `detach:cross` / `detach:lint-malformed` / `detach:lint-reserved`
+  with non-vacuity floors. Built as a HeartBeat wave (plan refuted to SOUND in three strong-model
+  rounds before any code; constraint-first reviews under the signed-off tiering).
+- Plugin/marketplace → **1.38.0**, Python package → **0.28.0**.
 
 ## v1.37.0 — regate: a gate changes only through the rigor that created it
 
