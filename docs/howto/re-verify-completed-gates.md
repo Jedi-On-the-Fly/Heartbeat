@@ -27,6 +27,13 @@ nothing to regress from; the sweep skips it and says so
 (`— skipped N planned gate(s) (never passed): …`), never silently. This is what keeps drafting
 a DAG's future phases from failing the sweep (and, via the
 [pre-push guard](block-pushes-on-failing-gates.md), from blocking pushes on unrelated work).
+
+Two states are counted FAILING without being re-run, annotated in the verdict: a gate under a
+**pending regate** (revised, not re-refuted — parked or not), and a **drifted** gate whose
+criteria changed without sanction (re-running weakened criteria proves nothing; the cure is a
+full regate cycle — see [plan-to-the-horizon.md](plan-to-the-horizon.md) and
+`tests/replan.sh` case_sweep). A sweep can therefore fail without executing a single
+criterion — that is it working.
 An explicit `hb gate <GATE> --check` still runs *any* gate, planned or not — a deliberate
 probe is not a regression sweep.
 

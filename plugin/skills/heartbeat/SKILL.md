@@ -42,6 +42,19 @@ phases, **append** new phases with fresh IDs and set the first new phase's
 `gate_entry` to the last completed phase's `gate_exit` (never touch/renumber done
 phases). Otherwise write a fresh DAG.
 
+**The horizon rule (WHEN to stop planning; continuation above is HOW to resume).**
+When the work is discovery — later phases depend on what earlier phases will *learn* —
+plan ONLY the phases whose spec is known now, and END the planned horizon with an
+explicit **replan point**: a final task whose gate verifies the learning is recorded and
+the next horizon is planned. Fabricating detailed phases beyond the horizon is the
+planning analogue of a hollow gate — unfalsifiable structure that reads as rigor; the
+refuter should flag it. Below the horizon the plan stays freely editable (edit or drop
+never-started phases; `dag.json` is a hypothesis there); ABOVE it, accepted work changes
+only through its own rigor — `regate` for criteria, `detach` for dependency claims — and
+an unsanctioned hand-edit of a completed gate's criteria trips the drift tripwire
+(doctor problem, failing sweep, `criteria_drift` tick) until a full regate cycle cures
+it. Method and proof: [plan-to-the-horizon.md](../../../docs/howto/plan-to-the-horizon.md).
+
 **Rules:**
 - Unique task/phase IDs DAG-wide. `requires` sparse (only real deps). **≤ 8 tasks/phase.**
 - **Spec-first** — each phase's *first* task authors that phase's gate test spec from
@@ -87,6 +100,14 @@ in the Python port, `hb audit --agent` — told to prove the DAG *won't* truly v
 work (gates that assert the wrong behaviour, phases with no real coverage, missing
 `requires`). Fold its concerns back into the DAG. **The plan refutation itself stays on
 the strong (session) model — it is critical design reading.**
+
+**Replan is a refutation outcome.** When an UNSOUND's findings refute the **plan** (a
+premise died, a dependency claim is false, the next phases were fabricated beyond the
+horizon) rather than a phase's execution, the resolution is to REPLAN through sanctioned
+surface: append or edit **unstarted** phases freely, `detach` the falsified dependency
+claim, `regate` a gate whose premises died — and NEVER weaken a gate, constraint, or
+review to fit the old plan (strengthening is also a revision: it goes through the same
+regate cycle). See [plan-to-the-horizon.md](../../../docs/howto/plan-to-the-horizon.md).
 
 Then **propose the refuter tiering** for the run ahead — the economics are declared once,
 per lens, at plan time: list the profiles the gates' `review.profile`s name
@@ -241,7 +262,7 @@ are the templates.
 
 ### `/heartbeat schedule <project-dir>`
 Drive ticks autonomously on Claude Code using a **`/schedule` routine** (cron).
-Present this ready-to-use routine to the user (fill in `<project-dir>`, `<slug>`,
+Present this ready-to-use routine to the user (replacing `<project-dir>`, `<slug>`,
 `<repo>`), and offer to create it via `/schedule`:
 
 ```

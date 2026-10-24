@@ -24,7 +24,11 @@ gates** (`gate.sh --all` in a node project, `hb gate --all` in a Python one) and
 A gate that has **never passed** — a drafted future phase whose criteria name files that don't exist
 yet — is not part of the sweep: it has nothing to *regress* from, so planning work can never block a
 push. The sweep reports these skips loudly (`— skipped N planned gate(s) (never passed): …`) rather
-than hiding them, so "all gates pass" never overstates what was verified.
+than hiding them, so "all gates pass" never overstates what was verified. The converse also holds:
+a gate under a **pending regate** or with **unsanctioned criteria drift** is counted FAILING without
+being re-run (parked or not), so a push is blocked until the revision is sanctioned through a full
+regate cycle — see [re-verify-completed-gates.md](re-verify-completed-gates.md) and
+[plan-to-the-horizon.md](plan-to-the-horizon.md).
 
 It's the push-time complement to the existing **pre-commit rot guard** (which blocks a *commit* that
 deletes a file a completed gate depends on). Together: you can't commit a change that breaks a gate's

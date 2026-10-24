@@ -158,6 +158,24 @@ case_append(){
   ( cd "$P" && PY rebuild --dir "$P" >/dev/null ); b=$(norm "$P")
   [ "$a" = "$b" ] || fail "append: python rebuild not idempotent modulo last_updated"
   assert_quiet "$P" GATE_H1 "append (an append is sanctioned quiet)"
+  # degenerate-id lint surface, PINNED: an id-less phase (even >8 tasks) lints identically on
+  # both runtimes — exit 0, the same '[?]' warning bytes, no crash (the dev-tests.md claim)
+  local dn dq rn rq
+  P="$W/app-noid"; mkh "$P"
+  python3 - "$P/.hb/dag.json" <<'EOF'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p))
+d["phases"].append({"title": "no id", "gate_entry": None, "gate_exit": None,
+                    "tasks": [{"id": f"n{i}", "title": "t", "requires": [], "description": "d"} for i in range(9)]})
+json.dump(d, open(p, "w"), indent=2)
+EOF
+  dn=$(node "$P/.hb/hb-lint.js" "$P/.hb/dag.json" 2>&1); rn=$?
+  dq=$( PY lint "$P/.hb/dag.json" --dir "$P" 2>&1 ); rq=$?
+  [ "$rn" = 0 ] && [ "$rq" = 0 ] || fail "append(degenerate id): a lint crashed or errored (node=$rn py=$rq): $dq"
+  dn=$(echo "$dn" | grep '\[?\]'); dq=$(echo "$dq" | grep '\[?\]')
+  [ -n "$dn" ] && [ "$dn" = "$dq" ] || fail "append(degenerate id): the '[?]' warning bytes differ or are missing:
+node: $dn
+py:   $dq"
   echo "APPEND-OK"
 }
 
@@ -441,10 +459,18 @@ d = json.load(sys.stdin); print(d['data'].get('action', ''))" )
   # a third tick still wakes criteria_drift:
   r=$(tickreason "$P")
   [ "$r" = "criteria_drift" ] || fail "tick: a later tick stopped reporting ('$r') — must fire every tick until cured"
-  r=$( PY tick --dir "$P" 2>/dev/null | python3 -c "
+  r=$( HB_ROT_CHECK=1 PY tick --dir "$P" 2>/dev/null | python3 -c "
 import json, sys
-d = json.load(sys.stdin); print(d['data'].get('reason', ''))" )
+d = json.load(sys.stdin); print(d['data'].get('reason', ''))" )   # HB_ROT_CHECK pinned: the suite exports 0 (fast fixture ticks) and the knob gates the whole doctor-driven block
   [ "$r" = "criteria_drift" ] || fail "tick: python reason is '$r', want criteria_drift (reason keys identical across runtimes)"
+  # both DRIVERS stop on drift: each executor escalates criteria_drift and exits nonzero —
+  # never a busy-loop, never a dispatch past it (the exec claim plan-to-the-horizon.md anchors here)
+  o=$( cd "$P" && HB_ROT_CHECK=1 HB_EXEC_BACKEND=script HB_EXEC_CMD='cat >/dev/null' node .hb/hb-exec.js run 2>&1 ); x=$?
+  [ "$x" -ne 0 ] || fail "tick: node hb-exec exited 0 over criteria_drift (must stop)"
+  echo "$o" | grep -q 'HB-EXEC STOP: criteria_drift' || fail "tick: node hb-exec did not escalate criteria_drift: $o"
+  o=$( HB_ROT_CHECK=1 HB_EXEC_BACKEND=script HB_EXEC_CMD='cat >/dev/null' PY exec run --dir "$P" 2>&1 ); x=$?
+  [ "$x" -ne 0 ] || fail "tick: python hb exec exited 0 over criteria_drift (must stop)"
+  echo "$o" | grep -q 'HB-EXEC STOP: criteria_drift' || fail "tick: python hb exec did not escalate criteria_drift: $o"
   # the cure un-sticks the loop: full cycle → the tick goes back to work
   declare_rg "$P" GATE_H1
   rearm_rg "$P" GATE_H1
@@ -454,7 +480,7 @@ d = json.load(sys.stdin); print(d['data'].get('reason', ''))" )
   # a dispatching tick LEASES the task it hands out (atomic claim) — free it so the python
   # twin can dispatch too (the stale-reclaim path would do the same after the deadline)
   rm -rf "$P/.hb/leases"/* 2>/dev/null
-  r=$( PY tick --dir "$P" 2>/dev/null | python3 -c "
+  r=$( HB_ROT_CHECK=1 PY tick --dir "$P" 2>/dev/null | python3 -c "
 import json, sys
 d = json.load(sys.stdin); print(d['data'].get('reason', ''))" )
   [ "$r" = "next_task" ] || fail "tick: python reason after the cure is '$r', want next_task"
@@ -522,9 +548,9 @@ selftest(){
   bytedrift "$P"
   mkpycopy "$W/py-s8"; mutate "$W/py-s8/heartbeat/tick.py" "drift-guard: tick"
   python3 -c "import sys; sys.path.insert(0, '$W/py-s8'); import heartbeat.tick" || fail "selftest s8: stripped tick.py no longer imports (marker on a structural line — the IndentationError class)"
-  r=$( HB_PY_SRC="$W/py-s8" PY tick --dir "$P" 2>/dev/null | python3 -c "
+  r=$( HB_ROT_CHECK=1 HB_PY_SRC="$W/py-s8" PY tick --dir "$P" 2>/dev/null | python3 -c "
 import json, sys
-d = json.load(sys.stdin); print(d['data'].get('reason', ''))" )
+d = json.load(sys.stdin); print(d['data'].get('reason', ''))" )   # HB_ROT_CHECK pinned ON so the strip, not the knob, is what silences the reason
   [ "$r" = "criteria_drift" ] && fail "selftest s8: python criteria_drift survived its guard strip"
   echo "REPLAN-SELFTEST-OK"
 }

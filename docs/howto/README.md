@@ -41,6 +41,9 @@ families A–J) is in [howto-list.md](howto-list.md).
   cause (failing criterion, missing file, awaiting gate).
 - [Re-verify completed gates](re-verify-completed-gates.md) — a passed gate is a claim about
   current reality; `--check` / `--all` re-run it and catch decay.
+- [Plan to the horizon](plan-to-the-horizon.md) — plan only what is known, end at an explicit
+  replan point, replan through sanctioned surface; the drift tripwire makes the unsanctioned
+  path loud (T184).
 - [Restore a verified phase](restore-a-verified-phase.md) — every gate pass is a git tag you
   can roll back to.
 - [Spend the model only on work](spend-the-model-only-on-work.md) — the tick wakes the worker

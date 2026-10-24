@@ -31,9 +31,11 @@ Everything that reads the plan honors it, loudly:
   `hb audit` from coming back clean; the skip is reported
   (`⏸ skipped 1 parked phase(s): P19 (unpark to re-audit)`). Unparking restores the audit
   findings — the debt returns with the phase.
-- **Regression sweep / pre-push** — `--all` skips the phase's gate even if it was **armed**
-  (ever-passed): parking a completed phase retires its gate from the sweep. Reported as
-  `— skipped N parked gate(s): …`, never silently.
+- **Regression sweep / pre-push** — `--all` retires the phase's gate from **evaluation** even
+  if it was **armed** (ever-passed), reported as `— skipped N parked gate(s): …`, never
+  silently. Parking does NOT silence the gate's open obligations: a pending regate or
+  unsanctioned criteria drift on a parked gate stays in the failing count, annotated
+  (`tests/regate-fail-closed.sh` case_park, `tests/replan.sh` case_sweep).
 - **Report** — the phase is listed under `parked`, marked `⏸`, and excluded from the
   progress denominator; it is never silently gone.
 
