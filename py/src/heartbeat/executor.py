@@ -444,6 +444,10 @@ def _run(hbdir):
             if reason == "project_complete":
                 print("HB-EXEC DONE: project complete")
                 return 0
+            if reason == "replan_waiting":
+                # a reached horizon stays a STOP on every run, not only the run that saw the wake (== hb-exec.js)
+                print(f"HB-EXEC STOP: replan_pending — {data.get('phase') or ''}")
+                return 1
             print(f"HB-EXEC IDLE: {reason}")
             return 0
 
@@ -582,6 +586,10 @@ def _run(hbdir):
             return 0
         elif reason == "gate_blocked":
             print(f"HB-EXEC STOP: gate_blocked — {_blocked_cause(hbdir)}")
+            return 1
+        elif reason == "replan_pending":
+            # the knowledge horizon: append the next horizon or hb horizon close — a human decision
+            print(f"HB-EXEC STOP: replan_pending — {data.get('phase') or ''}")
             return 1
         else:
             print(f"HB-EXEC STOP: {reason}")

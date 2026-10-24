@@ -82,6 +82,7 @@ def main(argv=None):
     p = sub.add_parser("regate"); p.add_argument("id"); p.add_argument("--reason", default=None); p.add_argument("--rearm", action="store_true"); p.add_argument("--artifact"); p.add_argument("--model"); _add_dir(p)
     p = sub.add_parser("detach"); p.add_argument("id"); p.add_argument("--reason", default=None); _add_dir(p)
     p = sub.add_parser("reattach"); p.add_argument("id"); _add_dir(p)
+    p = sub.add_parser("horizon"); p.add_argument("action"); p.add_argument("--reason", default=None); _add_dir(p)
     p = sub.add_parser("park"); p.add_argument("id"); p.add_argument("--reason", default=""); _add_dir(p)
     p = sub.add_parser("unpark"); p.add_argument("id"); _add_dir(p)
     p = sub.add_parser("next"); _add_dir(p)
@@ -363,6 +364,39 @@ def main(argv=None):
             sys.stderr.write(res + "\n"); return 1
         print(f"▶ reattached {res['id']} to {res['to']} — the dependency claim is restored; re-audit before running: hb audit")
         return 0
+    elif args.cmd == "horizon":
+        # The recorded end of a knowledge horizon (node twin: hb.js horizon). A VERDICT inside the
+        # regate fail-closed perimeter; reads the PROJECTION — the resolver's own source.
+        if args.action != "close":
+            sys.stderr.write("usage: hb horizon close --reason <why>\n")
+            return 2
+        why = (args.reason or "").strip()
+        if not why: sys.stderr.write("hb horizon close refused: --reason <why> is required — the end of a project is a recorded decision, never a silent one.\n"); return 1   # horizon-guard: close
+
+        def _close_locked():
+            dag = st.read_dag(hb)
+            events = st.read_events(hb)
+            state = st.project(events, dag)
+            done = set(state["completed_phases"])
+            live = [p for p in (dag.get("phases") or []) if not p.get("parked")]
+            last = live[-1] if live else {}
+            if not live: return "hb horizon close refused: no horizon is reached — every phase is parked (unpark the plan, or end it by its own record)."   # horizon-guard: close
+            if last.get("horizon") is not True: return f"hb horizon close refused: the last live phase {last.get('id')} is not flagged \"horizon\" — there is no knowledge horizon to close."   # horizon-guard: close
+            open_h = [p["id"] for p in live if p["id"] not in done]
+            if open_h: return f"hb horizon close refused: the horizon is not reached — incomplete live phase(s): {', '.join(open_h)}."   # horizon-guard: close
+            if last.get("id") in (state.get("horizon_closed") or []): return f"hb horizon close refused: the horizon at {last.get('id')} is already closed."   # horizon-guard: close
+            gates = dag.get("gates") or {}
+            rev = [g for g in (p.get("gate_exit") for p in live) if g and (st.regate_blocks(gates.get(g)) is not None or st.unanswered_regate(events, g) or st.stale_rearm(events, g))]
+            if rev: return f"hb horizon close refused: a revision is open on {', '.join(rev)} (regate pending, unanswered, or rearmed without a fresh pass) — finish the regate cycle first; closing would retire it behind a finished project."   # horizon-guard: close
+            st.append_event(hb, {"event": "horizon_closed", "phase": last.get("id"), "reason": why})
+            st.reproject(hb)
+            return {"id": last.get("id")}
+        verdict = st.with_wlock(hb, _close_locked)
+        if isinstance(verdict, str):
+            sys.stderr.write(verdict + "\n")
+            return 1
+        print(f"⊣ horizon closed at {verdict['id']} (by {os.environ.get('HB_ACTOR', 'unknown')}): {why}\n"
+              f"   the project ends here as a recorded decision; to continue instead, append the next horizon's phases to dag.json")
     elif args.cmd in ("park", "unpark"):
         # The CLI path for retiring a phase — no hand-editing, no deletion (deleting a gate
         # dangles the phase's gate_exit; parking keeps every reference intact and reversible).

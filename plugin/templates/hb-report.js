@@ -149,6 +149,19 @@ for (const p of phases) {
   dn = detachNote(p.id);   // detach-guard: report
   console.log(`  ${icon[p.status]} ${p.id} ${p.title} — ${p.done}/${p.total}${p.gate_exit ? `  [gate: ${p.gate_exit}]${rn}` : ''}${dn}`);
 }
+// The knowledge horizon (a flagged LAST live phase): planned → REACHED (a replan decision is
+// owed) → closed by a recorded verdict. Nothing on a project without one.
+const horizonLine = (() => {
+  const live = (dag.phases ?? []).filter(p => !p.parked), last = live[live.length - 1];
+  if (!last || last.horizon !== true) return '';
+  if (Array.isArray(state.horizon_closed) && state.horizon_closed.includes(last.id)) {
+    const ev = [...events].reverse().find(e => e.event === 'horizon_closed' && e.phase === last.id) || {};
+    return `Horizon: ${last.id} closed by ${ev.actor || '?'}: ${ev.reason || ''}`;
+  }
+  if (live.every(p => cph.has(p.id))) return `Horizon: ${last.id} REACHED — a replan decision is owed: append the next horizon's phases, or end the project with hb horizon close --reason <why>`;
+  return `Horizon: ${last.id} (planned) — the plan ends at its knowledge horizon; completing it owes a replan decision`;
+})();
+if (horizonLine) { console.log(''); console.log(horizonLine); }
 if (Object.keys(gates).length) {
   console.log(''); console.log('Gates:');
   for (const [g, v] of Object.entries(gates)) console.log(`  ${g}: ${v.passed} passed, ${v.failed} failed`);

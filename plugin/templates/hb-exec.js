@@ -394,6 +394,9 @@ async function run() {
 
     if (!tick.wakeAgent) {
       if (reason === 'project_complete') { process.stdout.write('HB-EXEC DONE: project complete\n'); return 0; }
+      // A reached horizon stays a STOP on every run, not just the run that saw the once-only wake:
+      // an exit-0 IDLE would read as "nothing owed" while a replan decision is still pending.
+      if (reason === 'replan_waiting') { escalate('replan_pending', data.phase || ''); return 1; }
       process.stdout.write(`HB-EXEC IDLE: ${reason || '(unknown)'}\n`);
       return 0;
     }
@@ -538,6 +541,7 @@ async function run() {
       case 'state_corrupted':     escalate('state_corrupted', ''); return 1;
       case 'gate_rot':            escalate('gate_rot', `count=${data.count || '?'}`); return 1;
       case 'review_stuck':        escalate('review_stuck', data.gate || ''); return 1;
+      case 'replan_pending':      escalate('replan_pending', data.phase || ''); return 1;   // the knowledge horizon: append the next horizon or hb horizon close — a human decision, never auto-continued
       default:                    escalate('unknown_reason', reason || '(none)'); return 1;
     }
   }

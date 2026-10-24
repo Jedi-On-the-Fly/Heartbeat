@@ -70,6 +70,24 @@ def build(hbdir):
     }
 
 
+def _horizon_line(hbdir, dag):
+    """The knowledge horizon (a flagged LAST live phase): planned → REACHED (a replan decision
+    is owed) → closed by a recorded verdict. '' on a project without one (== hb-report.js)."""
+    live = [p for p in (dag.get("phases") or []) if not p.get("parked")]
+    last = live[-1] if live else None
+    if last is None or last.get("horizon") is not True:
+        return ""
+    evs = st.read_events(hbdir)
+    s = st.project(evs, dag)
+    if last["id"] in (s.get("horizon_closed") or []):
+        ev = next((e for e in reversed(evs) if e.get("event") == "horizon_closed" and e.get("phase") == last["id"]), {})
+        return f"Horizon: {last['id']} closed by {ev.get('actor') or '?'}: {ev.get('reason') or ''}"
+    if all(p["id"] in s["completed_phases"] for p in live):
+        return (f"Horizon: {last['id']} REACHED — a replan decision is owed: append the next horizon's phases, "
+                f"or end the project with hb horizon close --reason <why>")
+    return f"Horizon: {last['id']} (planned) — the plan ends at its knowledge horizon; completing it owes a replan decision"
+
+
 def render(hbdir):
     r = build(hbdir)
     _dag_raw = st.read_dag(hbdir)
@@ -85,6 +103,9 @@ def render(hbdir):
         _dp = phases_raw.get(p["id"]) or {}   # detach-guard: report — a retracted claim is never silent
         if "detached_from" in _dp: suffix += f"  ⟂ detached from {_dp['detached_from']} (by {_dp.get('detached_by', '?')}: {_dp.get('detached_reason', '')})"   # detach-guard: report
         out.append(f"  {mark} {p['id']} {p['title']} — {p['done']}/{p['total']}  [gate: {p['gate']}]{suffix}")
+    hl = _horizon_line(hbdir, _dag_raw)
+    if hl:
+        out += ["", hl]
     imp = r["refuters"]
     if imp["caught"] or imp["cleared"]:
         out += ["", f"Refuter impact: caught {imp['caught']} hole(s) across {imp['caught'] + imp['cleared']} review(s)"]

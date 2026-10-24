@@ -43,6 +43,10 @@ function lint(dag) {
     if (tasks.length > 8) {
       warnings.push(`[${pidS}] ${tasks.length} tasks (>8) — context-loss risk, consider sub-phases`);
     }
+    // The knowledge-horizon marker is a strict boolean. Its POSITION is never linted: a flag left on
+    // a phase that is no longer last (after an append) is historical and inert, by design.
+    if (Object.prototype.hasOwnProperty.call(p, 'horizon') && typeof p.horizon !== 'boolean')
+      errors.push(`[${pidS}] horizon must be true or false (the knowledge-horizon marker)`);
     for (const t of tasks) {
       if (taskIds.has(t.id)) errors.push(`duplicate task ID: ${t.id}`);
       taskIds.add(t.id);

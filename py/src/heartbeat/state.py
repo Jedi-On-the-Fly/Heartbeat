@@ -84,6 +84,7 @@ def project(events, dag):
     s = initial_state(dag)
     completed, active = set(), set()
     gate_state = {}
+    horizon_closed = []  # phases whose knowledge horizon was closed by a recorded verdict, insertion-ordered
 
     def gs(g):
         return gate_state.setdefault(g, {"det": False, "rev": False})
@@ -94,6 +95,7 @@ def project(events, dag):
             completed.clear()
             active.clear()
             gate_state.clear()
+            horizon_closed.clear()
             s["build_stuck_count"] = 0
             s["gate"]["errors"] = 0
         elif e == "task_started":
@@ -131,6 +133,10 @@ def project(events, dag):
             g["rev"] = False
             s["gate"]["errors"] = 1
             s["build_stuck_count"] += 1
+        elif e == "horizon_closed":
+            ph = ev.get("phase")
+            if isinstance(ph, str) and ph and ph not in horizon_closed:
+                horizon_closed.append(ph)
         if e:
             s["last_event"] = e
 
@@ -157,6 +163,10 @@ def project(events, dag):
     s["active_tasks"] = sorted(active)
     s["completed_phases"] = sorted(completed_phases)
     s["pending_reviews"] = pending_reviews
+    # Sparse: the key exists only once a horizon was closed — horizon-less projections stay
+    # byte-identical (mirrors hb.js).
+    if horizon_closed:
+        s["horizon_closed"] = list(horizon_closed)
 
     cur = None
     for ph in phases:

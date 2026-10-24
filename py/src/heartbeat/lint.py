@@ -33,6 +33,10 @@ def lint(dag):
         tasks = p.get("tasks") or []
         if len(tasks) > 8:
             warnings.append(f"[{pid_s}] {len(tasks)} tasks (>8) — context-loss risk, consider sub-phases")
+        # The knowledge-horizon marker is a strict boolean; its POSITION is never linted (a flag left
+        # on a no-longer-last phase after an append is historical and inert, by design).
+        if "horizon" in p and not isinstance(p["horizon"], bool):
+            errors.append(f"[{pid_s}] horizon must be true or false (the knowledge-horizon marker)")
         for t in tasks:
             if t["id"] in task_ids:
                 errors.append(f"duplicate task ID: {t['id']}")

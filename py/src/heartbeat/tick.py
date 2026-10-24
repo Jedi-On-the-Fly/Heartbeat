@@ -43,6 +43,18 @@ def _rm(p):
         pass
 
 
+def _flag_text(p):
+    try:
+        return Path(p).read_text()
+    except OSError:
+        return None
+
+
+def _replan_wake(hbdir, nxt, phase):
+    _flag(hbdir, ".replan-alerted").write_text(phase)
+    return _wake({"reason": "replan_pending", "phase": phase, "next_task": nxt})
+
+
 def tick(hbdir):
     hbdir = Path(hbdir)
     lock = hbdir / ".lock"
@@ -139,10 +151,19 @@ def _body(hbdir):
     typ = nxt.get("type", "task")
 
     if typ == "all_done":
+        _rm(_flag(hbdir, ".replan-alerted"))
         if not _flag(hbdir, ".all-done-alerted").exists():
             _flag(hbdir, ".all-done-alerted").touch()
             return _wake({"reason": "all_done", "next_task": nxt})
         return _sleep({"reason": "project_complete"})
+    if typ == "replan_pending":
+        # The flagged last phase completed: a replan decision is owed. Wake ONCE per horizon
+        # phase — the flag stores the phase id, so a stale flag never silences a newer horizon.
+        # No event: the log records decisions, not notifications (== tick.sh).
+        _rm(_flag(hbdir, ".deadlock-alerted"))
+        rp_phase = str(nxt.get("phase") or "")
+        if _flag_text(_flag(hbdir, ".replan-alerted")) != rp_phase: return _replan_wake(hbdir, nxt, rp_phase)  # horizon-guard: tick
+        return _sleep({"reason": "replan_waiting", "phase": rp_phase})
     if typ == "deadlock":
         if not _flag(hbdir, ".deadlock-alerted").exists():
             _flag(hbdir, ".deadlock-alerted").touch()
@@ -180,6 +201,7 @@ def _body(hbdir):
 
     # a real task
     _rm(_flag(hbdir, ".all-done-alerted"))
+    _rm(_flag(hbdir, ".replan-alerted"))
     _rm(_flag(hbdir, ".deadlock-alerted"))
     task_id = nxt.get("id")
 

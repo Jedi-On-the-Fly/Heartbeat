@@ -11,6 +11,8 @@
  *     { id, phase, title, description, requires }   actionable task
  *     { type:"gate_pending", phase, gate }          phase tasks done, gate to run
  *     { type:"review_pending", phase, gate }        gate passed, adversarial review due (v1.4)
+ *     { type:"replan_pending", phase }              the flagged last live phase (horizon: true)
+ *                                                   completed and is not closed — replan or close
  *     { type:"all_done" } | { type:"busy", … } | { type:"deadlock", … } | null
  *   readyTasks(state, dag, hbDir, limit)    → array of ALL currently-runnable,
  *                                             unleased, requires-independent tasks
@@ -104,7 +106,15 @@ function resolve(state, dag, hbDir) {
   }
 
   if (phases.length === 0) return null;
-  if (phases.filter(isLive).every(p => completedPhases.has(p.id))) return { type: 'all_done' };
+  if (phases.filter(isLive).every(p => completedPhases.has(p.id))) {
+    // The knowledge horizon: a flagged LAST live phase ends the plan's known world, not the
+    // project — completing it owes a replan decision (append the next horizon, or close it as a
+    // recorded verdict), never a silent all_done. An all-parked plan has no last live phase.
+    const live = phases.filter(isLive), last = live[live.length - 1];
+    const closed = Array.isArray(state.horizon_closed) ? state.horizon_closed : [];
+    if (last && last.horizon === true && !closed.includes(last.id)) return { type: 'replan_pending', phase: last.id };   // horizon-guard: resolver
+    return { type: 'all_done' };
+  }
 
   // busy: the only tasks blocking progress are leased (in flight elsewhere)
   const inFlight = [];

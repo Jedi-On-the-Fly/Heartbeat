@@ -19,6 +19,7 @@ PROTOCOL = {
     "gate_rot":           "Run: hb diagnose — a completed phase's gate references a deleted file; restore it or re-point the gate.",
     "build_stuck":        "Run: hb diagnose — woken repeatedly without progress; root-cause it or surface a blocker report for a human.",
     "review_stuck":       "The adversarial review never resolved — spawn the refuter, write its findings to a file, and record hb review <gate> fail \"<holes>\" or hb review <gate> pass --artifact <file>, or surface for a human.",
+    "replan_pending":     "The plan reached its knowledge horizon (its flagged last phase is complete) — HUMAN NEEDED: a replan decision is owed, never a silent finish. Exactly two sanctioned moves: (1) replan by append-continuation — append the NEXT horizon's phases to dag.json (fresh ids; the first new gate_entry = the completed horizon phase's gate_exit; plan only what is now known and flag the new last phase horizon: true), lint + audit + refute the plan, then tick; or (2) end the project as a recorded decision: hb horizon close --reason <why>.",
     "all_done":           "Write the final project report.",
 }
 

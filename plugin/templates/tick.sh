@@ -39,8 +39,8 @@ HB_MAX_CONCURRENCY="${HB_MAX_CONCURRENCY:-1}"
 HEARTBEAT_STALE_S="${HEARTBEAT_STALE_S:-180}"
 # v1.4: optional notifier for human-needed wakes. If set, it is run as
 #   $HB_NOTIFY_CMD "<reason>" "<project>" "<detail>"
-# on build_stuck / gate_blocked / deadlock / unsanctioned_drift / all_done /
-# review_stuck / gate_rot — once per blockage. Timeout-wrapped and best-effort;
+# on build_stuck / gate_blocked / deadlock / unsanctioned_drift / criteria_drift /
+# all_done / replan_pending / review_stuck / gate_rot — once per blockage. Timeout-wrapped and best-effort;
 # it can never break the tick.
 HB_NOTIFY_CMD="${HB_NOTIFY_CMD:-}"
 # v1.6: run `hb.js doctor` each tick and wake `gate_rot` if a COMPLETED phase's
@@ -61,6 +61,7 @@ ARCH_HASH="$HB_DIR/architecture.hash"
 STUCK_FLAG="$HB_DIR/.stuck-alerted"
 NOPROG_FLAG="$HB_DIR/.noprogress-alerted"
 DONE_FLAG="$HB_DIR/.all-done-alerted"
+REPLAN_FLAG="$HB_DIR/.replan-alerted"     # holds the horizon phase id it alerted for
 DEADLOCK_FLAG="$HB_DIR/.deadlock-alerted"
 GATE_NOTIFY_FLAG="$HB_DIR/.gate-notified"
 DRIFT_NOTIFY_FLAG="$HB_DIR/.drift-notified"
@@ -283,6 +284,7 @@ TYPE=$(echo "$NEXT" | node -e "
 
 case "$TYPE" in
   all_done)
+    rm -f "$REPLAN_FLAG"
     if [ ! -f "$DONE_FLAG" ]; then
       touch "$DONE_FLAG"
       log_event "project_complete"
@@ -290,6 +292,17 @@ case "$TYPE" in
       wake_out "{\"reason\":\"all_done\",\"next_task\":$NEXT,\"ts\":\"$TS\"}"
     fi
     sleep_out "{\"reason\":\"project_complete\"}"
+    ;;
+  replan_pending)
+    # The flagged last phase completed: a replan decision is owed (append the next horizon, or
+    # hb horizon close). Wake ONCE per horizon phase — the flag stores the phase id, so a stale
+    # flag from an earlier horizon never silences a newer one. No event: the log records
+    # decisions, not notifications.
+    rm -f "$DEADLOCK_FLAG"
+    RP_PHASE=$(echo "$NEXT" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String(JSON.parse(d).phase??''));}catch(e){process.stdout.write('');}});")
+    RP_JSON=$(RP="$RP_PHASE" node -e "process.stdout.write(JSON.stringify(process.env.RP))")
+    if [ "$(cat "$REPLAN_FLAG" 2>/dev/null || true)" != "$RP_PHASE" ]; then printf '%s' "$RP_PHASE" > "$REPLAN_FLAG"; notify "replan_pending" "$RP_PHASE"; wake_out "{\"reason\":\"replan_pending\",\"phase\":$RP_JSON,\"next_task\":$NEXT,\"ts\":\"$TS\"}"; fi   # horizon-guard: tick
+    sleep_out "{\"reason\":\"replan_waiting\",\"phase\":$RP_JSON}"
     ;;
   deadlock)
     if [ ! -f "$DEADLOCK_FLAG" ]; then
@@ -353,7 +366,7 @@ case "$TYPE" in
     wake_out "{\"reason\":\"review_pending\",\"next_task\":$NEXT,\"ts\":\"$TS\"}"
     ;;
   *)
-    rm -f "$DONE_FLAG" "$DEADLOCK_FLAG"
+    rm -f "$DONE_FLAG" "$DEADLOCK_FLAG" "$REPLAN_FLAG"
     # v1.3 (#3): objective no-progress detection. Count how many times we've
     # already woken for THIS task with no task_started/done/failed since.
     TASK_ID=$(echo "$NEXT" | node -e "

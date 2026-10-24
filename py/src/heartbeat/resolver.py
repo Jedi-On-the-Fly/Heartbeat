@@ -94,6 +94,12 @@ def resolve(state, dag, hbdir):
     if not phases:
         return None
     if all(p["id"] in completed_phases for p in phases if _live(p)):
+        # The knowledge horizon: a flagged LAST live phase owes a replan decision, never a silent
+        # all_done (mirrors hb-next-task.js). An all-parked plan has no last live phase.
+        live = [p for p in phases if _live(p)]
+        last = live[-1] if live else None
+        closed = state.get("horizon_closed") if isinstance(state.get("horizon_closed"), list) else []
+        if last is not None and last.get("horizon") is True and last["id"] not in closed: return {"type": "replan_pending", "phase": last["id"]}  # horizon-guard: resolver
         return {"type": "all_done"}
 
     def _scan(pred):

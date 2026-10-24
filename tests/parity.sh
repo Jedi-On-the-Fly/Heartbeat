@@ -615,5 +615,49 @@ anchors_case(){  # <git|nogit>: same tree → same manifest (path set + hashes) 
 }
 anchors_case git; anchors_case nogit
 
+echo "── horizon parity ──"
+# The knowledge horizon: the resolver verdict, the sparse insertion-ordered projection, the marker's
+# lint error and the speculative_tail finding agree byte-for-byte — each with a non-vacuity floor
+# (two identically-broken runtimes must not read as parity). Inline mktemp cases, never fixture files.
+HZDAG='{"phases":[{"id":"H1","title":"a","gate_entry":null,"gate_exit":"GATE_H1","tasks":[{"id":"h1a","title":"t","requires":[],"description":"w"}]},{"id":"H2","title":"b","gate_entry":"GATE_H1","gate_exit":"GATE_H2","horizon":true,"tasks":[{"id":"h2a","title":"t","requires":[],"description":"w"}]}],"gates":{"GATE_H1":{"desc":"g","criteria":[{"id":"c1","desc":"d","cmd":"python3 -c \"assert 1+1==2\""}]},"GATE_H2":{"desc":"g","criteria":[{"id":"c2","desc":"d","cmd":"python3 -c \"assert 2+2==4\""}]}}}'
+HZEV='{"event":"initialized"}
+{"event":"task_done","task":"h1a"}
+{"event":"gate_passed","gate":"GATE_H1"}
+{"event":"task_done","task":"h2a"}
+{"event":"gate_passed","gate":"GATE_H2"}'
+hz_dir(){ # events → a project dir with the horizon dag, rebuilt
+  local d; d=$(mktemp -d); mkdir "$d/.hb"
+  printf '%s' "$HZDAG" > "$d/.hb/dag.json"; printf '%s\n' "$1" > "$d/.hb/events.jsonl"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" "$d/.hb/"
+  node "$d/.hb/hb.js" rebuild >/dev/null 2>&1; echo "$d"
+}
+NJ='import sys,json;print(json.dumps(json.load(sys.stdin),sort_keys=True,separators=(",",":")))'
+HD=$(hz_dir "$HZEV")
+HZ_RN=$(node "$HD/.hb/hb-next-task.js" "$HD/.hb/state.json" | python3 -c "$NJ")
+HZ_RP=$(eval "$PY next --dir \"$HD\"" | python3 -c "$NJ")
+cmp "horizon:resolve" "$HZ_RN" "$HZ_RP"
+echo "$HZ_RN" | grep -q '"replan_pending"' || { echo "  ✗ horizon:resolve — node does not verdict replan_pending: $HZ_RN"; FAIL=1; }
+rm -rf "$HD"
+HC='import sys,json;s=json.load(sys.stdin);print(json.dumps(s.get("horizon_closed","ABSENT"),separators=(",",":")))'
+HD=$(hz_dir "$HZEV"$'\n''{"event":"horizon_closed","phase":"H2","reason":"r"}'$'\n''{"event":"horizon_closed","phase":"H1","reason":"r"}'$'\n''{"event":"horizon_closed","phase":"H2","reason":"dup"}')
+HD0=$(hz_dir "$HZEV")
+HZ_PN="closed=$(node "$HD/.hb/hb.js" state | python3 -c "$HC") none=$(node "$HD0/.hb/hb.js" state | python3 -c "$HC")"
+HZ_PP="closed=$(eval "$PY state --dir \"$HD\"" | python3 -c "$HC") none=$(eval "$PY state --dir \"$HD0\"" | python3 -c "$HC")"
+cmp "horizon:project" "$HZ_PN" "$HZ_PP"
+[ "$HZ_PN" = 'closed=["H2","H1"] none="ABSENT"' ] || { echo "  ✗ horizon:project — not the insertion-ordered set / sparse key: $HZ_PN"; FAIL=1; }
+rm -rf "$HD" "$HD0"
+HL=$(mktemp -d)
+printf '%s' "$HZDAG" | python3 -c 'import sys,json;d=json.load(sys.stdin);d["phases"][1]["horizon"]="yes";print(json.dumps(d))' > "$HL/dag.json"
+node "$ROOT/plugin/templates/hb-lint.js" "$HL/dag.json" >/dev/null 2>&1; HZ_LNR=$?
+eval "$PY lint \"$HL/dag.json\"" >/dev/null 2>&1; HZ_LPR=$?
+cmp "horizon:lint" "$(l_node "$HL/dag.json") exit=$HZ_LNR" "$(l_py "$HL/dag.json") exit=$HZ_LPR"
+case "$(l_node "$HL/dag.json") exit=$HZ_LNR" in *'horizon must be true or false'*'exit=1') ;; *) echo "  ✗ horizon:lint — node found no marker error / exit 1"; FAIL=1;; esac
+printf '%s' '{"phases":[{"id":"PA","gate_entry":null,"gate_exit":"G_A","tasks":[{"id":"pa1","title":"t","requires":[],"description":"d"}]},{"id":"PB","gate_entry":null,"gate_exit":null,"tasks":[{"id":"pb1","title":"t","requires":[],"description":"d"}]},{"id":"PC","gate_entry":null,"gate_exit":null,"tasks":[]}],"gates":{"G_A":{"desc":"a","criteria":[{"id":"a1","desc":"b","cmd":"python3 -c \"assert 1+1==2\""}]}}}' > "$HL/tail.json"
+HZ_AN=$(node "$ROOT/plugin/templates/hb-audit.js" "$HL/tail.json" 2>&1); HZ_ANR=$?
+HZ_AP=$(eval "$PY audit \"$HL/tail.json\"" 2>&1); HZ_APR=$?
+cmp "horizon:audit" "$(echo "$HZ_AN" | grep speculative_tail) exit=$HZ_ANR" "$(echo "$HZ_AP" | grep speculative_tail) exit=$HZ_APR"
+echo "$HZ_AN" | grep -q 'speculative_tail' || { echo "  ✗ horizon:audit — node emitted no speculative_tail finding"; FAIL=1; }
+rm -rf "$HL"
+
 echo ""
 [ "$FAIL" -eq 0 ] && { echo "✅ PARITY OK — node ≡ python"; exit 0; } || { echo "❌ PARITY DIVERGENCE"; exit 1; }

@@ -129,7 +129,7 @@ if [ -z "${HB_NO_GIT:-}" ] && [ "$NO_GIT" != "1" ] && command -v git >/dev/null 
         echo "# HeartBeat runtime (ephemeral — never source)"
         echo ".hb/.lock"; echo ".hb/.wlock"; echo ".hb/leases/"
         echo ".hb/.stuck-alerted"; echo ".hb/.noprogress-alerted"
-        echo ".hb/.all-done-alerted"; echo ".hb/.deadlock-alerted"
+        echo ".hb/.all-done-alerted"; echo ".hb/.deadlock-alerted"; echo ".hb/.replan-alerted"
         echo ".hb/.gate-notified"; echo ".hb/.drift-notified"
         echo ".hb/.review-stuck-alerted"; echo ".hb/.rot-alerted"; echo ".hb/.gate-blocked-ticks"
         echo ".hb/*.tmp"; echo ".hb/dag-view.html"

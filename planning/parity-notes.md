@@ -381,3 +381,58 @@ whole event-sourcing design already assumes). Parity case: `drift:cross` (a runt
 hand-edit of a completed gate's criteria is detected identically by both doctors — exit 1,
 byte-identical problem line) with a non-vacuity floor (the clean twin fixture must be quiet on
 both). Proof: `tests/replan.sh` (T184) + its `--selftest` teeth.
+
+## The horizon contract (the knowledge horizon made machine-visible)
+
+The marker is `"horizon": true` on a phase — a strict boolean (`hb-lint` ≡ `lint.py` error
+`[<pid>] horizon must be true or false (the knowledge-horizon marker)`, byte-identical). It has a
+runtime effect ONLY on the LAST LIVE (non-parked) phase; anywhere else it is inert, and its position
+is never linted (a flag left behind by an append is historical). When every live phase is complete
+and the last one is flagged and not in the projected `horizon_closed`, both resolvers return
+`{"type":"replan_pending","phase":<id>}` (identical keys) instead of `all_done`; an EMPTY live list
+(every phase parked) keeps today's `all_done`, never a throw. Both ticks wake `replan_pending` ONCE
+per horizon phase — the `.replan-alerted` flag stores the phase id, so a stale flag never silences a
+newer horizon — then sleep `replan_waiting`; the flag clears on the task and `all_done` branches and
+no event is appended on the wake. Both exec drivers stop with `HB-EXEC STOP: replan_pending` (exit
+nonzero) on every run whose tick reaches the open horizon — the wake run and every later
+`replan_waiting` run alike. A higher-priority tick reason (criteria drift, gate rot, a blocked gate)
+keeps its own handling ahead of the horizon, exactly as it does ahead of task dispatch.
+
+The projection (`project` ≡ `state.project`) folds `horizon_closed` events into an insertion-ordered
+set that `initialized` resets, and projects it SPARSELY — the `horizon_closed` key is ABSENT on any
+log without a close, so every existing projection stays byte-identical.
+
+`hb horizon close --reason <why>` (both CLIs, under the write lock) is a VERDICT: it appends
+`{"event":"horizon_closed","phase","reason"}` (actor via the usual attribution) and reprojects, or
+refuses with a nonzero exit and NO event when the reason is missing/empty, the live list is empty,
+the last live phase is unflagged, any live phase is incomplete, the phase is already in the
+PROJECTED `horizon_closed` (the resolver's own source), or any live gate's regate cycle is open —
+pending (`regateBlocks`), unanswered in the log (`unansweredRegate`), or rearmed without a fresh
+criteria-pinned pass (`staleRearm`). The close is phase-scoped: an appended, flagged, completed
+horizon wakes again despite the older close. Refusal message text is runtime-flavored (like every
+CLI verb's); exit status and the no-event guarantee are the shared contract. Argument style is
+runtime-flavored too (the park/regate/detach precedent): node takes the reason as the trailing
+words after `--reason`, python takes one `--reason <string>` argument. The once-only wake is
+consumed by the first tick at a reached horizon even while a revision is open on a live gate (the
+close is refused until the cycle completes; the drivers keep stopping on every run).
+
+`speculative_tail` (`hb-audit.js` ≡ `audit.py`, identical message bytes): over live phases in plan
+order, a phase is UNVERIFIED when it has no `gate_exit` (with or without tasks — a zero-task
+placeholder is the purest speculative shape), its gate has no criteria, or none of its criteria is
+behavioral. Hostile shapes outside the dag schema — a non-object `gates` map or gate value, a
+non-array `criteria`, a non-string (or empty) `gate_exit` — read as EMPTY in every audit rule on
+both runtimes: no gate, no criteria (never an audit crash, never an audit divergence; full finding
+objects agree). This is an audit guarantee only — the lints do not yet reject every such shape. When the maximal trailing run of unverified phases is ≥ 2 AND at least one earlier live
+phase is verified, ONE warn finding names the tail ids, the cut phase and the cure (end the plan
+there with the horizon flag; `docs/howto/plan-to-the-horizon.md`). Parked phases are excluded. It
+stays a WARN: the hollow members already carry their own per-phase errors — this rule's job is the
+diagnosis (where to cut), not a second verdict.
+
+HONEST LIMITS, recorded: the marker is plan surface, desc-class — the drift tripwire pins only a
+completed gate's `(id, cmd)` criteria, so deleting the flag or parking the flagged phase silences the
+wake with doctor quiet (pinned as behavior, `l1`/`l2`). The recorded way to end a horizon is the
+close verb. A hand-appended `horizon_closed` event is accepted by the projection — the same
+procedural trust the whole event log carries (`HB_ACTOR` is self-declared identity); the verb's
+refusals bind the verb, not the pen. Parity cases: `horizon:resolve`, `horizon:project`
+(multi-close insertion order + the absent key), `horizon:lint`, `horizon:audit`, each with a
+non-vacuity floor, implemented inline. Proof: `tests/horizon.sh` (T185) + its `--selftest` teeth.

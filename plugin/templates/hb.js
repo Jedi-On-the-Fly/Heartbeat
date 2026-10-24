@@ -59,6 +59,7 @@ const PROTOCOL = {
   gate_rot:           'Run: node .hb/hb.js diagnose — a completed phase\'s gate references a deleted file; restore it or re-point the gate.',
   build_stuck:        'Run: node .hb/hb.js diagnose — woken repeatedly without progress; root-cause it or surface a blocker report for a human.',
   review_stuck:       'The adversarial review never resolved — spawn the refuter, write its findings to a file, and record hb review <gate> fail "<holes>" or hb review <gate> pass --artifact <file>, or surface for a human.',
+  replan_pending:     'The plan reached its knowledge horizon (its flagged last phase is complete) — HUMAN NEEDED: a replan decision is owed, never a silent finish. Exactly two sanctioned moves: (1) replan by append-continuation — append the NEXT horizon\'s phases to dag.json (fresh ids; the first new gate_entry = the completed horizon phase\'s gate_exit; plan only what is now known and flag the new last phase horizon: true), lint + audit + refute the plan, then tick; or (2) end the project as a recorded decision: node .hb/hb.js horizon close --reason <why>.',
   all_done:           'Write the final project report.',
 };
 function renderProtocolMd() {
@@ -114,11 +115,12 @@ function project(events, dag) {
   // review passed. A phase completes only when det AND (review not required OR rev).
   const gateState = {};
   const gs = (g) => (gateState[g] ||= { det: false, rev: false });
+  const horizonClosed = new Set();   // phases whose knowledge horizon was closed by a recorded verdict
 
   for (const ev of events) {
     switch (ev.event) {
       case 'initialized':
-        completed.clear(); active.clear();
+        completed.clear(); active.clear(); horizonClosed.clear();
         for (const k of Object.keys(gateState)) delete gateState[k];
         s.build_stuck_count = 0; s.gate.errors = 0;
         break;
@@ -151,6 +153,9 @@ function project(events, dag) {
         gs(ev.gate).det = false; gs(ev.gate).rev = false;
         s.gate.errors = 1; s.build_stuck_count += 1;
         break;
+      case 'horizon_closed':
+        if (typeof ev.phase === 'string' && ev.phase) horizonClosed.add(ev.phase);
+        break;
       default: /* audit-only event → no state change */ break;
     }
     if (ev.event) s.last_event = ev.event;
@@ -177,6 +182,9 @@ function project(events, dag) {
   s.active_tasks = [...active];
   s.completed_phases = [...completedPhases];
   s.pending_reviews = pendingReviews;             // v1.4
+  // Sparse: the key exists only once a horizon was closed, so every horizon-less projection
+  // stays byte-identical. Insertion-ordered.
+  if (horizonClosed.size) s.horizon_closed = [...horizonClosed];
 
   let cur = null;
   for (const p of phases) { if (!completedPhases.has(p.id)) { cur = p.id; break; } }
@@ -1678,6 +1686,38 @@ switch (cmd) {
     break;
   }
 
+  case 'horizon': {
+    // The recorded end of a knowledge horizon. A VERDICT, not a note: it retires the replan wake
+    // for good, so it sits inside the same fail-closed perimeter as its acceptance siblings
+    // (anchor, review, constraints --record), and it reads the PROJECTION — the resolver's own
+    // source — so the two can never disagree about whether the horizon is open.
+    if (arg1 !== 'close') die('usage: hb horizon close --reason <why>');
+    const hri = rest.indexOf('--reason');
+    const whyH = hri === -1 ? '' : rest.slice(hri + 1).join(' ').trim();
+    if (!whyH) die('hb horizon close refused: --reason <why> is required — the end of a project is a recorded decision, never a silent one.');   // horizon-guard: close
+    const verdictH = withWlock(() => {
+      const dag = readDag(), events = readEvents();
+      const state = project(events, dag);
+      const done = new Set(state.completed_phases);
+      const live = (dag.phases || []).filter(p => !p.parked);
+      const last = live[live.length - 1] || {};
+      if (!live.length) return 'hb horizon close refused: no horizon is reached — every phase is parked (unpark the plan, or end it by its own record).';   // horizon-guard: close
+      if (last.horizon !== true) return `hb horizon close refused: the last live phase ${last.id} is not flagged "horizon" — there is no knowledge horizon to close.`;   // horizon-guard: close
+      const openH = live.filter(p => !done.has(p.id)).map(p => p.id);
+      if (openH.length) return `hb horizon close refused: the horizon is not reached — incomplete live phase(s): ${openH.join(', ')}.`;   // horizon-guard: close
+      if (Array.isArray(state.horizon_closed) && state.horizon_closed.includes(last.id)) return `hb horizon close refused: the horizon at ${last.id} is already closed.`;   // horizon-guard: close
+      const revH = live.map(p => p.gate_exit).filter(g => g && (regateBlocks((dag.gates || {})[g]) || unansweredRegate(events, g) || staleRearm(events, g)));
+      if (revH.length) return `hb horizon close refused: a revision is open on ${revH.join(', ')} (regate pending, unanswered, or rearmed without a fresh pass) — finish the regate cycle first; closing would retire it behind a finished project.`;   // horizon-guard: close
+      appendEvent({ event: 'horizon_closed', phase: last.id, reason: whyH });
+      reproject();
+      return { id: last.id };
+    });
+    if (typeof verdictH === 'string') die(verdictH);
+    process.stdout.write(`⊣ horizon closed at ${verdictH.id} (by ${ACTOR}): ${whyH}\n` +
+      `   the project ends here as a recorded decision; to continue instead, append the next horizon's phases to dag.json\n`);
+    break;
+  }
+
   case 'park':
   case 'unpark': {
     // The CLI path for retiring a phase — no hand-editing, no deletion (deleting a gate
@@ -1728,7 +1768,7 @@ switch (cmd) {
   }
 
   default:
-    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|regate|detach|reattach|refuters|refute-prompt|changed|constraints|import> [args]');
+    die('usage: hb <start|done|fail|heartbeat|ready|review|doctor|diagnose|protocol|rebuild|state|park|unpark|regate|detach|reattach|horizon|refuters|refute-prompt|changed|constraints|import> [args]');
 }
 }
 

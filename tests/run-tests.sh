@@ -1997,6 +1997,17 @@ else
   echo "  (python3 absent — T184 skipped)"
 fi
 
+grp "T185 — the knowledge horizon is machine-visible: a flagged last live phase wakes replan_pending (once per horizon) instead of all_done, with exactly two sanctioned moves — append the next horizon, or hb horizon close (a fail-closed verdict inside the regate perimeter); lint type-checks the marker and audit names a speculative tail's cut point; both runtimes"
+HZN="$HB_SRC/tests/horizon.sh"
+if command -v python3 >/dev/null 2>&1; then
+  check "T185.1 marker/close/append/limits/parked/lint/audit/report, both runtimes (horizon.sh → HORIZON-OK)" \
+    'bash "'"$HZN"'" 2>&1 | grep -q "^HORIZON-OK"'
+  check "T185.2 teeth: each stripped horizon-guard class (resolver, tick, close, audit — node + py) reddens its named check (--selftest)" \
+    'bash "'"$HZN"'" --selftest 2>&1 | grep -q "^HORIZON-SELFTEST-OK"'
+else
+  echo "  (python3 absent — T185 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

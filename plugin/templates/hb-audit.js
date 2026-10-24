@@ -71,10 +71,43 @@ function reviewQuestions(dag, gate) {
   return lines.join('\n') + '\n';
 }
 
+// speculative_tail: a plan whose TRAILING live phases are unverified (no gate, no criteria, or no
+// behavioral criterion — a zero-task zero-gate placeholder included) behind a verified head was
+// planned past its knowledge horizon: those phases are guesses dressed as a plan. Fires once, warn
+// (the hollow members already carry their own errors) — its job is the DIAGNOSIS: the cut point.
+// Twin: audit._speculative_tail.
+// Hostile shapes (a non-object gates map or gate value, a non-array criteria, a non-string
+// gate_exit) are lint errors; here they read as EMPTY on both runtimes — never a crash, never a
+// divergence (a refuter catch: node threw on string criteria, python on a string gate value).
+// Twin: audit._gate_obj.
+const gateId = (p) => (typeof p.gate_exit === 'string' && p.gate_exit) ? p.gate_exit : null;   // a non-string gate_exit is no gate
+function gateObj(gates, g) {
+  const gv = typeof g === 'string' ? gates[g] : undefined;
+  return (gv && typeof gv === 'object' && !Array.isArray(gv)) ? gv : {};
+}
+function phaseVerified(p, gates) {
+  const gx = gateId(p);
+  if (!gx) return false;
+  const crit = gateObj(gates, gx).criteria;
+  if (!Array.isArray(crit) || !crit.length) return false;
+  return crit.some(c => c && typeof c === 'object' && !Array.isArray(c) && classify(c.cmd) === 'behavioral');
+}
+function speculativeTail(phases, gates, F) {
+  const live = phases.filter(p => !p.parked);
+  const rid = (p) => (typeof p.id === 'string' && p.id) ? p.id : '?';
+  let k = 0;
+  while (k < live.length && !phaseVerified(live[live.length - 1 - k], gates)) k++;
+  if (k < 2 || k === live.length) return;
+  const tail = live.slice(live.length - k).map(rid), cut = rid(live[live.length - k - 1]);
+  F('warn', 'speculative_tail', tail[0],
+    `phases ${tail.join(', ')} trail the plan unverified after ${cut} — a speculative tail (plans past the knowledge horizon are guesses): end the plan at ${cut} with "horizon": true and plan the tail when its spec is known (docs/howto/plan-to-the-horizon.md)`,
+    { tail, cut });
+}
+
 function audit(dag) {
   const findings = [];
   const phases = dag.phases || [];
-  const gates = dag.gates || {};
+  const gates = (dag.gates && typeof dag.gates === 'object' && !Array.isArray(dag.gates)) ? dag.gates : {};
   const parked = [];
   const F = (severity, rule, phase, message, extra) => findings.push({ severity, rule, phase, message, ...(extra || {}) });
 
@@ -87,14 +120,16 @@ function audit(dag) {
       continue;
     }
     const tasks = p.tasks || [];
-    if (tasks.length && !p.gate_exit) {
+    const gx = gateId(p);
+    if (tasks.length && !gx) {
       F('warn', 'unguarded_phase', p.id, `phase ${p.id} has tasks but no gate_exit — its work is never verified`);
       continue;
     }
-    if (!p.gate_exit) continue;
-    const crit = (gates[p.gate_exit] || {}).criteria || [];
+    if (!gx) continue;
+    const crit0 = gateObj(gates, gx).criteria;
+    const crit = Array.isArray(crit0) ? crit0 : [];
     if (crit.length === 0) {
-      F('error', 'ungated', p.id, `gate ${p.gate_exit} has no criteria — phase ${p.id} is not verified`, { gate: p.gate_exit });
+      F('error', 'ungated', p.id, `gate ${gx} has no criteria — phase ${p.id} is not verified`, { gate: gx });
       continue;
     }
     let behavioral = 0;
@@ -103,29 +138,29 @@ function audit(dag) {
       const cls = classify(c.cmd);
       if (cls === 'behavioral') behavioral++;
       else F('info', cls, p.id,
-        `${p.gate_exit}[${c.id}] is ${cls === 'vacuous' ? 'trivially true' : 'an existence-only check'} — assert behaviour, not ${cls === 'vacuous' ? 'nothing' : 'mere existence'}`,
-        { gate: p.gate_exit, criterion: c.id });
+        `${gx}[${c.id}] is ${cls === 'vacuous' ? 'trivially true' : 'an existence-only check'} — assert behaviour, not ${cls === 'vacuous' ? 'nothing' : 'mere existence'}`,
+        { gate: gx, criterion: c.id });
       if (isNondet(c.cmd)) F('warn', 'nondeterministic', p.id,
-        `${p.gate_exit}[${c.id}] touches network/time — may flake; gates must be deterministic`,
-        { gate: p.gate_exit, criterion: c.id });
+        `${gx}[${c.id}] touches network/time — may flake; gates must be deterministic`,
+        { gate: gx, criterion: c.id });
       if (isSideEffecting(c.cmd)) F('warn', 'side_effecting', p.id,
-        `${p.gate_exit}[${c.id}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)`,
-        { gate: p.gate_exit, criterion: c.id });
+        `${gx}[${c.id}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)`,
+        { gate: gx, criterion: c.id });
       if (/[\x1e\x1f]/.test(c.cmd || '') || /[\x1e\x1f]/.test(c.desc || '')) F('error', 'control_char', p.id,
-        `${p.gate_exit}[${c.id}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it`,
-        { gate: p.gate_exit, criterion: c.id });
+        `${gx}[${c.id}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it`,
+        { gate: gx, criterion: c.id });
     }
     if (behavioral === 0)
       F('error', 'hollow_gate', p.id,
-        `gate ${p.gate_exit} has NO behavioural criterion — phase ${p.id} passes without proving its work`,
-        { gate: p.gate_exit });
+        `gate ${gx} has NO behavioural criterion — phase ${p.id} passes without proving its work`,
+        { gate: gx });
     // "Has a review" = the review value is an object (a non-array dict — the same test both
     // runtimes use); any other shape is a lint error, never a crash here.
-    const rv = (gates[p.gate_exit] || {}).review;
+    const rv = gateObj(gates, gx).review;
     if (rv !== null && typeof rv === 'object' && !Array.isArray(rv) && !(Array.isArray(rv.constraints) && rv.constraints.length))
       F('warn', 'unconstrained_review', p.id,
-        `gate ${p.gate_exit} has an adversarial review but no plan-time constraints — the refuter's target is implicit (add review.constraints)`,
-        { gate: p.gate_exit });
+        `gate ${gx} has an adversarial review but no plan-time constraints — the refuter's target is implicit (add review.constraints)`,
+        { gate: gx });
 
     const taskText = tasks.map(t => `${t.title || ''} ${t.description || ''}`).join(' ').toLowerCase();
     const paths = new Set();
@@ -135,9 +170,11 @@ function audit(dag) {
       return taskText.includes(pth.toLowerCase()) || taskText.includes(base);
     }))
       F('warn', 'gate_offphase', p.id,
-        `gate ${p.gate_exit} references files no task in ${p.id} mentions — it may not be testing this phase's work`,
-        { gate: p.gate_exit });
+        `gate ${gx} references files no task in ${p.id} mentions — it may not be testing this phase's work`,
+        { gate: gx });
   }
+
+  speculativeTail(phases, gates, F);   // horizon-guard: audit
 
   return {
     findings,

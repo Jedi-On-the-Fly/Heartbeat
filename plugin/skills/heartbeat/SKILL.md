@@ -357,6 +357,7 @@ When woken by a tick (`data.reason` present), act by reason:
 | `gate_rot` | `node .hb/hb.js diagnose` names the missing file AND the commit that deleted it — restore it or re-point the gate. |
 | `build_stuck` | `signal: no_progress` means the agent was woken repeatedly without progressing. Produce a blocker report for human review. |
 | `review_stuck` | An adversarial review never resolved — spawn the refuter and record `hb review <gate> pass\|fail`, or surface for human review. |
+| `replan_pending` | The plan reached its knowledge horizon — its flagged last phase is complete. HUMAN NEEDED: a replan decision is owed, never a silent finish. Exactly two sanctioned moves: replan by append-continuation (append the NEXT horizon's phases to dag.json with fresh ids, the first new `gate_entry` = the completed horizon phase's `gate_exit`, plan only what is now known and flag the new last phase `horizon: true`; lint + audit + refute, then tick), or end the project as a recorded decision: `node .hb/hb.js horizon close --reason <why>`. |
 | `all_done` | Write the final project report. |
 
 **End of session:** finish each claimed task with `hb done`/`hb fail` — that frees

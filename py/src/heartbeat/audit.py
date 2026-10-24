@@ -78,10 +78,52 @@ def review_questions(dag, gate):
     return "\n".join(lines) + "\n"
 
 
+def _gate_obj(gates, g):
+    """Hostile shapes (non-dict gates map or gate value, non-list criteria, non-string gate_exit)
+    read as EMPTY on both runtimes — never a crash, never a divergence (twin: hb-audit.js gateObj)."""
+    gv = gates.get(g) if isinstance(g, str) else None
+    return gv if isinstance(gv, dict) else {}
+
+
+def _gate_id(p):
+    """A non-string gate_exit is no gate (twin: hb-audit.js gateId)."""
+    g = p.get("gate_exit")
+    return g if isinstance(g, str) and g else None
+
+
+def _phase_verified(p, gates):
+    gx = _gate_id(p)
+    if not gx:
+        return False
+    crit = _gate_obj(gates, gx).get("criteria")
+    if not isinstance(crit, list) or not crit:
+        return False
+    return any(isinstance(c, dict) and classify(c.get("cmd")) == "behavioral" for c in crit)
+
+
+def _speculative_tail(phases, gates, F):
+    """speculative_tail: trailing unverified live phases behind a verified head were planned past
+    the knowledge horizon. Fires once, warn — the DIAGNOSIS is the cut point (twin: hb-audit.js)."""
+    live = [p for p in phases if not p.get("parked")]
+
+    def rid(p):
+        return p["id"] if isinstance(p.get("id"), str) and p["id"] else "?"
+    k = 0
+    while k < len(live) and not _phase_verified(live[len(live) - 1 - k], gates):
+        k += 1
+    if k < 2 or k == len(live):
+        return
+    tail = [rid(p) for p in live[len(live) - k:]]
+    cut = rid(live[len(live) - k - 1])
+    F("warn", "speculative_tail", tail[0],
+      f"phases {', '.join(tail)} trail the plan unverified after {cut} — a speculative tail (plans past the knowledge horizon are guesses): end the plan at {cut} with \"horizon\": true and plan the tail when its spec is known (docs/howto/plan-to-the-horizon.md)",
+      tail=tail, cut=cut)
+
+
 def audit(dag):
     findings = []
     phases = dag.get("phases") or []
-    gates = dag.get("gates") or {}
+    gates = dag.get("gates") if isinstance(dag.get("gates"), dict) else {}
     parked = []
 
     def F(sev, rule, phase, message, **extra):
@@ -95,14 +137,16 @@ def audit(dag):
             parked.append(p["id"])
             continue
         tasks = p.get("tasks") or []
-        if tasks and not p.get("gate_exit"):
+        gx = _gate_id(p)
+        if tasks and not gx:
             F("warn", "unguarded_phase", p["id"], f"phase {p['id']} has tasks but no gate_exit — its work is never verified")
             continue
-        if not p.get("gate_exit"):
+        if not gx:
             continue
-        crit = (gates.get(p["gate_exit"]) or {}).get("criteria") or []
+        crit = _gate_obj(gates, gx).get("criteria")
+        crit = crit if isinstance(crit, list) else []
         if not crit:
-            F("error", "ungated", p["id"], f"gate {p['gate_exit']} has no criteria — phase {p['id']} is not verified", gate=p["gate_exit"])
+            F("error", "ungated", p["id"], f"gate {gx} has no criteria — phase {p['id']} is not verified", gate=gx)
             continue
         behavioral = 0
         for c in crit:
@@ -114,31 +158,31 @@ def audit(dag):
             else:
                 what = "trivially true" if cls == "vacuous" else "an existence-only check"
                 tail = "nothing" if cls == "vacuous" else "mere existence"
-                F("info", cls, p["id"], f"{p['gate_exit']}[{c.get('id')}] is {what} — assert behaviour, not {tail}",
-                  gate=p["gate_exit"], criterion=c.get("id"))
+                F("info", cls, p["id"], f"{gx}[{c.get('id')}] is {what} — assert behaviour, not {tail}",
+                  gate=gx, criterion=c.get("id"))
             if is_nondet(c.get("cmd")):
                 F("warn", "nondeterministic", p["id"],
-                  f"{p['gate_exit']}[{c.get('id')}] touches network/time — may flake; gates must be deterministic",
-                  gate=p["gate_exit"], criterion=c.get("id"))
+                  f"{gx}[{c.get('id')}] touches network/time — may flake; gates must be deterministic",
+                  gate=gx, criterion=c.get("id"))
             if is_side_effecting(c.get("cmd")):
                 F("warn", "side_effecting", p["id"],
-                  f"{p['gate_exit']}[{c.get('id')}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)",
-                  gate=p["gate_exit"], criterion=c.get("id"))
+                  f"{gx}[{c.get('id')}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)",
+                  gate=gx, criterion=c.get("id"))
             if any("\x1e" in v or "\x1f" in v for v in ((c.get(k) if isinstance(c.get(k), str) else "") for k in ("cmd", "desc"))):
                 F("error", "control_char", p["id"],
-                  f"{p['gate_exit']}[{c.get('id')}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it",
-                  gate=p["gate_exit"], criterion=c.get("id"))
+                  f"{gx}[{c.get('id')}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it",
+                  gate=gx, criterion=c.get("id"))
         if behavioral == 0:
             F("error", "hollow_gate", p["id"],
-              f"gate {p['gate_exit']} has NO behavioural criterion — phase {p['id']} passes without proving its work",
-              gate=p["gate_exit"])
+              f"gate {gx} has NO behavioural criterion — phase {p['id']} passes without proving its work",
+              gate=gx)
         # "Has a review" = the review value is a dict (node: a non-array object); any other shape is
         # a lint error, never a crash here.
-        rv = (gates.get(p["gate_exit"]) or {}).get("review")
+        rv = _gate_obj(gates, gx).get("review")
         if isinstance(rv, dict) and not (isinstance(rv.get("constraints"), list) and rv["constraints"]):
             F("warn", "unconstrained_review", p["id"],
-              f"gate {p['gate_exit']} has an adversarial review but no plan-time constraints — the refuter's target is implicit (add review.constraints)",
-              gate=p["gate_exit"])
+              f"gate {gx} has an adversarial review but no plan-time constraints — the refuter's target is implicit (add review.constraints)",
+              gate=gx)
 
         task_text = " ".join(f"{t.get('title', '')} {t.get('description', '')}" for t in tasks).lower()
         paths = set()
@@ -149,8 +193,10 @@ def audit(dag):
                 paths.add(pth)
         if paths and not any(pth.lower() in task_text or pth.rstrip("/").split("/")[-1].lower() in task_text for pth in paths):
             F("warn", "gate_offphase", p["id"],
-              f"gate {p['gate_exit']} references files no task in {p['id']} mentions — it may not be testing this phase's work",
-              gate=p["gate_exit"])
+              f"gate {gx} references files no task in {p['id']} mentions — it may not be testing this phase's work",
+              gate=gx)
+
+    _speculative_tail(phases, gates, F)  # horizon-guard: audit
 
     return {"findings": findings,
             "errors": sum(1 for f in findings if f["severity"] == "error"),
