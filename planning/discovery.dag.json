@@ -1,0 +1,250 @@
+{
+  "project": "discovery",
+  "_meta": {
+    "design": "Wave 3 — the discovery doctrine. Waves 1-2 built the sanctioned mutation verbs (regate: a gate's CONTENT changes only through rigor; detach: a dependency CLAIM is retractable, loudly). This wave ships the doctrine that tells a planner WHEN those verbs are the answer — plan only to the knowledge horizon, end the horizon with an explicit replan point, treat replanning as a sanctioned OUTCOME of refutation — plus the ONE runtime surface the plan refuter proved missing: the loud side of the editability boundary. Round 1 demonstrated a hand-edited completed gate's criteria is SILENT on every channel of both runtimes (doctor keys only on regate events a hand-edit never writes; unsanctioned_drift is WATCH_PATHS-based; stale-pass needs a rearm), so DS1 is spec-first feature work for the drift tripwire — doctor compares each ever-passed gate's current dag criteria against the criteria pinned on its last PROVENANCED gate_passed, a mismatch with no sanctioning gate_regated after that pass is an unsanctioned-criteria-drift finding, bare/import passes are skipped — alongside the characterization of what round 1 CONFIRMED already works (append-continuation runtime-agreed; unstarted surface silently editable; edges loud and parity-identical; detach/reattach compose at the replan point). DS2 ships the words: the skill's horizon rule + replan-as-refutation-outcome, the gated how-to docs/howto/plan-to-the-horizon.md with every claim anchored to T184, and docs current-state. Pre-checked: SKILL.md's only prose-check failure is the l.244 'fill in' phrase (ds2a rewords it); heartbeat.md, howto/README.md and howto-list.md are prose-clean today, so GATE_DS2 pins prose-check over the 11 named docs (parity-notes.md is owned by ds1c; no suite prose-checks it — its truth is held by GATE_DS1's review).",
+    "refutation_rounds": [
+      {
+        "round": 1,
+        "verdict": "UNSOUND",
+        "findings": "F1 the boundary's loud side does not exist (hand-edited completed criteria silent on every channel, both runtimes) — DS1 rescoped from characterization to spec-first tripwire work; F2 rebuild idempotence is false by design (last_updated now()-stamped) — asserted modulo last_updated; F3 no criterion falsified ds2c — outcome-keyed ds2z added; F4 ds2w missed docs ds2c may touch — ALL-PROSE-OK:6; F5 constraint subjects missed the runtime files the claims pin — added; F6 unstarted-silence keyed on doctor problems/exit, never zero notes (appends add a benign note); F7 T162.5/.6 pre-existing 1-in-2 suite flake recorded (surfaced at sign-off; not wave scope). Confirmed working: append-continuation, unstarted edit/drop silence, edge loudness parity, mid-lease append, verbs at the replan point, l.244 claim, GROUPS-PASSED pattern, timeouts."
+      },
+      {
+        "round": 2,
+        "verdict": "UNSOUND",
+        "findings": "F8 the last-pin-vs-current tripwire is launderable in one command (hand-weaken then plainly re-run the gate: the fresh pass pins the weakened criteria, pin==current forever) — respecced to CONSECUTIVE-PIN comparison over the whole log (any adjacent pin-pair difference, or last-pin-vs-current-dag difference, with no sanctioning gate_regated between those two points = drift; the log remembers the launder forever); F9 bare/import passes could shadow the pin — respecced: the pin sequence is the CRITERIA-PINNED passes only, bare passes are never pins (the staleRearm precedent), terminology fixed (criteria-pinned, not provenanced); F10 comparison semantics pinned — identity is the ORDERED sequence of (id, cmd) pairs byte-exact (reorder = drift, cmd byte change = drift, criterion add/remove = drift, an ever-passed gate REMOVED from the dag = drift; desc/timeout_s are NOT pinned by the gate runners and are an HONEST LIMIT recorded in parity-notes and the how-to — a timeout_s-only edit is invisible to the tripwire by design, never asserted as drift); F11 severity pinned: a doctor PROBLEM (tampered state, house precedent — exit 1; no existing fixture collides); F12 the loudness reaches the sweep and the tick — gate.sh --all counts drifted gates FAILING (the pending-regate precedent) and the ticks' doctor filter widens to surface drift problems as the EXISTING unsanctioned_drift reason key (no new PROTOCOL keys). Confirmed: pin shape {id,cmd,exit} ordered on both runtimes; sanction-window semantics coherent vs the regate machinery; ds2z greps all fail today; prose list clean today."
+      },
+      {
+        "round": 3,
+        "verdict": "UNSOUND",
+        "findings": "F13 positional-only sanction created an UNCURABLE problem (the full regate rigor run late could not quiet a drift pair; the problem message prescribed remedies that fail) — respecced with ABSOLUTION: a COMPLETED regate cycle for that gate (gate_regated → gate_rearmed → a fresh criteria-pinned pass, in order, after the later point) cures all earlier drift on the gate — late rigor is still rigor, the unsanctioned window stays in the log forever; a bare declare, or declare+rearm without the fresh pass, cures nothing; the problem message names the real cure. F14 the sweep semantics pinned to the pending-regate precedent exactly (a drifted gate is EXCLUDED from re-evaluation — running weakened criteria proves nothing — and counted FAILING, annotated), and the five existing checks that assert pre-tripwire silence (T160.3/.4, T161.2, two py gate tests) are re-specified to the new contract as part of ds1b — updated to expect the drift surface, never weakened. F15 park must not silence accepted-surface integrity: drift (and the adjacently-discovered pending-regate hole) count FAILING in --all even on parked gates; proof cases added. F16 reusing unsanctioned_drift's action text would be a protocol lie ('--freeze if intended' = one-actor self-sanction) — a NEW reason key criteria_drift with honest action text (sanction via a full regate cycle; never freeze to silence), a human-needed wake like gate_blocked, keys identical across runtimes, protocol surfaces updated (PROTOCOL.md template, both protocol tables, SKILL.md row, dev docs). F17 py twins added to P2 subjects. F18 staleness owners assigned: ds1c records the honest limits + cure semantics in parity-notes; ds2b's how-to gains the tripwire section (boundary, limits, strengthening-is-also-a-revision); ds2c updates re-verify-completed-gates.md, block-pushes-on-failing-gates.md and the dev-doc tick/doctor tables (both pre-checked prose-clean today; ds2w pins ALL-PROSE-OK:8). F19 sanction and absolution events are gate-scoped. Held: consecutive-pin launder-proofness, rebuild survival, detach/rename verdicts, bare-pass immunity, tick cost."
+      },
+      {
+        "round": 4,
+        "verdict": "UNSOUND",
+        "findings": "Held: absolution is sound and not a cheaper laundering channel (the cycle costs the sanctioned revision's own bar; one-human-two-actor-strings is the documented trust boundary); multi-pair composition correct; the cure reachable in every shape (single-gate runs have no doctor consult; declare/rearm/pass all work parked); no tick/exec deadlock; no phase split warranted. Changed: F20 the absolution anchor pinned CYCLE-anchored — the whole cycle, its gate_regated included, must postdate the pair's later point (an old innocent cycle + launder + later plain re-pass still drifts; spec case + probe added); F21 the respec list gains the SIXTH check (regate-fail-closed case_park / T179.4 pins the parked --all exit 0 this wave flips) and the four doc surfaces (park-a-phase.md, dev-plugin.md:150, dev-python.md:70, dev-tests.md's T179 row) — ds2w widens to ALL-PROSE-OK:11 (all pre-checked clean today); the sweep walks gates ever CRITERIA-PINNED (bare imports never seed the walk); F22 the fourth protocol surface owned — hb-exec.js's human-needed case table gains criteria_drift (escalate-and-stop STATED), plus the heartbeat-detect hook stop-list and the MCP tick tool description; F23 P2 split at house constraint size into P2 (detection + cure) and P3 (reach + quiet), teeth renumbered P4 (lint requires strict P<n> ids); F24 GATE_DS2 P1 claim/subjects gain the two rewritten how-tos. Minors: ds2w desc honest; the procedural HB_ACTOR trust-model limit recorded in ds1c and ds2b."
+      },
+      {
+        "round": 5,
+        "verdict": "UNSOUND",
+        "findings": "Convergence verified: F20 at all four sites; F22's four protocol surfaces + two stop-lists real and owned; F23's split within the house envelope (detach-wave precedent); F24 landed; the live simulator written strictly from ds1b's CORE words reproduced every verdict (the pass-anchored misreading is mechanically excluded); doctor today still silent over drift on both runtimes (spec-first premise holds); economics clean (single owner, no double-spec, no wrong-order dependency). Folded: F25 P3's subjects gain the files the six re-specified checks live in; F26 ds2c and GATE_DS2 P1 own the TRUTH of the three doc rows the parked-count flip falsifies (dev-tests' T179 row, dev-plugin's parked-pending-regate sentence, dev-python's park row) — re-specified, not just added to. Minors: the two py gate tests named in the dag (py/tests/test_gate.py l.203/l.232), 'in ds1b's change' clarified, the PROTOCOL.md-regenerates-from-the-table note added."
+      },
+      {
+        "round": 6,
+        "verdict": "UNSOUND",
+        "findings": "Convergence: all six round-5 changes landed verbatim; edited sentences coherent; the recorder rule cannot refuse P3's widened subjects; GATE_DS2 P1 within the house envelope; lint+audit clean on both runtimes (byte-identical projections); all 24 cited paths exist; no dangling reference. Folded: F27 GATE_DS2 P1's subjects gain dev-plugin.md and dev-python.md (the claim pinned their rows' truth with no subject coverage — the F5/F17/F24/F25 class); M1 the _meta prose-floor clause made honest (parity-notes.md is suite-unchecked; GATE_DS1's review holds it)."
+      }
+    ]
+  },
+  "phases": [
+    {
+      "id": "DS1",
+      "title": "the boundary made real — the drift tripwire + the replan mechanics pinned",
+      "gate_entry": null,
+      "gate_exit": "GATE_DS1",
+      "tasks": [
+        {
+          "id": "ds1a",
+          "title": "author tests/replan.sh (spec-first: tripwire RED, mechanics characterized)",
+          "requires": [],
+          "description": "Write tests/replan.sh with the env-hygiene header VERBATIM (unset HB_DIR PROJECT_DIR GATE G DAG_FILE EVENTS_FILE). Cases: (append) a fixture whose phase H1 completed through the CLI gains appended horizon-2 phases (fresh ids, first new gate_entry = GATE_H1) — both runtimes lint 0 errors, resolve the next task from the appended phases, leave H1's projection byte-untouched, and rebuild idempotently MODULO last_updated (by design: hb.js:107/185, state.py:83/169); (unstarted) editing and dropping a never-started phase keeps lint at 0 errors and doctor at ZERO PROBLEMS with exit 0 — never asserted as zero NOTES — while the resolver follows the edited plan; (drift, RED TODAY — the tripwire spec) the pin history is truth: hand-editing completed GATE_H1's criteria → doctor PROBLEM (exit 1) on BOTH runtimes naming the gate and the CURE; the LAUNDER (hand-weaken then plainly re-run so a fresh pass pins the weakened criteria) STILL drifts; a bare/import pass never shadows the pin sequence; an ever-passed gate REMOVED from the dag drifts; criteria REORDERED drifts; desc/timeout_s-only edits do NOT drift (unpinned — the honest limit); (cure) a COMPLETED regate cycle FOR THAT GATE — gate_regated, then gate_rearmed, then a fresh criteria-pinned pass, in that order after the drift — absolves all the gate's earlier drift and doctor goes quiet; a bare declare cures NOTHING; declare+rearm without the fresh pass cures NOTHING; a cycle on a DIFFERENT gate cures nothing (cross-gate interleave); the anchor is CYCLE-scoped: an old innocent cycle from BEFORE the drift plus a later plain re-pass cures NOTHING (the whole cycle — its gate_regated included — must postdate the pair's later point); after the cure a NEW hand-edit drifts again; (sanctioned quiet) a declared regate's window, rearm + fresh pass, detach/reattach, an append; (sweep) gate.sh --all EXCLUDES a drifted gate from re-evaluation (running weakened criteria proves nothing) and counts it FAILING, annotated — including when the gate's phase is PARKED, and including a removed gate (the sweep walks gates ever CRITERIA-PINNED in the log — bare imports never seed it); the SIX existing suite checks that assert pre-tripwire silence (T160.3/.4, T161.2, the two py/tests/test_gate.py sweep tests (l.203, l.232), and T179.4 / regate-fail-closed case_park — which pins the parked --all exit 0 this wave flips) are re-specified to the new contract in ds1b's change — updated, never weakened; (tick) a tick on the drifted fixture wakes the NEW criteria_drift reason (human-needed, like gate_blocked; fires every tick until cured; reason KEYS identical across runtimes); (verbs) detach an appended phase at the replan point, reattach, resolver sane. --selftest: sabotages (duplicate appended id; a generator mutating H1's record; the drift-guard lines stripped from COPIES of both runtimes) each redden the NAMED check for the RIGHT reason."
+        },
+        {
+          "id": "ds1b",
+          "title": "implement the drift tripwire (both runtimes, guard-marked, parity case)",
+          "requires": [
+            "ds1a"
+          ],
+          "description": "Implement the drift tripwire on both runtimes. CORE (doctor): for each gate ever criteria-pinned in the log, collect its CRITERIA-PINNED gate_passed events in log order (bare/import passes are never pins — the staleRearm precedent) and append the gate's current dag criteria as the final element; identity is the ORDERED sequence of (id, cmd) pairs compared byte-exact; any ADJACENT difference is UNSANCTIONED drift unless (i) a gate_regated FOR THAT GATE lies between the two points (contemporaneous sanction), or (ii) a COMPLETED regate cycle for that gate — gate_regated then gate_rearmed then a fresh criteria-pinned pass, in order, the WHOLE cycle (its gate_regated included) after the pair's later point (ABSOLUTION: late rigor is still rigor; the last completed cycle absolves all earlier drift on that gate; the unsanctioned window stays in the log). An ever-passed gate absent from the dag is the same problem. Severity: doctor PROBLEM (exit 1), message bytes twin-identical, naming the gate and the real cure ('sanction the revision through a full regate cycle: declare, rearm with evidence, fresh pass; git-restore first to retract the content'). desc/timeout_s are not pinned and not compared — the honest limit, recorded. SWEEP: gate.sh --all and the py sweep twin EXCLUDE drifted gates from re-evaluation and count them FAILING with an annotation (the pending-regate precedent, gate.sh:253-277) — parked does NOT silence it (and fix the adjacent round-3 discovery the same way: a parked gate's PENDING REGATE must also stay in the failing count), removed gates appear via the log walk over CRITERIA-PINNED passes only; re-specify the six existing checks (T160.3/.4, T161.2, T179.4/regate-fail-closed case_park node; the two py/tests/test_gate.py sweep tests at l.203 and l.232) to the new contract. TICK: a NEW human-needed reason criteria_drift (never reuse unsanctioned_drift — its freeze-if-intended action text would be a one-actor self-sanction lie): tick.sh + the py tick twin widen the per-tick doctor filter, wake every tick until cured, reason keys identical, action text names the cure; ALL FOUR protocol surfaces updated in the same change — the PROTOCOL.md template (it regenerates from the hb.js table — one edit point serves both), hb.js protocol table, protocol.py, and hb-exec.js's human-needed case table (the driver ESCALATES AND STOPS on criteria_drift, stated, never busy-loops) — plus the driver stop-lists that enumerate human-needed reasons (heartbeat-detect.sh hook, mcp_server.py's tick tool description). Mirror logic exactly; guard markers on strip-clean single lines (drift-guard: doctor / sweep / tick — never structural); parity case drift:cross (one runtime's hand-edit detected identically by the other's doctor) with a non-vacuity floor."
+        },
+        {
+          "id": "ds1c",
+          "title": "wire T184, record the contract in parity-notes",
+          "requires": [
+            "ds1b"
+          ],
+          "description": "Wire tests/replan.sh into tests/run-tests.sh as group T184 (outcome-keyed on REPLAN-OK / REPLAN-SELFTEST-OK — never a group-name grep). Append the 'replan contract' paragraph to planning/parity-notes.md: append-continuation semantics, the editability boundary (unstarted surface freely editable — the plan is a hypothesis; accepted surface changes only through regate/detach, the drift tripwire makes the unsanctioned path LOUD), the pin identity and its HONEST LIMITS (desc/timeout_s unpinned; the trust model is procedural — HB_ACTOR strings are self-declared, one human can play both actors, and a forged event log is outside it), the absolution semantics (a completed regate cycle cures; the window stays in the log), rebuild determinism modulo last_updated, and the drift:cross parity case."
+        }
+      ]
+    },
+    {
+      "id": "DS2",
+      "title": "the doctrine shipped — skill horizon rule, replan-as-outcome, gated how-to",
+      "gate_entry": "GATE_DS1",
+      "gate_exit": "GATE_DS2",
+      "tasks": [
+        {
+          "id": "ds2a",
+          "title": "SKILL.md: plan-to-the-knowledge-horizon + replan-as-refutation-outcome",
+          "requires": [],
+          "description": "Edit plugin/skills/heartbeat/SKILL.md. (1) The plan verb gains the HORIZON RULE: when the work is discovery (later phases depend on what earlier phases will learn), plan ONLY the phases whose spec is known now and END the planned horizon with an explicit replan point — a final task whose gate verifies the learning is recorded and the next horizon is planned (the continuation rule already in the skill is HOW; the horizon rule is WHEN). Fabricating detailed phases beyond the horizon is flagged as the planning analogue of a hollow gate. (2) The refutation/review flow gains REPLAN-AS-OUTCOME: an UNSOUND whose findings refute the PLAN (not the phase's execution) resolves by replanning through sanctioned surface — append/edit unstarted phases freely, detach falsified dependency claims, regate gates whose premises died — and NEVER by weakening a gate, constraint, or review to fit the old plan. Cite docs/howto/plan-to-the-horizon.md. (3) Reword l.244's 'fill in' phrase (e.g. 'replacing <project-dir>, <slug>, <repo>') so SKILL.md is prose-check-clean — verified: that phrase is today's ONLY failing class."
+        },
+        {
+          "id": "ds2b",
+          "title": "docs/howto/plan-to-the-horizon.md (gated-docs method)",
+          "requires": [
+            "ds2a"
+          ],
+          "description": "Write the how-to: what a knowledge horizon is (the field case: gates hard-coded environment premises that died mid-project); planning to it (the horizon rule, the replan point, sizing a horizon); replanning at it (append-continuation with the exact mechanics T184 proves; the editability boundary; which verb for which falsification — append/edit for unstarted surface, detach for a falsified claim, regate for a dead premise); replan-as-refutation-outcome; and THE TRIPWIRE section — the boundary is enforced, not assumed: what drifts (the pin identity), the honest limits (desc/timeout_s unpinned; the trust model procedural — HB_ACTOR self-declared, one human can play both actors; a forged log outside it), the cure (a completed regate cycle — late rigor is still rigor), and strengthening-is-also-a-revision (an honest strengthen-then-rerun drifts too; declare the regate FIRST, or cure after — one extra gate run, and the review is the point). EVERY behavioral claim is anchored to a runnable proof by name (tests/replan.sh cases, tests/detach.sh, tests/regate-*.sh) per the gated-docs method — no claim ships unanchored. Current-state prose only; no version narrative."
+        },
+        {
+          "id": "ds2c",
+          "title": "docs current-state (dev-tests row, howto-list, concept line)",
+          "requires": [
+            "ds2b"
+          ],
+          "description": "Docs current-state across every surface the tripwire and doctrine touch: dev-tests.md gains the T184 row; docs/howto/howto-list.md (and README.md if it indexes how-tos) lists plan-to-the-horizon.md; docs/heartbeat.md gains the one concept line tying the doctrine to the verbs if the concept doc enumerates doctrine; re-verify-completed-gates.md, block-pushes-on-failing-gates.md and park-a-phase.md updated for the new --all semantics (drifted gates excluded-and-counted; parked silences neither drift nor a pending regate); dev-plugin.md and dev-python.md tick/doctor/sweep tables gain the criteria_drift reason and the drift problem row, AND the three rows the parked-count flip FALSIFIES are re-specified, not merely added to — dev-tests.md's T179 row ('never failing the sweep'), dev-plugin.md's parked-pending-regate sentence (l.150), dev-python.md's park row (l.70) — each must state the new truth: parked silences neither drift nor a pending regate in the --all count; SKILL.md's protocol reason table row (owned by ds2a's file) kept consistent. Keep every changed doc prose-check-clean and docs-currency green."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_DS1": {
+      "desc": "the editability boundary is real on BOTH sides and the loudness reaches every surface with a real cure — the drift tripwire (consecutive-pin, launder-proof, bare-pass-immune, absolved only by a completed regate cycle) fires as a doctor problem, fails the --all sweep even parked, wakes the tick as criteria_drift, stays quiet on every sanctioned mutation — and the replan mechanics are pinned by a self-testing proof on both runtimes with parity (incl. drift:cross) and full pytest green.",
+      "criteria": [
+        {
+          "id": "ds1x",
+          "desc": "the replan proof is green end-to-end",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/replan.sh 2>&1 | grep -q '^REPLAN-OK'",
+          "timeout_s": 300
+        },
+        {
+          "id": "ds1y",
+          "desc": "the proof's teeth: each sabotage reddens its named check",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/replan.sh --selftest 2>&1 | grep -q '^REPLAN-SELFTEST-OK'",
+          "timeout_s": 300
+        },
+        {
+          "id": "ds1p",
+          "desc": "parity green (shared-logic guard for any ds1b fold)",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/parity.sh >/dev/null 2>&1",
+          "timeout_s": 300
+        },
+        {
+          "id": "ds1q",
+          "desc": "full python suite green (py/.venv pytest)",
+          "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src ./.venv/bin/python -m pytest -q >/dev/null 2>&1",
+          "timeout_s": 300
+        }
+      ],
+      "review": {
+        "profile": "correctness",
+        "prompt": "Refute that DS1 is done. Does tests/replan.sh carry the env-hygiene header VERBATIM? Build the fixtures YOURSELF in mktemp, independently of the proof: complete H1 through the CLI, then probe the tripwire on BOTH runtimes: (a) hand-edit → doctor PROBLEM exit 1, twin-identical bytes, message naming the regate-cycle cure; (b) the LAUNDER (hand-weaken, plain re-run) → still drift; (c) bare-pass shadowing → immune; (d) reorder / cmd byte change / criterion add+remove / gate REMOVED from dag → each drifts; desc-only and timeout_s-only → each must NOT drift and parity-notes records the limit; (e) THE CURE — after drift, a bare declare cures nothing, declare+rearm cures nothing, declare+rearm+fresh pass cures ALL the gate's earlier drift (doctor quiet, sweep green, tick proceeds), a cycle on a DIFFERENT gate cures nothing, an OLD innocent cycle from before the drift plus a later plain re-pass cures NOTHING (the anchor is the cycle's own position, not the pass's), a new hand-edit after the cure drifts again; try to construct a sequence that is cured while never having been reviewed, or drifts while fully sanctioned — either breaks P2; (f) SWEEP — --all excludes the drifted gate from re-evaluation and counts it FAILING annotated, INCLUDING parked (and a parked gate's pending regate also stays in the failing count — the adjacent fix), INCLUDING a removed ever-passed gate; confirm the six re-specified checks (T160.3/.4, T161.2, T179.4/case_park, two py gate tests) assert the NEW contract and nothing else in the suites regressed; (g) TICK — criteria_drift wakes every tick until cured, keys identical across runtimes, action text names the cure (no freeze-to-silence), PROTOCOL.md/protocol tables updated; (h) rebuild replays events — the drift verdict and the cure both survive a rebuild. Then the mechanics: append-continuation (lint 0, next task appended, H1 byte-untouched, rebuild idempotent modulo last_updated), unstarted edit/drop (zero doctor PROBLEMS, exit 0, resolver follows). Strip the drift-guard lines (doctor, sweep, tick classes) from COPIES of both runtimes — the selftest must redden the NAMED checks, and no marker may sit on a structural line. Is drift:cross in parity with a non-vacuity floor? Do T184's checks key on OUTCOME markers? Are parity and full pytest green? End SOUND or UNSOUND.",
+        "constraints": [
+          {
+            "id": "P1",
+            "claim": "Append-continuation is fully sanctioned and runtime-agreed: appending horizon-2 phases (fresh ids; first new phase's gate_entry = the last completed phase's gate_exit) to a project whose phases completed through the CLI yields, on BOTH runtimes, lint 0 errors, the resolver's next task from the appended phases, the completed phases' projection byte-untouched, and rebuild idempotent MODULO the by-design now()-stamped last_updated field (byte-identical after stripping it).",
+            "subjects": [
+              "tests/replan.sh",
+              "plugin/templates/hb-lint.js",
+              "py/src/heartbeat/lint.py",
+              "plugin/templates/hb.js",
+              "py/src/heartbeat/state.py"
+            ],
+            "violation": "Either runtime rejects the appended dag, resolves a task outside the appended phases, mutates a completed phase's record, disagrees with the other runtime on any of these, or rebuild changes any projection byte other than last_updated."
+          },
+          {
+            "id": "P2",
+            "claim": "Drift detection and its cure are exact on both runtimes: over a gate's criteria-pinned pass history (bare passes never pins) plus the current dag criteria — identity the ordered (id, cmd) pairs byte-exact — any adjacent difference is a doctor PROBLEM (exit 1, twin-identical bytes, message naming the regate-cycle cure) unless a gate_regated FOR THAT GATE lies between the two points or a COMPLETED cycle for that gate (gate_regated then gate_rearmed then a fresh criteria-pinned pass, in order, the whole cycle after the pair's later point) absolves it; the launder, a bare-pass shadow, a reorder, a removal, and an old pre-drift cycle plus re-pass all remain drift; a completed post-drift cycle cures; desc/timeout_s-only edits never drift (the recorded honest limit); editing or dropping a NEVER-STARTED phase leaves lint at 0 errors and doctor at zero PROBLEMS with exit 0.",
+            "subjects": [
+              "tests/replan.sh",
+              "plugin/templates/hb.js",
+              "py/src/heartbeat/doctor.py"
+            ],
+            "violation": "Any listed drift shape goes undetected on some runtime (or message bytes differ), any non-cure quiets the problem or a completed post-drift cycle fails to, a desc/timeout_s-only edit is flagged, a sanctioned mutation (regate window, rearm + fresh pass, detach/reattach, append) is flagged, or a never-started edit raises a problem."
+          },
+          {
+            "id": "P3",
+            "claim": "The loudness reaches every surface and parking silences none of it: both sweeps EXCLUDE a drifted gate from re-evaluation and count it FAILING with an annotation — including when parked (a parked gate's pending regate likewise stays in the failing count) and including a criteria-pinned gate removed from the dag; both ticks wake the NEW criteria_drift reason (identical keys, action text naming the cure, never freeze-to-silence) every tick until cured; all four protocol surfaces carry the reason (PROTOCOL.md template, hb.js protocol table, protocol.py, hb-exec.js's human-needed table — the driver escalates and stops); and the six re-specified suite checks assert the new contract.",
+            "subjects": [
+              "plugin/templates/gate.sh",
+              "py/src/heartbeat/gate.py",
+              "plugin/templates/tick.sh",
+              "py/src/heartbeat/tick.py",
+              "plugin/templates/hb-exec.js",
+              "tests/replan.sh",
+              "tests/run-tests.sh",
+              "tests/regate-fail-closed.sh",
+              "py/tests/test_gate.py"
+            ],
+            "violation": "A drifted gate is re-evaluated or escapes either sweep's failing count (parked or removed shapes included), a parked pending regate drops from the count, a tick proceeds or wakes a different/diverging reason, any protocol surface omits criteria_drift or its action text permits self-sanction, the exec driver busy-loops instead of escalating, or a re-specified check still asserts the old silence."
+          },
+          {
+            "id": "P4",
+            "claim": "The proof has teeth and hygiene: --selftest sabotages (duplicate appended id; a generator mutating the completed record; the drift-guard lines — doctor, sweep and tick classes — stripped from COPIES of each runtime) each redden the NAMED check for the RIGHT reason; the guard markers sit on strip-clean single lines, never structural ones; the env-hygiene header is verbatim; T184's suite checks key on REPLAN-OK / REPLAN-SELFTEST-OK outcome markers; and drift:cross is in tests/parity.sh with a non-vacuity floor.",
+            "subjects": [
+              "tests/replan.sh",
+              "tests/run-tests.sh",
+              "tests/parity.sh"
+            ],
+            "violation": "A sabotage passes or reddens the wrong check (or for a parse error instead of the named reason), a marker sits on a structural line, the header is missing or altered, a T184 check would pass on a red run, or the parity case passes on two empty/identical-error outputs."
+          }
+        ]
+      }
+    },
+    "GATE_DS2": {
+      "desc": "the doctrine is shipped as words that cannot rot: the skill's horizon rule and replan-as-outcome, the anchored how-to, and the changed docs — all prose-check-clean, docs-currency green, the how-to's proof anchor green in the owning suite (T184 in GROUPS-PASSED), and full pytest green.",
+      "criteria": [
+        {
+          "id": "ds2w",
+          "desc": "the 11 docs the wave writes or re-specifies are prose-check-clean",
+          "cmd": "cd \"$PROJECT_DIR\" && bash docs/howto/gate-examples/prose-check.sh plugin/skills/heartbeat/SKILL.md docs/howto/plan-to-the-horizon.md docs/dev-tests.md docs/howto/howto-list.md docs/heartbeat.md docs/howto/README.md docs/howto/re-verify-completed-gates.md docs/howto/block-pushes-on-failing-gates.md docs/howto/park-a-phase.md docs/dev-plugin.md docs/dev-python.md 2>&1 | grep -q '^ALL-PROSE-OK:11'",
+          "timeout_s": 120
+        },
+        {
+          "id": "ds2x",
+          "desc": "docs-currency green",
+          "cmd": "cd \"$PROJECT_DIR\" && bash docs/howto/gate-examples/docs-currency.sh >/dev/null 2>&1",
+          "timeout_s": 300
+        },
+        {
+          "id": "ds2z",
+          "desc": "ds2c's outputs exist and point at real things: the dev-tests T184 row, the howto-list entry, and the run-tests group they cite",
+          "cmd": "cd \"$PROJECT_DIR\" && grep -q 'T184' docs/dev-tests.md && grep -q 'plan-to-the-horizon' docs/howto/howto-list.md && grep -q 'grp \"T184' tests/run-tests.sh",
+          "timeout_s": 60
+        },
+        {
+          "id": "ds2y",
+          "desc": "the how-to's anchor is green in the owning suite: T184 in GROUPS-PASSED (full node suite; ~12min measured)",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/run-tests.sh 2>&1 | grep -q 'GROUPS-PASSED:.* T184 '",
+          "timeout_s": 1500
+        },
+        {
+          "id": "ds2q",
+          "desc": "full python suite green (py/.venv pytest)",
+          "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src ./.venv/bin/python -m pytest -q >/dev/null 2>&1",
+          "timeout_s": 300
+        }
+      ],
+      "review": {
+        "profile": "default",
+        "prompt": "Refute that DS2 is done. Read the skill's new sections and the how-to as a SKEPTIC: run every documented command verbatim in mktemp fixtures — does any documented mechanic, flag, state or channel not exist in code, and is any claim unanchored to a runnable proof that exists AND passes (open tests/replan.sh and check the cited case names are real)? Is the horizon rule stated as prohibition + sanctioned path — plan ONLY to the horizon, the replan point explicit — and is replan-as-outcome worded so it can NEVER be read as permission to weaken a gate, constraint or review (try to construct the misreading)? Does the skill's new text contradict any existing rule in SKILL.md or AGENTS.md (the continuation rule, never-weaken, spec-first)? Is SKILL.md prose-check-clean INCLUDING the reworded l.244, with no new placeholder-class phrase introduced? Does the how-to's tripwire section state the enforcement, the honest limits (desc/timeout_s; forged log), the completed-cycle cure and strengthening-is-also-a-revision accurately against the shipped DS1 behavior (run the documented sequences)? Are re-verify-completed-gates.md and block-pushes-on-failing-gates.md true against the new --all semantics? Are howto-list/README indexes updated, dev-tests.md's T184 row accurate against the real run-tests.sh group, and docs-currency green? Do the full node suite (T184 in GROUPS-PASSED) and full pytest pass? End SOUND or UNSOUND.",
+        "constraints": [
+          {
+            "id": "P1",
+            "claim": "Every behavioral claim in the skill's new sections and the how-to is anchored to a runnable proof that exists and passes (tests/replan.sh cases by name; detach/regate suites where cited); the re-specified how-tos (re-verify-completed-gates.md, block-pushes-on-failing-gates.md, park-a-phase.md) are true against the shipped --all and park semantics, as are the three re-specified dev-doc rows the parked-count flip falsifies (dev-tests' T179 row, dev-plugin's parked-pending-regate sentence, dev-python's park row); every backticked hb verb names a registered subcommand, every relative link resolves, and SKILL.md, the how-to, dev-tests.md and howto-list.md are prose-check-clean.",
+            "subjects": [
+              "plugin/skills/heartbeat/SKILL.md",
+              "docs/howto/plan-to-the-horizon.md",
+              "docs/dev-tests.md",
+              "docs/howto/re-verify-completed-gates.md",
+              "docs/howto/block-pushes-on-failing-gates.md",
+              "docs/howto/park-a-phase.md",
+              "docs/dev-plugin.md",
+              "docs/dev-python.md"
+            ],
+            "violation": "A claim with no runnable anchor or a dead/misnamed anchor, an unknown hb verb, a broken link, or PROSE-FAIL on any changed doc."
+          },
+          {
+            "id": "P2",
+            "claim": "The doctrine is prohibition + sanctioned path, never softened into permission: the plan verb requires planning ONLY to the knowledge horizon with an explicit replan point; the refutation flow resolves a plan-refuting UNSOUND by replanning through sanctioned surface (append/edit unstarted phases, detach falsified claims, regate dead premises) and states that weakening a gate, constraint or review to fit the old plan is NEVER a replan; the wording cannot be read as sanctioning escape-detach or gate-weakening.",
+            "subjects": [
+              "plugin/skills/heartbeat/SKILL.md",
+              "docs/howto/plan-to-the-horizon.md"
+            ],
+            "violation": "Wording that permits gate/constraint-weakening as an outcome of refutation, omits or makes optional the replan point, or presents detach/regate as a way to ESCAPE a blocked gate."
+          }
+        ]
+      }
+    }
+  }
+}
