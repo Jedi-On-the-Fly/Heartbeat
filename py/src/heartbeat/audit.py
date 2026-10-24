@@ -21,7 +21,12 @@ SIDE_EFFECT = re.compile(r"(^|[^0-9>=])>{1,2}\s*(?!/dev/null|/tmp|&\s*[12])|\bte
 
 
 def classify(cmd):
-    c = (cmd or "").strip()
+    # A non-string cmd reads as "" (its shape is a lint error, never a crash here), and an EMPTY
+    # cmd is VACUOUS: the runner evals '' → exit 0 → a trivial pass, so it must never count as
+    # the behavioral criterion that saves a gate from hollow_gate (a refuter-era latent hole).
+    c = (cmd if isinstance(cmd, str) else "").strip()
+    if not c:
+        return "vacuous"
     if VACUOUS.match(c):
         return "vacuous"
     if EXISTENCE.match(c):
@@ -30,11 +35,11 @@ def classify(cmd):
 
 
 def is_nondet(cmd):
-    return bool(NONDET.search(cmd or ""))
+    return bool(NONDET.search(cmd if isinstance(cmd, str) else ""))
 
 
 def is_side_effecting(cmd):
-    return bool(SIDE_EFFECT.search(cmd or ""))
+    return bool(SIDE_EFFECT.search(cmd if isinstance(cmd, str) else ""))
 
 
 # A `grep` that keys on a test-suite marker (a coverage gate) vs a grep of a source string.
@@ -68,7 +73,7 @@ def review_questions(dag, gate):
         return f"no gate '{gate}' in this DAG\n"
     lines = [f"Falsification checklist for {gate} — for each criterion, how could it FALSELY pass?"]
     for c in (g.get("criteria") or []):
-        lines.append(f"  - {criterion_question(c)}")
+        lines.append(f"  - {criterion_question(c if isinstance(c, dict) else {})}")
     lines.append(f'  - PHASE CLAIM: "{g.get("desc") or gate}". Could every criterion above pass while this is still broken? Is any criterion testing the WRONG behaviour? Is the REAL runtime exercised (not mocked/stubbed)?')
     return "\n".join(lines) + "\n"
 
@@ -101,6 +106,8 @@ def audit(dag):
             continue
         behavioral = 0
         for c in crit:
+            if not isinstance(c, dict):
+                c = {}   # a non-object entry is a lint error (criteria-shape rule); here it is simply not behavioral
             cls = classify(c.get("cmd"))
             if cls == "behavioral":
                 behavioral += 1
@@ -117,7 +124,7 @@ def audit(dag):
                 F("warn", "side_effecting", p["id"],
                   f"{p['gate_exit']}[{c.get('id')}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)",
                   gate=p["gate_exit"], criterion=c.get("id"))
-            if any("\x1e" in (c.get(k) or "") or "\x1f" in (c.get(k) or "") for k in ("cmd", "desc")):
+            if any("\x1e" in v or "\x1f" in v for v in ((c.get(k) if isinstance(c.get(k), str) else "") for k in ("cmd", "desc"))):
                 F("error", "control_char", p["id"],
                   f"{p['gate_exit']}[{c.get('id')}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it",
                   gate=p["gate_exit"], criterion=c.get("id"))
@@ -136,7 +143,9 @@ def audit(dag):
         task_text = " ".join(f"{t.get('title', '')} {t.get('description', '')}" for t in tasks).lower()
         paths = set()
         for c in crit:
-            for pth in lintmod.extract_paths(c.get("cmd", "")):
+            if not isinstance(c, dict) or not isinstance(c.get("cmd"), str):
+                continue   # hostile shapes are lint errors, skipped here
+            for pth in lintmod.extract_paths(c["cmd"]):
                 paths.add(pth)
         if paths and not any(pth.lower() in task_text or pth.rstrip("/").split("/")[-1].lower() in task_text for pth in paths):
             F("warn", "gate_offphase", p["id"],

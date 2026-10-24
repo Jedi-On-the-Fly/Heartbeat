@@ -154,7 +154,8 @@ bash <project-dir>/.hb/gate.sh --all            # every ever-passed gate (regres
 ```bash
 node <project-dir>/.hb/hb-lint.js <project-dir>/.hb/dag.json
 ```
-Reports duplicate IDs, cycles, broken `requires`, undefined gates, phases > 8 tasks.
+Reports duplicate IDs (tasks and phases), cycles, broken `requires`, undefined gates,
+phases > 8 tasks, and malformed criteria (every entry must be an object with a string `cmd`).
 
 ### `/heartbeat audit <project-dir>` — adversarial DAG review
 

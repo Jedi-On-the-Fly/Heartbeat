@@ -73,6 +73,14 @@ def lint(dag):
     for g in gates:
         if not any(p.get("gate_entry") == g or p.get("gate_exit") == g for p in phases):
             warnings.append(f"gate defined but never referenced: {g}")
+        # Criteria SHAPE is lint's to own: every entry must be an object with a string cmd — the
+        # runners eval cmd and every static reader walks these entries, so garbage here crashed
+        # doctor/audit on both runtimes (a refuter catch). Loud, identical bytes across runtimes.
+        gv = gates[g] if isinstance(gates[g], dict) else {}
+        for i, c in enumerate(gv.get("criteria") or []):
+            if not isinstance(c, dict) or not isinstance(c.get("cmd"), str):
+                errors.append(f"[{g}] criteria entry {i} must be an object with a string cmd "
+                              f"(got {json.dumps(c, separators=(',', ':'), ensure_ascii=False)[:120]})")
 
     _check_placeholders(dag, warnings)
     _check_gate_artifacts(dag, warnings)
@@ -293,8 +301,10 @@ def _check_gate_artifacts(dag, warnings):
     ).lower()
     seen = set()
     for g in (dag.get("gates") or {}).values():
-        for c in (g.get("criteria") or []):
-            for p in extract_paths(c.get("cmd", "")):
+        for c in ((g.get("criteria") or []) if isinstance(g, dict) else []):
+            if not isinstance(c, dict) or not isinstance(c.get("cmd"), str):
+                continue   # hostile shapes are lint ERRORS (the criteria-shape rule), skipped here
+            for p in extract_paths(c["cmd"]):
                 if p in seen:
                     continue
                 seen.add(p)

@@ -234,6 +234,31 @@ cmp "drift:cross" "$DRN" "$DRP"
 [ -n "$DRN" ] || { echo "  ✗ drift:cross — node names no drift problem (vacuous)"; FAIL=1; }
 echo "$DR_C" | grep -q 'exit_node=0 exit_py=0' || { echo "  ✗ drift:floor — the clean twin fixture is not quiet on both runtimes: $DR_C"; FAIL=1; }
 
+# hostile criteria shapes: a non-object entry or a non-string cmd is a LINT ERROR with
+# identical bytes, and every static reader (lint, doctor, audit) survives it on both
+# runtimes — a refuter catch: four of the six readers crashed, differently per runtime.
+HCDAG='{"phases":[{"id":"H","title":"h","gate_entry":null,"gate_exit":"GATE_H","tasks":[{"id":"h1","title":"t","requires":[],"description":"w"}]}],"gates":{"GATE_H":{"desc":"g","criteria":[null,["garbage"],"garbage",{"id":"c1","desc":"d","cmd":7},{"id":"c2","desc":"d","cmd":null},{"id":"c3","desc":"d","cmd":"python3 -c \"assert 1\""}]}}}'
+HCD=$(mktemp -d); mkdir "$HCD/.hb"
+printf '%s' "$HCDAG" > "$HCD/.hb/dag.json"
+printf '{"event":"initialized"}\n' > "$HCD/.hb/events.jsonl"
+cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" "$HCD/.hb/"
+node "$HCD/.hb/hb.js" rebuild >/dev/null 2>&1
+HC_LN=$(node "$HCD/.hb/hb-lint.js" "$HCD/.hb/dag.json" 2>&1); HC_LNR=$?
+HC_LP=$(eval "$PY lint \"$HCD/.hb/dag.json\" --dir \"$HCD\"" 2>&1); HC_LPR=$?
+cmp "hostile-criteria:lint" "$HC_LN" "$HC_LP"
+[ "$HC_LNR" = 1 ] && [ "$HC_LPR" = 1 ] || { echo "  ✗ hostile-criteria:lint — exits node=$HC_LNR py=$HC_LPR (want 1/1)"; FAIL=1; }
+echo "$HC_LN" | grep -q 'criteria entry' || { echo "  ✗ hostile-criteria:lint — no criteria-shape error named: $HC_LN"; FAIL=1; }
+HC_DN=$( cd "$HCD" && node .hb/hb.js doctor 2>&1 ); HC_DNR=$?
+HC_DP=$( eval "$PY doctor --dir \"$HCD\"" 2>&1 ); HC_DPR=$?
+[ "$HC_DNR" = "$HC_DPR" ] || { echo "  ✗ hostile-criteria:doctor — exits diverge node=$HC_DNR py=$HC_DPR"; FAIL=1; }
+printf '%s\n%s\n' "$HC_DN" "$HC_DP" | grep -qiE 'Traceback|TypeError' && { echo "  ✗ hostile-criteria:doctor — a doctor crashed on a hostile dag"; FAIL=1; }
+HC_AN=$(node "$ROOT/plugin/templates/hb-audit.js" "$HCD/.hb/dag.json" 2>&1); HC_ANR=$?
+HC_AP=$(eval "$PY audit \"$HCD/.hb/dag.json\" --dir \"$HCD\"" 2>&1); HC_APR=$?
+[ "$HC_ANR" = "$HC_APR" ] || { echo "  ✗ hostile-criteria:audit — exits diverge node=$HC_ANR py=$HC_APR"; FAIL=1; }
+printf '%s\n%s\n' "$HC_AN" "$HC_AP" | grep -qiE 'Traceback|TypeError' && { echo "  ✗ hostile-criteria:audit — an audit crashed on a hostile dag"; FAIL=1; }
+echo "$HC_AN" | grep -q 'hollow_gate' && echo "$HC_AP" | grep -q 'hollow_gate' && { echo "  ✗ hostile-criteria:audit — hollow_gate fired despite a real behavioral criterion"; FAIL=1; }
+rm -rf "$HCD"
+
 echo "── state projection parity ──"
 DAG='{"phases":[{"id":"P0","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"P0T1","requires":[]},{"id":"P0T2","requires":["P0T1"]}]},{"id":"P1","gate_entry":"G0","gate_exit":"G1","tasks":[{"id":"P1T1","requires":[]}]}],"gates":{"G0":{"criteria":[{"id":"c","cmd":"true"}]},"G1":{"review":{"prompt":"r"},"criteria":[{"id":"c","cmd":"true"}]}}}'
 state_case(){ # name events

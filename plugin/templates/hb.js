@@ -249,8 +249,9 @@ function doctor() {
   for (const [g, gv] of Object.entries(gates)) {
     const phaseId = gateToPhase[g];
     const isDone = phaseId && completed.has(phaseId);
-    for (const c of (gv.criteria || [])) {
-      for (const rel of extractPaths(c.cmd || '')) {
+    for (const c of ((gv && typeof gv === 'object' && !Array.isArray(gv) ? gv.criteria : null) || [])) {
+      if (!c || typeof c !== 'object' || Array.isArray(c) || typeof c.cmd !== 'string') continue;   // hostile shapes are lint errors (surfaced as `dag:` problems below), never a crash here
+      for (const rel of extractPaths(c.cmd)) {
         if (fs.existsSync(path.join(PROJECT_DIR, rel.replace(/\/$/, '')))) continue;
         (isDone ? problems : notes).push(
           `${g} [${c.id}] → missing ${rel}` +

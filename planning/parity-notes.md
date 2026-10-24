@@ -241,7 +241,12 @@ Extend it when a new shared surface lands.
 ## Auditor ruleset (identical regexes in both)
 
 Classify each gate criterion `cmd`:
-- **vacuous** — trivially true. `^\s*(true|:|exit 0|echo\b|test 1 = 1|\[ 1 = 1 \])\s*;?\s*$`
+- **vacuous** — trivially true. An EMPTY or non-string cmd first (the runner evals `''` →
+  exit 0, so it must never count as the behavioral criterion that saves a gate from
+  `hollow_gate`; a non-string cmd's shape is a lint ERROR — the criteria-shape rule: every
+  entry an object with a string cmd, identical bytes both runtimes, parity case
+  `hostile-criteria:lint` — and classifies as nothing here), then the regex
+  `^\s*(true|:|exit 0|echo\b|test 1 = 1|\[ 1 = 1 \])\s*;?\s*$`
 - **existence** — existence-only check. `^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls(\s|$))`
 - **behavioral** — anything else (the good case).
 Orthogonal flag:

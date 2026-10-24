@@ -36,7 +36,18 @@ ok(){ echo "  ✓ $1"; PASS=$((PASS+1)); [ -n "$_CURG" ] && _GCHECKS["$_CURG"]=1
 ko(){ echo "  ✗ $1"; FAIL=$((FAIL+1)); [ -n "$_CURG" ] && { _GFAIL["$_CURG"]=1; _GCHECKS["$_CURG"]=1; }; }
 # H1 coverage floor: a run that silently SKIPPED most groups (a stripped box) must NOT read green.
 _coverage_check(){ local skipped="${2:-0}" floor="${HB_SKIP_FLOOR:-20}"; if [ "$skipped" -gt "$floor" ]; then echo "⚠ COVERAGE-INCOMPLETE: $skipped groups skipped (> floor $floor) — suite NOT fully verified"; return 3; fi; return 0; }
-check(){ if eval "$2" >/dev/null 2>&1; then ok "$1"; else ko "$1"; fi; }
+# A failing check prints a bounded tail of its captured output — a red check whose evidence
+# is discarded is undiagnosable after the fact (the T162.5 lesson: one flaky full-run red
+# left nothing to root-cause). Still evaluated IN-PROCESS (no subshell: expressions may set
+# variables or cd in subshells of their own), and still non-TTY for the expression.
+CHK_OUT=""
+check(){
+  [ -n "$CHK_OUT" ] || CHK_OUT="$TMP/.check-out"
+  if eval "$2" >"$CHK_OUT" 2>&1; then ok "$1"; else
+    ko "$1"
+    [ -s "$CHK_OUT" ] && tail -n 15 "$CHK_OUT" | sed 's/^/      │ /'
+  fi
+}
 set_state(){ node -e "const fs=require('fs');const f=process.argv[1];const s=JSON.parse(fs.readFileSync(f,'utf8'));${1};fs.writeFileSync(f,JSON.stringify(s,null,2));" "$HB/state.json"; }
 tick(){ rm -rf "$HB/.lock"; bash "$HB/tick.sh"; }
 
@@ -1816,8 +1827,13 @@ check "T162.3 node: audit SKIPS the parked hollow gate (exit 0, reported); unpar
 node "$H162/hb.js" start T1 >/dev/null 2>&1; printf 'ok\n' > "$P162/out.txt"; node "$H162/hb.js" done T1 >/dev/null 2>&1; bash "$H162/gate.sh" G0 >/dev/null 2>&1
 check "T162.4 node: resolver skips the parked phase — all_done reachable without it" \
   'node "$H162/hb-next-task.js" "$H162/state.json" | grep -q all_done'
+# ONE sweep, both asserts on its captured output (two back-to-back sweeps could diverge and
+# said nothing when they failed); on a miss the output prints via the check capture. The
+# unpark is fixture restore OUTSIDE the check: a .5 failure must never cascade into .6 (the
+# observed flake's second red was exactly that artifact — unpark skipped by the && chain).
 check "T162.5 node: --all skips an ARMED parked gate loudly ('0 ever-passed' after parking P0)" \
-  'node "$H162/hb.js" park P0 >/dev/null 2>&1 && bash "$H162/gate.sh" --all 2>&1 | grep -q "re-verifying 0 ever-passed" && bash "$H162/gate.sh" --all 2>&1 | grep -qi "parked" && node "$H162/hb.js" unpark P0 >/dev/null 2>&1'
+  'O162=""; node "$H162/hb.js" park P0 >/dev/null 2>&1 && O162=$(bash "$H162/gate.sh" --all 2>&1) && { echo "$O162" | grep -q "re-verifying 0 ever-passed" && echo "$O162" | grep -qi "parked"; } || { echo "park/sweep said:"; echo "${O162:-<park refused or sweep produced no output>}"; false; }'
+node "$H162/hb.js" unpark P0 >/dev/null 2>&1
 check "T162.6 node: report shows parked honestly (parked list + excluded from the denominator)" \
   'node "$H162/hb-report.js" "$H162" --json | python3 -c "import sys,json;r=json.load(sys.stdin);sys.exit(0 if r[\"parked\"]==[\"P9\"] and r[\"progress\"][\"total\"]==1 else 1)"'
 

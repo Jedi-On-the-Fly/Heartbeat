@@ -27,8 +27,10 @@ def doctor(hbdir):
     for g, gv in gates.items():
         phase_id = gate_to_phase.get(g)
         is_done = phase_id in completed if phase_id else False
-        for c in (gv.get("criteria") or []):
-            for rel in lintmod.extract_paths(c.get("cmd", "")):
+        for c in ((gv.get("criteria") or []) if isinstance(gv, dict) else []):
+            if not isinstance(c, dict) or not isinstance(c.get("cmd"), str):
+                continue   # hostile shapes are lint errors (surfaced as `dag:` problems below), never a crash here
+            for rel in lintmod.extract_paths(c["cmd"]):
                 if (Path(pd) / rel.rstrip("/")).exists():
                     continue
                 if is_done:

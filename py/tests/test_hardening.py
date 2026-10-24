@@ -113,3 +113,56 @@ def test_executor_review_pass_persists_artifact(tmp_path, monkeypatch):
     assert executor.run(hb) == 0
     assert "A0" in state.read_state(hb)["completed_phases"]
     assert (hb / "reviews" / "GA0.md").exists()
+
+
+# ── hostile criteria shapes: every static reader survives, lint owns the loud error ──────────
+# A criteria entry that is not an object, or whose cmd is not a string, is out of the dag
+# schema's domain. The contract (mirrored in hb-lint.js/hb.js/hb-audit.js, parity case
+# lint:hostile-criteria): lint ERRORS on it with identical bytes across runtimes; doctor and
+# the artifact scans skip it without crashing (the lint error surfaces as a `dag:` problem);
+# audit classifies it as non-behavioral (an all-garbage gate is hollow) — never a traceback.
+
+HOSTILE_CRITERIA = {
+    "intcmd":    [{"id": "c1", "desc": "d", "cmd": 7}],
+    "nullcmd":   [{"id": "c1", "desc": "d", "cmd": None}],
+    "listentry": [["garbage"]],
+    "nullentry": [None],
+    "strentry":  ["garbage"],
+}
+
+
+def _hostile_dag(crit):
+    return {"project": "t",
+            "phases": [{"id": "H", "title": "h", "gate_entry": None, "gate_exit": "GATE_H",
+                        "tasks": [{"id": "h1", "title": "t", "requires": [], "description": "w"}]}],
+            "gates": {"GATE_H": {"desc": "g", "criteria": crit}}}
+
+
+@pytest.mark.parametrize("shape", sorted(HOSTILE_CRITERIA))
+def test_hostile_criteria_lint_errors_loudly(shape):
+    from heartbeat import lint as lintmod
+    r = lintmod.lint(_hostile_dag(HOSTILE_CRITERIA[shape]))          # must not raise
+    assert any("criteria entry" in e and "GATE_H" in e for e in r["errors"]), r
+
+
+@pytest.mark.parametrize("shape", sorted(HOSTILE_CRITERIA))
+def test_hostile_criteria_doctor_reports_never_crashes(tmp_path, shape):
+    hb = make_hb(tmp_path, _hostile_dag(HOSTILE_CRITERIA[shape]))
+    state.reproject(hb)
+    d = doctor.doctor(str(hb))                                        # must not raise
+    assert any(p.startswith("dag: ") and "criteria entry" in p for p in d["problems"]), d
+
+
+@pytest.mark.parametrize("shape", sorted(HOSTILE_CRITERIA))
+def test_hostile_criteria_audit_hollow_never_crashes(shape):
+    r = audit.audit(_hostile_dag(HOSTILE_CRITERIA[shape]))            # must not raise
+    assert any(f["rule"] == "hollow_gate" for f in r["findings"]), r  # garbage is not behavioral
+
+
+def test_empty_cmd_is_vacuous_not_behavioral():
+    # A zero-byte cmd runs as `''` → exit 0 → a trivial pass; it must never count as the
+    # behavioral criterion that saves a gate from hollow_gate.
+    assert audit.classify("") == "vacuous"
+    assert audit.classify(None) == "vacuous"
+    r = audit.audit(_hostile_dag([{"id": "c1", "desc": "d", "cmd": ""}]))
+    assert any(f["rule"] == "hollow_gate" for f in r["findings"]), r

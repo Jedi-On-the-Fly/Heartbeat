@@ -82,6 +82,13 @@ function lint(dag) {
     if (!phases.some(p => p.gate_entry === g || p.gate_exit === g)) {
       warnings.push(`gate defined but never referenced: ${g}`);
     }
+    // Criteria SHAPE is lint's to own: every entry must be an object with a string cmd — the
+    // runners eval cmd and every static reader walks these entries, so garbage here crashed
+    // doctor/audit on both runtimes (a refuter catch). Loud, identical bytes across runtimes.
+    ((gates[g] && typeof gates[g] === 'object' && !Array.isArray(gates[g]) ? gates[g].criteria : null) || []).forEach((c, i) => {
+      if (!c || typeof c !== 'object' || Array.isArray(c) || typeof c.cmd !== 'string')
+        errors.push(`[${g}] criteria entry ${i} must be an object with a string cmd (got ${JSON.stringify(c).slice(0, 120)})`);
+    });
   }
 
   checkPlaceholders(dag, warnings);
@@ -268,7 +275,8 @@ function checkGateArtifacts(dag, warnings) {
   const seen = new Set();
   for (const g of Object.values(dag.gates ?? {})) {
     for (const c of (g.criteria ?? [])) {
-      for (const p of extractPaths(c.cmd ?? '')) {
+      if (!c || typeof c !== 'object' || Array.isArray(c) || typeof c.cmd !== 'string') continue;   // hostile shapes are lint ERRORS (the criteria-shape rule), skipped here
+      for (const p of extractPaths(c.cmd)) {
         if (seen.has(p)) continue; seen.add(p);
         const base  = p.replace(/\/$/, '').split('/').pop().toLowerCase();
         const noext = base.replace(/\.\w+$/, '');

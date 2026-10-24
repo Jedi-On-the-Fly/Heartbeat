@@ -27,14 +27,18 @@ const NONDET    = /\bcurl\b|\bwget\b|\bnc\b|\bping\b|\bsleep\b|\bRANDOM\b|\bshuf
 // exempt, and so is `=>` (a JS arrow in an inline `node -e`); writes into the project tree are the risk.
 const SIDE_EFFECT = /(^|[^0-9>=])>{1,2}\s*(?!\/dev\/null|\/tmp|&\s*[12])|\btee\b|\bcp\b|\bmv\b|\bmkdir\b|\btouch\b|\bdd\b|\bsed\s+-i\b|\binstall\s+-D\b/;
 
+// A non-string cmd reads as '' (its shape is a lint error, never a crash here), and an EMPTY
+// cmd is VACUOUS: the runner evals '' → exit 0 → a trivial pass, so it must never count as
+// the behavioral criterion that saves a gate from hollow_gate (a refuter-era latent hole).
 function classify(cmd) {
-  const c = (cmd || '').trim();
+  const c = (typeof cmd === 'string' ? cmd : '').trim();
+  if (!c) return 'vacuous';
   if (VACUOUS.test(c)) return 'vacuous';
   if (EXISTENCE.test(c)) return 'existence';
   return 'behavioral';
 }
-const isNondet = (cmd) => NONDET.test(cmd || '');
-const isSideEffecting = (cmd) => SIDE_EFFECT.test(cmd || '');
+const isNondet = (cmd) => NONDET.test(typeof cmd === 'string' ? cmd : '');
+const isSideEffecting = (cmd) => SIDE_EFFECT.test(typeof cmd === 'string' ? cmd : '');
 
 // A `grep` that keys on a test-suite marker (a coverage gate) vs a grep of a source string.
 const COVERAGE = /\bgrep\b[^|]*(GROUPS-PASSED|\bT[0-9]+\b|[A-Z][A-Z0-9-]*-OK)/;
@@ -62,7 +66,7 @@ function reviewQuestions(dag, gate) {
   const g = ((dag || {}).gates || {})[gate];
   if (!g) return `no gate '${gate}' in this DAG\n`;
   const lines = [`Falsification checklist for ${gate} — for each criterion, how could it FALSELY pass?`];
-  for (const c of (g.criteria || [])) lines.push(`  - ${criterionQuestion(c)}`);
+  for (const c of (g.criteria || [])) lines.push(`  - ${criterionQuestion(c && typeof c === 'object' && !Array.isArray(c) ? c : {})}`);
   lines.push(`  - PHASE CLAIM: "${g.desc || gate}". Could every criterion above pass while this is still broken? Is any criterion testing the WRONG behaviour? Is the REAL runtime exercised (not mocked/stubbed)?`);
   return lines.join('\n') + '\n';
 }
@@ -94,7 +98,8 @@ function audit(dag) {
       continue;
     }
     let behavioral = 0;
-    for (const c of crit) {
+    for (let c of crit) {
+      if (!c || typeof c !== 'object' || Array.isArray(c)) c = {};   // a non-object entry is a lint error (criteria-shape rule); here it is simply not behavioral
       const cls = classify(c.cmd);
       if (cls === 'behavioral') behavioral++;
       else F('info', cls, p.id,
@@ -124,7 +129,7 @@ function audit(dag) {
 
     const taskText = tasks.map(t => `${t.title || ''} ${t.description || ''}`).join(' ').toLowerCase();
     const paths = new Set();
-    for (const c of crit) for (const pth of extractPaths(c.cmd || '')) paths.add(pth);
+    for (const c of crit) { if (!c || typeof c !== 'object' || Array.isArray(c) || typeof c.cmd !== 'string') continue; for (const pth of extractPaths(c.cmd)) paths.add(pth); }   // hostile shapes are lint errors, skipped here
     if (paths.size && ![...paths].some(pth => {
       const base = pth.replace(/\/$/, '').split('/').pop().toLowerCase();
       return taskText.includes(pth.toLowerCase()) || taskText.includes(base);
@@ -167,7 +172,7 @@ if (require.main === module) {
 // Canonical non-behavioral-criterion check (shared with hb-exec.js strict mode — single source).
 function nonBehavioral(cmd) {
   // A criterion that only checks a file/dir EXISTS (not that it behaves).
-  return /^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls\b)/.test(cmd || '');
+  return /^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls\b)/.test(typeof cmd === 'string' ? cmd : '');
 }
 
 module.exports = { audit, classify, isNondet, reviewQuestions, nonBehavioral };

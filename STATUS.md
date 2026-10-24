@@ -1,7 +1,66 @@
 # STATUS — HeartBeat
 
-**Version:** v1.38.0 (detach — retract a dependency claim, loudly and reversibly)
+**Version:** v1.39.0 (the discovery doctrine — plan to the horizon; criteria drift is loud)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.39.0 — the discovery doctrine: plan to the knowledge horizon; drift in accepted criteria is loud
+
+For discovery work — projects where later phases depend on what earlier phases will LEARN — part
+of the plan is unknowable at planning time, and the field failure this wave answers is the gate
+whose criteria hard-coded environment premises that died mid-project. The doctrine has two sides
+and both now have teeth: plan only to the horizon and replan freely below it; above it, accepted
+criteria change only through the rigor that created them.
+
+- **The drift tripwire** (both runtimes): every real gate pass already pins `criteria:
+  [{id, cmd, exit}]` on its `gate_passed` event. Doctor now walks each gate's criteria-pinned
+  pass history plus the current dag criteria as a final element, comparing ordered `(id, cmd)`
+  pairs canonically (strings byte-exact — the schema's domain; out-of-schema values as a type
+  class, identically across runtimes; hostile log entries can never crash the walk). Any adjacent
+  UNSANCTIONED difference is a PROBLEM (exit 1, twin-identical bytes, naming the cure). The
+  LAUNDER — weaken, then plainly re-pass so a fresh pass pins the weakened bytes — still drifts:
+  the pin history is truth. Bare/import passes never pin; a removed ever-pinned gate is the same
+  problem; reorders drift; `desc`/`timeout_s` edits never do (unpinned — the honest limit).
+- **The cure is a completed regate cycle** — declare, a DIFFERENT actor rearms with evidence,
+  fresh pass, the whole cycle after the drift (late rigor is still rigor; the last cycle absolves
+  all earlier drift on that gate; the unsanctioned window stays in the log). A bare declare,
+  declare+rearm without the fresh pass, a cycle on another gate, and an old pre-drift cycle all
+  cure nothing. Strengthening is also a revision — the tripwire pins change, not direction.
+- **The loudness reaches every surface**: both sweeps (`gate.sh --all` ≡ `hb gate --all`) EXCLUDE
+  a drifted gate from re-evaluation (running weakened criteria proves nothing) and count it
+  FAILING, annotated — and parked now silences neither drift NOR a pending regate (the old
+  parked exit-0 pin is flipped); both ticks wake the NEW human-needed `criteria_drift` reason
+  every tick until cured, outranking dispatch; both exec drivers escalate and STOP; all protocol
+  surfaces carry the reason (PROTOCOL.md template, hb.js table, protocol.py, hb-exec.js,
+  the SKILL.md reason table, the detect-hook and MCP stop-lists).
+- **The doctrine shipped**: the plan verb's HORIZON RULE (plan only phases whose spec is known
+  now; end at an explicit replan point; fabricated far phases are the planning analogue of a
+  hollow gate) + REPLAN-AS-REFUTATION-OUTCOME (an UNSOUND that refutes the plan resolves through
+  sanctioned surface — append/edit unstarted phases, detach falsified claims, regate dead
+  premises — never a weakened gate). New gated how-to: `docs/howto/plan-to-the-horizon.md`,
+  every behavioral claim anchored to a named runnable proof.
+- **Hardening chores shipped with the release**: (1) hostile criteria shapes (a non-object entry,
+  a non-string cmd) crashed four of the six static readers, differently per runtime — now a LINT
+  ERROR with identical bytes (the criteria-shape rule), skipped without crashing by both doctors,
+  both artifact scans and both audits (parity case `hostile-criteria:lint`); an EMPTY cmd now
+  classifies VACUOUS, never the behavioral criterion that saves a gate from `hollow_gate` (the
+  runner evals `''` → exit 0 — a latent audit hole). (2) The T162.5/.6 suite flake: the one
+  surviving red run proves .6 was a cascade artifact of .5's skipped unpark; the fixture restore
+  moved outside the check, .5 asserts ONE captured sweep, and a failing suite check now prints a
+  bounded tail of its output (390 pressure iterations + full suite green; the mechanism, if it
+  ever recurs, will self-diagnose).
+- Refuter record (5 reviews, 3 catches): sonnet (correctness lens, GATE_DS1) caught the
+  degenerate-identity runtime splits twice — `String()`/`str()` coercions, then the 2^53/exponent
+  float boundary (final design: type-class identity for out-of-schema values) — plus a py lint
+  crash on id-less phases and structural py guard markers; the session model (default lens,
+  GATE_DS2) caught a node-form command in the python-console doc, an exec claim riding an anchor
+  that never tested it (now pinned in `case_tick`), and a mis-cited case. The plan itself took
+  7 refutation rounds (F1–F27) before a line of code was written.
+- Proof-driven: `tests/replan.sh` (T184: append/unstarted/quiet/verbs + drift/cure/sweep/tick,
+  8 selftest sabotage classes across both runtimes), parity cases `drift:cross` +
+  `hostile-criteria:lint`, 16 new pytest cases; six legacy checks re-specified to the new
+  contract (behavior-flip regressions instead of hand-edits), never weakened.
+
+**Plugin/marketplace → 1.39.0, Python package → 0.29.0.**
 
 ## v1.38.0 — detach: a dependency claim is retractable, never silently droppable
 
