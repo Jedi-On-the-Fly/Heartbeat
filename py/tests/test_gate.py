@@ -217,12 +217,19 @@ def test_all_dedup_respects_timeout_and_failure(tmp_path):
     r = gate.run_all(hb)
     assert (tmp_path / "n.txt").read_text().count("x") == 2   # different budget → both ran
     assert r["deduped"] == 0
-    # cached failure: regress BOTH gates to one shared failing cmd
+    # cached failure: two NEW gates share a cmd that regresses by BEHAVIOR (flag flip) — editing
+    # an armed gate's pinned criteria would be criteria DRIFT and the sweep would exclude it (T184)
     import json
-    fail_cmd = 'echo f >> "$PROJECT_DIR/f.txt"; false'
-    dag["gates"]["GA"]["criteria"][0]["cmd"] = fail_cmd
-    dag["gates"]["GB"]["criteria"][0] = {"id": "b", "desc": "d", "cmd": fail_cmd}
+    fail_cmd = 'echo f >> "$PROJECT_DIR/f.txt"; [ ! -f "$PROJECT_DIR/break" ]'
+    dag["phases"] += [{"id": p, "gate_exit": g, "tasks": [{"id": f"T{p}", "title": "t", "requires": []}]}
+                      for p, g in (("P2", "GC"), ("P3", "GD"))]
+    dag["gates"]["GC"] = {"desc": "c", "criteria": [{"id": "x", "desc": "d", "cmd": fail_cmd}]}
+    dag["gates"]["GD"] = {"desc": "d", "criteria": [{"id": "x", "desc": "d", "cmd": fail_cmd}]}
     (tmp_path / ".hb" / "dag.json").write_text(json.dumps(dag))
+    for g in ("GC", "GD"):
+        gate.run_gate(hb, g)                                # arm with the criteria they keep
+    (tmp_path / "break").write_text("")                     # the regression: bytes stay pinned
+    (tmp_path / "f.txt").write_text("")
     r = gate.run_all(hb)
     assert not r["ok"]
     assert (tmp_path / "f.txt").read_text().count("f") == 2   # one run + one flake probe
@@ -239,15 +246,16 @@ def test_sweep_flake_probe_labels_but_never_absolves(tmp_path):
         {"id": p, "gate_exit": g, "tasks": [{"id": f"T{p}", "title": "t", "requires": []}]}
         for p, g in (("P0", "GFLK"), ("P1", "GDET"))],
         "gates": {"GFLK": {"desc": "f", "criteria": [{"id": "k", "desc": "flaky", "cmd": flaky_cmd}]},
-                  "GDET": {"desc": "d", "criteria": [{"id": "d", "desc": "det", "cmd": "true"}]}}}
+                  "GDET": {"desc": "d", "criteria": [{"id": "d", "desc": "det",
+                                                     "cmd": '[ ! -f "$PROJECT_DIR/detbreak" ]'}]}}}
     hb = make_hb(tmp_path, dag)
     state.reproject(hb)
     gate.run_gate(hb, "GFLK")            # fails, creates flag
     assert gate.run_gate(hb, "GFLK")["status"] == "passed"   # arms it
-    gate.run_gate(hb, "GDET")            # arms GDET (cmd true)
-    import json
-    dag["gates"]["GDET"]["criteria"][0]["cmd"] = "false"     # regress GDET deterministically
-    (tmp_path / ".hb" / "dag.json").write_text(json.dumps(dag))
+    gate.run_gate(hb, "GDET")            # arms GDET with the criteria it keeps
+    # GDET regresses by BEHAVIOR (flag flip) — editing its pinned criteria would be criteria
+    # DRIFT and the sweep would exclude the gate from re-evaluation (T184).
+    (tmp_path / "detbreak").write_text("")
     (tmp_path / "flag").unlink()                             # re-arm the flake
     r = gate.run_all(hb)
     assert not r["ok"]                                       # flake still blocks (fail-closed)
@@ -255,10 +263,13 @@ def test_sweep_flake_probe_labels_but_never_absolves(tmp_path):
     text = "\n".join(ln for res in r["gates"].values() for ln in res["lines"])
     assert "FLAKY" in text                                   # flake labeled
     assert "reproduced" in text                              # regression labeled affirmatively
-    # sweep-only: a plain eval_gate (no probe) runs the cmd exactly once
-    dag["gates"]["GDET"]["criteria"][0]["cmd"] = 'echo p >> "$PROJECT_DIR/probes.txt"; false'
+    # sweep-only: a plain eval_gate (no probe) runs the cmd exactly once — on a NEW planned gate
+    # (adding a gate is sanctioned surface; editing GDET's pinned criteria would be drift)
+    import json
+    dag["gates"]["GCNT"] = {"desc": "cnt", "criteria": [{"id": "n", "desc": "d",
+                                                         "cmd": 'echo p >> "$PROJECT_DIR/probes.txt"; false'}]}
     (tmp_path / ".hb" / "dag.json").write_text(json.dumps(dag))
-    gate.eval_gate(hb, "GDET")
+    gate.eval_gate(hb, "GCNT")
     assert (tmp_path / "probes.txt").read_text().count("p") == 1
 
 

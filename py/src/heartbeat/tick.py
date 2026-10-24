@@ -92,7 +92,13 @@ def _body(hbdir):
         if reclaimed:
             st.reproject(hbdir)
 
-    # 5. rot detection
+    # 5. doctor-driven checks: criteria drift (outranks rot; EVERY tick until cured —
+    # no once-only flag: laundering must never fade into a waiting sleep), then rot.
+    # The guard lines are strip-clean COMPLETE statements, never a block header (a refuter
+    # catch: a marker on a structural `if` strips into an IndentationError — red for the
+    # wrong reason, the detach-wave lesson).
+    _dft = st.drifted_gates(st.read_events(hbdir), st.read_dag(hbdir).get("gates") or {}) if HB_ROT_CHECK != "0" else []   # drift-guard: tick — the per-tick doctor filter, widened to the drift problem
+    if _dft: return _wake({"reason": "criteria_drift", "count": len(_dft), "gates": _dft})   # drift-guard: tick — human-needed, every tick until cured
     if HB_ROT_CHECK != "0" and doc.has_rot(hbdir):
         if not _flag(hbdir, ".rot-alerted").exists():
             _flag(hbdir, ".rot-alerted").touch()

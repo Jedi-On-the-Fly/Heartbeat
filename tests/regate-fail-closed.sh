@@ -354,11 +354,17 @@ case_park(){
   declare_node "$P" GATE_A
   ( cd "$P" && node .hb/hb.js park A retired for now >/dev/null )
   ( cd "$P" && bash .hb/gate.sh GATE_A >/dev/null 2>&1 ); [ $? -eq 3 ] || fail "park: eval of a parked+pending gate is not refused (exit 3)"
+  # Parked retires a gate from EVALUATION — it does not silence its pending revision: the
+  # regate stays in the FAILING count on both runtimes (the T184 flip of this check's old
+  # exit-0 pin; a sweep must never say ALL GREEN over an unrefuted revision, parked or not).
   local out rc
   out=$( cd "$P" && bash .hb/gate.sh --all 2>&1 ); rc=$?
-  [ "$rc" -eq 0 ] || fail "park: a PARKED pending regate failed the sweep (park retirement contract broken)"
+  [ "$rc" -eq 1 ] || fail "park: a PARKED pending regate must stay in the FAILING count (exit $rc, want 1)"
+  [ -f "$P/executed.flag" ] && fail "park: the parked gate was EVALUATED by the sweep (retirement from evaluation broken)"
   echo "$out" | grep -i parked | grep -qi regate || fail "park: the parked listing does not ANNOTATE the pending regate"
-  ( cd "$P" && PY gate --all --dir "$P" 2>&1 | grep -i parked | grep -qi regate ) || fail "park: python parked listing does not annotate the pending regate"
+  echo "$out" | grep -i 'counted FAILING' | grep -q 'GATE_A' || fail "park: the failing-count annotation does not name the parked gate"
+  ( cd "$P" && PY gate --all --dir "$P" >/dev/null 2>&1 ); [ $? -eq 1 ] || fail "park: python sweep exit 0 over a parked pending regate"
+  ( cd "$P" && PY gate --all --dir "$P" 2>&1 | grep -i 'counted FAILING' | grep -q 'GATE_A' ) || fail "park: python failing-count annotation does not name the parked gate"
   echo "PARK-OK"
 }
 

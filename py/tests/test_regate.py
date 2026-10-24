@@ -149,14 +149,19 @@ def review_owed_fixture(tmp_path, monkeypatch, dag=None, declare_now=True):
     a regate declared. The complete history matters: an executor driven on this fixture must land
     in the review_pending branch, not on some earlier task."""
     d = dag or regate_dag(tmp_path)
+
+    def _pin(g):
+        # The seeded pass pins the dag's OWN criteria — a synthetic pin that mismatches the dag
+        # would honestly read as criteria drift (T184): the fixture's history must be consistent.
+        return [{"id": c["id"], "cmd": c["cmd"], "exit": 0} for c in d["gates"][g]["criteria"]]
     hb = make_hb(tmp_path, d, events=[
         {"event": "task_done", "task": "a1", "actor": "doer"},
         {"event": "gate_passed", "gate": "GATE_A", "pass": 1, "fail": 0, "runtime": "python",
-         "criteria": [{"id": "ga1", "cmd": "true", "exit": 0}]},
+         "criteria": _pin("GATE_A")},
         {"event": "task_done", "task": "b1", "actor": "doer"},
         {"event": "task_done", "task": "c1", "actor": "doer"},
         {"event": "gate_passed", "gate": "GATE_B", "pass": 1, "fail": 0, "runtime": "python",
-         "criteria": [{"id": "gb1", "cmd": "python3 -c 'assert True'", "exit": 0}]},
+         "criteria": _pin("GATE_B")},
     ])
     (tmp_path / "findings.md").write_text(
         "I tried to refute GATE_B / phase B (task b1): ran the criteria, found nothing broken.\nHOLES: none\n")

@@ -130,6 +130,7 @@ def main(argv=None):
                     print(f"✗ {g}: {res['failed']} failing criteria{fl}")
             if r.get("regated"):   # a pending revision is a FAILURE, never a skip
                 print(f"— ⛔ {len(r['regated'])} regate-pending gate(s) (revised, not re-refuted — counted FAILING): {' '.join(r['regated'])}")
+            if r.get("drifted"): print(f"— ⛔ {len(r['drifted'])} drifted gate(s) (criteria changed without sanction — counted FAILING): {' '.join(r['drifted'])}")   # drift-guard: sweep — one strip-clean line: excluded from re-evaluation, counted FAILING
             if r["skipped"]:   # loud, never silent — a skipped gate must be visible in the sweep
                 print(f"— skipped {len(r['skipped'])} planned gate(s) (never passed): {' '.join(r['skipped'])}")
             if r["parked"]:

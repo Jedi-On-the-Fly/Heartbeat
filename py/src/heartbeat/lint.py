@@ -17,11 +17,22 @@ def lint(dag):
     gates = dag.get("gates") or {}
     phases = dag.get("phases") or []
     task_ids, task_map = set(), {}
+    phase_ids = set()
 
     for p in phases:
+        # A duplicate phase id silently MERGES two phases in the projection — the append-time
+        # mistake (replanning adds phases to a dag whose ids are already taken). Same bar as tasks.
+        # Scoped to non-empty STRING ids so both runtimes classify degenerate shapes (missing id,
+        # None, numbers) identically — a refuter catch: p["id"] crashed on an id-less phase.
+        pid = p.get("id")
+        pid_s = pid if isinstance(pid, str) and pid else "?"   # degenerate ids render '?' on BOTH runtimes (a refuter catch: p['id'] crashed here)
+        if isinstance(pid, str) and pid:
+            if pid in phase_ids:
+                errors.append(f"duplicate phase ID: {pid}")
+            phase_ids.add(pid)
         tasks = p.get("tasks") or []
         if len(tasks) > 8:
-            warnings.append(f"[{p['id']}] {len(tasks)} tasks (>8) — context-loss risk, consider sub-phases")
+            warnings.append(f"[{pid_s}] {len(tasks)} tasks (>8) — context-loss risk, consider sub-phases")
         for t in tasks:
             if t["id"] in task_ids:
                 errors.append(f"duplicate task ID: {t['id']}")
@@ -29,9 +40,9 @@ def lint(dag):
             task_map[t["id"]] = t
         for g in (p.get("gate_entry"), p.get("gate_exit")):
             if g and g not in gates:
-                errors.append(f"[{p['id']}] undefined gate: {g}")
+                errors.append(f"[{pid_s}] undefined gate: {g}")
         if p.get("gate_entry") and not any(q.get("gate_exit") == p["gate_entry"] for q in phases):
-            errors.append(f"[{p['id']}] gate_entry {p['gate_entry']} is no phase's gate_exit — phase locked forever")
+            errors.append(f"[{pid_s}] gate_entry {p['gate_entry']} is no phase's gate_exit — phase locked forever")
 
     for tid in task_ids:
         for r in (task_map[tid].get("requires") or []):

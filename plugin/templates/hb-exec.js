@@ -533,6 +533,7 @@ async function run() {
       case 'build_stuck':         escalate('build_stuck', data.task || data.signal || ''); return 1;
       case 'deadlock':            escalate('deadlock', data.detail ? JSON.stringify(data.detail) : ''); return 1;
       case 'unsanctioned_drift':  escalate('unsanctioned_drift', ''); return 1;
+      case 'criteria_drift':      escalate('criteria_drift', `count=${data.count || '?'}`); return 1;   // a completed gate's criteria changed without sanction — the driver STOPS; the cure (a full regate cycle) needs a human, never an auto-fix
       case 'dag_corrupted':       escalate('dag_corrupted', ''); return 1;
       case 'state_corrupted':     escalate('state_corrupted', ''); return 1;
       case 'gate_rot':            escalate('gate_rot', `count=${data.count || '?'}`); return 1;

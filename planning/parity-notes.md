@@ -341,3 +341,38 @@ _start` — the anchor is rewritten per declare and a stamp mismatch reads as mi
 against a late-landing stale hash). The warning twins (`detachWarn` ≡ `_detach_warn`) are
 per-channel over the event log; fuzzed cross-runtime during review (400 seeded cases, no
 divergence).
+
+## The replan contract (the editability boundary + the drift tripwire)
+
+Append-continuation is the sanctioned way a plan grows: new phases with fresh ids (both lints now
+error on a duplicate phase id, same bar as tasks), the first new phase's `gate_entry` = the last
+completed phase's `gate_exit`; the append leaves every completed phase's projection untouched, and
+`rebuild` is deterministic MODULO the top-level `last_updated` stamp (hb.js / state.py write it at
+projection time — the one intentional nondeterminism in the projection bytes).
+
+The editability boundary: the UNSTARTED surface is freely editable — the plan below the knowledge
+horizon is a hypothesis, so reshaping or dropping a never-started phase (its gate included) is
+quiet by design. The ACCEPTED surface changes only through its own rigor — regate (criteria) and
+detach (dependency claims). The drift tripwire makes the unsanctioned path LOUD on both runtimes:
+every real gate pass pins its criteria on the `gate_passed` event (`criteria: [{id, cmd, exit}]`);
+`driftedGates` (hb.js) ≡ `state.drifted_gates` walks each gate's criteria-pinned pass history plus
+the current dag criteria as the final element, comparing the ORDERED `(id, cmd)` pairs byte-exact.
+An adjacent difference is drift unless a `gate_regated` for that gate lies between the two points
+(a declared window — the regate machinery already fails that gate closed), or a COMPLETED regate
+cycle (`gate_regated` → `gate_rearmed` → fresh criteria-pinned pass, the whole cycle after the
+pair's later point) absolves it — the cure; the unsanctioned window stays in the log. Drift is a
+doctor PROBLEM (exit 1) with twin-identical bytes, the sweeps (`gate.sh --all` ≡ `hb gate --all`)
+EXCLUDE the drifted gate from re-evaluation and count it FAILING annotated (parked silences
+neither drift nor a pending regate — the T179.4 flip), a removed ever-pinned gate surfaces via the
+log walk, and the tick wakes the human-needed `criteria_drift` reason (identical key, runtime-
+specific action text) every tick until cured.
+
+HONEST LIMITS, recorded: `desc` and `timeout_s` are not pinned and never compared (reword a
+description or adjust a budget freely — only `(id, cmd)` is evidence); bare/import passes (no
+criteria field) never pin and never seed the walk; and the trust model is PROCEDURAL — `HB_ACTOR`
+strings are self-declared identity, one human can play declarer and rearmer, and a forged or
+truncated event log is outside the tripwire's reach (the log is trusted input, the same trust the
+whole event-sourcing design already assumes). Parity case: `drift:cross` (a runtime-neutral
+hand-edit of a completed gate's criteria is detected identically by both doctors — exit 1,
+byte-identical problem line) with a non-vacuity floor (the clean twin fixture must be quiet on
+both). Proof: `tests/replan.sh` (T184) + its `--selftest` teeth.

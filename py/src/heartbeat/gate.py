@@ -231,8 +231,10 @@ def run_all(hbdir, emit=None, progress=None):
     _gts = st.read_dag(hbdir).get("gates") or {}   # regate-guard
     _rgl = sorted(g for g in _gts if st.regate_blocks(_gts[g]) is not None)   # regate-guard: fail-closed predicate (== single-gate path)
     _rg_live = [g for g in _rgl if g not in set(parked)]   # regate-guard: counted FAILING below, never evaluated, never a skip
-    _rg_parked = [g for g in _rgl if g in set(parked)]   # regate-guard: retired, but ANNOTATED — retirement never hides a revision
+    _rg_parked = [g for g in _rgl if g in set(parked)]   # regate-guard: retired from evaluation, ANNOTATED — and still counted FAILING (parked does not silence a revision: the T179.4 flip)
     armed = [g for g in armed if g not in _rg_live]; skipped = [g for g in skipped if g not in _rg_live]   # regate-guard
+    _dft = st.drifted_gates(st.read_events(hbdir), _gts)   # drift-guard: sweep — the criteria-pinned log walk (removed gates included; bare passes never seed)
+    armed = [g for g in armed if g not in set(_dft)]; skipped = [g for g in skipped if g not in set(_dft)]   # drift-guard: sweep — a drifted gate is EXCLUDED from re-evaluation: running weakened criteria proves nothing
     total_fail = 0
     report = {}
     memo = {}   # one sweep's dedup scope: byte-identical (cmd, effective timeout) runs once
@@ -245,7 +247,8 @@ def run_all(hbdir, emit=None, progress=None):
            "deduped": sum(r["deduped"] for r in report.values()),
            "flaky": sum(r["flaky"] for r in report.values()),
            "elapsed_s": int(time.monotonic() - t0 + 0.5)}
-    out["regated"] = _rg_live; out["parked_regated"] = _rg_parked; out["ok"] = out["ok"] and not _rg_live   # regate-guard
+    out["regated"] = _rgl; out["parked_regated"] = _rg_parked; out["ok"] = out["ok"] and not _rgl   # regate-guard: ALL pending revisions count FAILING, parked included
+    out["drifted"] = _dft; out["ok"] = out["ok"] and not _dft   # drift-guard: sweep — counted FAILING, annotated (the pending-regate precedent); parked silences nothing
     return out
 
 

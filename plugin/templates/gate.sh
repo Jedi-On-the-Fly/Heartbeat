@@ -256,7 +256,7 @@ if [ "$ALL" = 1 ]; then
     console.log(all.filter(g => seen.has(g) && !parkedG.has(g) && !regated.has(g)).join(' '));
     console.log(all.filter(g => !seen.has(g) && !parkedG.has(g) && !regated.has(g)).join(' '));
     console.log(all.filter(g => parkedG.has(g)).join(' '));
-    console.log(all.filter(g => regated.has(g) && !parkedG.has(g)).join(' '));
+    console.log(all.filter(g => regated.has(g)).join(' '));   // parked does NOT silence a pending regate: it stays in the failing count (the T179.4 flip)
     console.log(all.filter(g => regated.has(g) && parkedG.has(g)).join(' '));
   " "$DAG_FILE" "$EVENTS_FILE")
   GATES=$(printf '%s\n' "$LISTS" | sed -n 1p)
@@ -264,6 +264,8 @@ if [ "$ALL" = 1 ]; then
   PARKED=$(printf '%s\n' "$LISTS" | sed -n 3p)
   REGATED=$(printf '%s\n' "$LISTS" | sed -n 4p)     # regate-guard
   PARKED_RG=$(printf '%s\n' "$LISTS" | sed -n 5p)   # regate-guard
+  DRIFTED=$({ node "$HB_DIR/hb.js" drift 2>/dev/null || true; } | tr '\n' ' ' | sed 's/ $//')   # drift-guard: sweep — the criteria-pinned log walk (removed gates included; bare passes never seed)
+  if [ -n "${DRIFTED:-}" ]; then NG=""; for g in $GATES; do case " $DRIFTED " in *" $g "*) :;; *) NG="$NG $g";; esac; done; GATES="$NG"; fi   # drift-guard: sweep — a drifted gate is EXCLUDED from re-evaluation: running weakened criteria proves nothing
   # Announce scope UP FRONT — a multi-minute silent sweep (the pre-push hook path) is
   # indistinguishable from a hung run — and report the elapsed total in the verdict.
   set -- $GATES; NGATES=$#
@@ -275,6 +277,7 @@ if [ "$ALL" = 1 ]; then
   for g in $GATES; do eval_gate "$g"; TOTAL_FAIL=$((TOTAL_FAIL + FAIL)); echo ""; done
   T_ALL=$((SECONDS - S0))
   if [ -n "${REGATED:-}" ]; then set -- $REGATED; echo "— ⛔ $# regate-pending gate(s) (revised, not re-refuted — counted FAILING): $REGATED"; echo ""; TOTAL_FAIL=$((TOTAL_FAIL + $#)); fi   # regate-guard: a pending revision is a FAILURE, never a skip (single line: a stripped guard must leave a PARSING script)
+  if [ -n "${DRIFTED:-}" ]; then set -- $DRIFTED; echo "— ⛔ $# drifted gate(s) (criteria changed without sanction — counted FAILING): $DRIFTED"; echo ""; TOTAL_FAIL=$((TOTAL_FAIL + $#)); fi   # drift-guard: sweep — counted FAILING, annotated (the pending-regate precedent); parked silences nothing
   if [ -n "$PLANNED" ]; then
     set -- $PLANNED
     echo "— skipped $# planned gate(s) (never passed): $PLANNED"

@@ -257,6 +257,76 @@ def stale_rearm(events, gate):
     return True
 
 
+def _canon_crit(c):
+    """Identity canonicalization: the (id, cmd) pair as compact JSON — a missing field reads as
+    null, a non-dict criteria entry as '!invalid' — so hostile shapes classify IDENTICALLY on
+    both runtimes and can never crash the walk (a refuter catch: String()/str() coercions split
+    them). The schema's domain for id/cmd is STRINGS, compared byte-exact; out-of-schema values
+    compare as a TYPE CLASS (all numbers one token — a second refuter catch: mimicking JS number
+    formatting splits at the 2^53/exponent boundaries; the honest limit is class identity, and a
+    real weakening still trips on the string cmd). Twin: hb.js canonCrit."""
+    if not isinstance(c, dict):
+        return "!invalid"
+
+    def f(v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return v
+        if isinstance(v, bool):
+            return "!bool:" + ("true" if v else "false")
+        if isinstance(v, (int, float)):
+            return "!num"
+        return "!obj"
+    return json.dumps([f(c.get("id")), f(c.get("cmd"))], separators=(",", ":"), ensure_ascii=False)
+
+
+def drifted_gates(events, gates):
+    """The drift tripwire walk (T184). For each gate ever CRITERIA-PINNED (a gate_passed carrying
+    a non-empty criteria array — bare/import passes never pin, the stale_rearm precedent), walk
+    its pins in log order plus the current dag criteria as the final element; identity is the
+    ORDERED (id, cmd) pairs byte-exact (desc/timeout_s are NOT pinned — the honest limit). Any
+    ADJACENT difference is UNSANCTIONED DRIFT unless (i) a gate_regated FOR THAT GATE lies
+    between the two points (contemporaneous sanction — a still-open declare sanctions the final
+    pair, and the regate machinery already fails that gate closed), or (ii) a COMPLETED regate
+    cycle — gate_regated then gate_rearmed then a fresh criteria-pinned pass, in order, the WHOLE
+    cycle (its gate_regated included) after the pair's later point (ABSOLUTION: late rigor is
+    still rigor; the last cycle absolves all earlier drift on that gate; the unsanctioned window
+    stays in the log). A gate absent from the dag compares as always-different: removal is the
+    same drift. Twin: hb.js driftedGates."""
+    pins, regated, rearmed = {}, {}, {}
+    for i, e in enumerate(events):
+        g = e.get("gate")
+        if not g:
+            continue
+        if e.get("event") == "gate_passed" and isinstance(e.get("criteria"), list) and e["criteria"]:
+            pins.setdefault(g, []).append((i, [_canon_crit(c) for c in e["criteria"]]))
+        elif e.get("event") == "gate_regated":
+            regated.setdefault(g, []).append(i)
+        elif e.get("event") == "gate_rearmed":
+            rearmed.setdefault(g, []).append(i)
+    out = []
+    inf = float("inf")
+    for g, P in pins.items():
+        cur = ((gates.get(g) or {}).get("criteria") or []) if g in gates else None
+        S = list(P) + [(inf, None if cur is None else [_canon_crit(c) for c in cur])]
+        last_cycle = -1   # start position (the gate_regated) of the LAST completed cycle
+        for r in regated.get(g, []):
+            m = next((x for x in rearmed.get(g, []) if x > r), None)
+            if m is not None and any(pos > m for pos, _ in P):
+                last_cycle = max(last_cycle, r)
+        same = lambda a, b: a is not None and b is not None and json.dumps(a) == json.dumps(b)
+        for i in range(len(S) - 1):
+            if same(S[i][1], S[i + 1][1]):
+                continue
+            sanctioned = any(S[i][0] < r < S[i + 1][0] for r in regated.get(g, []))
+            absolved = last_cycle > S[i + 1][0]
+            if not (sanctioned or absolved):
+                out.append(g)
+                break
+    return sorted(out)
+
+
 def with_wlock(hbdir, fn):
     wlock = Path(hbdir) / ".wlock"
     deadline = time.time() + 5

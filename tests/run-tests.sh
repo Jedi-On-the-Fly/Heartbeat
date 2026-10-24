@@ -1769,23 +1769,28 @@ check "T160.1 a byte-identical cmd runs ONCE across 3 gates (counter file has 1 
   '[ "$(grep -c "^run" "$P160/runs.txt")" -eq 1 ]'
 check "T160.2 every reuse is LOUD (2 deduped lines) and the verdict counts them" \
   '[ "$(echo "$O160" | grep -c "deduped,")" -eq 2 ] && echo "$O160" | grep -q "2 deduped"'
-node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const c2='echo y >> \"\$PROJECT_DIR/two.txt\"';d.gates.G1.criteria=[{id:'c',desc:'suite',cmd:c2}];d.gates.G2.criteria=[{id:'c',desc:'suite',timeout_s:30,cmd:c2}];fs.writeFileSync(f,JSON.stringify(d,null,2))"
+# NEW gates armed with the criteria they keep — editing an armed gate's criteria would be
+# criteria DRIFT and the sweep would exclude it (T184); regressions below flip BEHAVIOR via
+# flag files, never bytes.
+node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const c2='echo y >> \"\$PROJECT_DIR/two.txt\"';d.gates.G3={desc:'3',criteria:[{id:'c',desc:'suite',cmd:c2}]};d.gates.G4={desc:'4',criteria:[{id:'c',desc:'suite',timeout_s:30,cmd:c2}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+for g in G3 G4; do bash "$H160/gate.sh" "$g" >/dev/null 2>&1; done
 : > "$P160/two.txt"
 check "T160.3 the same cmd under a DIFFERENT effective timeout is NOT deduped (both run)" \
   'bash "$H160/gate.sh" --all >/dev/null 2>&1; [ "$(grep -c "^y" "$P160/two.txt")" -eq 2 ]'
-node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const fc='echo f >> \"\$PROJECT_DIR/f.txt\"; false';for (const g of ['G0','G1','G2']) d.gates[g].criteria=[{id:'c',desc:'suite',cmd:fc}];fs.writeFileSync(f,JSON.stringify(d,null,2))"
-: > "$P160/f.txt"
+node -e "const fs=require('fs');const f='$H160/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));const fc='echo f >> \"\$PROJECT_DIR/f.txt\"; [ ! -f \"\$PROJECT_DIR/break160\" ]';for (const g of ['GF0','GF1','GF2']) d.gates[g]={desc:g,criteria:[{id:'c',desc:'suite',cmd:fc}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+for g in GF0 GF1 GF2; do bash "$H160/gate.sh" "$g" >/dev/null 2>&1; done   # arm while the shared cmd still passes
+: > "$P160/break160"; : > "$P160/f.txt"   # the regression: behavior flips, bytes stay pinned
 check "T160.4 a cached FAILURE executes once (+1 flake probe) but still fails EVERY referencing gate" \
   '! bash "$H160/gate.sh" --all >/dev/null 2>&1 && [ "$(grep -c "^f" "$P160/f.txt")" -eq 2 ] && [ "$(bash "$H160/gate.sh" --all 2>&1 | grep -c "✗ \[c\]")" -eq 3 ]'
 
 grp "T161 — flake probe: a sweep failure is re-run ONCE to distinguish flake from regression — the verdict NEVER changes (fail-closed)"
 P161="$TMP/p161"; bash "$HB_SRC/plugin/bootstrap.sh" "$P161" >/dev/null 2>&1 </dev/null; H161="$P161/.hb"
-node -e "const fs=require('fs');const f='$H161/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GFLK={desc:'flaky',criteria:[{id:'k',desc:'passes only when flag exists',cmd:'[ -f \"\$PROJECT_DIR/flag\" ] || { : > \"\$PROJECT_DIR/flag\"; false; }'}]};d.gates.GDET={desc:'det',criteria:[{id:'d',desc:'always fails',cmd:'false'}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
+# GDET regresses by BEHAVIOR (flag flip), never by editing its pinned criteria — a hand-edit
+# would be criteria DRIFT and the sweep would exclude the gate from re-evaluation (T184).
+node -e "const fs=require('fs');const f='$H161/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GFLK={desc:'flaky',criteria:[{id:'k',desc:'passes only when flag exists',cmd:'[ -f \"\$PROJECT_DIR/flag\" ] || { : > \"\$PROJECT_DIR/flag\"; false; }'}]};d.gates.GDET={desc:'det',criteria:[{id:'d',desc:'fails once detbreak exists',cmd:'[ ! -f \"\$PROJECT_DIR/detbreak\" ]'}]};fs.writeFileSync(f,JSON.stringify(d,null,2))"
 bash "$H161/gate.sh" GFLK >/dev/null 2>&1; bash "$H161/gate.sh" GFLK >/dev/null 2>&1   # fail (creates flag), then pass → armed
-bash "$H161/gate.sh" GDET >/dev/null 2>&1   # fails — arm it via a temporary pass instead
-node -e "const fs=require('fs');const f='$H161/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GDET.criteria[0].cmd='true';fs.writeFileSync(f,JSON.stringify(d,null,2))"
-bash "$H161/gate.sh" GDET >/dev/null 2>&1   # arm GDET
-node -e "const fs=require('fs');const f='$H161/dag.json';const d=JSON.parse(fs.readFileSync(f,'utf8'));d.gates.GDET.criteria[0].cmd='false';fs.writeFileSync(f,JSON.stringify(d,null,2))"
+bash "$H161/gate.sh" GDET >/dev/null 2>&1   # arms GDET with the criteria it keeps
+: > "$P161/detbreak"   # the deterministic regression: behavior flips, bytes stay pinned
 rm -f "$P161/flag"
 O161=$(bash "$H161/gate.sh" --all 2>&1); R161=$?
 check "T161.1 a flaky criterion (fails, then passes on re-run) is labeled FLAKY — and the sweep STILL blocks" \
@@ -1893,7 +1898,7 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$RGFC"'" perimeter 2>&1 | grep -q "^PERIMETER-OK"'
   check "T179.3 unattended: ticks sleep regate_pending_waiting (both states, both runtimes, executors idle); the mid-review race fabricates no verdict through ANY writer; the gate-path shim reaches the escalation branch" \
     'bash "'"$RGFC"'" unattended 2>&1 | grep -q "^UNATTENDED-OK"'
-  check "T179.4 lint validates the regate record shape (malformed = non-empty error, well-formed clean, both runtimes); park composes (eval still refused; parked sweep listing annotates, never fails)" \
+  check "T179.4 lint validates the regate record shape (malformed = non-empty error, well-formed clean, both runtimes); park composes (eval still refused; a parked pending regate stays ANNOTATED and counted FAILING — parked silences nothing)" \
     'bash "'"$RGFC"'" lint 2>&1 | grep -q "^LINT-OK" && bash "'"$RGFC"'" park 2>&1 | grep -q "^PARK-OK"'
   check "T179.5 teeth: each regate guard stripped from a copy flips its named check red (--selftest)" \
     'bash "'"$RGFC"'" --selftest 2>&1 | grep -q "^REGATE-FAIL-CLOSED-SELFTEST-OK"'
@@ -1963,6 +1968,17 @@ if command -v python3 >/dev/null 2>&1; then
     'bash "'"$DTSF"'" --selftest 2>&1 | grep -q "^DETACH-SURFACING-SELFTEST-OK"'
 else
   echo "  (python3 absent — T183 skipped)"
+fi
+
+grp "T184 — the replan contract: the horizon extends by APPEND, the unstarted surface edits freely, and an unsanctioned edit of accepted criteria is LOUD (drift tripwire: doctor PROBLEM twin-identical, sweeps exclude+count FAILING, tick wakes criteria_drift) until a full regate cycle cures it; both runtimes"
+RPL="$HB_SRC/tests/replan.sh"
+if command -v python3 >/dev/null 2>&1; then
+  check "T184.1 append/unstarted/quiet/verbs characterized + drift/cure/sweep/tick enforced, both runtimes (replan.sh → REPLAN-OK)" \
+    'bash "'"$RPL"'" 2>&1 | grep -q "^REPLAN-OK"'
+  check "T184.2 teeth: duplicate appended id, a mutating generator, and each stripped drift-guard class (doctor node+py, sweep, tick) redden their named checks (--selftest)" \
+    'bash "'"$RPL"'" --selftest 2>&1 | grep -q "^REPLAN-SELFTEST-OK"'
+else
+  echo "  (python3 absent — T184 skipped)"
 fi
 
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a

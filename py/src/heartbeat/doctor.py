@@ -144,6 +144,8 @@ def doctor(hbdir):
             e_pin = last_re.get(g)
             if not e_pin or ((rmk.get("rearm") or {}).get("sha256") and e_pin.get("sha256") and rmk["rearm"]["sha256"] != e_pin["sha256"]): problems.append(f"{g}: the dag records a rearmed regate but the event log " + ("pins different bytes (sha256 mismatch with gate_rearmed)" if e_pin else "has no gate_rearmed event") + " — a fabricated rearm record (the log is truth)")   # regate-guard: marker-sync
 
+    for g in st.drifted_gates(evs_r, gates): problems.append(f"{g}: criteria drifted from the pinned evidence without sanction — sanction the revision through a full regate cycle: declare, rearm with evidence, fresh pass; git-restore first to retract the content")   # drift-guard: doctor — the pin history is truth; an unsanctioned edit of accepted criteria is laundering, not replanning
+
     # detach: a retracted dependency claim is a legitimate in-flight state — NOTES, never problems;
     # the log is still truth in both divergence directions. Node twin: doctor() in hb.js.
     from . import anchors as _anch

@@ -331,6 +331,7 @@ When woken by a tick (`data.reason` present), act by reason:
 | `dag_corrupted` | Restore dag.json from git/backup (structure is immutable). |
 | `deadlock` | `active_orphan` → the stale-lease reclaim frees it automatically; if it persists, `hb fail <id>`. `dag_invalid` → surface errors for human review. |
 | `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
+| `criteria_drift` | A completed gate's criteria changed without sanction — `node .hb/hb.js doctor` names the gate. HUMAN NEEDED; never freeze or edit past it. The cure is a full regate cycle: git-restore dag.json to retract the content, or declare the revision (`node .hb/hb.js regate <gate> <reason>`), a DIFFERENT actor rearms with evidence (`node .hb/hb.js regate <gate> --rearm --artifact <file>`), then a fresh pass (`bash .hb/gate.sh <gate>`). |
 | `gate_rot` | `node .hb/hb.js diagnose` names the missing file AND the commit that deleted it — restore it or re-point the gate. |
 | `build_stuck` | `signal: no_progress` means the agent was woken repeatedly without progressing. Produce a blocker report for human review. |
 | `review_stuck` | An adversarial review never resolved — spawn the refuter and record `hb review <gate> pass\|fail`, or surface for human review. |

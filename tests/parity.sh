@@ -202,6 +202,38 @@ echo "$DT_N" | grep -q 'ready_node=1' && echo "$DT_N" | grep -q 'ready_py=1' || 
 echo "$DT_N" | grep -q 'changed_node=1' && echo "$DT_N" | grep -q 'changed_py=1' || { echo "  ✗ detach:changed-base — the change list is not exactly {dwork.txt} on both (noise widened, or dwork missing): $DT_N"; FAIL=1; }
 echo "$DT_N" | grep -q 'reattached=\[GATE_P False\]' || { echo "  ✗ detach:reattach — the cross-runtime reattach did not round-trip: $DT_N"; FAIL=1; }
 
+# cross-runtime: a hand-edit of a completed gate's criteria (runtime-neutral — an editor, not a
+# CLI) is detected identically by BOTH doctors: exit 1 and twin-identical problem bytes naming
+# the regate-cycle cure. Non-vacuity floor: the clean twin fixture is QUIET on both — the case
+# cannot pass by both runtimes erroring equally on garbage.
+DRDAG='{"phases":[{"id":"H","title":"h","gate_entry":null,"gate_exit":"GATE_H","tasks":[{"id":"h1","title":"t","requires":[],"description":"w"}]}],"gates":{"GATE_H":{"desc":"g","criteria":[{"id":"c1","desc":"d","cmd":"python3 -c \"assert 1\""}]}}}'
+drift_case(){ # $1 = drifted|clean — emits exits + each runtime's extracted drift problem line
+  local d; d=$(mktemp -d); mkdir "$d/.hb"
+  printf '%s' "$DRDAG" > "$d/.hb/dag.json"
+  printf '{"event":"initialized"}\n' > "$d/.hb/events.jsonl"
+  cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" "$ROOT/plugin/templates/gate.sh" "$d/.hb/"
+  node "$d/.hb/hb.js" rebuild >/dev/null 2>&1
+  ( cd "$d" && HB_NO_GIT=1 bash .hb/gate.sh GATE_H >/dev/null 2>&1 )   # the criteria-pinned pass
+  if [ "$1" = drifted ]; then python3 -c "
+import json; p='$d/.hb/dag.json'; dd=json.load(open(p))
+dd['gates']['GATE_H']['criteria'][0]['cmd']='python3 -c \"assert True\"'
+json.dump(dd,open(p,'w'),indent=2)"; fi
+  local on rn op rp
+  on=$( cd "$d" && node .hb/hb.js doctor 2>&1 ); rn=$?
+  op=$( eval "$PY doctor --dir \"$d\"" 2>&1 ); rp=$?
+  echo "exit_node=$rn exit_py=$rp"
+  echo "node:$(echo "$on" | grep 'drifted from the pinned evidence' | sed 's/^[[:space:]]*✗[[:space:]]*//')"
+  echo "py:$(echo "$op" | grep 'drifted from the pinned evidence' | sed 's/^[[:space:]]*✗[[:space:]]*//')"
+  rm -rf "$d"
+}
+DR_D=$(drift_case drifted)
+DR_C=$(drift_case clean)
+echo "$DR_D" | grep -q 'exit_node=1 exit_py=1' || { echo "  ✗ drift:cross — doctor exits differ or are 0 on a drifted fixture: $DR_D"; FAIL=1; }
+DRN=$(echo "$DR_D" | sed -n 's/^node://p'); DRP=$(echo "$DR_D" | sed -n 's/^py://p')
+cmp "drift:cross" "$DRN" "$DRP"
+[ -n "$DRN" ] || { echo "  ✗ drift:cross — node names no drift problem (vacuous)"; FAIL=1; }
+echo "$DR_C" | grep -q 'exit_node=0 exit_py=0' || { echo "  ✗ drift:floor — the clean twin fixture is not quiet on both runtimes: $DR_C"; FAIL=1; }
+
 echo "── state projection parity ──"
 DAG='{"phases":[{"id":"P0","gate_entry":null,"gate_exit":"G0","tasks":[{"id":"P0T1","requires":[]},{"id":"P0T2","requires":["P0T1"]}]},{"id":"P1","gate_entry":"G0","gate_exit":"G1","tasks":[{"id":"P1T1","requires":[]}]}],"gates":{"G0":{"criteria":[{"id":"c","cmd":"true"}]},"G1":{"review":{"prompt":"r"},"criteria":[{"id":"c","cmd":"true"}]}}}'
 state_case(){ # name events

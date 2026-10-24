@@ -15,6 +15,7 @@ PROTOCOL = {
     "dag_corrupted":      "Restore dag.json from git/backup — its structure is immutable.",
     "deadlock":           "Run: hb diagnose — active_orphan: free the IDs; dag_invalid: fix the DAG and re-lint.",
     "unsanctioned_drift": "Review the diff. If the change is intended: hb tick --freeze.",
+    "criteria_drift":     "A completed gate's criteria changed without sanction (run hb doctor for the gate). HUMAN NEEDED — never freeze or edit past this: the cure is a full regate cycle — git-restore dag.json to retract the content, or declare the revision (hb regate <gate> --reason <why>), have a DIFFERENT actor rearm with evidence (hb regate <gate> --rearm --artifact <file>), then a fresh pass (hb gate <gate>).",
     "gate_rot":           "Run: hb diagnose — a completed phase's gate references a deleted file; restore it or re-point the gate.",
     "build_stuck":        "Run: hb diagnose — woken repeatedly without progress; root-cause it or surface a blocker report for a human.",
     "review_stuck":       "The adversarial review never resolved — spawn the refuter, write its findings to a file, and record hb review <gate> fail \"<holes>\" or hb review <gate> pass --artifact <file>, or surface for a human.",

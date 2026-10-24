@@ -55,6 +55,7 @@ const PROTOCOL = {
   dag_corrupted:      'Restore dag.json from git/backup — its structure is immutable.',
   deadlock:           'Run: node .hb/hb.js diagnose — active_orphan: free the IDs; dag_invalid: fix the DAG and re-lint.',
   unsanctioned_drift: 'Review the diff. If the change is intended: bash .hb/tick.sh --freeze.',
+  criteria_drift:     'A completed gate\'s criteria changed without sanction (run node .hb/hb.js doctor for the gate). HUMAN NEEDED — never freeze or edit past this: the cure is a full regate cycle — git-restore dag.json to retract the content, or declare the revision (node .hb/hb.js regate <gate> <reason>), have a DIFFERENT actor rearm with evidence (node .hb/hb.js regate <gate> --rearm --artifact <file>), then a fresh pass (bash .hb/gate.sh <gate>).',
   gate_rot:           'Run: node .hb/hb.js diagnose — a completed phase\'s gate references a deleted file; restore it or re-point the gate.',
   build_stuck:        'Run: node .hb/hb.js diagnose — woken repeatedly without progress; root-cause it or surface a blocker report for a human.',
   review_stuck:       'The adversarial review never resolved — spawn the refuter, write its findings to a file, and record hb review <gate> fail "<holes>" or hb review <gate> pass --artifact <file>, or surface for a human.',
@@ -405,6 +406,8 @@ function doctor() {
       }
     }
   }
+
+  for (const g of driftedGates(readEvents(), gates)) problems.push(`${g}: criteria drifted from the pinned evidence without sanction — sanction the revision through a full regate cycle: declare, rearm with evidence, fresh pass; git-restore first to retract the content`);   // drift-guard: doctor — the pin history is truth; an unsanctioned edit of accepted criteria is laundering, not replanning
 
   // detach: a retracted dependency claim is a legitimate in-flight state — NOTES, never problems
   // (topology edits carry no acceptance-laundering risk: the phase's own gate still verifies). But
@@ -866,6 +869,69 @@ function staleRearm(events, gate) {
   return true;
 }
 
+// The drift tripwire (T184): a completed gate's criteria are EVIDENCE the log has pinned.
+// For each gate ever CRITERIA-PINNED (a gate_passed carrying a non-empty criteria array —
+// bare/import passes never pin, the staleRearm precedent), walk its pins in log order plus
+// the current dag criteria as the final element; identity is the ORDERED (id, cmd) pairs
+// byte-exact (desc/timeout_s are NOT pinned — the honest limit). Any ADJACENT difference is
+// UNSANCTIONED DRIFT unless (i) a gate_regated FOR THAT GATE lies between the two points
+// (contemporaneous sanction — a still-open declare sanctions the final pair, and the regate
+// machinery already fails that gate closed), or (ii) a COMPLETED regate cycle — gate_regated
+// then gate_rearmed then a fresh criteria-pinned pass, in order, the WHOLE cycle (its
+// gate_regated included) after the pair's later point (ABSOLUTION: late rigor is still rigor;
+// the last cycle absolves all earlier drift on that gate; the unsanctioned window stays in the
+// log). A gate absent from the dag compares as always-different: removal is the same drift.
+// Twin: state.drifted_gates.
+// Identity canonicalization: the (id, cmd) pair as compact JSON — a missing field reads as null,
+// a non-object criteria entry as '!invalid' — so hostile shapes classify IDENTICALLY on both
+// runtimes and can never crash the walk (a refuter catch: String()/str() coercions split them —
+// node read a missing id as 'undefined' where python read 'None', and `true` vs 'true' collided
+// only on node). The schema's domain for id/cmd is STRINGS, compared byte-exact; out-of-schema
+// values compare as a TYPE CLASS (all numbers one token — a second refuter catch: mimicking JS
+// number formatting in python splits at the 2^53/exponent boundaries; the honest limit is class
+// identity, and a real weakening still trips on the string cmd). Twin: state._canon_crit.
+function canonField(v) {
+  if (v === undefined || v === null) return null;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'boolean') return '!bool:' + v;
+  if (typeof v === 'number') return '!num';
+  return '!obj';
+}
+function canonCrit(c) {
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return '!invalid';
+  return JSON.stringify([canonField(c.id), canonField(c.cmd)]);
+}
+function driftedGates(events, gates) {
+  const pins = {}, regated = {}, rearmed = {};
+  events.forEach((e, i) => {
+    if (!e.gate) return;
+    if (e.event === 'gate_passed' && Array.isArray(e.criteria) && e.criteria.length)
+      (pins[e.gate] = pins[e.gate] || []).push({ pos: i, ids: e.criteria.map(canonCrit) });
+    else if (e.event === 'gate_regated') (regated[e.gate] = regated[e.gate] || []).push(i);
+    else if (e.event === 'gate_rearmed') (rearmed[e.gate] = rearmed[e.gate] || []).push(i);
+  });
+  const out = [];
+  const INF = Number.MAX_SAFE_INTEGER;
+  for (const g of Object.keys(pins)) {
+    const P = pins[g];
+    const cur = Object.prototype.hasOwnProperty.call(gates, g) ? ((gates[g] || {}).criteria || []) : null;
+    const S = P.concat([{ pos: INF, ids: cur === null ? null : cur.map(canonCrit) }]);
+    let lastCycle = -1;   // start position (the gate_regated) of the LAST completed cycle
+    for (const r of (regated[g] || [])) {
+      const m = (rearmed[g] || []).find(x => x > r);
+      if (m !== undefined && P.some(p => p.pos > m)) lastCycle = Math.max(lastCycle, r);
+    }
+    const same = (a, b) => a !== null && b !== null && JSON.stringify(a) === JSON.stringify(b);
+    for (let i = 0; i + 1 < S.length; i++) {
+      if (same(S[i].ids, S[i + 1].ids)) continue;
+      const sanctioned = (regated[g] || []).some(r => r > S[i].pos && r < S[i + 1].pos);
+      const absolved = lastCycle > S[i + 1].pos;
+      if (!sanctioned && !absolved) { out.push(g); break; }
+    }
+  }
+  return out.sort();
+}
+
 // The weasel-vector loudness for `hb detach`: detaching FROM a gate in any of these states removes
 // a dependency claim that was doing real work, so the declare carries a warning. PER-CHANNEL
 // liveness (a merged last-verdict stream under-fires on the refuted steady state — review_failed,
@@ -1286,6 +1352,12 @@ switch (cmd) {
     for (const c of (gp.criteria || [])) process.stdout.write(`  [exit ${c.exit}] ${c.id}: ${c.cmd}\n`);
     const rp = [...evs].reverse().find(e => e.event === 'review_passed' && e.gate === gate);
     if (rp) process.stdout.write(`  reviewed by ${rp.reviewer || '?'} → ${rp.artifact}\n`);
+    break;
+  }
+
+  case 'drift': {
+    // The drifted-gate list, one per line (consumed by gate.sh --all; empty = none drifted).
+    for (const g of driftedGates(readEvents(), readDag().gates || {})) process.stdout.write(g + '\n');
     break;
   }
 

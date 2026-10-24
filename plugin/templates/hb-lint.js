@@ -27,11 +27,21 @@ function lint(dag) {
   const phases = dag.phases ?? [];
   const taskIds = new Set();
   const taskMap = {};
+  const phaseIds = new Set();
 
   for (const p of phases) {
+    // A duplicate phase id silently MERGES two phases in the projection — the append-time
+    // mistake (replanning adds phases to a dag whose ids are already taken). Same bar as tasks.
+    // Scoped to non-empty STRING ids so both runtimes classify degenerate shapes (missing id,
+    // null, numbers) identically — a refuter catch: p["id"] crashed python on an id-less phase.
+    if (typeof p.id === 'string' && p.id) {
+      if (phaseIds.has(p.id)) errors.push(`duplicate phase ID: ${p.id}`);
+      phaseIds.add(p.id);
+    }
+    const pidS = (typeof p.id === 'string' && p.id) ? p.id : '?';   // degenerate ids render '?' on BOTH runtimes (a refuter catch: the coercions diverged)
     const tasks = p.tasks ?? [];
     if (tasks.length > 8) {
-      warnings.push(`[${p.id}] ${tasks.length} tasks (>8) — context-loss risk, consider sub-phases`);
+      warnings.push(`[${pidS}] ${tasks.length} tasks (>8) — context-loss risk, consider sub-phases`);
     }
     for (const t of tasks) {
       if (taskIds.has(t.id)) errors.push(`duplicate task ID: ${t.id}`);
@@ -39,10 +49,10 @@ function lint(dag) {
       taskMap[t.id] = t;
     }
     for (const g of [p.gate_entry, p.gate_exit]) {
-      if (g && !gates[g]) errors.push(`[${p.id}] undefined gate: ${g}`);
+      if (g && !gates[g]) errors.push(`[${pidS}] undefined gate: ${g}`);
     }
     if (p.gate_entry && !phases.some(q => q.gate_exit === p.gate_entry)) {
-      errors.push(`[${p.id}] gate_entry ${p.gate_entry} is no phase's gate_exit — phase locked forever`);
+      errors.push(`[${pidS}] gate_entry ${p.gate_entry} is no phase's gate_exit — phase locked forever`);
     }
   }
 

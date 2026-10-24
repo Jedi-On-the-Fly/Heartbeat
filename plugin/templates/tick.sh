@@ -185,10 +185,16 @@ if [ -d "$LEASES" ]; then
   [ "$reclaimed" = true ] && node "$HB_DIR/hb.js" rebuild >/dev/null 2>&1 || true
 fi
 
-# ── 2.6 Rot detection (v1.6): a COMPLETED phase's gate references a vanished file ─
-# hb doctor is static and cheap; run it each tick and wake once on rot, then wait.
+# ── 2.6 Doctor-driven checks: criteria drift, then rot ────────────────────────
+# hb doctor is static and cheap; run it ONCE each tick and filter its problems.
+# Drift outranks rot and fires EVERY tick until cured (no once-only flag): an
+# unsanctioned edit of accepted criteria is laundering, and it must never fade
+# into a waiting sleep the way rot does.
 if [ "$HB_ROT_CHECK" != "0" ] && [ -f "$HB_DIR/hb.js" ]; then
-  rot=$(node "$HB_DIR/hb.js" doctor 2>/dev/null | grep -c "no longer reproducible" || true)
+  DOC_OUT=$(node "$HB_DIR/hb.js" doctor 2>/dev/null || true)
+  drift=$(printf '%s\n' "$DOC_OUT" | grep -c "criteria drifted from the pinned evidence" || true)   # drift-guard: tick — the per-tick doctor filter, widened to the drift problem
+  if [ "${drift:-0}" -gt 0 ]; then wake_out "{\"reason\":\"criteria_drift\",\"count\":$drift,\"ts\":\"$TS\"}"; fi   # drift-guard: tick — human-needed, every tick until cured
+  rot=$(printf '%s\n' "$DOC_OUT" | grep -c "no longer reproducible" || true)
   if [ "${rot:-0}" -gt 0 ]; then
     if [ ! -f "$ROT_FLAG" ]; then
       touch "$ROT_FLAG"
