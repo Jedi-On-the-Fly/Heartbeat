@@ -116,6 +116,14 @@ def main(argv=None):
 
     hb = _hbdir(args)
 
+    # The shape contract (T186): every verb that interprets the plan refuses a malformed or unreadable
+    # dag.json with ONE line, before it reads or writes anything (== hb.js SHAPE_CHECKED; doctor and
+    # diagnose report it, gate exits 4, next answers deadlock dag_invalid).
+    _shape_checked = {"start", "done", "fail", "heartbeat", "review", "regate", "detach", "reattach", "horizon", "park",
+                      "unpark", "constraints", "state", "ready", "rebuild", "changed", "evidence", "refute-prompt", "report", "reward", "bench"}
+    if args.cmd in _shape_checked and st.dag_shape_problems(hb): sys.stderr.write(f"✗ dag.json is structurally invalid: {st.dag_shape_problems(hb)[0]} — run: hb lint\n"); return 1  # shape-guard: reader
+    if args.cmd == "gate" and st.dag_shape_problems(hb): sys.stderr.write(f"✗ dag.json is structurally invalid: {st.dag_shape_problems(hb)[0]} — run: hb lint\n"); return 4  # shape-guard: reader
+
     if args.cmd == "tick":
         print(json.dumps(tickmod.tick(hb)))
     elif args.cmd == "gate":
@@ -670,6 +678,7 @@ def main(argv=None):
             sys.stderr.write("refute-prompt: %s\n" % e)
             return 1
     elif args.cmd == "next":
+        if st.dag_shape_problems(hb): print(json.dumps({"type": "deadlock", "cause": "dag_invalid", "detail": {"errors": st.dag_shape_problems(hb)[:5]}})); return 0  # shape-guard: reader
         s = st.project(st.read_events(hb), st.read_dag(hb))
         print(json.dumps(rv.resolve(s, st.read_dag(hb), hb)))
     elif args.cmd == "exec":

@@ -20,6 +20,11 @@ const asJson = process.argv.includes('--json');
 if (!dir) { console.error('Usage: hb-report.js <hb-dir> [--json]'); process.exit(2); }
 
 const J = f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+// The shape contract (T186): no report of a malformed or unreadable plan — refused with ONE line.
+{ let L = null; try { L = require(path.join(__dirname, 'hb-lint.js')); if (typeof L.readDagFile !== 'function' || typeof L.shapeErrors !== 'function') throw new Error('outdated'); } catch (e) { L = null; }
+  const rd = L ? L.readDagFile(path.join(dir, 'dag.json')) : { error: 'dag.json could not be checked (hb-lint.js missing or outdated?)' };
+  const bad = rd.error || L.shapeErrors(rd.dag, true)[0];
+  if (bad) { console.error(`✗ dag.json is structurally invalid: ${bad} — run: node .hb/hb-lint.js .hb/dag.json`); process.exit(1); } }   // shape-guard: reader
 let dag, state;
 try { dag = J('dag.json'); state = J('state.json'); }
 catch (e) { console.error(`Cannot read dag/state: ${e.message}`); process.exit(1); }

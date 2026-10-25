@@ -8,7 +8,8 @@
 #   bash gate.sh --all                RE-VERIFY every ever-passed gate read-only
 #                                     (regression check; never-passed/planned gates
 #                                     are SKIPPED and reported — nothing to regress from)
-# Exit 0 = passed | 1 = blocked/failing | 2 = usage / unknown gate
+# Exit 0 = passed | 1 = blocked/failing | 2 = usage / unknown gate | 3 = regate pending
+# | 4 = dag.json unreadable or structurally malformed (checked FIRST, every mode; no event)
 #
 # v1.5: --check / --all make a passed gate keep acting as a gate — you can re-run
 # the criteria anytime to prove the project STILL passes, without mutating state.
@@ -228,6 +229,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 GATE="${1:-}"; export GATE
+# The shape contract (T186): refused before ANY mode runs — ahead of usage (2) and a pending regate (3).
+SHAPE_ERR=$(node -e "const l=require(process.env.HB_DIR+'/hb-lint.js');const r=l.readDagFile(process.env.DAG_FILE);process.stdout.write(r.error||l.shapeErrors(r.dag,true)[0]||'')" 2>/dev/null || echo "dag.json could not be checked (hb-lint.js missing or outdated?)")
+if [ -n "$SHAPE_ERR" ]; then echo "✗ dag.json is structurally invalid: $SHAPE_ERR — run: node .hb/hb-lint.js .hb/dag.json" >&2; exit 4; fi   # shape-guard: reader
 
 # ── --all: read-only re-verification of every EVER-PASSED gate ────────────────
 # Regression semantics: a gate that has passed keeps acting as a gate; a gate that has never

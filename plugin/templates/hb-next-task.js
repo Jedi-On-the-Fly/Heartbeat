@@ -85,6 +85,10 @@ function readyTasks(state, dag, hbDir, limit) {
 
 /** Single next action (see header for the shape). */
 function resolve(state, dag, hbDir) {
+  // The shape contract (T186): a structurally malformed plan is a deadlock, never a throw.
+  let L; try { L = require('./hb-lint.js'); if (typeof L.readDagFile !== 'function' || typeof L.shapeErrors !== 'function') throw new Error('outdated'); } catch (e) { return { type: 'deadlock', cause: 'dag_invalid', detail: { errors: ['dag.json could not be checked (hb-lint.js missing or outdated?)'] } }; }
+  const shapeBad = L.shapeErrors(dag, true);
+  if (shapeBad.length) return { type: 'deadlock', cause: 'dag_invalid', detail: { errors: shapeBad.slice(0, 5) } };   // shape-guard: reader
   const ctx = buildContext(state, dag, hbDir);
   const { phases, completedPhases, pendingReviews, taskStatus, leased, gatePassed } = ctx;
 
@@ -158,8 +162,9 @@ if (require.main === module) {
   let state, dag;
   try { state = JSON.parse(fs.readFileSync(stateFile, 'utf8')); }
   catch (e) { process.stderr.write(`Cannot read state.json: ${e.message}\n`); process.stdout.write('null\n'); process.exit(0); }
-  try { dag = JSON.parse(fs.readFileSync(path.join(hbDir, 'dag.json'), 'utf8')); }
-  catch (e) { process.stderr.write(`Cannot read dag.json: ${e.message}\n`); process.stdout.write('null\n'); process.exit(0); }
+  let rd; try { const L = require('./hb-lint.js'); if (typeof L.readDagFile !== 'function' || typeof L.shapeErrors !== 'function') throw new Error('outdated'); rd = L.readDagFile(path.join(hbDir, 'dag.json')); } catch (e) { rd = { error: 'dag.json could not be checked (hb-lint.js missing or outdated?)' }; }
+  if (rd.error) { process.stdout.write(JSON.stringify({ type: 'deadlock', cause: 'dag_invalid', detail: { errors: [rd.error] } }) + '\n'); process.exit(0); }   // shape-guard: reader
+  dag = rd.dag;
   const result = resolve(state, dag, hbDir);
   process.stdout.write((result === null ? 'null' : JSON.stringify(result)) + '\n');
   process.exit(0);

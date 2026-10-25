@@ -32,6 +32,15 @@ def leases_dir(hbdir):
     return Path(hbdir) / "leases"
 
 
+def dag_shape_problems(hbdir):
+    """The shape contract (T186): the structure errors of dag.json as it sits on disk, read through
+    the checked file read — never read_dag()'s empty-plan fallback. [] when structurally sound.
+    Twin: hb.js dagShapeProblems."""
+    from . import lint as lintmod
+    dag, err = lintmod.read_dag_file(dag_path(hbdir))
+    return [err] if err else lintmod.shape_errors(dag, True)
+
+
 def read_dag(hbdir):
     try:
         return json.loads(dag_path(hbdir).read_text())

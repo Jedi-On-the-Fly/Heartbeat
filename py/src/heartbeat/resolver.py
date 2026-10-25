@@ -72,6 +72,9 @@ def ready_tasks(state, dag, hbdir, limit=0):
 
 
 def resolve(state, dag, hbdir):
+    # The shape contract (T186): a structurally malformed plan is a deadlock, never a raise.
+    shape_bad = lintmod.shape_errors(dag, True)
+    if shape_bad: return {"type": "deadlock", "cause": "dag_invalid", "detail": {"errors": shape_bad[:5]}}  # shape-guard: reader
     ctx = _build_context(state, dag, hbdir)
     phases = ctx["phases"]
     completed_phases = ctx["completed_phases"]

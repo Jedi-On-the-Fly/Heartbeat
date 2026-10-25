@@ -66,7 +66,9 @@ def _tick(hb, a):
         d["next"] = ("After performing data.action, call `tick` again — keep looping until reason "
                      "is all_done or a human-needed reason.")
     return r
-def _next(hb, a):     return rv.resolve(_state(hb), st.read_dag(hb), hb)
+def _next(hb, a):
+    if st.dag_shape_problems(hb): return {"type": "deadlock", "cause": "dag_invalid", "detail": {"errors": st.dag_shape_problems(hb)[:5]}}  # shape-guard: reader
+    return rv.resolve(_state(hb), st.read_dag(hb), hb)
 def _ready(hb, a):    return rv.ready_tasks(_state(hb), st.read_dag(hb), hb, int(a.get("n", 0) or 0))
 def _stateview(hb, a): return _state(hb)
 def _report(hb, a):   return reportmod.build(hb)
@@ -83,7 +85,7 @@ def _audit(hb, a):
 # name -> (handler, description, inputSchema). Act tools are appended in
 # _register_act() so the read surface stands alone.
 TOOLS = {
-    "tick":     (_tick,      "Run one Stage-A tick and return the next action (wakeAgent, reason, action). To run a whole project, DRIVE the loop: after performing data.action, call `tick` again — keep looping until reason is all_done or a human-needed reason (gate_blocked/build_stuck/deadlock/review_stuck/unsanctioned_drift/criteria_drift/gate_rot/replan_pending).", _EMPTY),
+    "tick":     (_tick,      "Run one Stage-A tick and return the next action (wakeAgent, reason, action). To run a whole project, DRIVE the loop: after performing data.action, call `tick` again — keep looping until reason is all_done or a human-needed reason (gate_blocked/build_stuck/deadlock/review_stuck/unsanctioned_drift/criteria_drift/gate_rot/replan_pending/dag_corrupted/state_corrupted).", _EMPTY),
     "next":     (_next,      "The single next eligible action (resolver.resolve).", _EMPTY),
     "ready":    (_ready,     "The concurrently-runnable task set.", {"type": "object", "properties": {"n": {"type": "integer", "description": "max tasks (0 = all)"}}}),
     "state":    (_stateview, "The projected project state (from the event log).", _EMPTY),
@@ -187,6 +189,12 @@ TOOLS.update({
 })
 
 
+# The shape contract (T186): the tools that answer for themselves on a malformed plan (tick wakes
+# dag_corrupted, next says deadlock dag_invalid, lint/audit/doctor/diagnose report it) or never read
+# the project's plan; every other tool returns an error result.
+_SHAPE_FREE = {"tick", "next", "lint", "audit", "doctor", "diagnose", "code_context", "code_discover", "deplint"}
+
+
 def _result(mid, result):
     return {"jsonrpc": "2.0", "id": mid, "result": result}
 
@@ -233,6 +241,7 @@ def _handle(hb, msg):
         if not entry:
             return _error(mid, -32602, f"unknown tool: {name}")
         try:
+            if name not in _SHAPE_FREE and st.dag_shape_problems(hb): raise ValueError(f"dag.json is structurally invalid: {st.dag_shape_problems(hb)[0]} — run: hb lint")  # shape-guard: reader
             out = entry[0](hb, args)
             res = {"content": [{"type": "text", "text": json.dumps(out)}]}
         except Exception as e:  # a tool failure is a tool result, not a protocol error

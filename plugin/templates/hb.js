@@ -52,8 +52,8 @@ const PROTOCOL = {
   gate_blocked:       'Run: node .hb/hb.js diagnose — fix the ROOT cause (do NOT weaken the gate), then re-run bash .hb/gate.sh <gate>.',
   at_capacity:        'Nothing to do — max tasks already in flight. No action.',
   state_corrupted:    'node .hb/hb.js rebuild (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable.',
-  dag_corrupted:      'Restore dag.json from git/backup — its structure is immutable.',
-  deadlock:           'Run: node .hb/hb.js diagnose — active_orphan: free the IDs; dag_invalid: fix the DAG and re-lint.',
+  dag_corrupted:      'dag.json is unreadable or structurally malformed — run node .hb/hb-lint.js .hb/dag.json for every error, then restore dag.json from git/backup or fix the named fields until it lints clean. Never hand-edit state.json.',
+  deadlock:           'Run: node .hb/hb.js diagnose — active_orphan: free the IDs; dag_invalid: fix the DAG and re-lint; resolver_error: the resolver (.hb/hb-next-task.js) is missing or crashed — restore it from the plugin templates, then tick (it wakes every tick until fixed).',
   unsanctioned_drift: 'Review the diff. If the change is intended: bash .hb/tick.sh --freeze.',
   criteria_drift:     'A completed gate\'s criteria changed without sanction (run node .hb/hb.js doctor for the gate). HUMAN NEEDED — never freeze or edit past this: the cure is a full regate cycle — git-restore dag.json to retract the content, or declare the revision (node .hb/hb.js regate <gate> <reason>), have a DIFFERENT actor rearm with evidence (node .hb/hb.js regate <gate> --rearm --artifact <file>), then a fresh pass (bash .hb/gate.sh <gate>).',
   gate_rot:           'Run: node .hb/hb.js diagnose — a completed phase\'s gate references a deleted file; restore it or re-point the gate.',
@@ -244,7 +244,18 @@ function mutate(ev) {
 // v1.5: static integrity check. The headline is rot detection — a COMPLETED phase
 // whose gate references a file that no longer exists (that gate can no longer be
 // reproduced). Also surfaces DAG errors, state/log drift, and stale leases. Read-only.
+// The shape contract (T186): the structure errors of dag.json as it sits on disk — read through the
+// checked file read, never readDag()'s empty-plan fallback. [] when the plan is structurally sound.
+function dagShapeProblems() {
+  let L; try { L = require('./hb-lint.js'); if (typeof L.readDagFile !== 'function' || typeof L.shapeErrors !== 'function') throw new Error('outdated'); } catch (e) { return ['dag.json could not be checked (hb-lint.js missing or outdated?)']; }   // fail closed, like gate.sh/tick.sh
+  const { readDagFile, shapeErrors } = L;
+  const r = readDagFile(DAG);
+  return r.error ? [r.error] : shapeErrors(r.dag, true);
+}
+
 function doctor() {
+  const shapeBad = dagShapeProblems();
+  if (shapeBad.length) return { problems: shapeBad.map(e => `dag: ${e}`), notes: ['plan checks skipped: dag.json invalid'] };   // shape-guard: reader
   const dag = readDag();
   const state = project(readEvents(), dag);
   const gates = dag.gates || {}, phases = dag.phases || [];
@@ -456,7 +467,18 @@ function sh(cmd) {
   try { return execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 8000 }); }
   catch (e) { return (e && e.stdout) || ''; }
 }
+// The resolver's verdict, run the way the tick runs it (a subprocess): a missing or crashing resolver
+// is cause resolver_error — in-process, a crashing module would take diagnose down with it.
+function resolverVerdict() {
+  const rp = path.join(HB_DIR, 'hb-next-task.js');
+  if (!fs.existsSync(rp)) return { type: 'deadlock', cause: 'resolver_error', detail: { error: 'the resolver script is missing' } };
+  try { return JSON.parse(require('child_process').execFileSync(process.execPath, [rp, STATE], { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] })); }
+  catch (e) { return { type: 'deadlock', cause: 'resolver_error', detail: { error: 'the resolver failed' } }; }
+}
+
 function diagnose(reason) {
+  const shapeBad = dagShapeProblems();
+  if (shapeBad.length) return `Diagnosis: dag_corrupted\n  ${shapeBad[0]}\n  Recover: ${PROTOCOL.dag_corrupted}`;   // shape-guard: reader
   const dag = readDag(), events = readEvents(), state = project(events, dag);
   const out = [];
   const P = s => out.push(s);
@@ -479,7 +501,7 @@ function diagnose(reason) {
     else if ((state.pending_reviews || []).length) reason = 'review_stuck';
     else if ((state.build_stuck_count || 0) >= 5) reason = 'build_stuck';
     else if (regatedGates.length) reason = 'regate_pending';
-    else { try { const { resolve } = require('./hb-next-task.js'); const r = resolve(state, dag, HB_DIR); if (r && r.type === 'deadlock') reason = 'deadlock'; } catch (e) {} }
+    else { const r = resolverVerdict(); if (r && r.type === 'deadlock') reason = 'deadlock'; }
   }
   P(`Diagnosis: ${reason || 'no blocker detected'}`);
   if (!reason) { P('  Not currently blocked. Run: node .hb/hb.js state'); return out.join('\n'); }
@@ -523,9 +545,10 @@ function diagnose(reason) {
     P('   3. If no  → restore the file: git checkout <commit>^ -- <file>.');
     P('   4. Re-verify read-only: bash .hb/gate.sh --all.  Do NOT weaken the criterion.');
   } else if (reason === 'deadlock') {
-    let r = {}; try { const { resolve } = require('./hb-next-task.js'); r = resolve(state, dag, HB_DIR) || {}; } catch (e) {}
+    const r = resolverVerdict() || {};
     P(`  Cause: ${r.cause || 'unknown'}`);
-    if (r.cause === 'active_orphan') P('  Recover: free the orphan IDs (hb fail <id>): ' + JSON.stringify((r.detail || {}).tasks || []));
+    if (r.cause === 'resolver_error') P(`  Recover: ${(r.detail || {}).error || 'the resolver failed'} — restore .hb/hb-next-task.js from the plugin templates (cp <plugin>/templates/hb-next-task.js .hb/), then tick.`);
+    else if (r.cause === 'active_orphan') P('  Recover: free the orphan IDs (hb fail <id>): ' + JSON.stringify((r.detail || {}).tasks || []));
     else if (r.cause === 'dag_invalid') P('  Recover: fix the DAG, then: node .hb/hb-lint.js .hb/dag.json\n  ' + JSON.stringify((r.detail || {}).errors || []));
     else P('  Recover: no eligible task — run node .hb/hb-lint.js .hb/dag.json and check requires/gates.');
   } else if (reason === 'build_stuck') {
@@ -1084,6 +1107,12 @@ module.exports = { project, phaseByGateExit, initialState, PROTOCOL, renderProto
 if (require.main === module) {
 const [cmd, arg1, ...rest] = process.argv.slice(2);
 const die = (msg) => { process.stderr.write(msg + '\n'); process.exit(1); };
+// The shape contract (T186): every verb that interprets the plan refuses a malformed or unreadable
+// dag.json with ONE line, before it reads or writes anything (doctor/diagnose report it instead;
+// protocol/refuters never read the plan).
+const SHAPE_CHECKED = new Set(['start', 'done', 'fail', 'heartbeat', 'beat', 'review', 'park', 'unpark', 'regate', 'detach', 'reattach', 'horizon',
+  'constraints', 'anchor', 'import', 'state', 'ready', 'rebuild', 'changed', 'evidence', 'drift', 'refute-prompt']);
+if (SHAPE_CHECKED.has(cmd) && dagShapeProblems().length) die(`✗ dag.json is structurally invalid: ${dagShapeProblems()[0]} — run: node .hb/hb-lint.js .hb/dag.json`);   // shape-guard: reader
 
 switch (cmd) {
   case 'start':

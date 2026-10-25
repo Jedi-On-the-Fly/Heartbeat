@@ -33,6 +33,14 @@ for (let i = 0; i < args.length; i++) {
 const dir = pos[0];
 if (!dir) { console.error('Usage: hb-viz.js <hb-dir> [out.html] [--serve [--port N] [--host H]]'); process.exit(2); }
 const out = pos[1] ?? path.join(dir, 'dag-view.html');
+// The shape contract (T186): no view of a malformed or unreadable plan — refused with ONE line.
+function shapeProblem(d) {
+  let L; try { L = require(path.join(__dirname, 'hb-lint.js')); if (typeof L.readDagFile !== 'function' || typeof L.shapeErrors !== 'function') throw new Error('outdated'); } catch (e) { return 'dag.json could not be checked (hb-lint.js missing or outdated?)'; }
+  const { readDagFile, shapeErrors } = L;
+  const r = readDagFile(path.join(d, 'dag.json'));
+  return r.error || shapeErrors(r.dag, true)[0] || '';
+}
+{ const bad = shapeProblem(dir); if (bad) { console.error(`✗ dag.json is structurally invalid: ${bad} — run: node .hb/hb-lint.js .hb/dag.json`); process.exit(1); } }   // shape-guard: reader
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -160,6 +168,8 @@ if (!serve) {
   const server = http.createServer((req, res) => {
     if (!originOk(req.headers.origin)) { res.writeHead(403); res.end('forbidden origin'); return; }
     const url = (req.url || '/').split('?')[0];
+    // re-checked on EVERY request: the server re-reads dag.json per request, so a plan broken while it runs is refused too
+    { const bad = shapeProblem(dir); if (bad && (url === '/' || url === '/state')) { res.writeHead(409, { 'content-type': 'text/plain; charset=utf-8' }); res.end(`dag.json is structurally invalid: ${bad} — run: node .hb/hb-lint.js .hb/dag.json`); return; } }   // shape-guard: reader
     if (url === '/state') {
       try {
         const { dag, state } = readData(dir);

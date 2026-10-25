@@ -14,7 +14,10 @@
  */
 'use strict';
 const fs = require('fs');
-const { extractPaths, readDagFile, shapeErrors, structureView } = require('./hb-lint.js');
+let lintLib;
+try { lintLib = require('./hb-lint.js'); if (typeof lintLib.readDagFile !== 'function' || typeof lintLib.shapeErrors !== 'function' || typeof lintLib.structureView !== 'function') throw new Error('outdated'); }
+catch (e) { process.stderr.write('✗ dag.json could not be checked (hb-lint.js missing or outdated?) — restore .hb/hb-lint.js from the plugin templates\n'); process.exit(1); }
+const { extractPaths, readDagFile, shapeErrors, structureView } = lintLib;
 
 const VACUOUS   = /^\s*(true|:|exit\s+0|echo\b|test\s+1\s*=\s*1|\[\s+1\s+=\s+1\s+\])\s*;?\s*$/;
 const EXISTENCE = /^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls(\s|$))/;

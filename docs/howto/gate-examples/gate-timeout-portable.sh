@@ -33,6 +33,7 @@ make_no_timeout_path() {
 setup_project() {  # → a .hb dir carrying gate.sh + a dag with a hanging gate and a fast gate
   local hb; hb="$(mktemp -d)/.hb"; mkdir -p "$hb"
   cp "$GATESH" "$hb/gate.sh"
+  cp "$ROOT/plugin/templates/hb-lint.js" "$hb/hb-lint.js"   # gate.sh checks the plan's structure first (T186) — a bootstrapped .hb always carries it
   cat > "$hb/dag.json" <<'JSON'
 { "phases": [], "gates": {
   "GHANG": { "desc": "hangs", "criteria": [ { "id": "h", "desc": "sleeps past the bound", "cmd": "sleep 30" } ] },

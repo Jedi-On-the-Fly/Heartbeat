@@ -14,9 +14,10 @@
 # SPEC-FIRST: the lint/audit/schema cases are RED TODAY by design — the schema carries no
 # annotations yet, python lint crashes on several of these shapes, and the runtimes disagree.
 #
-#   bash tests/dag-shape.sh [case]           cases: lint (k1-k6)
-#   bash tests/dag-shape.sh --selftest [lint]
-# Prints SHAPE-LINT-OK for the lint case, SHAPE-SELFTEST-LINT-OK for its teeth.
+#   bash tests/dag-shape.sh [case]           cases: lint (k1-k7) readers (r0-r10); default: both
+#   bash tests/dag-shape.sh --selftest [lint|readers]
+# Prints SHAPE-LINT-OK / SHAPE-READERS-OK per case and DAG-SHAPE-OK for both; the selftest prints
+# SHAPE-SELFTEST-LINT-OK / SHAPE-SELFTEST-READERS-OK and DAG-SHAPE-SELFTEST-OK for both.
 set -u
 # Env hygiene: under a gate criterion, gate.sh exports HB_DIR/PROJECT_DIR/GATE — and the fixture
 # projects' copied CLIs honor env HB_DIR. A proof must never inherit a caller's project pointers.
@@ -433,6 +434,349 @@ py:   $op"
   echo "SHAPE-LINT-OK ($n derived structure mutations, $checked existing dags against the $PRE oracle)"
 }
 
+# ── case: readers ──────────────────────────────────────────────────────────────────────────────
+# Every plan-interpreting reader fails CLOSED on a malformed or unreadable dag: the tick wakes
+# dag_corrupted, the resolvers say deadlock dag_invalid, verbs refuse or report, gate eval exits 4.
+NODE_MUT="start done fail heartbeat beat review park unpark regate detach reattach horizon constraints anchor import"
+NODE_READ="state ready rebuild changed evidence drift refute-prompt"
+NODE_REPORT="doctor diagnose"
+NODE_EXEMPT="protocol refuters"              # never read the plan's structure
+PY_MUT="start done fail heartbeat review regate detach reattach horizon park unpark constraints"
+PY_READ="state ready rebuild changed evidence refute-prompt report reward bench"
+PY_REPORT="doctor diagnose"
+PY_EXEMPT="init protocol refuters mcp-serve lint audit tick gate exec next"   # scaffold / static / own cases (S1, r1, r2, r5, r7, r8)
+MCP_STATE="tick next"; MCP_REPORT="lint audit doctor diagnose"; MCP_EXEMPT="code_context code_discover deplint"
+nverb_args(){ case "$1" in
+  start|done|fail|heartbeat|beat) echo "$1 t2";; review) echo "review G1 pass --artifact a.md";;
+  park) echo "park P2 shelved";; unpark|reattach) echo "$1 P2";; regate) echo "regate G1 premise died";;
+  detach) echo "detach P2 claim was false";; horizon) echo "horizon close --reason done";;
+  constraints) echo "constraints G1 --record c.json";; anchor|changed|evidence|refute-prompt) echo "$1 G1";;
+  *) echo "$1";; esac; }
+pverb_args(){ case "$1" in
+  start|done|fail|heartbeat) echo "$1 t2";; review) echo "review G1 pass --artifact a.md";;
+  park) echo "park P2 --reason shelved";; unpark|reattach) echo "$1 P2";; regate) echo "regate G1 --reason x";;
+  detach) echo "detach P2 --reason x";; horizon) echo "horizon close --reason done";;
+  constraints) echo "constraints G1 --record c.json";; changed|evidence|refute-prompt) echo "$1 G1";;
+  bench) echo "bench --backend script";;
+  *) echo "$1";; esac; }
+mkproj(){   # the template project: bootstrapped, the base dag, one completed task in the log
+  local T="$1"; mkdir -p "$T"; ( cd "$T" && bash "$ROOT/plugin/bootstrap.sh" . >/dev/null 2>&1 )
+  printf '%s' "$BASE" > "$T/.hb/dag.json"
+  ( cd "$T" && HB_ACTOR=doer node .hb/hb.js start t1 >/dev/null && HB_ACTOR=doer node .hb/hb.js done t1 >/dev/null ) || fail "readers: template could not complete t1"
+  printf 'Refutation attempt for G1 (task t1): nothing to see.\nHOLES: none\n' > "$T/a.md"; printf '[]' > "$T/c.json"
+}
+nev(){ wc -l < "$1/.hb/events.jsonl" 2>/dev/null | tr -d ' '; }
+first_error(){   # node lint's first error for the fixture's dag (the structure layer runs first)
+  node "$NLINT" "$1/.hb/dag.json" --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["errors"][0])' 2>/dev/null
+}
+tickj(){ if [ "$2" = node ]; then ( cd "$1" && bash .hb/tick.sh 2>&1 ); else PY tick --dir "$1" 2>&1; fi; }
+core_readers(){   # $1 = project, $2 = label
+  local P="$1" L="$2" rt o r e0 fe n
+  fe=$(first_error "$P"); [ -n "$fe" ] || fail "readers [$L]: the fixture lints clean — not a structure fixture"
+  for rt in node py; do
+    for n in 1 2; do
+      o=$(tickj "$P" "$rt")
+      crashed "$o" && fail "readers r1 [$L] ($rt): the tick CRASHED: $o"
+      echo "$o" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); a=d.get("data") or {}
+assert d.get("wakeAgent") is True and a.get("reason")=="dag_corrupted" and isinstance(a.get("errors"),list) and a["errors"], d' 2>/dev/null \
+        || fail "readers r1 [$L] ($rt, tick $n): want a dag_corrupted WAKE carrying the errors: $o"
+      local lc; lc='node .hb/hb-lint.js .hb/dag.json'; [ "$rt" = py ] && lc='hb lint'
+      echo "$o" | python3 -c 'import json,sys; a=json.loads(sys.stdin.read())["data"].get("action",""); assert sys.argv[1] in a and "immutable" not in a and "state.json" in a, a' "$lc" 2>/dev/null \
+        || fail "readers r1 [$L] ($rt): the dag_corrupted action must name '$lc', never 'immutable', and warn off state.json: $o"
+    done
+  done
+  local rn rp
+  rn=$( cd "$P" && node .hb/hb-next-task.js .hb/state.json 2>&1 ); rp=$(PY next --dir "$P" 2>&1)
+  crashed "$rn$rp" && fail "readers r2 [$L]: a resolver CRASHED: $rn / $rp"
+  for o in "$rn" "$rp"; do
+    echo "$o" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d.get("type")=="deadlock" and d.get("cause")=="dag_invalid", d' 2>/dev/null \
+      || fail "readers r2 [$L]: want {type: deadlock, cause: dag_invalid}: node=$rn py=$rp"
+  done
+  [ "$(echo "$rn" | python3 -c 'import json,sys; print(sorted(json.loads(sys.stdin.read())))')" = "$(echo "$rp" | python3 -c 'import json,sys; print(sorted(json.loads(sys.stdin.read())))')" ] \
+    || fail "readers r2 [$L]: the resolvers' keys differ: $rn / $rp"
+  e0=$(nev "$P")
+  o=$( cd "$P" && bash .hb/gate.sh G1 2>&1 ); r=$?
+  [ "$r" = 4 ] || fail "readers r5 [$L]: gate.sh G1 exit $r (want 4): $o"
+  o=$(PY gate G1 --dir "$P" 2>&1); r=$?
+  [ "$r" = 4 ] || fail "readers r5 [$L]: hb gate G1 exit $r (want 4): $o"
+  [ "$(nev "$P")" = "$e0" ] || fail "readers r5 [$L]: a refused gate appended an event"
+  for rt in node py; do
+    if [ "$rt" = node ]; then o=$( cd "$P" && node .hb/hb.js doctor 2>&1 ); r=$?; else o=$(PY doctor --dir "$P" 2>&1); r=$?; fi
+    crashed "$o" && fail "readers r6 [$L] ($rt): doctor CRASHED: $o"
+    [ "$r" = 1 ] || fail "readers r6 [$L] ($rt): doctor exit $r (want 1): $o"
+    echo "$o" | grep -qF "$fe" || fail "readers r6 [$L] ($rt): doctor does not name the structure error '$fe': $o"
+    echo "$o" | grep -qF 'plan checks skipped: dag.json invalid' || fail "readers r6 [$L] ($rt): doctor does not say the plan checks were skipped: $o"
+    echo "$o" | grep -qiE 'drift|rebuild|regate|detach|reproducible|differs from the event-log' && fail "readers r6 [$L] ($rt): doctor ran a plan-derived check on a broken plan: $o"
+  done
+  return 0
+}
+case_readers(){
+  local T="$W/tpl" P label path expect dag n=0 v
+  mkproj "$T"
+  # (r0) the regression pin: the lint-clean base behaves exactly as today
+  P="$W/r0"; cp -a "$T" "$P"
+  [ "$(tickj "$P" node | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["data"]["reason"])')" = next_task ] || fail "readers r0: node tick is not next_task on a clean plan"
+  rm -rf "$P/.hb/leases"/* 2>/dev/null
+  [ "$(tickj "$P" py | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["data"]["reason"])')" = next_task ] || fail "readers r0: python tick is not next_task on a clean plan"
+  ( cd "$P" && node .hb/hb.js state >/dev/null && node .hb/hb.js doctor >/dev/null && bash .hb/gate.sh --check G1 >/dev/null 2>&1 ) || fail "readers r0: node state/doctor/gate --check refused a clean plan"
+  ( PY state --dir "$P" >/dev/null && PY doctor --dir "$P" >/dev/null && PY gate G1 --check --dir "$P" >/dev/null 2>&1 ) || fail "readers r0: python state/doctor/gate --check refused a clean plan"
+  # the core readers on EVERY derived structure mutation and every unreadable class
+  while IFS=$'\t' read -r label path expect dag; do
+    [ -n "$label" ] || continue
+    n=$((n+1)); P="$W/rm$n"; cp -a "$T" "$P"; printf '%s' "$dag" > "$P/.hb/dag.json"
+    core_readers "$P" "$label" </dev/null; rm -rf "$P"
+  done <<<"$(derive)"
+  [ "$n" -ge 40 ] || fail "readers: only $n derived mutations reached the readers"
+  local nmut=$n
+  local cls
+  for cls in missing empty truncated NaN BOM top; do
+    P="$W/ru-$cls"; cp -a "$T" "$P"
+    case $cls in
+      missing) rm -f "$P/.hb/dag.json";; empty) : > "$P/.hb/dag.json";; truncated) printf '{"phases": [' > "$P/.hb/dag.json";;
+      NaN) printf '{"phases":[],"gates":{},"x":NaN}' > "$P/.hb/dag.json";; BOM) printf '\xef\xbb\xbf{"phases":[],"gates":{}}' > "$P/.hb/dag.json";;
+      top) printf '[1]' > "$P/.hb/dag.json";;
+    esac
+    if [ "$cls" = missing ]; then fe="dag.json unreadable: missing"; else fe=$(first_error "$P"); fi
+    core_readers_unreadable "$P" "unreadable $cls" "$fe"; rm -rf "$P"
+  done
+  # the FULL sweep on one representative per STRUCTURE class
+  rep(){   # $1 = label, $2 = python statement over d, or RAW:<text>
+    P="$W/rep-$1"; rm -rf "$P"; cp -a "$T" "$P"
+    case "$2" in RAW:*) printf '%s' "${2#RAW:}" > "$P/.hb/dag.json";;
+      *) printf '%s' "$BASE" | python3 -c "import json,sys; d=json.load(sys.stdin); $2; print(json.dumps(d))" > "$P/.hb/dag.json";; esac
+  }
+  local reps='unreadable|RAW:{"phases": [
+container|d["phases"][0]["tasks"]="x"
+id|d["phases"][0]["tasks"][1]["id"]=5
+reference|d["phases"][1]["gate_entry"]=[]
+parked|d["phases"][1]["parked"]="no"'
+  local rl rs verb o r e0 h0 fe
+  while IFS='|' read -r rl rs; do
+    rep "$rl" "$rs"; fe=$(first_error "$P"); [ -n "$fe" ] || fail "readers [$rl]: representative lints clean"
+    # derived coverage: every CLI verb is classified
+    for verb in $(sed -n '/^if (require.main === module)/,$p' "$ROOT/plugin/templates/hb.js" | grep -oE "^  case '[a-z-]+'" | grep -oE "'[a-z-]+'" | tr -d "'"); do
+      echo " $NODE_MUT $NODE_READ $NODE_REPORT $NODE_EXEMPT " | grep -q " $verb " || fail "readers: node verb '$verb' is unclassified (mutating / read / report / exempt)"
+    done
+    for verb in $(PY -h 2>&1 | grep -oE '\{[a-z,-]+\}' | head -1 | tr -d '{}' | tr ',' ' '); do
+      echo " $PY_MUT $PY_READ $PY_REPORT $PY_EXEMPT " | grep -q " $verb " || fail "readers: python verb '$verb' is unclassified"
+    done
+    # (r3) mutating verbs refuse: nonzero, no event, dag.json untouched, the error named
+    for verb in $NODE_MUT; do
+      e0=$(nev "$P"); h0=$(cksum < "$P/.hb/dag.json")
+      o=$( cd "$P" && HB_ACTOR=someone node .hb/hb.js $(nverb_args "$verb") 2>&1 ); r=$?
+      crashed "$o" && fail "readers r3 [$rl] node $verb CRASHED: $o"
+      [ "$r" != 0 ] || fail "readers r3 [$rl] node $verb exited 0 on a broken plan: $o"
+      [ "$(nev "$P")" = "$e0" ] || fail "readers r3 [$rl] node $verb appended an event"
+      [ "$(cksum < "$P/.hb/dag.json")" = "$h0" ] || fail "readers r3 [$rl] node $verb rewrote dag.json"
+      echo "$o" | grep -qF "$fe" || fail "readers r3 [$rl] node $verb does not name '$fe': $o"
+    done
+    for verb in $PY_MUT; do
+      e0=$(nev "$P"); h0=$(cksum < "$P/.hb/dag.json")
+      o=$( cd "$P" && HB_ACTOR=someone PY $(pverb_args "$verb") --dir "$P" 2>&1 ); r=$?
+      crashed "$o" && fail "readers r3 [$rl] py $verb CRASHED: $o"
+      [ "$r" != 0 ] || fail "readers r3 [$rl] py $verb exited 0 on a broken plan: $o"
+      [ "$(nev "$P")" = "$e0" ] || fail "readers r3 [$rl] py $verb appended an event"
+      [ "$(cksum < "$P/.hb/dag.json")" = "$h0" ] || fail "readers r3 [$rl] py $verb rewrote dag.json"
+      echo "$o" | grep -qF "$fe" || fail "readers r3 [$rl] py $verb does not name '$fe': $o"
+    done
+    # (r4) read verbs: nonzero, ONE line naming the first error and the runtime's lint command
+    for verb in $NODE_READ; do
+      o=$( cd "$P" && node .hb/hb.js $(nverb_args "$verb") 2>&1 ); r=$?
+      [ "$r" != 0 ] && [ "$(echo "$o" | grep -c .)" = 1 ] && echo "$o" | grep -qF "$fe" && echo "$o" | grep -qF 'node .hb/hb-lint.js .hb/dag.json' \
+        || fail "readers r4 [$rl] node $verb: want exit!=0 and ONE line naming '$fe' and the lint command (exit $r): $o"
+    done
+    o=$( cd "$P" && node .hb/hb.js constraints G1 --prompt 2>&1 ); r=$?
+    [ "$r" != 0 ] && echo "$o" | grep -qF "$fe" || fail "readers r4 [$rl] node constraints --prompt: $o"
+    for verb in $PY_READ; do
+      o=$(PY $(pverb_args "$verb") --dir "$P" 2>&1); r=$?
+      [ "$r" != 0 ] && [ "$(echo "$o" | grep -c .)" = 1 ] && echo "$o" | grep -qF "$fe" && echo "$o" | grep -qF 'hb lint' \
+        || fail "readers r4 [$rl] py $verb: want exit!=0 and ONE line naming '$fe' and 'hb lint' (exit $r): $o"
+    done
+    o=$( cd "$P" && node .hb/hb-report.js .hb 2>&1 ); r=$?
+    [ "$r" != 0 ] && echo "$o" | grep -qF "$fe" || fail "readers r4 [$rl] hb-report.js: $o"
+    o=$( cd "$P" && node .hb/hb-viz.js .hb 2>&1 ); r=$?
+    [ "$r" != 0 ] && echo "$o" | grep -qF "$fe" || fail "readers r4 [$rl] hb-viz.js: $o"
+    # (r5) every gate mode refuses with exit 4 — ahead of usage (2) and a pending regate (3)
+    e0=$(nev "$P")
+    for o in "--check G1" "--all" ""; do
+      ( cd "$P" && bash .hb/gate.sh $o >/dev/null 2>&1 ); r=$?; [ "$r" = 4 ] || fail "readers r5 [$rl] gate.sh $o exit $r (want 4)"
+    done
+    for o in "G1 --check" "--all"; do PY gate $o --dir "$P" >/dev/null 2>&1; r=$?; [ "$r" = 4 ] || fail "readers r5 [$rl] hb gate $o exit $r (want 4)"; done
+    if [ "$rl" != unreadable ]; then
+      python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["gates"]["G1"]["regate"]={"at":"t","reason":"r","actor":"a","prev_criteria":[],"pending":True}; json.dump(d,open(sys.argv[1],"w"))' "$P/.hb/dag.json"
+      ( cd "$P" && bash .hb/gate.sh G1 >/dev/null 2>&1 ); r=$?; [ "$r" = 4 ] || fail "readers r5 [$rl] gate.sh on a regate-pending gate in a broken plan exit $r (want 4, ahead of 3)"
+      PY gate G1 --dir "$P" >/dev/null 2>&1; r=$?; [ "$r" = 4 ] || fail "readers r5 [$rl] hb gate on a regate-pending gate exit $r (want 4)"
+      rep "$rl" "$rs"
+    fi
+    [ "$(nev "$P")" = "$e0" ] || fail "readers r5 [$rl]: a refused gate appended an event"
+    # (r6b) diagnose names dag_corrupted
+    for o in "$( cd "$P" && node .hb/hb.js diagnose 2>&1 )" "$(PY diagnose --dir "$P" 2>&1)"; do
+      crashed "$o" && fail "readers r6 [$rl] diagnose CRASHED: $o"
+      echo "$o" | grep -q 'dag_corrupted' || fail "readers r6 [$rl] diagnose does not name dag_corrupted: $o"
+    done
+    # (r7) both exec drivers stop on dag_corrupted
+    o=$( cd "$P" && HB_EXEC_BACKEND=script HB_EXEC_CMD='cat >/dev/null' node .hb/hb-exec.js run 2>&1 ); r=$?
+    [ "$r" != 0 ] && echo "$o" | grep -q 'HB-EXEC STOP: dag_corrupted' || fail "readers r7 [$rl] node hb-exec: $o"
+    o=$( HB_EXEC_BACKEND=script HB_EXEC_CMD='cat >/dev/null' PY exec run --dir "$P" 2>&1 ); r=$?
+    [ "$r" != 0 ] && echo "$o" | grep -q 'HB-EXEC STOP: dag_corrupted' || fail "readers r7 [$rl] python hb exec: $o"
+    # (r8) every MCP tool per class, through the server's own dispatch
+    PYTHONPATH="$PYSRC" python3 - "$P/.hb" "$fe" "$MCP_STATE" "$MCP_REPORT" "$MCP_EXEMPT" <<'MCPEOF' || fail "readers r8 [$rl]: an MCP tool misbehaved (see above)"
+import json, sys
+from heartbeat import mcp_server as m
+hb, fe = sys.argv[1], sys.argv[2]
+state, report, exempt = sys.argv[3].split(), sys.argv[4].split(), sys.argv[5].split()
+bad = []
+for name in sorted(m.TOOLS):
+    if name in exempt: continue
+    args = {"task": "t2"} if name in ("start", "done", "fail") else ({"gate": "G1", "verdict": "pass", "artifact": "a.md"} if name == "review" else ({"gate": "G1"} if name == "gate" else {}))
+    res = m._handle(hb, {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}})["result"]
+    text = res["content"][0]["text"]
+    if "Traceback" in text: bad.append((name, "traceback")); continue
+    if name == "tick":
+        d = json.loads(text); a = d.get("data") or {}
+        if not (d.get("wakeAgent") is True and a.get("reason") == "dag_corrupted"): bad.append((name, text))
+    elif name == "next":
+        d = json.loads(text)
+        if not (d.get("type") == "deadlock" and d.get("cause") == "dag_invalid"): bad.append((name, text))
+    elif name in report:
+        if res.get("isError") or fe not in text and "dag_corrupted" not in text: bad.append((name, text))
+    else:
+        if not (res.get("isError") and fe in text): bad.append((name, text))
+unclassified = [n for n in m.TOOLS if n not in state + report + exempt + ["ready", "state", "report", "gate", "start", "done", "fail", "review"]]
+if unclassified: bad.append(("unclassified", unclassified))
+if bad: print(bad); sys.exit(1)
+MCPEOF
+  done <<<"$reps"
+  # (r9) a corrupt state.json AND a malformed dag: the structure check runs first → dag_corrupted
+  P="$W/r9"; cp -a "$T" "$P"; printf '{"phases": [' > "$P/.hb/dag.json"; printf '{broken' > "$P/.hb/state.json"
+  for rt in node py; do
+    [ "$(tickj "$P" "$rt" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["data"]["reason"])' 2>&1)" = dag_corrupted ] || fail "readers r9 ($rt): a corrupt state + malformed dag must wake dag_corrupted (structure before the state self-heal)"
+  done
+  # (r10) NO SILENT SLEEP — and no silent SECOND tick: a crashing or missing resolver wakes deadlock
+  # resolver_error on EVERY tick, every exec run stops, and diagnose names the cause (both runtimes)
+  is_rerr(){ python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["wakeAgent"] is True and d["data"]["reason"]=="deadlock" and "resolver_error" in json.dumps(d), d' 2>/dev/null; }
+  local how
+  for how in crash missing; do
+    P="$W/r10-$how"; cp -a "$T" "$P"
+    if [ "$how" = crash ]; then printf 'process.exit(1)\n' > "$P/.hb/hb-next-task.js"; else rm -f "$P/.hb/hb-next-task.js"; fi
+    for n in 1 2 3; do o=$(tickj "$P" node); echo "$o" | is_rerr || fail "readers r10 [$how] (node tick $n): want a deadlock resolver_error WAKE every tick: $o"; done
+    for n in 1 2; do
+      o=$( cd "$P" && HB_EXEC_BACKEND=script HB_EXEC_CMD='cat >/dev/null' node .hb/hb-exec.js run 2>&1 ); r=$?
+      [ "$r" != 0 ] && echo "$o" | grep -q 'HB-EXEC STOP: deadlock' || fail "readers r10 [$how] (node exec run $n): want a STOP, never an IDLE exit 0: $o"
+    done
+    o=$( cd "$P" && node .hb/hb.js diagnose deadlock 2>&1 ); echo "$o" | grep -q 'resolver_error' && echo "$o" | grep -q 'restore .hb/hb-next-task.js' || fail "readers r10 [$how]: node diagnose deadlock does not name resolver_error and its cure: $o"
+    o=$(tickj "$P" node); echo "$o" | python3 -c 'import json,sys; a=json.loads(sys.stdin.read())["data"].get("action",""); assert "resolver_error" in a, a' 2>/dev/null || fail "readers r10 [$how]: the node deadlock action does not name the resolver_error cure: $o"
+  done
+  P="$W/r10p"; cp -a "$T" "$P"; cp -r "$PYSRC" "$W/py-r10"
+  python3 - "$W/py-r10/heartbeat/resolver.py" <<'R10EOF'
+import sys
+p = sys.argv[1]; s = open(p).read()
+s = s.replace("def resolve(state, dag, hbdir):", "def resolve(state, dag, hbdir):\n    raise RuntimeError('resolver exploded')\n\n\ndef _orig_resolve(state, dag, hbdir):", 1)
+open(p, "w").write(s)
+R10EOF
+  for n in 1 2 3; do o=$(PYTHONPATH="$W/py-r10" python3 -m heartbeat.cli tick --dir "$P" 2>&1); echo "$o" | is_rerr || fail "readers r10 (python tick $n): want a deadlock resolver_error WAKE every tick: $o"; done
+  for n in 1 2; do
+    o=$( HB_EXEC_BACKEND=script HB_EXEC_CMD='cat >/dev/null' PYTHONPATH="$W/py-r10" python3 -m heartbeat.cli exec run --dir "$P" 2>&1 ); r=$?
+    [ "$r" != 0 ] && echo "$o" | grep -q 'HB-EXEC STOP: deadlock' || fail "readers r10 (python exec run $n): want a STOP: $o"
+  done
+  o=$(PYTHONPATH="$W/py-r10" python3 -m heartbeat.cli diagnose deadlock --dir "$P" 2>&1); echo "$o" | grep -q 'resolver_error' && echo "$o" | grep -q 'repair the heartbeat install' || fail "readers r10: python diagnose deadlock does not name resolver_error and its cure: $o"
+  o=$(PYTHONPATH="$W/py-r10" python3 -m heartbeat.cli tick --dir "$P" 2>&1); echo "$o" | python3 -c 'import json,sys; a=json.loads(sys.stdin.read())["data"].get("action",""); assert "resolver_error" in a, a' 2>/dev/null || fail "readers r10: the python deadlock action does not name the resolver_error cure: $o"
+  # (r11) the structure checker itself missing: every node reader fails CLOSED with one fixed line
+  local miss='dag.json could not be checked (hb-lint.js missing or outdated?)' variant
+  for variant in missing outdated; do
+  P="$W/r11-$variant"; cp -a "$T" "$P"; rm -f "$P/.hb/hb-lint.js"
+  [ "$variant" = outdated ] && printf 'module.exports = { lint: () => ({ errors: [], warnings: [] }) };\n' > "$P/.hb/hb-lint.js"
+  for o in "$( cd "$P" && node .hb/hb.js state 2>&1 )" "$( cd "$P" && HB_ACTOR=x node .hb/hb.js start t2 2>&1 )" "$( cd "$P" && node .hb/hb.js doctor 2>&1 )" \
+           "$( cd "$P" && node .hb/hb-next-task.js .hb/state.json 2>&1 )" "$( node "$P/.hb/hb-report.js" "$P/.hb" 2>&1 )" "$( node "$P/.hb/hb-viz.js" "$P/.hb" 2>&1 )" \
+           "$( cd "$P" && bash .hb/gate.sh G1 2>&1 )" "$(tickj "$P" node)"; do
+    crashed "$o$(echo "$o" | grep -c 'node:internal' | sed 's/^0$//;s/.*[1-9].*/Cannot read prop/')" && fail "readers r11: a node reader CRASHED with the checker missing: $o"
+    echo "$o" | grep -qF "$miss" || fail "readers r11 [$variant]: a node reader did not fail closed with '$miss': $o"
+  done
+  done
+  # (r12) the human-needed stop lists carry the two integrity reasons (the hook and the MCP tick tool)
+  local hk; hk=$(mkdir -p "$W/r12/.hb" && : > "$W/r12/.hb/hb.js" && CLAUDE_PROJECT_DIR="$W/r12" bash "$ROOT/plugin/hooks/heartbeat-detect.sh" | tr '\n' ' ')
+  echo "$hk" | grep -q 'dag_corrupted' && echo "$hk" | grep -q 'state_corrupted' || fail "readers r12: the SessionStart hook's stop list lacks dag_corrupted/state_corrupted: $hk"
+  PYTHONPATH="$PYSRC" python3 -c 'from heartbeat import mcp_server as m; d=m.TOOLS["tick"][1]; assert "dag_corrupted" in d and "state_corrupted" in d, d' || fail "readers r12: the MCP tick tool's stop list lacks dag_corrupted/state_corrupted"
+  # (r13) the live viz server re-checks on EVERY request: a plan broken while it runs is refused (409)
+  P="$W/r13"; cp -a "$T" "$P"
+  ( cd "$P" && exec node .hb/hb-viz.js .hb --serve --port 0 > "$W/r13.url" 2>&1 ) & local vpid=$!
+  local url="" i
+  for i in $(seq 50); do url=$(grep -o 'http://[^ ]*' "$W/r13.url" 2>/dev/null | head -1); [ -n "$url" ] && break; sleep 0.1; done
+  [ -n "$url" ] || { kill "$vpid" 2>/dev/null; fail "readers r13: the viz server did not start"; }
+  vget(){ node -e "require('http').get(process.argv[1]+'/state',r=>{let d='';r.on('data',c=>d+=c).on('end',()=>{console.log(r.statusCode+' '+d.slice(0,300))})}).on('error',e=>console.log('ERR '+e.message))" "$url"; }
+  o=$(vget); [ "${o%% *}" = 200 ] || { kill "$vpid"; fail "readers r13: the viz server did not serve a clean plan: $o"; }
+  printf '%s' "$BASE" | python3 -c 'import json,sys; d=json.load(sys.stdin); d["phases"][0]["tasks"]="x"; print(json.dumps(d))' > "$P/.hb/dag.json"
+  o=$(vget); kill "$vpid" 2>/dev/null; wait "$vpid" 2>/dev/null
+  [ "${o%% *}" = 409 ] && echo "$o" | grep -qF 'phases[0].tasks must be a list' || fail "readers r13: a plan broken under the running viz server was not refused with 409 + the error: $o"
+  # (r14) a resolver answer that parses but is no verdict is resolver_error — never a phantom task
+  local g ev
+  for g in '{}' '[]' '"x"' '5' '{"task":"t2"}' '{"type":"weird"}'; do
+    P="$W/r14"; rm -rf "$P"; cp -a "$T" "$P"
+    printf 'console.log(%s)\n' "JSON.stringify($g)" > "$P/.hb/hb-next-task.js"
+    o=$(tickj "$P" node); echo "$o" | is_rerr || fail "readers r14 [node $g]: an unusable resolver answer must wake deadlock resolver_error: $o"
+    ev=$(nev "$P")
+    o=$( cd "$P" && HB_EXEC_BACKEND=script HB_EXEC_CMD='cat >/dev/null' node .hb/hb-exec.js run 2>&1 ); r=$?
+    [ "$r" != 0 ] && [ "$(nev "$P")" = "$ev" ] || fail "readers r14 [node $g]: the driver must STOP with no phantom task events (exit $r, events $ev → $(nev "$P")): $o"
+    cp -r "$PYSRC" "$W/py-r14"; rm -rf "$W/py-r14-x"; mv "$W/py-r14" "$W/py-r14-x"
+    python3 - "$W/py-r14-x/heartbeat/resolver.py" "$g" <<'R14EOF'
+import sys
+p, g = sys.argv[1], sys.argv[2]; s = open(p).read()
+s = s.replace("def resolve(state, dag, hbdir):", "def resolve(state, dag, hbdir):\n    import json as _j\n    return _j.loads(%r)\n\n\ndef _orig_resolve(state, dag, hbdir):" % g, 1)
+open(p, "w").write(s)
+R14EOF
+    P="$W/r14p"; rm -rf "$P"; cp -a "$T" "$P"
+    o=$(PYTHONPATH="$W/py-r14-x" python3 -m heartbeat.cli tick --dir "$P" 2>&1); echo "$o" | is_rerr || fail "readers r14 [python $g]: an unusable resolver answer must wake deadlock resolver_error: $o"
+    ev=$(nev "$P")
+    o=$( HB_EXEC_BACKEND=script HB_EXEC_CMD='cat >/dev/null' PYTHONPATH="$W/py-r14-x" python3 -m heartbeat.cli exec run --dir "$P" 2>&1 ); r=$?
+    crashed "$o" && fail "readers r14 [python $g]: the driver CRASHED: $o"
+    [ "$r" != 0 ] && [ "$(nev "$P")" = "$ev" ] || fail "readers r14 [python $g]: the driver must STOP with no phantom task events (exit $r): $o"
+  done
+  # (r15) a resolver_error episode never arms the once-only deadlock alert: once cured, a REAL deadlock still wakes
+  for rt in node py; do
+    P="$W/r15-$rt"; rm -rf "$P"; cp -a "$T" "$P"; cp "$P/.hb/hb-next-task.js" "$W/r15-good.js"
+    if [ "$rt" = node ]; then printf 'process.exit(1)\n' > "$P/.hb/hb-next-task.js"; tickj "$P" node >/dev/null; tickj "$P" node >/dev/null; cp "$W/r15-good.js" "$P/.hb/hb-next-task.js"
+    else PYTHONPATH="$W/py-r10" python3 -m heartbeat.cli tick --dir "$P" >/dev/null 2>&1; PYTHONPATH="$W/py-r10" python3 -m heartbeat.cli tick --dir "$P" >/dev/null 2>&1; fi
+    ( cd "$P" && HB_ACTOR=doer node .hb/hb.js start t2 >/dev/null ) && rm -rf "$P/.hb/leases"/*   # an active orphan: a real deadlock
+    o=$(tickj "$P" "$rt")
+    echo "$o" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["wakeAgent"] is True and d["data"]["reason"]=="deadlock" and "active_orphan" in json.dumps(d), d' 2>/dev/null \
+      || fail "readers r15 ($rt): after a cured resolver_error, a real deadlock must still WAKE (the episode armed the alert flag?): $o"
+  done
+  # (r16) one dag_corrupted event per blockage on BOTH runtimes (the wake fires every tick; the log records it once)
+  for rt in node py; do
+    P="$W/r16-$rt"; rm -rf "$P"; cp -a "$T" "$P"; ev=$(nev "$P")
+    printf '{"phases": [' > "$P/.hb/dag.json"
+    for n in 1 2 3; do tickj "$P" "$rt" >/dev/null; done
+    [ "$(nev "$P")" = $((ev+1)) ] || fail "readers r16 ($rt): want exactly ONE dag_corrupted event over 3 ticks of one blockage (events $ev → $(nev "$P"))"
+    printf '%s' "$BASE" > "$P/.hb/dag.json"; tickj "$P" "$rt" >/dev/null; rm -rf "$P/.hb/leases"/*
+    printf '{"phases": [' > "$P/.hb/dag.json"; tickj "$P" "$rt" >/dev/null
+    [ "$(grep -c '"dag_corrupted"' "$P/.hb/events.jsonl")" = 2 ] || fail "readers r16 ($rt): a NEW blockage after a sound plan must log again (want 2 dag_corrupted events)"
+  done
+  echo "SHAPE-READERS-OK ($nmut derived mutations through the core readers; 5 representatives through every verb, gate mode, driver and MCP tool)"
+}
+core_readers_unreadable(){   # like core_readers, with the expected first error given (a missing file has no lint output to ask)
+  local P="$1" L="$2" fe="$3" rt o r e0
+  for rt in node py; do
+    o=$(tickj "$P" "$rt")
+    echo "$o" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); a=d.get("data") or {}
+assert d.get("wakeAgent") is True and a.get("reason")=="dag_corrupted" and a.get("errors"), d' 2>/dev/null \
+      || fail "readers r1 [$L] ($rt): want a dag_corrupted WAKE carrying the errors: $o"
+  done
+  for o in "$( cd "$P" && node .hb/hb-next-task.js .hb/state.json 2>&1 )" "$(PY next --dir "$P" 2>&1)"; do
+    echo "$o" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d.get("type")=="deadlock" and d.get("cause")=="dag_invalid", d' 2>/dev/null \
+      || fail "readers r2 [$L]: want deadlock dag_invalid: $o"
+  done
+  e0=$(nev "$P")
+  ( cd "$P" && bash .hb/gate.sh G1 >/dev/null 2>&1 ); r=$?; [ "$r" = 4 ] || fail "readers r5 [$L]: gate.sh exit $r (want 4)"
+  PY gate G1 --dir "$P" >/dev/null 2>&1; r=$?; [ "$r" = 4 ] || fail "readers r5 [$L]: hb gate exit $r (want 4)"
+  [ "$(nev "$P")" = "$e0" ] || fail "readers r5 [$L]: a refused gate appended an event"
+  for rt in node py; do
+    if [ "$rt" = node ]; then o=$( cd "$P" && node .hb/hb.js doctor 2>&1 ); r=$?; else o=$(PY doctor --dir "$P" 2>&1); r=$?; fi
+    [ "$r" = 1 ] && echo "$o" | grep -qF "$fe" && echo "$o" | grep -qF 'plan checks skipped: dag.json invalid' || fail "readers r6 [$L] ($rt): doctor (exit $r): $o"
+    echo "$o" | grep -qiE 'drift|rebuild|regate|detach|reproducible|differs from the event-log' && fail "readers r6 [$L] ($rt): doctor ran a plan-derived check: $o"
+  done
+  return 0
+}
+
 # ── selftest: mutation teeth ──────────────────────────────────────────────────────────────────
 strip_node(){   # $1 = file, $2 = marker
   local b; b=$(grep -c "$2" "$1" 2>/dev/null || true); [ "${b:-0}" -gt 0 ] || fail "selftest: no '$2' marker in $1"
@@ -475,13 +819,45 @@ selftest_lint(){
   echo "SHAPE-SELFTEST-LINT-OK"
 }
 
+# the readers' target: parked "no" on P2 — a STRUCTURE error every unguarded reader walks past
+# without crashing (the tick would quietly dispatch t2), so a strip reddens by behavior, not a crash
+target_readers(){ printf '%s' "$BASE" | python3 -c 'import json,sys; d=json.load(sys.stdin); d["phases"][1]["parked"]="no"; print(json.dumps(d))'; }
+selftest_readers(){
+  local S="$W/sr" T="$W/sr-tpl" o r
+  mkproj "$T"
+  P="$S/n"; mkdir -p "$S"; cp -a "$T" "$P"; target_readers > "$P/.hb/dag.json"
+  # sr1: the node reader guards stripped from the fixture's COPIES → node state answers, the resolver hands out work
+  strip_node "$P/.hb/hb.js" "shape-guard: reader"; strip_node "$P/.hb/hb-next-task.js" "shape-guard: reader"
+  ( cd "$P" && node .hb/hb.js state >/dev/null 2>&1 ) || fail "selftest sr1: node state still refuses with its guards stripped (marker not load-bearing)"
+  o=$( cd "$P" && node .hb/hb-next-task.js .hb/state.json 2>&1 ); crashed "$o" && fail "selftest sr1: the stripped node resolver CRASHED (wrong reason): $o"
+  echo "$o" | grep -q 'dag_invalid' && fail "selftest sr1: dag_invalid survived the node resolver strip"
+  # st1: the tick guard stripped from tick.sh → the tick no longer wakes dag_corrupted
+  P="$S/t"; cp -a "$T" "$P"; target_readers > "$P/.hb/dag.json"; strip_node_sh "$P/.hb/tick.sh" "shape-guard: tick"
+  [ "$(tickj "$P" node | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["data"]["reason"])' 2>&1)" = dag_corrupted ] && fail "selftest st1: dag_corrupted survived the tick.sh strip"
+  # sr2 + st2: the python reader / tick guards stripped from a runtime COPY
+  cp -r "$ROOT/py/src" "$S/py"; strip_py "$S/py" "shape-guard: reader"; strip_py "$S/py" "shape-guard: tick"
+  P="$S/p"; cp -a "$T" "$P"; target_readers > "$P/.hb/dag.json"
+  PYTHONPATH="$S/py" python3 -m heartbeat.cli state --dir "$P" >/dev/null 2>&1 || fail "selftest sr2: python state still refuses with its guards stripped"
+  o=$(PYTHONPATH="$S/py" python3 -m heartbeat.cli tick --dir "$P" 2>&1); crashed "$o" && fail "selftest st2: the stripped python tick CRASHED (wrong reason): $o"
+  echo "$o" | grep -q 'dag_corrupted' && fail "selftest st2: dag_corrupted survived the tick.py strip"
+  echo "SHAPE-SELFTEST-READERS-OK"
+}
+strip_node_sh(){ local b; b=$(grep -c "$2" "$1" 2>/dev/null || true); [ "${b:-0}" -gt 0 ] || fail "selftest: no '$2' marker in $1"; sed -i "/$2/d" "$1"; bash -n "$1" 2>/dev/null || fail "selftest: stripped $1 no longer parses"; }
+
 # ── dispatch ──────────────────────────────────────────────────────────────────────────────────
 if [ "${1:-}" = "--selftest" ]; then
-  case "${2:-all}" in lint|all) selftest_lint;; *) fail "unknown selftest scope: $2";; esac
+  case "${2:-all}" in
+    lint) selftest_lint;;
+    readers) selftest_readers;;
+    all) selftest_lint && selftest_readers && echo "DAG-SHAPE-SELFTEST-OK";;
+    *) fail "unknown selftest scope: $2";;
+  esac
   exit 0
 fi
-case "${1:-lint}" in
+case "${1:-all}" in
   lint) case_lint;;
+  readers) case_readers;;
+  all) case_lint && case_readers && echo "DAG-SHAPE-OK";;
   *) fail "unknown case: $1";;
 esac
 exit 0

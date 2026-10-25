@@ -64,6 +64,8 @@ NOPROG_FLAG="$HB_DIR/.noprogress-alerted"
 DONE_FLAG="$HB_DIR/.all-done-alerted"
 REPLAN_FLAG="$HB_DIR/.replan-alerted"     # holds the horizon phase id it alerted for
 DEADLOCK_FLAG="$HB_DIR/.deadlock-alerted"
+DAGBAD_FLAG="$HB_DIR/.dag-corrupted-alerted"     # one dag_corrupted event per blockage (the wake fires every tick)
+RESERR_FLAG="$HB_DIR/.resolver-error-alerted"    # one notification per broken-resolver blockage — never the deadlock flag
 GATE_NOTIFY_FLAG="$HB_DIR/.gate-notified"
 DRIFT_NOTIFY_FLAG="$HB_DIR/.drift-notified"
 REVIEW_STUCK_FLAG="$HB_DIR/.review-stuck-alerted"
@@ -144,6 +146,15 @@ if ! mkdir "$LOCK" 2>/dev/null; then
 fi
 HAVE_LOCK=true
 
+# ── 1.5 dag.json structure (the shape contract, T186) ────────────────────────
+# FIRST, before the state self-heal (which rebuilds through the plan): a missing, unparseable or
+# structurally malformed dag.json wakes dag_corrupted EVERY tick, carrying the errors — never a
+# dispatch on a broken plan, never a silent sleep.
+SHAPE_JSON=$(node -e "const l=require(process.env.HB_DIR+'/hb-lint.js');const r=l.readDagFile(process.env.DAG);const e=r.error?[r.error]:l.shapeErrors(r.dag,true);process.stdout.write(e.length?JSON.stringify(e.slice(0,5)):'')" 2>/dev/null || echo '["dag.json could not be checked (hb-lint.js missing or outdated?)"]')
+if [ -n "$SHAPE_JSON" ]; then [ -f "$DAGBAD_FLAG" ] || { touch "$DAGBAD_FLAG"; log_event "dag_corrupted"; }; wake_out "{\"reason\":\"dag_corrupted\",\"errors\":$SHAPE_JSON,\"hint\":\"run node .hb/hb-lint.js .hb/dag.json — restore dag.json from git/backup or fix the named fields\"}"; fi   # shape-guard: tick
+
+rm -f "$DAGBAD_FLAG"
+
 # ── 2. state.json integrity ─────────────────────────────────────────────────
 # v1.3 (#2): state.json is a projection of events.jsonl. On corruption, try to
 # self-heal by reprojecting from the log; only wake state_corrupted if that fails
@@ -156,10 +167,6 @@ if ! node -e "JSON.parse(require('fs').readFileSync(process.env.STATE,'utf8'))" 
     log_event "state_corrupted"
     wake_out "{\"reason\":\"state_corrupted\",\"hint\":\"rebuild state.json from events.jsonl and dag.json\"}"
   fi
-fi
-if ! node -e "JSON.parse(require('fs').readFileSync(process.env.DAG,'utf8'))" 2>/dev/null; then
-  log_event "dag_corrupted"
-  wake_out "{\"reason\":\"dag_corrupted\",\"hint\":\"dag.json is immutable — restore it from backup/git\"}"
 fi
 
 # ── 2.5 Reclaim stale leases (dead/hung agent) → free the task for re-handout ─
@@ -267,11 +274,19 @@ fi
 rm -f "$GATE_NOTIFY_FLAG"
 
 # ── 6. Next task lookup ────────────────────────────────────────────────────────
+# A resolver that is missing, crashes or prints garbage is a human-needed deadlock (resolver_error)
+# — never a silent no_pending_tasks sleep that would swallow the failure forever.
 if [ ! -f "$NEXT_TASK_SCRIPT" ]; then
-  sleep_out "{\"reason\":\"no_next_task_script\"}"
+  NEXT='{"type":"deadlock","cause":"resolver_error","detail":{"error":"the resolver script is missing"}}'
+else
+  NEXT=$(node "$NEXT_TASK_SCRIPT" "$STATE" 2>/dev/null) && RES_RC=0 || RES_RC=$?
+  # a usable answer is null, a known verdict type, or a task view with a string id — anything else
+  # (a crash, garbage, {}, [], a bare string) is the resolver failing, never a phantom task
+  if [ "$RES_RC" != 0 ] || ! printf '%s' "$NEXT" | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));const T=['all_done','deadlock','busy','gate_pending','review_pending','replan_pending'];process.exit(d===null||(d&&typeof d==='object'&&!Array.isArray(d)&&(T.includes(d.type)||(d.type===undefined&&typeof d.id==='string'&&d.id)))?0:1)" 2>/dev/null; then
+    NEXT="{\"type\":\"deadlock\",\"cause\":\"resolver_error\",\"detail\":{\"error\":\"the resolver failed (exit $RES_RC)\"}}"
+  fi
 fi
-
-NEXT=$(node "$NEXT_TASK_SCRIPT" "$STATE" 2>/dev/null || echo "null")
+case "$NEXT" in *'"cause":"resolver_error"'*) ;; *) rm -f "$RESERR_FLAG";; esac
 
 if [ -z "$NEXT" ] || [ "$NEXT" = "null" ]; then
   sleep_out "{\"reason\":\"no_pending_tasks\"}"
@@ -306,6 +321,12 @@ case "$TYPE" in
     sleep_out "{\"reason\":\"replan_waiting\",\"phase\":$RP_JSON}"
     ;;
   deadlock)
+    # a broken resolver (resolver_error) stays LOUD every tick — no later tick may sleep past it;
+    # the alert flag still bounds the event and the notification to once per blockage
+    if printf '%s' "$NEXT" | grep -q '"cause":"resolver_error"'; then
+      [ -f "$RESERR_FLAG" ] || { touch "$RESERR_FLAG"; notify "deadlock" "resolver_error"; }
+      wake_out "{\"reason\":\"deadlock\",\"next_task\":$NEXT,\"ts\":\"$TS\"}"
+    fi
     if [ ! -f "$DEADLOCK_FLAG" ]; then
       touch "$DEADLOCK_FLAG"
       log_event "deadlock_detected"

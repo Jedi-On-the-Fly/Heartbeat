@@ -15,6 +15,8 @@ def _project_dir(hbdir):
 
 
 def doctor(hbdir):
+    shape_bad = st.dag_shape_problems(hbdir)
+    if shape_bad: return {"problems": [f"dag: {e}" for e in shape_bad], "notes": ["plan checks skipped: dag.json invalid"]}  # shape-guard: reader
     dag = st.read_dag(hbdir)
     state = st.project(st.read_events(hbdir), dag)
     gates = dag.get("gates") or {}
@@ -171,6 +173,9 @@ def has_rot(hbdir):
 
 
 def diagnose(hbdir, reason=None):
+    from .protocol import PROTOCOL as _P
+    shape_bad = st.dag_shape_problems(hbdir)
+    if shape_bad: return f"Diagnosis: dag_corrupted\n  {shape_bad[0]}\n  Recover: {_P['dag_corrupted']}"  # shape-guard: reader
     dag = st.read_dag(hbdir)
     events = st.read_events(hbdir)
     state = st.project(events, dag)
@@ -255,9 +260,13 @@ def diagnose(hbdir, reason=None):
                     out.append(f"     traced: deleted in {deleted}")
         out.append("  Recover: restore the file (git checkout <commit>^ -- <file>) or re-point the gate.")
     elif reason == "deadlock":
-        r = rv.resolve(state, dag, hbdir) or {}
+        try:
+            r = rv.resolve(state, dag, hbdir) or {}
+        except Exception as e:  # a crashing resolver is cause resolver_error (== hb.js resolverVerdict)
+            r = {"type": "deadlock", "cause": "resolver_error", "detail": {"error": f"the resolver failed ({type(e).__name__})"}}
         out.append(f"  Cause: {r.get('cause', 'unknown')}")
         out.append("  Recover: " + ("free the orphan IDs (hb fail <id>)" if r.get("cause") == "active_orphan"
+                                     else "repair the heartbeat install (the resolver failed), then tick" if r.get("cause") == "resolver_error"
                                      else "fix the DAG and re-lint (hb lint)"))
     elif reason == "build_stuck":
         out.append(f"  build_stuck_count={state['build_stuck_count']}. Read events.jsonl — are you repeating a fix?")

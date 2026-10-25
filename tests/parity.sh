@@ -638,7 +638,17 @@ SA_N=$(node "$ROOT/plugin/templates/hb-audit.js" "$SD/s.json" 2>&1 | grep '\[dag
 SA_P=$(eval "$PY audit \"$SD/s.json\"" 2>&1 | grep '\[dag_shape\]'); eval "$PY audit \"$SD/s.json\"" >/dev/null 2>&1; SA_PR=$?
 cmp "shape:audit" "$SA_N exit=$SA_NR" "$SA_P exit=$SA_PR"
 echo "$SA_N" | grep -q 'dag_shape' || { echo "  ✗ shape:audit — node audit emitted no dag_shape finding"; FAIL=1; }
-rm -rf "$SD"
+# shape:tick — both ticks on a structure-invalid dag wake the IDENTICAL dag_corrupted reason
+ST=$(mktemp -d); mkdir "$ST/.hb"
+printf '%s' '{"phases":[{"id":"A","gate_exit":"G","tasks":"x"}],"gates":{"G":{"criteria":[]}}}' > "$ST/.hb/dag.json"
+printf '{"event":"initialized"}\n' > "$ST/.hb/events.jsonl"
+cp "$ROOT/plugin/templates/hb.js" "$ROOT/plugin/templates/hb-lint.js" "$ROOT/plugin/templates/hb-next-task.js" "$ROOT/plugin/templates/tick.sh" "$ST/.hb/"
+printf '{}' > "$ST/.hb/state.json"
+TK_N=$( cd "$ST" && HB_NO_GIT=1 bash .hb/tick.sh 2>/dev/null | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("wakeAgent"),(d.get("data") or {}).get("reason"))' 2>&1 )
+TK_P=$( eval "$PY tick --dir \"$ST\"" 2>/dev/null | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("wakeAgent"),(d.get("data") or {}).get("reason"))' 2>&1 )
+cmp "shape:tick" "$TK_N" "$TK_P"
+[ "$TK_N" = "True dag_corrupted" ] || { echo "  ✗ shape:tick — node does not wake dag_corrupted: $TK_N"; FAIL=1; }
+rm -rf "$SD" "$ST"
 
 echo "── horizon parity ──"
 # The knowledge horizon: the resolver verdict, the sparse insertion-ordered projection, the marker's

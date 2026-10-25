@@ -50,6 +50,29 @@ def _flag_text(p):
         return None
 
 
+def _dag_corrupted_wake(hbdir, shape):
+    # one dag_corrupted event per blockage (the wake fires every tick) — == tick.sh's flag
+    if not _flag(hbdir, ".dag-corrupted-alerted").exists():
+        _flag(hbdir, ".dag-corrupted-alerted").touch()
+        st.append_event(hbdir, {"event": "dag_corrupted"})
+    return _wake({"reason": "dag_corrupted", "errors": shape[:5]})
+
+
+_VERDICTS = {"all_done", "deadlock", "busy", "gate_pending", "review_pending", "replan_pending"}
+
+
+def _usable(nxt):
+    """null, a known verdict type, or a task view with a string id (== tick.sh) — anything else is the
+    resolver failing, never a phantom task."""
+    if nxt is None:
+        return True
+    if not isinstance(nxt, dict):
+        return False
+    if "type" in nxt:
+        return nxt["type"] in _VERDICTS
+    return isinstance(nxt.get("id"), str) and bool(nxt["id"])
+
+
 def _replan_wake(hbdir, nxt, phase):
     _flag(hbdir, ".replan-alerted").write_text(phase)
     return _wake({"reason": "replan_pending", "phase": phase, "next_task": nxt})
@@ -73,6 +96,11 @@ def tick(hbdir):
 
 
 def _body(hbdir):
+    # 1.5 dag.json structure (the shape contract, T186) — FIRST, before the state self-heal (which
+    # reprojects through the plan): dag_corrupted EVERY tick, carrying the errors (== tick.sh).
+    shape = st.dag_shape_problems(hbdir)
+    if shape: return _dag_corrupted_wake(hbdir, shape)  # shape-guard: tick
+    _rm(_flag(hbdir, ".dag-corrupted-alerted"))
     # 2. state integrity (self-heal by reprojecting; only wake if the log is unusable)
     try:
         json.loads((hbdir / "state.json").read_text())
@@ -81,12 +109,6 @@ def _body(hbdir):
             st.reproject(hbdir)
         except Exception:
             return _wake({"reason": "state_corrupted"})
-    # 3. dag integrity
-    try:
-        json.loads((hbdir / "dag.json").read_text())
-    except Exception:
-        return _wake({"reason": "dag_corrupted"})
-
     # 4. reclaim stale leases
     leases = hbdir / "leases"
     if leases.is_dir():
@@ -145,7 +167,12 @@ def _body(hbdir):
 
     # 9. next task
     dag = st.read_dag(hbdir)
-    nxt = rv.resolve(state, dag, hbdir)
+    try:
+        nxt = rv.resolve(state, dag, hbdir)
+    except Exception as e:  # a crashing resolver is a human-needed deadlock, never a silent sleep (== tick.sh)
+        nxt = {"type": "deadlock", "cause": "resolver_error", "detail": {"error": f"the resolver failed ({type(e).__name__})"}}
+    if not _usable(nxt):
+        nxt = {"type": "deadlock", "cause": "resolver_error", "detail": {"error": "the resolver failed (an unusable answer)"}}
     if nxt is None:
         return _sleep({"reason": "no_pending_tasks"})
     typ = nxt.get("type", "task")
@@ -165,6 +192,9 @@ def _body(hbdir):
         if _flag_text(_flag(hbdir, ".replan-alerted")) != rp_phase: return _replan_wake(hbdir, nxt, rp_phase)  # horizon-guard: tick
         return _sleep({"reason": "replan_waiting", "phase": rp_phase})
     if typ == "deadlock":
+        # a broken resolver (resolver_error) stays LOUD every tick and never arms the deadlock flag (== tick.sh)
+        if nxt.get("cause") == "resolver_error":
+            return _wake({"reason": "deadlock", "next_task": nxt})
         if not _flag(hbdir, ".deadlock-alerted").exists():
             _flag(hbdir, ".deadlock-alerted").touch()
             return _wake({"reason": "deadlock", "next_task": nxt})
