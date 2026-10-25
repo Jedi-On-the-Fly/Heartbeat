@@ -1,0 +1,16 @@
+[
+  {
+    "id": "G1",
+    "claim": "The skill's plan procedure is executable end to end on a bootstrapped project: the horizon rule (SKILL.md:45-61) tells the planner to write `\"horizon\": true` on the final planned phase, and the same procedure's shape rule (SKILL.md:94-95, 'Validate the shape against `<project-dir>/.hb/dag.schema.json`') names a schema file that actually exists in a project bootstrapped by either runtime (`plugin/bootstrap.sh`, python `hb init`) and that declares the marker — so the planner can obey the horizon rule and the shape rule in one plan without leaving the skill. Either the bootstraps ship the schema into `.hb/` (and the copy is the one `tests/horizon.sh` n4 pins, with `horizon` a boolean under the phase object's `additionalProperties:false`), or the skill names the path that exists — `plugin/dag.schema.json`, as README.md:147 does — and no doc the plan owns points the planner at a schema path that resolves to nothing.",
+    "subjects": [
+      "plugin/skills/heartbeat/SKILL.md:45",
+      "plugin/skills/heartbeat/SKILL.md:95",
+      "plugin/bootstrap.sh:63",
+      "py/src/heartbeat/scaffold.py::init",
+      "plugin/dag.schema.json::phases",
+      "tests/horizon.sh:386",
+      "README.md:147"
+    ],
+    "violation": "In a `mktemp -d` project bootstrapped with `bash plugin/bootstrap.sh .` (or scaffolded with python `hb init`), `test -f .hb/dag.schema.json` fails — today both bootstraps leave it ABSENT: `plugin/bootstrap.sh:63-68` copies tick.sh, gate.sh, hb-next-task.js, dag.json and the seven `hb-*.js`/`refuter_profiles.js` templates and never the schema, and `scaffold.py` writes dag.json, executor.json, events.jsonl and PROTOCOL.md only — while SKILL.md:95 still instructs validation against `<project-dir>/.hb/dag.schema.json` (the only doc naming that path). Equally a shipped `.hb/dag.schema.json` whose phase object lacks a boolean `horizon` property, so the flagged plan the skill prescribes is rejected by the validation the skill prescribes."
+  }
+]

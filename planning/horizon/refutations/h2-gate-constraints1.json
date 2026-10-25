@@ -1,0 +1,85 @@
+[
+  {
+    "id": "G1",
+    "claim": "Every doc surface that enumerates the tick's data.reason keys enumerates the SAME set the code registers: the 15 keys of hb.js PROTOCOL (== protocol.py PROTOCOL) appear, none missing and none invented, in the three reason tables (plugin/skills/heartbeat/SKILL.md, README.md, CLAUDE-MD-SNIPPET.md), in dev-plugin.md's PROTOCOL reasons list, and in SKILL.md's schedule-routine parenthetical; and every human-needed stop list that a doc quotes from a code surface (the SessionStart hook text, the MCP tick tool description) carries the same keys the code surface carries — docs/howto/drive-heartbeat-over-mcp.md's stop list included, since it states the tool 'teaches this itself'.",
+    "subjects": [
+      "CLAUDE-MD-SNIPPET.md",
+      "plugin/skills/heartbeat/SKILL.md:286",
+      "README.md",
+      "docs/dev-plugin.md:159",
+      "docs/howto/drive-heartbeat-over-mcp.md:62",
+      "plugin/templates/hb.js::PROTOCOL",
+      "py/src/heartbeat/protocol.py::PROTOCOL",
+      "py/src/heartbeat/mcp_server.py:81"
+    ],
+    "violation": "Diffing the backticked keys of a reason table or reason list against the PROTOCOL key set yields a non-empty difference in either direction — e.g. CLAUDE-MD-SNIPPET.md's table has 13 rows (no gate_rot, no review_stuck), SKILL.md's schedule parenthetical omits review_pending/gate_rot/review_stuck/at_capacity, or drive-heartbeat-over-mcp.md lists four human-needed reasons while mcp_server.py's tick description lists six (criteria_drift, replan_pending added)."
+  },
+  {
+    "id": "G2",
+    "claim": "Every doc surface that enumerates the auditor's rules names exactly the rule set hb-audit.js can emit (derived as docs/howto/gate-examples/audit-rules-check.sh derives it: F() string-literal rules plus classify() values, minus 'behavioral' — currently hollow_gate, ungated, unguarded_phase, nondeterministic, side_effecting, gate_offphase, speculative_tail, unconstrained_review, control_char, vacuous, existence): the SKILL.md 'Flags:' paragraph, dev-plugin.md's audit table, the auditor how-to's rule table, and audit-rules-check.sh's generator — with the speculative_tail entry on each stating warn severity and the same firing condition the code implements (≥ 2 trailing LIVE unverified phases AND a verified live phase before them; quiet when the whole live plan is unverified or the tail is parked), and `bash docs/howto/gate-examples/audit-rules-check.sh` printing AUDIT-RULES-PROVEN with speculative_tail among the fired rules.",
+    "subjects": [
+      "plugin/skills/heartbeat/SKILL.md:174",
+      "docs/dev-plugin.md",
+      "docs/howto/the-auditor-catches-each-weakness.md",
+      "docs/howto/gate-examples/audit-rules-check.sh",
+      "plugin/templates/hb-audit.js::speculativeTail"
+    ],
+    "violation": "A rule hb-audit.js emits is absent from a surface that presents itself as the flag list (e.g. SKILL.md's 'Flags: … and speculative_tail' paragraph names neither unconstrained_review nor control_char), a surface names a rule the auditor cannot emit, a surface states a different severity or firing condition than speculativeTail() implements, or audit-rules-check.sh fails or fires without speculative_tail."
+  },
+  {
+    "id": "G3",
+    "claim": "The how-to's account of speculative_tail is true of the auditor's actual output on every shape it fires on: the stated reason it is a warning — 'the hollow members already carry their own errors; this rule's job is the diagnosis' — holds only if each tail member in a firing shape carries its own error-severity finding; and the described output ('ONE warning naming the tail, the cut phase and the cure, identically on both runtimes') matches a run of `node plugin/templates/hb-audit.js` and `hb audit` on the t1 and t6 fixtures of tests/horizon.sh::mkaudit and on a two-unguarded-phase tail.",
+    "subjects": [
+      "docs/howto/plan-to-the-horizon.md:17",
+      "plugin/skills/heartbeat/SKILL.md:48",
+      "plugin/templates/hb-audit.js::speculativeTail",
+      "py/src/heartbeat/audit.py::_speculative_tail",
+      "tests/horizon.sh::case_audit"
+    ],
+    "violation": "An audit of a firing shape produces a tail member with no finding of its own or only a warning — e.g. the t6 placeholder tail (zero tasks, zero gate) yields exactly one finding (speculative_tail) and nothing on PB or PC, and in t1 the unguarded PB carries only a warn — so the sentence 'the hollow members already carry their own errors' is false as written; or the finding count, named ids or runtime-identity differ from the paragraph."
+  },
+  {
+    "id": "G4",
+    "claim": "Beyond the skill and the how-to (P2's subjects), every surface that tells the actor what to do at a reached horizon presents the same two moves and nothing else: README.md's and CLAUDE-MD-SNIPPET.md's replan_pending rows, the hb.js and protocol.py PROTOCOL action texts, hb-report's REACHED line, hb.js/cli.py's close confirmation line, docs/howto/README.md's horizon line, and dev-plugin.md's/dev-python.md's `horizon close` rows each name append-continuation and `horizon close --reason` with the reason shown as mandatory (no optional brackets, no reason-less form), present the close as available only once every live phase is complete, and name no other route — park, flag removal, freeze, rebuild, hand-editing state.json or events.jsonl, or `hb done` — as a way to end, quiet or skip the horizon.",
+    "subjects": [
+      "README.md:217",
+      "CLAUDE-MD-SNIPPET.md:57",
+      "docs/howto/README.md:44",
+      "docs/dev-plugin.md",
+      "docs/dev-python.md",
+      "plugin/templates/hb.js::PROTOCOL",
+      "py/src/heartbeat/protocol.py::PROTOCOL",
+      "plugin/templates/hb-report.js::horizonLine"
+    ],
+    "violation": "Any of these surfaces omits one of the two moves, shows `--reason` as optional or omits it, lists a third route for ending or silencing a reached horizon, describes the close as usable on an unreached or unflagged horizon, or the action/REACHED text on one runtime names a move the other runtime's twin text does not."
+  },
+  {
+    "id": "G5",
+    "claim": "The how-to's 'The close is a verdict, and it fails closed' paragraph is a complete and correctly-anchored map of the code's refusal ladder: every guard in hb.js `case 'horizon'` and cli.py `_close_locked` (reason missing/empty; every phase parked; last live phase unflagged; an incomplete live phase; already in the projected horizon_closed; an open revision on any live gate via regateBlocks/unansweredRegate/staleRearm) appears as a clause, each clause's parenthetical case id names the tests/horizon.sh fail-label that actually asserts THAT refusal (the label text after `refused … \"cN(…)\"`), the documented exit/no-event contract matches both runtimes (die → exit 1 with no event appended), and the dev-plugin and dev-python `horizon close` rows list the same six refusals.",
+    "subjects": [
+      "docs/howto/plan-to-the-horizon.md:62",
+      "docs/dev-plugin.md",
+      "docs/dev-python.md",
+      "plugin/templates/hb.js:1689",
+      "py/src/heartbeat/cli.py:367",
+      "tests/horizon.sh::case_close"
+    ],
+    "violation": "A code guard has no clause, a clause has no guard, a clause's cited case id does not carry the assertion for that clause (e.g. 'already closed by the projection's own reading' is anchored to c5, whose assertions are the reset-and-replay re-open and re-accept, while the already-closed refusal is asserted under the label `c3(already closed)`), the exit/no-event behaviour differs from the text on either runtime, or the two dev-doc rows disagree with each other or with the ladder."
+  },
+  {
+    "id": "G6",
+    "claim": "The horizon text in the nine changed docs is current-state prose that stands without knowledge of any earlier design: no sentence describes the mechanism by contrast with a prior state ('still', 'remains', 'no longer', 'now', 'previously', 'was', 'used to', 'landed', a wave or phase id, a version number), no sentence prophesies a check that does not exist ('should flag', 'will'), and every mechanism claim is stated as what hb-audit / the resolver / the tick / the close DO — the only temporal comparatives permitted are those about a PLAN's own state (e.g. a phase that is no longer last after an append).",
+    "subjects": [
+      "docs/howto/plan-to-the-horizon.md",
+      "plugin/skills/heartbeat/SKILL.md:44",
+      "docs/dev-plugin.md",
+      "docs/dev-python.md",
+      "docs/dev-tests.md",
+      "README.md",
+      "CLAUDE-MD-SNIPPET.md",
+      "docs/howto/README.md",
+      "docs/howto/howto-list.md"
+    ],
+    "violation": "A sentence in the changed horizon text reads as version narrative or prophecy — candidates found: the how-to's 'is still the recommended content of the horizon phase' and the skill's 'remains the recommended CONTENT of the horizon phase' (both contrast with a design the reader is not shown), or any 'the refuter should flag it' without the named mechanism beside it — or `bash docs/howto/gate-examples/prose-check.sh` on the nine docs prints anything but ALL-PROSE-OK:9."
+  }
+]

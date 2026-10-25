@@ -1,0 +1,42 @@
+[
+  {
+    "id": "G1",
+    "claim": "The plan the skill prescribes passes the shape check the skill and README prescribe: a dag.json whose last planned phase carries `\"horizon\": true` (SKILL.md's horizon rule, the how-to's 'Mark the horizon' bullet, the T185 fixtures) validates against `plugin/dag.schema.json` — the file README.md's 'Schema: validate against' rule and SKILL.md's 'Validate the shape against `<project-dir>/.hb/dag.schema.json`' rule name — so the planner can obey the horizon rule and the schema rule in the same plan. The schema's phase object declares `horizon` as a boolean next to `parked`, and the T168 proof's validator (`constraints-schema.sh`: structural check, `jsonschema` when installed) returns valid for the flagged shape.",
+    "subjects": [
+      "plugin/skills/heartbeat/SKILL.md:47",
+      "plugin/skills/heartbeat/SKILL.md:94",
+      "README.md:147",
+      "docs/howto/plan-to-the-horizon.md:28",
+      "plugin/dag.schema.json::phases",
+      "tests/horizon.sh::mkh"
+    ],
+    "violation": "The phase object in `plugin/dag.schema.json` has `\"additionalProperties\": false` and no `horizon` property, so a flagged plan is rejected by the very validation the docs prescribe — e.g. `python3 -c 'import json,jsonschema;jsonschema.validate(json.load(open(\"dag.json\")),json.load(open(\"plugin/dag.schema.json\")))'` on the tests/parity.sh HZDAG (or any T185 fixture) raises `Additional properties are not allowed ('horizon' was unexpected)`, or the schema-free structural check `set(phase) - set(schema.properties.phases.items.properties)` is non-empty for a flagged phase — while `hb-lint` accepts the same file with 0 errors. Equally a doc that keeps telling the planner to validate against the schema without the marker being declared there."
+  },
+  {
+    "id": "G2",
+    "claim": "The auditor how-to's counts are derived from the auditor, not hand-written: the number of findings it says the auditor emits, the number of rows in its rule table, and the `AUDIT-RULES-PROVEN:<n>` figure it tells the reader to expect all equal the rule set `audit-rules-check.sh` derives from `hb-audit.js` (F() string-literal rules plus classify() values minus `behavioral` — eleven today: unguarded_phase, ungated, hollow_gate, vacuous, existence, nondeterministic, side_effecting, gate_offphase, control_char, unconstrained_review, speculative_tail), and the opening sentence's list of weaknesses the auditor refuses includes the shapes the wave added (a speculative tail), so no count or list in the doc is left at a pre-wave value.",
+    "subjects": [
+      "docs/howto/the-auditor-catches-each-weakness.md:10",
+      "docs/howto/the-auditor-catches-each-weakness.md:38",
+      "docs/howto/the-auditor-catches-each-weakness.md:3",
+      "docs/howto/gate-examples/audit-rules-check.sh",
+      "plugin/templates/hb-audit.js::speculativeTail"
+    ],
+    "violation": "A count in the how-to differs from `bash docs/howto/gate-examples/audit-rules-check.sh` output or from the table's own row count — today the doc says 'The auditor emits eight findings' above an eleven-row table, and its 'Run it' block promises `# -> AUDIT-RULES-PROVEN:10` while the script prints `AUDIT-RULES-PROVEN:11` — or the intro's enumeration of refused weaknesses names only the pre-wave shapes."
+  },
+  {
+    "id": "G3",
+    "claim": "The human-needed stop set is ONE set wherever a surface enumerates it: the SessionStart hook text (`heartbeat-detect.sh`), the MCP `tick` tool description (`mcp_server.py`), the MCP how-to's stop list, SKILL.md's `/heartbeat run` stop list, and the unattended how-to's description of what `HB_NOTIFY_CMD` pings for all name the same reason keys; that set contains every reason both `hb-exec.js` and `executor.py` escalate-and-stop on that `tick.sh` also notifies as a blockage (gate_blocked, build_stuck, deadlock, gate_rot, review_stuck, unsanctioned_drift, replan_pending) plus `criteria_drift` (HUMAN NEEDED in every reason table); and none of them presents `replan_pending` as anything but a stop a human clears.",
+    "subjects": [
+      "plugin/skills/heartbeat/SKILL.md:220",
+      "docs/howto/drive-heartbeat-over-mcp.md:62",
+      "docs/dev-plugin.md:246",
+      "docs/howto/schedule-heartbeat-unattended.md:51",
+      "plugin/hooks/heartbeat-detect.sh:13",
+      "py/src/heartbeat/mcp_server.py:81",
+      "plugin/templates/tick.sh::notify",
+      "plugin/templates/hb-exec.js:535"
+    ],
+    "violation": "Diffing the backticked/slash-separated keys of any two of these stop lists yields a non-empty difference, or a list omits a key from the code-derived set — today SKILL.md:221-222 names gate_blocked/build_stuck/deadlock/criteria_drift/replan_pending (+ review_pending) and omits review_stuck, unsanctioned_drift and gate_rot; the hook names seven keys and omits gate_rot; the MCP description and how-to name six and omit unsanctioned_drift and gate_rot; and schedule-heartbeat-unattended.md:51 describes the notifier's pings as 'a blocked gate, a stuck build, or completion' while tick.sh:304 also notifies `replan_pending` (and deadlock, review_stuck, gate_rot, unsanctioned_drift)."
+  }
+]

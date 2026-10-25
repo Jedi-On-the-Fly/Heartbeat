@@ -1,0 +1,55 @@
+# GATE_H2 refutation — attempt 1
+
+Refuter: an independent agent (not the doer). Scope: the uncommitted docs diff (`git diff`) against the mechanism in commit 065f129 (plugin/templates/*, py/src/heartbeat/*) and tests/horizon.sh. Nothing in the repo tree was modified. Behaviour was probed only in mktemp fixtures.
+
+## Probes run this round
+
+- `bash tests/horizon.sh` printed MARKER-OK, CLOSE-OK, APPEND-OK, FLAGS-OK, LIMITS-OK, PARKED-OK, LINT-OK, AUDIT-OK, REPORT-OK, HORIZON-OK.
+- `bash docs/howto/gate-examples/prose-check.sh <the nine docs>` printed ALL-PROSE-OK:9. docs-currency.sh printed DOCS-CURRENT-OK, single-source.sh printed SINGLE-SOURCE-OK, index-coverage.sh printed INDEX-COVERAGE-OK, and audit-rules-check.sh printed AUDIT-RULES-PROVEN:11.
+- PROTOCOL keys: node `Object.keys(require('./plugin/templates/hb.js').PROTOCOL)` and python `heartbeat.protocol.PROTOCOL` diff empty. There are 15 keys. Every one appears in the SKILL.md, README.md and CLAUDE-MD-SNIPPET.md tables (15 rows each, lines 357-371, 203-217 and 46-60), in dev-plugin.md:159 and in the SKILL.md:286-289 schedule parenthetical.
+- The MCP how-to stop list (drive-heartbeat-over-mcp.md:62-63) is gate_blocked / build_stuck / deadlock / review_stuck / criteria_drift / replan_pending. That equals the mcp_server.py:81 tick description.
+- Every backticked `hb <verb>` / `node .hb/hb.js <verb>` in the nine docs is a registered subcommand. Checked against the `python3 -m heartbeat.cli --help` choices, which include `horizon`, and node's usage line. Every relative markdown link in the 12 changed docs resolves.
+- Audit runs (`node plugin/templates/hb-audit.js` and `hb audit`) on mkaudit t1, t5 and t6, plus a two-unguarded-phase tail (t8), all built in a mktemp dir:
+  - t1: PB `⚠ unguarded_phase`, PC `✗ hollow_gate`, one `⚠ speculative_tail`. Byte-identical on both runtimes, exit 1 on both.
+  - t6: only the single speculative_tail warn, exit 0 on both.
+  - t8: two unguarded_phase warns plus one speculative_tail, exit 0.
+  - t5 (parked tail behind a verified head): NO speculative_tail, `⏸ skipped 2 parked phase(s)`, exit 0.
+- Reason-less close in a bootstrapped mktemp fixture: `node .hb/hb.js horizon close` and `python3 -m heartbeat.cli horizon close --dir <fx>` both exit 1 with "--reason <why> is required". The event count stays 1.
+- Code read: hb.js `case 'horizon'` (six guards, die → exit 1) and cli.py `_close_locked` (the same six, return 1). tick.sh and tick.py clear `.replan-alerted` only on the all_done branch and the task (`*)`) branch. hb-exec.js and executor.py STOP on replan_pending and on replan_waiting.
+
+## Findings
+
+1. **dev-plugin.md's audit table omits a rule the auditor emits (G2).** The `## Audit` table at docs/dev-plugin.md:172-182 lists hollow_gate, ungated, unguarded_phase, nondeterministic, gate_offphase, speculative_tail, unconstrained_review, control_char and vacuous/existence. It has no `side_effecting` row. `grep -c side_effecting docs/dev-plugin.md` gives 0. Yet hb-audit.js:146 emits `F('warn', 'side_effecting', …)`, and audit-rules-check.sh counts it among its 11 proven rules. This phase edited the table, adding the speculative_tail row, and left it incomplete as the authoritative "Rule | Severity | Condition" list. dev-python.md:179 defers to it ("Same rules/severities as the plugin"), so the omission spreads.
+
+2. **SKILL.md's speculative_tail entry states a different firing condition and no severity (G2).** The entry at SKILL.md:180-182 reads "≥ 2 trailing unverified phases behind a verified head". It drops LIVE: on t5, where the trailing phases are parked, that sentence predicts a fire, but the auditor is quiet (probe above). The entry never says warn. The auditor how-to row (the-auditor-catches-each-weakness.md:27) also drops "live" ("two or more trailing phases left unverified behind a verified head"), though it does say "(a warning)". G2 requires each surface to state warn severity and the LIVE / parked-quiet condition.
+
+3. **docs/howto/README.md:44-46 gives a reason-less close form (G4).** It reads: "so completing it wakes `replan_pending` (append the next horizon, or `hb horizon close`)". The code refuses that exact form on both runtimes: exit 1, no event, per the probe above and horizon.sh c2(no reason). G4's violation clause names "omits `--reason` / a reason-less form" explicitly. Every other G4 surface is correct and shows the reason as mandatory: README:216, SNIPPET:59, both PROTOCOL texts, the hb-report/report.py REACHED line, the hb.js/cli.py confirmation, and the dev-plugin:141 and dev-python:73 rows.
+
+4. **README.md's tick summary misstates when replan_pending fires (P1).** README.md:165-166 reads: "project done → all_done — unless its last phase is a flagged knowledge horizon → replan_pending (once)". The resolver (hb-next-task.js / resolver.py) fires only when the LAST LIVE phase is flagged AND it is not in `horizon_closed`. horizon.sh, run green this round, pins two shapes where the summary's prediction is wrong:
+   - c3: after `hb horizon close`, the dag's last phase is still flagged, yet the tick wakes all_done.
+   - l2: the flagged last phase is parked; it is still the dag's last phase, yet the result is all_done.
+
+   P1 requires README's tick summary to state the new truth. dev-plugin:163 and dev-python:26 state it correctly ("LAST live phase … not in horizon_closed").
+
+5. Minor and non-blocking:
+   - planning/parity-notes.md:255-261 has a "Findings (severity)" list that still enumerates only 6 audit rules. It is missing side_effecting, unconstrained_review, control_char and speculative_tail, so the file this phase edited carries a falsified rule enumeration.
+   - plan-to-the-horizon.md:55-56 says the once-flag "is cleared whenever work or `all_done` comes back". The code clears it only on the task-dispatch and all_done branches, not on gate_pending or review_pending. dev-plugin, dev-python and dev-tests say this precisely.
+   - Temporal-comparative wording sits outside prose-check's net: dev-plugin.md:81 "so horizon-less projections stay byte-identical" and dev-python.md:26 "(an empty live list stays `all_done`)". It is borderline. G6's named candidates ("still the recommended content", "remains the recommended CONTENT") are gone. "the refuter should too" now sits beside the named mechanism (`hb-audit` … `speculative_tail`).
+
+The following held:
+- The six-step close ladder and its anchors are correct: c1 not-reached/unflagged, c2, c3(already closed) with c5 as the projection pin, c6 in all four channels, and c7.
+- The new "a tail member carries its own finding when its shape has one" sentence holds on t1, t6 and t8 on both runtimes, as does the parity-notes/hb-audit comment twin.
+- The how-to frames the reached horizon as exactly two sanctioned moves. The close is refused unless every live phase is complete. Flag deletion and parking appear only as the pinned honest limits (l1, l2), with "the recorded way to end a horizon is the close verb". They are never presented as a path. The how-to could call them "unsanctioned" in words, but it does not present them as equivalent to the close.
+
+## Constraint answers
+
+P1: VIOLATED — README.md:165-166 tick summary ("all_done — unless its last phase is a flagged knowledge horizon → replan_pending") contradicts the resolver (hb-next-task.js `last live … && !closed.includes(last.id)`), and tests/horizon.sh c3 (a closed flagged last phase ticks all_done) and l2 (a parked flagged last phase is all_done) both pass this round (CLOSE-OK, LIMITS-OK). The other P1 items held: all verbs are registered, links resolve, ALL-PROSE-OK:9, DOCS-CURRENT-OK, the T185 row matches run-tests.sh:2000, the howto-list row cites T184 + T185, and the dev-plugin/dev-python resolver/types/PROTOCOL/flag/exec rows are re-specified.
+P2: NOT-REPRODUCED — I read SKILL.md:44-62 and plan-to-the-horizon.md:46-73 and 151-155. Both present exactly two sanctioned moves and a mandatory `--reason`. The close is refused unless every live phase is complete (c1). Flag deletion and parking appear only as the honest limits pinned by l1/l2, beside "The recorded way to end a horizon is the close verb". Fabrication is tied to `speculative_tail`, and "never a weakened gate, constraint, or review" holds. I found no permission wording.
+G1: NOT-REPRODUCED — the node and python PROTOCOL key sets are equal (15). All 15 appear in SKILL.md:357-371, README.md:203-217, CLAUDE-MD-SNIPPET.md:46-60, dev-plugin.md:159 and SKILL.md:286-289 with no extras. drive-heartbeat-over-mcp.md:62-63 lists the same six human-needed keys as mcp_server.py:81.
+G2: VIOLATED — docs/dev-plugin.md:172-182 audit table has no `side_effecting` row (grep count 0), while hb-audit.js:146 emits `F('warn','side_effecting',…)` and audit-rules-check.sh counts 11 rules. SKILL.md:180-182's speculative_tail entry gives no severity and omits "live": it predicts a fire on the parked-tail t5, where `node plugin/templates/hb-audit.js t5.json` prints no speculative_tail (exit 0). the-auditor-catches-each-weakness.md:27 also omits "live". audit-rules-check.sh itself printed AUDIT-RULES-PROVEN:11.
+G3: NOT-REPRODUCED — the false sentence is gone from all three places. The replacement ("unguarded warns, empty/hollow gate errors, an empty placeholder carries none") matches node and python output on t1 (PB ⚠ unguarded_phase, PC ✗ hollow_gate), t6 (only speculative_tail) and t8 (two ⚠ unguarded_phase). Each run produced exactly one speculative_tail naming PB, PC, PA and the cure, byte-identical across runtimes.
+G4: VIOLATED — docs/howto/README.md:44-46 gives the close as "`hb horizon close`" with no `--reason`. That exact form is refused on both runtimes: in a mktemp fixture, `node .hb/hb.js horizon close` and `python3 -m heartbeat.cli horizon close --dir <fx>` each exit 1 with "--reason <why> is required" and append no event (horizon.sh c2). README:216, SNIPPET:59, PROTOCOL (both), the report REACHED line, the close confirmation and the dev rows are all correct.
+G5: NOT-REPRODUCED — plan-to-the-horizon.md:62-70 has one clause for each of the six guards in hb.js `case 'horizon'` and cli.py `_close_locked` (reason, all-parked, unflagged, incomplete, already-closed, regateBlocks/unansweredRegate/staleRearm). Each clause's anchor matches a horizon.sh label: c1(not reached|unflagged), c2(no reason|empty reason), c3(already closed) plus c5 as the projection pin, c6 (four channels) and c7(all parked). Node `die` exits 1 and python returns 1, with no event either way. dev-plugin.md:141 and dev-python.md:73 list the same six refusals.
+G6: NOT-REPRODUCED — ALL-PROSE-OK:9. A grep of the added lines for still/remains/no longer/now/was/will/should/yet/version or phase ids found only plan-state comparatives ("the same plan still ends all_done", "no longer last after an append") and "the refuter should too" placed next to the named `hb-audit` `speculative_tail` mechanism. The borderline "stay(s)" wording at dev-plugin.md:81 and dev-python.md:26 is noted under findings, not counted here.
+
+REFUTED

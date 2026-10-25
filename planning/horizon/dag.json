@@ -1,0 +1,267 @@
+{
+  "project": "horizon",
+  "_meta": {
+    "design": "Wave 4 — the horizon made machine-visible. Wave 3 shipped the doctrine (plan only to the knowledge horizon; end with an explicit replan point) as WORDS: the how-to's replan point is a convention ('a final task whose gate verifies the learning is recorded') and its audit teeth are an aspiration ('the plan refuter should flag it the way hb-audit flags test -f'). No machine part knows what a horizon is — 'horizon' appears zero times in either runtime — so finishing a deliberately-short plan is indistinguishable from finishing a complete project: the resolver returns all_done, the tick congratulates, the exec driver prints DONE. This wave gives the doctrine its mechanism: (1) a first-class marker — \"horizon\": true on the final planned phase (type-checked by both lints; position never linted — an inert historical flag after an append is sanctioned); (2) the reached horizon is distinguished from the done project — the resolver returns a NEW type replan_pending when every live phase is complete and the last live phase is flagged and unclosed, the tick wakes it ONCE (the all-done-alerted precedent, never a busy-loop) as a human-needed reason with exactly TWO sanctioned moves: replan by append-continuation (T184's proven surface) or END the project through a recorded decision — hb horizon close --reason <why>, fail-closed (reached + flagged + unclosed + reasoned + the live list non-empty + NO open regate cycle in any state on a live gate, else nonzero exit and NO event), appending a phase-scoped horizon_closed event that survives rebuild and projects SPARSELY (existing projections stay byte-identical); (3) the aspiration made real — hb-audit's speculative_tail names the fabricated-far-phases shape (a gated head, then >= 2 trailing unverified live phases) and the exact cut point. Honest limits pinned, not hidden: the marker is PLAN surface — desc-class, unpinned by the drift tripwire — so deleting the flag from the completed phase, or parking it, silences the wake; the proof pins that silence as behavior and parity-notes + the how-to record it; the recorded path is the close verb. Pre-checked: 'horizon' absent from both runtimes; T185 unused; the 9 docs h2w pins are prose-clean today (ALL-PROSE-OK verified); heartbeat.md has no exposure (untouched); both exec drivers already fail closed on unknown reasons (the named case adds honesty, not new safety); the SKILL reason-table row and the hook stop-list edits land in H1 and GATE_H1 runs their checkers DIRECTLY (h1s: single-source.sh + hook-drives-loop.sh — T138.1/T143 would otherwise bind first at h2y's full suite, a whole-phase red window); dev-plugin.md ll.100/156/160/201 enumerate the resolver types and protocol reasons this wave extends and are falsified rows to RE-SPECIFY (dev-python's twins located at fold time); a speculative_tail probe over all 63 planning dags, the seeded template and the test fixtures fires on NONE (no suite reddens); PROTOCOL.md is bootstrap-generated from the hb.js map (no second template surface). The H2 marker is the plan practicing its own doctrine — wave 5 is genuinely unplanned — but the live .hb runs bootstrap-time COPIES of the tools, so the wake itself is proven in fixtures; the repo's own plan sees it only after a sanctioned tool refresh (a release-time chore, outside gate scope).",
+    "refutation_rounds": [
+      {
+        "round": 1,
+        "verdict": "UNSOUND",
+        "findings": "F1 hb horizon close was an acceptance verb OUTSIDE the regate fail-closed perimeter (a reached horizon with an open revision accepted the close and retired the revision behind a 'finished' project; every sibling acceptance surface — anchor, review, constraints --record, rearm — refuses exactly this) — a sixth refusal added: close refused while any live phase's gate carries a pending regate or the log attests an unanswered one; c6 case + P2 clause. F2 the all-parked plan was an unspecced resolver edge (zero live phases → 'last live phase' throws; tick.sh swallows the crash into a no_pending_tasks sleep forever) — specced: no live phases verdicts all_done (today's behavior), case p1; the adjacent gap in the same family: a zero-task zero-gate phase was unclassified by speculative_tail — pinned UNVERIFIED (a placeholder is the purest speculative shape), case t6. F3 the already-closed refusal read the LOG while the resolver read the PROJECTION ('initialized' resets the projected set → an unfinishable wedge: can't close, can't quiet) — one source now: both read state.horizon_closed. F4 P1 pinned the python action text without owning protocol.py — subject added. F5 falsified rows the plan missed: dev-plugin.md:102's once-flag enumeration (.replan-alerted), README.md's tick summary + reason table, CLAUDE-MD-SNIPPET.md's reason table (both tables also missing criteria_drift — pre-existing currency debt, same class, folded); both docs prose-clean today → h2w widened to ALL-PROSE-OK:9. F6 T137 pins the parity audit-fixture COUNT (7) into two doc rows — the three new parity cases are implemented INLINE (the regate_case pattern), never as new files in that loop. F7 the _meta dogfood sentence overstated (live .hb runs bootstrap-time copies) — softened to the honest claim. Folded from notes: the resolver parity case normalizes JSON like proj_compare (node compact vs py spaced); the once-flag STORES THE PHASE ID so a stale flag from an earlier horizon never silences a newer appended one (case a4) — the permanent-silence construction dies instead of becoming an honest limit. Verified sound: replan_pending immune to the suite's STUCK_TICKS/HB_ROT_CHECK exports (the ds2y class cannot recur); warn-only tail keeps T136 + strictBlock untouched; all existing all_done asserts sit on unflagged fixtures; protocol-key checks are subset checks; GROUPS-PASSED trailing space makes the T185 grep safe; sparse projection survives replan.sh's byte asserts and every parity state case."
+      },
+      {
+        "round": 2,
+        "verdict": "UNSOUND",
+        "findings": "Convergence verified: all seven round-1 folds landed; the widened speculative_tail definition replayed over all 63 planning dags + template + fixtures + nested .hb projects fires on NONE (closest: parity/broken.json — quiet, no gated head); T136.1 keys on exit 1 and the warn exits 0; parity-fuzz compares the audits to each other so a symmetric warn stays green; docs-currency greps fixed tokens (cannot redden mid-wave); T143's checker is a presence-regex (the stop-list edit keeps it green); no suite pins state.json key sets, report bytes, usage bytes or flag-file content; the live .hb copies ignore unknown dag fields, so the H2 marker is inert mid-wave on every surface; T185 appears nowhere (h2z's three greps all fail today); replan.sh measured 18.6s against horizon.sh's 600s budget. Changed: F8 the close accepted in the STALE-REARM window (declare → rearm, no fresh pass: projection keeps det=true, regateBlocks clear, unansweredRegate false — the revision retired behind a 'finished' project; hb review and both executors refuse exactly this window, and the close is verdict-class) — staleRearm added to the refusal list, P2, and c6 now probes all three cycle states (declare / rearm-alone / fresh pass); F9 the F2 crash class recurred INSIDE the new verb (close on an all-parked plan: py live[-1] IndexError, node undefined) — the empty live list takes the not-reached refusal, case c7; F10 c5 could not distinguish projection-read from log-scan (they agree absent a reset) — c5 now runs the initialized-reset sequence (close → initialized → re-wake → re-accept); F11 the new shared projection surface had NO parity case (AGENTS rule 2) — horizon:project added (multi-close, insertion order, proj_compare normalization); F12 GATE_H1 executed none of the mechanical pins for the P3 surfaces (T138.1/T143 bind first at h2y — a whole-phase red window) — criterion h1s runs single-source.sh + hook-drives-loop.sh at the gate, m2's data.action assert pinned to CONTENT (both sanctioned moves named), the _meta overstatement corrected; F13 the GATE_H2 prompt still said 'seven' docs — nine; F14 defensive: the protocol action text must never contain a quoted key-colon substring (single-source.sh extracts keys by grep)."
+      },
+      {
+        "round": 3,
+        "verdict": "UNSOUND",
+        "findings": "Convergence verified: the stale-rearm predicate is implementable as worded on BOTH runtimes (all three helpers exist twinned: regateBlocks/regate_blocks, unansweredRegate/unanswered_regate, staleRearm/stale_rearm) and all four surfaces tell the same predicate; c7/p1 consistent with the real empty-list behavior ([].every vacuous-true → all_done); h1s runs green TODAY from the repo root (SINGLE-SOURCE-OK + HOOK-DRIVES-LOOP-OK, both read-only, no args); every case id cross-checks (no orphans either direction); all cited doc line-areas verified current; the widened speculative_tail independently re-implemented and replayed over 87 dag-shaped files — zero firings, round 2's claim reproduced; both exec drivers idle-exit-0 on unknown sleeps so replan_waiting cannot busy-loop. Changed: F15 c5's initialized-reset probe was PROJECTION-INVALID as worded (the reset wipes completion history, so 're-verdict replan_pending' was false on any correct implementation — the probe discriminated nothing) — a REPLAY step folded into c5, the review prompt and P2 (reset, replay the task_done/gate_passed history — the proj_compare 'mid' precedent; bare replayed passes never pin, drift-safe); F16 c6's three states never isolated the unanswered-regate clause (declare is caught by the marker, rearm-alone by staleRearm — an implementation omitting unansweredRegate passed) — a fourth shape added: declare then HAND-CLEAR the marker in the mktemp dag → still refused, the log is truth; F17 GATE_H1's desc still said three parity cases — four; F18 h2b's close-contract anchors lagged the folds (c1/c2/c5 → c1/c2/c5/c6/c7 + the perimeter sentence — GATE_H2 P2's foreclosure now has its documented mechanism); F19 s5/s6 widened to strip ALL horizon-guard: close lines (c1 AND c6 redden — every guard class now has symmetric per-runtime teeth); F20 _meta's close summary pre-dated the perimeter folds — corrected; the tick.sh notify-comment's missing criteria_drift folded into h1b's edit (the F5 class)."
+      },
+      {
+        "round": 4,
+        "verdict": "SOUND",
+        "findings": "Convergence: every round-3 fold landed verbatim-coherent in all its load-bearing places (c5's reset-then-replay identical in h1a, the prompt and P2 — and verified projection-valid AND drift-coherent against the real code: only criteria-carrying gate_passed events enter the pin walk, so bare replayed passes keep the walk quiet and the probe genuinely discriminates projection-read from log-scan; the fixture class is review-less so task_done/gate_passed is the complete history; the text says re-VERDICT, resolver-level, so the once-flag cannot falsify it); the fourth c6 shape leans on the real marker-sync precedent; the only remaining 'three parity cases' strings are historical round-records, not spec; _meta's close summary, h1b's refusal list and P2 are the same six-condition set with full case coverage (c1/c2/c5/c6/c7). Final adversarial pass found no uncovered sequence: unpark after an l2 silence re-verdicts replan_pending (projection-pure resolver — never a false all_done; worst buggy-flag case is a suppressed repeat notification on a phase the human personally parked, with the verdict, exec STOP and report line all still loud); a detached phase stays live but detach only retracts an ordering claim — it can unblock, never block, so 'last live phase' is unaffected; a hand-forged horizon_closed in the log is ZERO new power (forging task_done+gate_passed already bought all_done pre-wave) — the already-recorded procedural-trust limit, not a new hole; parking a regated phase past the close's perimeter leaves doctor's gate-keyed regate checks loud (parking-as-silence is the named honest limit); a flagged zero-task zero-gate final phase never completes — today's degenerate-placeholder wedge for ANY gateless trailing phase, which the wave's own t6 tooth warns against. Nits recorded, no fold: the prompt lumps the audit sabotage under 'guard lines' while h1a/h1c spec a block strip (the reviewer also reads h1a); h2b anchors t1-t5, t6 being a sub-shape. VERDICT: SOUND."
+      }
+    ]
+  },
+  "phases": [
+    {
+      "id": "H1",
+      "title": "the horizon made machine-visible — replan_pending, the recorded close, the teeth",
+      "gate_entry": null,
+      "gate_exit": "GATE_H1",
+      "tasks": [
+        {
+          "id": "h1a",
+          "title": "author tests/horizon.sh (spec-first: mechanism + teeth RED today)",
+          "requires": [],
+          "description": "Write tests/horizon.sh with the env-hygiene header VERBATIM (unset HB_DIR PROJECT_DIR GATE G DAG_FILE EVENTS_FILE 2>/dev/null || true). Fixtures are built in mktemp from the repo's templates (the tests/replan.sh pattern); never against the repo's own .hb. Cases: (marker) a project whose last phase carries \"horizon\": true, completed through the CLI with criteria-pinned passes — both resolvers return {\"type\":\"replan_pending\",\"phase\":<id>} with identical keys (m1); both ticks wake replan_pending ONCE with a data.action that NAMES both sanctioned moves (grep the append path and the close verb in the action text, not mere non-emptiness) and the SECOND tick sleeps replan_waiting (m2); the same fixture without the marker verdicts all_done on both (m3 — the regression pin); both exec drivers print 'HB-EXEC STOP: replan_pending' and exit nonzero (HB_EXEC_BACKEND=script HB_EXEC_CMD='cat >/dev/null') (m4). (close) hb horizon close is fail-closed on BOTH runtimes: refused with a nonzero exit and NO appended event when the horizon is not reached (c1), when --reason is missing/empty (c2), when already closed per the PROJECTED state.horizon_closed — the resolver's own source, and the c5 probe pins ONE source: close, append an 'initialized' event, REPLAY the completion history after the reset (re-append the task_done/gate_passed events — the proj_compare 'mid' precedent; bare replayed passes never pin, so the replay is drift-safe), then both runtimes must re-verdict replan_pending AND re-accept a close (a projection read sees the reset; a log scan still sees the old event and wedges) (c5), and when any live gate's regate cycle is open in ANY state — pending (declared), unanswered in the log, or REARMED WITHOUT A FRESH PASS (the stale-rearm window every verdict-class sibling refuses) (c6 — probe all FOUR shapes on both runtimes: declare → refused; declare then HAND-CLEAR the marker in the mktemp dag → STILL refused, the log is truth (the unanswered-regate clause isolated); rearm alone → STILL refused; fresh criteria-pinned pass → the close reopens); the close on an ALL-PARKED plan takes the not-reached refusal, never a throw (c7); a valid close appends horizon_closed carrying phase, reason and the recording HB_ACTOR, reprojects state.json (horizon_closed: [<phase>] present; ABSENT on every fixture with no close event — the sparse-projection pin), and the next tick verdicts all_done (c3); hb rebuild preserves the verdict (c4). (append) at a reached horizon, appending fresh phases (first new gate_entry = the completed horizon phase's gate_exit) makes both ticks hand out the appended tasks (a1); the old flag is inert mid-plan — no replan wake while appended work remains (a2); completing an appended plan whose own last phase is flagged wakes replan_pending for the NEW phase even though the OLD phase has a recorded close (a3 — the close is phase-scoped); a STALE once-flag never silences a newer horizon — after the first wake (flag set), append and complete the new phases entirely through the CLI with NO intermediate tick, and the next tick must still wake replan_pending for the NEW phase (the flag stores the phase id) (a4). (limits) deleting the flag from the completed phase (l1) or parking the flagged phase (l2) verdicts all_done with doctor QUIET on both runtimes — the honest limit pinned as behavior. (parked-out) an ALL-PARKED plan verdicts all_done on both runtimes — no crash, no eternal no_pending_tasks sleep — including when the flag sits on a parked phase (p1). (lint) a non-boolean horizon is a lint ERROR with byte-identical messages (n1); \"horizon\": true and false lint at 0 errors, including true on a NON-final phase (inert — n2). (audit) speculative_tail fires exactly once, severity warn, naming the tail phase ids, the cut phase and the horizon cure, byte-identical on both runtimes, on a plan with a behaviorally-gated head and >= 2 trailing live phases that are unverified — unguarded (tasks, no gate_exit), ungated (gate with no criteria), or hollow (zero behavioral criteria) (t1); and stays QUIET on a fully-gated plan (t2), a single unverified final phase (t3), an all-unverified plan (t4 — no gated head), and when the tail phases are parked (t5); a zero-task, zero-gate phase counts UNVERIFIED — a trailing pair of placeholder phases behind a gated head fires the rule (t6). (report) both reports print the horizon line — planned (r1), REACHED naming both sanctioned moves (r2), closed-by with actor and reason (r3) — and print NO horizon line on an unmarked project (r4). --selftest: sabotages against COPIES of the runtimes, each reddening the NAMED check for the RIGHT reason: the horizon-guard lines stripped from the node resolver (s1), the py resolver (s2), tick.sh (s3), tick.py (s4); ALL the horizon-guard: close lines stripped from the node close verb (s5) and the py close verb (s6) — an early close AND a mid-regate close must then be ACCEPTED, reddening the c1 and c6 probes; the speculative_tail block stripped from hb-audit.js (s7) and audit.py (s8). Prints HORIZON-OK / HORIZON-SELFTEST-OK."
+        },
+        {
+          "id": "h1b",
+          "title": "implement the mechanism (resolver, projection, ticks, close verb, protocol, exec, report)",
+          "requires": [
+            "h1a"
+          ],
+          "description": "Implement the mechanism on both runtimes, logic mirrored exactly, every guard marker (horizon-guard: resolver / tick / close) on a strip-clean SINGLE line that is a complete statement (python lines never a block header — the IndentationError class). RESOLVER (hb-next-task.js resolve + resolver.py resolve): in the all-live-phases-complete branch, when the LAST live phase carries horizon === true and its id is not in state.horizon_closed, return {\"type\":\"replan_pending\",\"phase\":<id>} — identical keys; every other shape keeps returning all_done, EXPLICITLY including the empty live list (an all-parked plan has no last live phase — today's all_done behavior, never a throw that tick.sh would swallow into a no_pending_tasks sleep). PROJECTION (hb.js project + state.py project): a horizon_closed event adds its phase to a set ('initialized' resets it, the existing precedent); project it SPARSELY — s.horizon_closed only when non-empty, insertion-ordered — so every existing projection stays byte-identical. TICK (tick.sh + tick.py): a replan_pending resolution wakes ONCE (flag file .replan-alerted, the .all-done-alerted precedent; tick.sh also notifies 'replan_pending' and updates the header's notify-reason comment, folding the comment's missing criteria_drift in the same edit — the F5 currency-debt class), then sleeps {\"reason\":\"replan_waiting\"}; the flag STORES THE HORIZON PHASE ID — a wake for a DIFFERENT phase ignores a stale flag and rewrites it (so an append completed entirely through the CLI with no intermediate tick can never be permanently silenced) — and is cleared on the task and all_done branches; no event is appended on the wake (the log records decisions, not notifications). CLOSE VERB (hb.js case 'horizon' + a cli.py 'horizon' parser): hb horizon close --reason <why> under the write lock — the close is an ACCEPTANCE verb and sits inside the regate fail-closed perimeter like its siblings (anchor, review, constraints --record): refused (nonzero exit, NO event appended) when the subaction is not 'close', when --reason is missing/empty, when the last live phase is not flagged, when any live phase is incomplete, when the live list is EMPTY (the not-reached refusal — never a throw on an all-parked plan), when that phase is already in the PROJECTED state.horizon_closed (one source — the resolver's), or when any live gate's regate cycle is open in any state — pending (regateBlocks), unanswered in the log, or rearmed WITHOUT a fresh criteria-pinned pass (staleRearm — the verdict-class perimeter: hb review and both executors refuse this exact window; the close is a verdict, not a record); on success append {\"event\":\"horizon_closed\",\"phase\":...,\"reason\":...} (actor via the existing appendEvent attribution), reproject, print the confirmation; both usage strings gain the verb. PROTOCOL (every wave-3 surface): a replan_pending row in hb.js PROTOCOL and protocol.py with identical KEYS and runtime-flavored action text naming BOTH sanctioned moves (replan by append-continuation — plan only the NEXT horizon — or hb horizon close --reason <why> as the recorded end-of-project decision) and never a third path — and never a quoted key-colon substring like a literal '\"horizon\":' in the action or SKILL-row text (single-source.sh extracts protocol keys with a key-colon grep); .hb/PROTOCOL.md regenerates from the table; SKILL.md's reason table gains the row (T138.1 forces it; the surrounding prose is H2's); hb-exec.js and executor.py gain a NAMED replan_pending case (escalate / 'HB-EXEC STOP: replan_pending', exit nonzero — both drivers already fail closed on unknown reasons, the named case is honesty); heartbeat-detect.sh's two stop lists gain replan_pending keeping docs/howto/gate-examples/hook-drives-loop.sh green (T143's checker, which h1s runs at the gate); mcp_server.py's tick-tool description likewise. REPORT (hb-report.js + report.py): one horizon line when the last live phase is flagged — planned / REACHED (naming both sanctioned moves) / closed by <actor>: <reason> — and no line otherwise."
+        },
+        {
+          "id": "h1c",
+          "title": "implement the teeth (lint marker type rule, audit speculative_tail)",
+          "requires": [
+            "h1a"
+          ],
+          "description": "Implement the static teeth, rulesets mirrored byte-exact. LINT (hb-lint.js + lint.py): a phase carrying a non-boolean horizon is an ERROR — '[<pid>] horizon must be true or false (the knowledge-horizon marker)' (the regate.pending precedent, degenerate phase ids rendered '?' at the existing sites); true/false pass, and position is NOT linted (an inert historical flag after an append is sanctioned — the how-to documents inertness). AUDIT (hb-audit.js + audit.py): the speculative_tail rule — over LIVE phases in plan order, a phase is 'unverified' when it has tasks but no gate_exit, when it has NO tasks and no gate_exit (a placeholder is the purest speculative shape), when its gate has no criteria, or when its gate has zero behavioral criteria (reusing classify; hostile shapes ride the existing not-behavioral normalization, never a crash); when the maximal TRAILING run of unverified phases has length >= 2 AND at least one earlier live phase is verified, emit ONE warn finding (rule 'speculative_tail', anchored on the first tail phase) naming the tail ids, the cut phase (the last verified phase) and the cure — end the plan there with \"horizon\": true and plan the tail when its spec is known — citing docs/howto/plan-to-the-horizon.md; quiet on the t2–t5 shapes. Severity stays warn: the hollow members already carry their own per-phase errors, and this rule's job is the DIAGNOSIS (the cut point), not a second sentence. The seeded template dag and every fixture dag the suites audit must stay speculative_tail-quiet (check, don't assume), with the one marker line this wave adds to its own plan file linting clean."
+        },
+        {
+          "id": "h1d",
+          "title": "wire T185, parity cases, the horizon contract in parity-notes",
+          "requires": [
+            "h1b",
+            "h1c"
+          ],
+          "description": "Wire tests/horizon.sh into tests/run-tests.sh as group T185, outcome-keyed on HORIZON-OK / HORIZON-SELFTEST-OK (never a group-name grep). Add four parity cases to tests/parity.sh, each with a non-vacuity floor and each implemented INLINE in mktemp (the regate_case pattern — NEVER a new fixture file in the audit fixture loop, whose count T137 pins into two doc rows): horizon:resolve (both resolvers' JSON on a reached-horizon fixture, compared after the proj_compare-style normalization — node prints compact JSON, py spaced — and the output must name replan_pending), horizon:project (the new shared projection surface, AGENTS rule 2: a multi-close fixture projected by both runtimes through the existing proj_compare normalization — the horizon_closed key present, insertion-ordered, byte-agreed), horizon:lint (the non-boolean-marker error, byte-compared, exits 1/1), horizon:audit (the speculative_tail finding line, byte-compared, equal exits, the line must name the rule). Append 'The horizon contract' to planning/parity-notes.md: the marker semantics (strict boolean true on the LAST live phase; inert elsewhere; type-checked), the replan_pending shape and once-only wake, the sparse horizon_closed projection (insertion order; the key ABSENT on horizon-less logs — the byte-stability guarantee for every existing project), the close verb's refusals and phase scope, the speculative_tail rule (threshold 2, the gated-head requirement, parked exclusion, warn severity and why), and the HONEST LIMITS: the marker is plan surface — desc-class, unpinned by the drift tripwire — so deleting the flag or parking the phase silences the wake silently; the recorded decision is hb horizon close; the trust model stays procedural (HB_ACTOR self-declared)."
+        }
+      ]
+    },
+    {
+      "id": "H2",
+      "title": "the doctrine meets the mechanism — skill re-spec, how-to re-spec, docs current-state",
+      "gate_entry": "GATE_H1",
+      "gate_exit": "GATE_H2",
+      "horizon": true,
+      "tasks": [
+        {
+          "id": "h2a",
+          "title": "SKILL.md: the replan point IS the marker; stop lists gain replan_pending",
+          "requires": [],
+          "description": "Edit plugin/skills/heartbeat/SKILL.md. (1) Re-specify the horizon rule (the l.48 area): the explicit replan point IS the mechanism — mark the final planned phase \"horizon\": true; the tick then wakes replan_pending instead of all_done when the horizon completes, with exactly two sanctioned moves (replan by append-continuation, or hb horizon close --reason <why> to end the project as a recorded decision); a final task that records the learning remains the recommended CONTENT of the horizon phase, no longer the definition of the replan point. (2) The run verb's stop list (the l.213 area) and the schedule routine's reason list (the l.279 area) gain replan_pending; keep the exec section's 'until all_done or a human is needed' sentence true. (3) Own the reason-table row's wording (the row itself landed in H1 for T138.1): keys identical to both protocol tables, action text naming both sanctioned moves and never a third path. Prose-check-clean; no new placeholder-class phrase."
+        },
+        {
+          "id": "h2b",
+          "title": "re-specify docs/howto/plan-to-the-horizon.md from convention to mechanism",
+          "requires": [
+            "h2a"
+          ],
+          "description": "Re-specify docs/howto/plan-to-the-horizon.md, every behavioral claim anchored to a tests/horizon.sh case BY NAME (the gated-docs method; replan.sh / detach / regate anchors stay where still cited): the 'explicit replan point' paragraph now states the marker, the replan_pending wake and the two sanctioned moves (m1/m2, c3, a1); the 'plan refuter should flag it the way hb-audit flags test -f' sentence becomes CURRENT-STATE — hb-audit flags the fabricated-far-phases shape as speculative_tail, naming the cut (t1–t5); add the close verb's fail-closed contract — including that the close is a VERDICT inside the regate perimeter (an open revision in any state refuses it) and that an all-parked plan cannot be closed (c1/c2/c5/c6/c7) — its rebuild survival (c4) and phase scope (a3); add the honest-limit additions — the marker is plan surface, unpinned by the drift tripwire, so deleting the flag or parking the phase silences the wake (l1/l2) and the recorded path is the close verb; the sizing guidance gains the inertness note (an old flag after an append is historical, not an error — n2). Current-state prose only; no version narrative; prose-check-clean."
+        },
+        {
+          "id": "h2c",
+          "title": "docs current-state (dev docs rows re-specified, T185 row, howto index)",
+          "requires": [
+            "h2b"
+          ],
+          "description": "Docs current-state across every surface the mechanism extends — re-specify the rows the change FALSIFIES, never only append (the wave-3 F24/F26 lesson). dev-plugin.md: the resolver row (l.100) and resolve() types line (l.160) gain replan_pending (+phase); the PROTOCOL reasons list (l.156) gains it; the once-flag enumeration (l.102) gains .replan-alerted; the exec loop paragraph (l.201) gains the named stop; the hook paragraph (l.241) stays true against the edited heartbeat-detect.sh text; the hb verbs enumeration gains horizon close; the report and tick sections gain the horizon line/rows where those tables enumerate. README.md's tick summary (l.165) and data.reason table (l.200-214) and CLAUDE-MD-SNIPPET.md's reason table (l.56) gain the replan_pending row AND the criteria_drift row both tables are missing (pre-existing currency debt, same class — folded, never left half-true). dev-python.md: the same re-specs on its resolver / tick / protocol / CLI / report rows (locate every enumeration of resolver types, protocol reasons and human-needed stop lists). docs/dev-tests.md gains the T185 row, string-accurate against the real run-tests.sh group line. docs/howto/howto-list.md's plan-to-the-horizon row is re-specified to cite T184 + T185; docs/howto/README.md's horizon line stays true. Every changed doc prose-check-clean; docs-currency green."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_H1": {
+      "desc": "the horizon is machine-visible and every channel tells the truth about it — a reached horizon wakes replan_pending (once, with exactly two sanctioned moves) instead of all_done on both runtimes, the close verb is fail-closed and phase-scoped with a rebuild-surviving recorded decision, existing projections stay byte-identical, the exec drivers stop, the teeth flag the fabricated-far-phases shape at its cut point, and the honest limits are pinned as behavior — proven by a self-testing proof with four new parity cases and full pytest green.",
+      "criteria": [
+        {
+          "id": "h1x",
+          "desc": "the horizon proof is green end-to-end",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/horizon.sh 2>&1 | grep -q '^HORIZON-OK'",
+          "timeout_s": 600
+        },
+        {
+          "id": "h1y",
+          "desc": "the proof's teeth: each sabotage reddens its named check",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/horizon.sh --selftest 2>&1 | grep -q '^HORIZON-SELFTEST-OK'",
+          "timeout_s": 600
+        },
+        {
+          "id": "h1p",
+          "desc": "parity green (incl. horizon:resolve, horizon:project, horizon:lint, horizon:audit)",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/parity.sh >/dev/null 2>&1",
+          "timeout_s": 600
+        },
+        {
+          "id": "h1s",
+          "desc": "the mechanical pins run AT this gate, not first at h2y: protocol single-sourcing (T138.1's checker) and the hook stop lists (T143's checker)",
+          "cmd": "cd \"$PROJECT_DIR\" && bash docs/howto/gate-examples/single-source.sh 2>&1 | grep -q 'SINGLE-SOURCE-OK' && bash docs/howto/gate-examples/hook-drives-loop.sh 2>&1 | grep -q 'HOOK-DRIVES-LOOP-OK'",
+          "timeout_s": 60
+        },
+        {
+          "id": "h1q",
+          "desc": "full python suite green (py/.venv pytest)",
+          "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src ./.venv/bin/python -m pytest -q >/dev/null 2>&1",
+          "timeout_s": 300
+        }
+      ],
+      "review": {
+        "profile": "correctness",
+        "prompt": "Refute that H1 is done. Work ONLY in mktemp fixtures you build yourself — never against the repo's own .hb, and modify nothing in the repo tree. Does tests/horizon.sh carry the env-hygiene header VERBATIM? Build a reached-horizon fixture through the CLI on BOTH runtimes and probe: (a) resolve returns replan_pending with identical keys; the tick wakes ONCE (data.action names BOTH sanctioned moves and no third) then sleeps replan_waiting; no marker / flag deleted / phase parked / after a recorded close each verdict all_done — and an ALL-PARKED plan verdicts all_done on both runtimes without a resolver crash (probe it: park everything, tick, check the reason is not an eternal no_pending_tasks); after a first wake, append and complete the new phases entirely through the CLI with NO intermediate tick — the stale once-flag must not silence the new horizon's wake; (b) the CLOSE — refused (nonzero exit, NO event appended) when not reached, when --reason is missing, when already closed per the PROJECTED state (one source with the resolver — run c5's sequence yourself: close, append an 'initialized' event, REPLAY the completion history after the reset, check both runtimes re-verdict replan_pending and RE-ACCEPT a close, no wedge), when the live list is empty (hb horizon close on an all-parked plan — a refusal, never a traceback), and through the WHOLE regate cycle on a live gate: declare → refused; declare then hand-clear the marker in the mktemp dag → STILL refused (the log is truth — the unanswered-regate clause isolated); rearm WITHOUT a fresh pass → STILL refused (the stale-rearm window — the verdict-class perimeter hb review and both executors enforce); fresh criteria-pinned pass → the close reopens; on both runtimes; a valid close appends horizon_closed with phase+reason+actor, projects a horizon_closed key that is ABSENT on every closeless fixture (byte-stability of existing projections — compare a pre-wave projection byte-for-byte modulo last_updated), and survives hb rebuild; try to construct a close that silences a LATER appended horizon (phase scope) or a sequence where the wake never fires for a genuinely reached horizon or fires for an unreached one — either breaks P1/P2; (c) REACH — both exec drivers STOP with 'HB-EXEC STOP: replan_pending' and nonzero exit; the reason lives on every protocol surface (hb.js PROTOCOL, protocol.py, regenerated PROTOCOL.md, SKILL.md's reason table, both exec tables, both heartbeat-detect.sh stop lists with T143 still green, the MCP tick description) with identical KEYS; both reports print planned / REACHED / closed-by correctly and NOTHING on an unmarked project; (d) TEETH — both lints error byte-identically on a non-boolean marker and stay 0-error on true, false, and an inert non-final flag; speculative_tail fires once (warn) on the gated-head + two-unverified-tail shape naming tail, cut and cure — a zero-task zero-gate placeholder counts unverified — and is QUIET on fully-gated, single-tail, all-unverified and parked-tail shapes; feed the rule hostile criteria shapes (the lint-error class) — no crash on either runtime; confirm the seeded template dag, the suites' fixture dags and the planning/*.dag.json archive stay quiet, and that the parity cases are inline (the audit fixture loop's count unchanged — T137 green); (e) HYGIENE — strip the horizon-guard lines (resolver, tick, close, audit classes) from COPIES of each runtime: the selftest must redden the NAMED check for the RIGHT reason, and no marker may sit on a structural line (python markers are complete statements); do T185's suite checks key on HORIZON-OK / HORIZON-SELFTEST-OK outcome markers; do the four parity cases carry non-vacuity floors (horizon:project through the proj_compare normalization, multi-close insertion order agreed); does h1s actually run single-source.sh and hook-drives-loop.sh green AT THIS GATE (the SKILL row and stop lists bind here, not first at the full suite); is m2's data.action assert on CONTENT (both sanctioned moves named), not mere non-emptiness; are parity and full pytest green? End SOUND or UNSOUND.",
+        "constraints": [
+          {
+            "id": "P1",
+            "claim": "The reached horizon is distinguished from the done project, exactly: on both runtimes, when every live phase is complete and the LAST live phase carries horizon === true with its id not in the projected state.horizon_closed, resolve returns {type:'replan_pending', phase} with identical keys and the tick wakes replan_pending ONCE (a second un-cured tick sleeps replan_waiting; data.action injected from the protocol names both sanctioned moves); with no marker, a deleted flag, a parked horizon phase, a recorded close, or an EMPTY live list (an all-parked plan — never a throw), the verdict is all_done; after an append the resolver hands out the new phases (the old flag inert) and a newly reached appended horizon wakes again — a stale once-flag from an earlier horizon never silences it (the flag stores the phase id); the horizon_closed projection is SPARSE — a log with no horizon_closed event projects a state.json without the key, byte-identical to today's projection.",
+            "subjects": [
+              "plugin/templates/hb-next-task.js",
+              "py/src/heartbeat/resolver.py",
+              "plugin/templates/tick.sh",
+              "py/src/heartbeat/tick.py",
+              "plugin/templates/hb.js",
+              "py/src/heartbeat/state.py",
+              "py/src/heartbeat/protocol.py",
+              "tests/horizon.sh"
+            ],
+            "violation": "Any listed shape returns the wrong verdict on either runtime or the runtimes diverge on keys; an all-parked plan crashes a resolver (or sleeps no_pending_tasks forever); the wake repeats without a cure, never fires for a reached horizon, or stays silenced by a stale flag after an untick'd append; a horizon-less project's state.json gains a key or changes a byte (beyond last_updated)."
+          },
+          {
+            "id": "P2",
+            "claim": "The close is a recorded, fail-closed, phase-scoped VERDICT on both runtimes, inside the full regate perimeter like its verdict-class siblings (hb review, both executors): hb horizon close requires a non-empty --reason, a reached horizon (all live phases complete, the live list non-empty — an all-parked plan takes the not-reached refusal, never a throw — and the last live phase flagged), no prior close for that phase in the PROJECTED state.horizon_closed (the resolver's own source — never a second, log-scan reading; c5's initialized-reset-then-replay probe distinguishes the implementations), and NO open regate cycle in any state on any live gate — pending, unanswered in the log, or rearmed without a fresh criteria-pinned pass (the stale-rearm window) — each refusal exits nonzero and appends NO event; a valid close appends horizon_closed {phase, reason} under the existing actor attribution, reprojects, and the verdict survives hb rebuild; a close recorded for an earlier horizon phase never quiets a later appended one.",
+            "subjects": [
+              "plugin/templates/hb.js",
+              "py/src/heartbeat/cli.py",
+              "py/src/heartbeat/state.py",
+              "tests/horizon.sh"
+            ],
+            "violation": "A refused close appends an event or exits 0; an early, reason-less, unflagged or double close is accepted on either runtime; a close is accepted while a live gate's regate cycle is open — pending, unanswered, OR rearmed without a fresh pass (the revision retired behind a 'finished' project); the close throws on an all-parked plan; the refusal and the resolver read different sources (the initialized-reset wedge — c5's probe sequence fails); the close is lost on rebuild; an old close silences a new horizon."
+          },
+          {
+            "id": "P3",
+            "claim": "The loudness reaches every surface and the limits are stated where they bind: both exec drivers STOP on replan_pending with a NAMED escalation (HB-EXEC STOP: replan_pending, nonzero exit, never a busy-loop); the reason lives with identical keys on every protocol surface — hb.js PROTOCOL, protocol.py, the regenerated PROTOCOL.md, SKILL.md's reason table (T138.1 green), both exec case tables, heartbeat-detect.sh's stop lists (T143 green), mcp_server.py's tick description; both reports print the horizon line (planned / REACHED naming both sanctioned moves / closed by actor: reason) and nothing on an unmarked project; and the honest limits (flag deletion and parking silence the wake — plan surface, unpinned by the drift tripwire; the recorded path is the close verb) are pinned by the proof and recorded in parity-notes.",
+            "subjects": [
+              "plugin/templates/hb-exec.js",
+              "py/src/heartbeat/executor.py",
+              "plugin/templates/hb.js",
+              "py/src/heartbeat/protocol.py",
+              "plugin/skills/heartbeat/SKILL.md",
+              "plugin/hooks/heartbeat-detect.sh",
+              "py/src/heartbeat/mcp_server.py",
+              "plugin/templates/hb-report.js",
+              "py/src/heartbeat/report.py",
+              "planning/parity-notes.md",
+              "tests/horizon.sh"
+            ],
+            "violation": "A driver proceeds or busy-loops past a reached horizon; any protocol surface omits replan_pending or its action text invents a third path (or permits closing as an escape from an unreached horizon); the reports stay silent on a reached horizon or invent lines on unmarked projects; a stop-list edit reddens T143 or the SKILL row reddens T138.1; the limits go unrecorded."
+          },
+          {
+            "id": "P4",
+            "claim": "The teeth and the proof's hygiene are exact: both lints error byte-identically on a non-boolean horizon and stay at 0 errors on true/false and on an inert non-final flag; both audits emit speculative_tail exactly once (warn) iff >= 2 trailing live phases are unverified (unguarded / ungated / zero-behavioral / the zero-task zero-gate placeholder) AND at least one earlier live phase is verified — naming the tail ids, the cut phase and the horizon cure — and stay quiet on a fully-gated plan, a single unverified final phase, an all-unverified plan, and a parked tail, without crashing on hostile criteria shapes and without firing on any existing planning dag, the seeded template, or a suite fixture; the selftest sabotages redden the NAMED checks (markers strip-clean, python markers complete statements); T185's suite checks key on HORIZON-OK / HORIZON-SELFTEST-OK; the four parity cases (resolve, project, lint, audit) are non-vacuous, implemented inline, and leave the audit fixture loop's count (T137's pin) untouched.",
+            "subjects": [
+              "plugin/templates/hb-lint.js",
+              "py/src/heartbeat/lint.py",
+              "plugin/templates/hb-audit.js",
+              "py/src/heartbeat/audit.py",
+              "tests/horizon.sh",
+              "tests/run-tests.sh",
+              "tests/parity.sh"
+            ],
+            "violation": "A rule misfires or stays silent on a listed shape, crashes, or its message bytes differ between runtimes; a sabotage passes or reddens the wrong check (or for a parse error instead of the named reason); a T185 check would pass on a red run; a parity case passes on two empty or identical-error outputs."
+          }
+        ]
+      }
+    },
+    "GATE_H2": {
+      "desc": "the doctrine and the mechanism are one text: the skill's replan point IS the marker, the how-to's two prophecy sentences are current-state mechanism claims anchored to T185 cases by name, the honest limits are documented where they bind, every falsified doc row is re-specified (the README and snippet reason tables included) — all nine docs prose-check-clean, docs-currency green, T185 green in the owning suite, full pytest green.",
+      "criteria": [
+        {
+          "id": "h2w",
+          "desc": "the 9 docs the wave writes or re-specifies are prose-check-clean",
+          "cmd": "cd \"$PROJECT_DIR\" && bash docs/howto/gate-examples/prose-check.sh plugin/skills/heartbeat/SKILL.md docs/howto/plan-to-the-horizon.md docs/dev-plugin.md docs/dev-python.md docs/dev-tests.md docs/howto/howto-list.md docs/howto/README.md README.md CLAUDE-MD-SNIPPET.md 2>&1 | grep -q '^ALL-PROSE-OK:9'",
+          "timeout_s": 120
+        },
+        {
+          "id": "h2x",
+          "desc": "docs-currency green",
+          "cmd": "cd \"$PROJECT_DIR\" && bash docs/howto/gate-examples/docs-currency.sh >/dev/null 2>&1",
+          "timeout_s": 300
+        },
+        {
+          "id": "h2z",
+          "desc": "h2c's outputs exist and point at real things: the dev-tests T185 row, the howto-list cite, and the run-tests group they name",
+          "cmd": "cd \"$PROJECT_DIR\" && grep -q 'T185' docs/dev-tests.md && grep -q 'T185' docs/howto/howto-list.md && grep -q 'grp \"T185' tests/run-tests.sh",
+          "timeout_s": 60
+        },
+        {
+          "id": "h2y",
+          "desc": "the how-to's anchor is green in the owning suite: T185 in GROUPS-PASSED (full node suite; ~13min measured)",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/run-tests.sh 2>&1 | grep -q 'GROUPS-PASSED:.* T185 '",
+          "timeout_s": 1500
+        },
+        {
+          "id": "h2q",
+          "desc": "full python suite green (py/.venv pytest)",
+          "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src ./.venv/bin/python -m pytest -q >/dev/null 2>&1",
+          "timeout_s": 300
+        }
+      ],
+      "review": {
+        "profile": "default",
+        "prompt": "Refute that H2 is done. Read the re-specified skill sections and how-to as a SKEPTIC: run every documented command VERBATIM in mktemp fixtures (never the repo's own .hb; modify nothing in the repo tree) — does any documented mechanic, marker, verb, reason key, refusal or channel not exist or behave otherwise in code? Open tests/horizon.sh and check every cited case name is real and that the claim each anchor carries matches what the case actually asserts. Is the replan point stated AS the marker (not the old final-task convention), with exactly two sanctioned moves at a reached horizon, and is the close verb documented with its refusals so it cannot be read as an escape hatch — try to construct the misreadings ('close early to stop the nagging', 'delete the flag, same thing', 'park it past the wake') and check the text forecloses each, with the honest limits documented where they bind rather than hidden? Does the new text contradict SKILL.md or AGENTS.md anywhere (never-weaken, spec-first, the continuation rule, the drift tripwire's pin identity)? Are the falsified rows RE-SPECIFIED, not appended to — dev-plugin's resolver row, resolve() types, PROTOCOL reasons, once-flag enumeration and exec-loop paragraph; dev-python's twins; README.md's and CLAUDE-MD-SNIPPET.md's reason tables (replan_pending AND the folded criteria_drift row); dev-tests' T185 row string-accurate against the real group line; howto-list's row citing T184 + T185? Does every backticked hb verb name a registered subcommand (horizon included) and every relative link resolve? Are all nine docs prose-check-clean, docs-currency green, T185 in GROUPS-PASSED on a full node suite run, and pytest green? End SOUND or UNSOUND.",
+        "constraints": [
+          {
+            "id": "P1",
+            "claim": "Every behavioral claim in the re-specified skill sections and how-to is anchored to a runnable proof that exists and passes (tests/horizon.sh cases by name; replan/detach/regate suites where still cited), and every doc row the mechanism falsifies states the NEW truth: dev-plugin's resolver row, resolve() types line, PROTOCOL reasons list, once-flag enumeration, exec-loop paragraph and hook paragraph; dev-python's resolver/tick/protocol/CLI/report twins; README.md's tick summary and reason table and CLAUDE-MD-SNIPPET.md's reason table (replan_pending plus the folded criteria_drift row); dev-tests' T185 row; howto-list's plan-to-the-horizon row; every backticked hb verb names a registered subcommand, every relative link resolves, and the nine pinned docs are prose-check-clean with docs-currency green.",
+            "subjects": [
+              "plugin/skills/heartbeat/SKILL.md",
+              "docs/howto/plan-to-the-horizon.md",
+              "docs/dev-plugin.md",
+              "docs/dev-python.md",
+              "docs/dev-tests.md",
+              "docs/howto/howto-list.md",
+              "docs/howto/README.md",
+              "README.md",
+              "CLAUDE-MD-SNIPPET.md"
+            ],
+            "violation": "A claim with no runnable anchor or a dead/misnamed anchor, an anchor whose case asserts something other than the claim, a falsified row left stating the old truth, an unknown hb verb, a broken link, or PROSE-FAIL / docs-currency red on any pinned doc."
+          },
+          {
+            "id": "P2",
+            "claim": "The doctrine is prohibition plus sanctioned path, never softened into permission: at a reached horizon the text presents exactly two sanctioned moves — replan by append-continuation or hb horizon close with a recorded reason — and names flag-deletion and parking as the UNSANCTIONED silences the honest-limits section pins (never as a recommended path); closing is never presented as an escape from an unreached horizon, from refutation outcomes, or from the drift tripwire; fabricating post-horizon phases is tied to the named teeth (speculative_tail); and no wording can be read as permission to weaken a gate, constraint or review.",
+            "subjects": [
+              "plugin/skills/heartbeat/SKILL.md",
+              "docs/howto/plan-to-the-horizon.md"
+            ],
+            "violation": "Wording that permits closing early, presents flag-deletion/parking as equivalent to the close, omits or makes optional the recorded reason, presents the marker as optional for discovery work, or reads as sanctioning gate/constraint-weakening or post-horizon fabrication."
+          }
+        ]
+      }
+    }
+  }
+}
