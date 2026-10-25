@@ -299,7 +299,7 @@ Disable auto-commit with `HB_GIT_AUTOCOMMIT=0`.
 | `STUCK_TICKS` | 3 | No-progress wakes (task or review) before escalation |
 | `HB_MAX_CONCURRENCY` | 1 | Tasks in flight at once (leases) |
 | `GATE_TIMEOUT_S` | 5 | Per-criterion gate timeout |
-| `HB_NOTIFY_CMD` | (empty) | Command run on human-needed wakes: `"<reason>" "<project>" "<detail>"` |
+| `HB_NOTIFY_CMD` | (empty) | Node `tick.sh` only: command run once per blockage on `build_stuck`, `gate_blocked`, `deadlock`, `unsanctioned_drift`, `gate_rot`, `review_stuck`, `replan_pending` and `all_done` (not `criteria_drift`, which wakes every tick): `"<reason>" "<project>" "<detail>"` |
 | `HB_ROT_CHECK` | 1 | Per-tick rot detection (0 to disable) |
 | `HB_NO_GIT` | (empty) | Disable git init + commit-on-gate-pass + hook |
 | `HB_GIT_AUTOCOMMIT` | 1 | 0 disables the commit on gate pass |

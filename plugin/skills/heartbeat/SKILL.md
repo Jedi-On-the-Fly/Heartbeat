@@ -287,8 +287,8 @@ Prompt: |
   data.reason per the HeartBeat Tick Protocol (next_task, gate_pending,
   review_pending, gate_blocked, at_capacity, state_corrupted, dag_corrupted,
   deadlock, unsanctioned_drift, criteria_drift, gate_rot, build_stuck,
-  review_stuck, replan_pending, all_done). Update .hb/state.json atomically (tmp + rename) and
-  append a task_done event to .hb/events.jsonl.
+  review_stuck, replan_pending, all_done). Mutate state ONLY through the hb CLI
+  (node .hb/hb.js start/done/fail/review …) — never hand-edit .hb/state.json.
   ALWAYS at end of session: rm -rf <project-dir>/.hb/.lock
 ```
 
