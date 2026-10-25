@@ -44,11 +44,16 @@ phases). Otherwise write a fresh DAG.
 
 **The horizon rule (WHEN to stop planning; continuation above is HOW to resume).**
 When the work is discovery — later phases depend on what earlier phases will *learn* —
-plan ONLY the phases whose spec is known now, and END the planned horizon with an
-explicit **replan point**: a final task whose gate verifies the learning is recorded and
-the next horizon is planned. Fabricating detailed phases beyond the horizon is the
-planning analogue of a hollow gate — unfalsifiable structure that reads as rigor; the
-refuter should flag it. Below the horizon the plan stays freely editable (edit or drop
+plan ONLY the phases whose spec is known now, and mark the final planned phase
+`"horizon": true`. That marker IS the replan point: when the horizon phase completes, the
+tick wakes `replan_pending` instead of `all_done`, and exactly two moves are sanctioned —
+replan by append-continuation (above; plan only the NEXT horizon), or end the project as a
+recorded decision with `node .hb/hb.js horizon close --reason <why>`. A final task that
+records the learning (a findings file a criterion can test) is the recommended
+content of the horizon phase. Fabricating detailed phases beyond the horizon is the
+planning analogue of a hollow gate — unfalsifiable structure that reads as rigor; `hb-audit`
+flags the shape as `speculative_tail` (a warning: ≥ 2 trailing unverified LIVE phases behind
+a verified head, naming the cut point), and the refuter should too. Below the horizon the plan stays freely editable (edit or drop
 never-started phases; `dag.json` is a hypothesis there); ABOVE it, accepted work changes
 only through its own rigor — `regate` for criteria, `detach` for dependency claims — and
 an unsanctioned hand-edit of a completed gate's criteria trips the drift tripwire
@@ -87,7 +92,7 @@ it. Method and proof: [plan-to-the-horizon.md](../../../docs/howto/plan-to-the-h
   warns `unconstrained_review` on a review gate without any. The review of such a gate is constraint-first — see
   [constraint-first-review.md](../../../docs/howto/constraint-first-review.md).
 - **No hardcoded values/counts** — derive from source/registry. Validate the shape
-  against `<project-dir>/.hb/dag.schema.json`.
+  against the plugin's `${CLAUDE_PLUGIN_ROOT}/dag.schema.json` (bootstrap does not copy it into `.hb/`).
 
 **Acceptance (run and show before proposing):**
 ```bash
@@ -169,8 +174,12 @@ node <project-dir>/.hb/hb-audit.js <project-dir>/.hb/dag.json    # exit 1 if any
 Flags: **hollow_gate** (a phase whose gate has no behavioral criterion), **ungated**,
 **unguarded_phase**, existence-only / vacuous criteria, **nondeterministic** gates
 (network/time → flaky), **side_effecting** (a gate that writes/creates files can fabricate
-its own evidence — observe, don't produce), and **gate_offphase** (the gate tests nothing
-the phase produces).
+its own evidence — observe, don't produce), **gate_offphase** (the gate tests nothing
+the phase produces), **unconstrained_review** (a review gate without plan-time
+`review.constraints`), **control_char** (a `\x1e`/`\x1f` byte that would corrupt the gate
+runner's transport), and **speculative_tail** (a warning: two or more trailing unverified LIVE phases, parked ones
+excluded, behind a verified head — planned past the knowledge horizon; it names where to cut and mark
+`"horizon": true`).
 
 **Adversarial layer (agent).** The static rules catch *structural* weakness; a second
 *read* catches semantic gaps — a gate that asserts the **wrong** behaviour, a phase whose
@@ -210,6 +219,7 @@ Tick Protocol below.
 
 **Serial (default):** repeatedly `bash .hb/tick.sh` → act on `data.reason` → repeat,
 stopping only at a wake that needs a human (`gate_blocked`, `build_stuck`, `deadlock`,
+`review_stuck`, `unsanctioned_drift`, `criteria_drift`, `gate_rot`, `replan_pending`, or a
 `review_pending` you can't clear) or `all_done`. Equivalent to `/loop 15m /heartbeat tick <dir>`
 but self-paced.
 
@@ -275,8 +285,9 @@ Prompt: |
     bash <project-dir>/.hb/tick.sh
   Parse the JSON output. If wakeAgent is false, stop. If true, act on
   data.reason per the HeartBeat Tick Protocol (next_task, gate_pending,
-  gate_blocked, state_corrupted, dag_corrupted, deadlock, unsanctioned_drift,
-  build_stuck, all_done). Update .hb/state.json atomically (tmp + rename) and
+  review_pending, gate_blocked, at_capacity, state_corrupted, dag_corrupted,
+  deadlock, unsanctioned_drift, criteria_drift, gate_rot, build_stuck,
+  review_stuck, replan_pending, all_done). Update .hb/state.json atomically (tmp + rename) and
   append a task_done event to .hb/events.jsonl.
   ALWAYS at end of session: rm -rf <project-dir>/.hb/.lock
 ```

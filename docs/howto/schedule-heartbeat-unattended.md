@@ -47,5 +47,10 @@ privileges.
 
 ## What you get
 
-A project that advances on its timer, commits and tags each verified phase as a restore point,
-and pings you only on a human-needed wake (a blocked gate, a stuck build, or completion).
+A project that advances on its timer and commits and tags each verified phase as a restore
+point, and whose tick log shows every human-needed wake (a blocked gate, a stuck build, a
+deadlock, drift, gate rot, a stalled review, a reached knowledge horizon) and completion. A
+push notification is a node-tick feature: `.hb/tick.sh` runs `HB_NOTIFY_CMD` once per blockage
+on `build_stuck`, `gate_blocked`, `deadlock`, `unsanctioned_drift`, `gate_rot`, `review_stuck`,
+`replan_pending` and `all_done` (not on `criteria_drift`, which wakes every tick instead); the
+python `hb tick` used above has no notifier.

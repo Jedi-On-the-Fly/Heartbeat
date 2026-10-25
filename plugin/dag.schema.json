@@ -68,6 +68,7 @@
           "gate_exit": { "type": ["string", "null"] },
           "parked": { "type": "boolean", "description": "Out of the plan's live surface: the resolver never offers its tasks, audit skips its gate, the --all sweep skips it (even if armed), and report lists it as parked. Set via `hb park <PHASE|GATE>`; reversible with `hb unpark`. Parking, not deletion — deleting a gate dangles gate_exit." },
           "parked_reason": { "type": "string" },
+          "horizon": { "type": "boolean", "description": "The knowledge-horizon marker. When this is the LAST live phase and every live phase is complete, the tick wakes replan_pending instead of all_done: append the next horizon's phases, or end the project with `hb horizon close --reason <why>`. Inert on any other phase (a flag left behind by an append is historical)." },
           "tasks": {
             "type": "array",
             "maxItems": 8,

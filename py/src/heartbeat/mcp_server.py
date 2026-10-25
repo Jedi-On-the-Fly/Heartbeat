@@ -78,7 +78,7 @@ def _audit(hb, a):    return auditmod.audit(st.read_dag(hb))
 # name -> (handler, description, inputSchema). Act tools are appended in
 # _register_act() so the read surface stands alone.
 TOOLS = {
-    "tick":     (_tick,      "Run one Stage-A tick and return the next action (wakeAgent, reason, action). To run a whole project, DRIVE the loop: after performing data.action, call `tick` again — keep looping until reason is all_done or a human-needed reason (gate_blocked/build_stuck/deadlock/review_stuck/criteria_drift/replan_pending).", _EMPTY),
+    "tick":     (_tick,      "Run one Stage-A tick and return the next action (wakeAgent, reason, action). To run a whole project, DRIVE the loop: after performing data.action, call `tick` again — keep looping until reason is all_done or a human-needed reason (gate_blocked/build_stuck/deadlock/review_stuck/unsanctioned_drift/criteria_drift/gate_rot/replan_pending).", _EMPTY),
     "next":     (_next,      "The single next eligible action (resolver.resolve).", _EMPTY),
     "ready":    (_ready,     "The concurrently-runnable task set.", {"type": "object", "properties": {"n": {"type": "integer", "description": "max tasks (0 = all)"}}}),
     "state":    (_stateview, "The projected project state (from the event log).", _EMPTY),

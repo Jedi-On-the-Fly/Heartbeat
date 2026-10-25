@@ -15,16 +15,62 @@ The horizon is the last phase whose gate you can spec **now** — concrete crite
 runnable commands, premises you actually hold. Plan to it and stop:
 
 - **Plan only the phases whose spec is known.** A detailed phase beyond the horizon is the
-  planning analogue of a hollow gate: unfalsifiable structure that reads as rigor. The plan
-  refuter should flag it the way `hb-audit` flags `test -f`.
-- **End the horizon with an explicit replan point** — a final task whose gate verifies two
-  things behaviorally: the learning is *recorded* (a findings file, a decision doc — a real
-  artifact a criterion can test), and the next horizon is *planned* (the appended dag
-  lints clean and survives its own refutation).
+  planning analogue of a hollow gate: unfalsifiable structure that reads as rigor. `hb-audit`
+  flags the shape as `speculative_tail` — two or more trailing live phases that are
+  unverified (no gate, a gate without criteria, no behavioral criterion, or an empty
+  placeholder phase) behind a verified head — as ONE warning naming the tail, the cut phase
+  and the cure, identically on both runtimes (`tests/horizon.sh` `case_audit` t1, t6). It
+  stays quiet on a fully-gated plan, a single unverified final phase, an all-unverified plan
+  (no verified head to cut back to) and a parked tail (t2–t5). It is a warning, not an error:
+  its job is the diagnosis — where to cut. A tail member carries its own finding when its
+  shape has one (an unguarded phase warns, an empty or hollow gate errors); an empty
+  placeholder phase carries none, and this rule is what names it.
+- **Mark the horizon: `"horizon": true` on the last planned phase.** That marker IS the
+  replan point. When the flagged phase is the last live phase and every live phase is
+  complete, both resolvers return `replan_pending` instead of `all_done` (`case_marker` m1;
+  without the marker the same plan still ends `all_done` — m3). Both ticks wake
+  `replan_pending` once, with an action naming the two sanctioned moves, then sleep
+  `replan_waiting` (m2); both exec drivers stop with `HB-EXEC STOP: replan_pending — <phase>`
+  on every run (m4). The marker is a strict boolean: lint errors on anything else (`case_lint`
+  n1), and a truthy non-boolean is no horizon on any surface (n3).
+- **Put the learning inside the horizon phase.** A final task whose gate verifies the
+  learning is *recorded* (a findings file, a decision doc — a real artifact a criterion can
+  test) is the recommended content of the horizon phase; the marker makes sure the
+  decision that follows it is never skipped.
 - **Size the horizon honestly.** One phase is a fine horizon. The cost of a short horizon
   is one more replan point; the cost of a long one is fabricated phases you will either
   execute against dead premises or hand-edit — and the tripwire below makes the second
-  path loud.
+  path loud. An old flag left on a phase that is no longer last after an append is
+  historical and inert, never a lint error (n2; `case_append` a2).
+
+## At the horizon: exactly two moves
+
+When the tick wakes `replan_pending`, a human decision is owed, and there are exactly two
+sanctioned answers:
+
+1. **Replan by append-continuation** (next section): append the NEXT horizon's phases, flag
+   the new last phase, refute the appended plan, tick. The ticks hand out the appended work
+   (`case_append` a1). The close is phase-scoped, so a new flagged horizon wakes again even
+   after an older one was closed (a3), and a stale once-flag never silences a newer horizon
+   (a4; the flag is one surface across both runtimes and is cleared when a task is handed
+   out or `all_done` is reached — `case_flags` f1, f2, f4).
+2. **End the project as a recorded decision**: `hb horizon close --reason "<why>"` (node:
+   `node .hb/hb.js horizon close --reason <why…>`). It appends a `horizon_closed` event
+   carrying the phase, the reason and the actor, reprojects, and the next tick wakes
+   `all_done` (`case_close` c3); `hb rebuild` preserves the verdict (c4).
+
+**The close is a verdict, and it fails closed.** It is refused — nonzero exit, no event
+appended — when the horizon is not reached or the last live phase is unflagged (c1), when
+the reason is missing or empty (c2), when the horizon is already closed by the projection's
+own reading (c3; and c5 pins that reading as the projection's: after an `initialized` reset
+and a replay of the completion history, the horizon is open again and accepts a new close), and when every phase is parked (c7). The
+close sits inside the same regate perimeter as the review: an open revision on ANY live
+gate — declared, unanswered in the log even with the dag marker hand-cleared, carried only
+by a pending dag marker, or rearmed without a fresh pass — refuses it, so a close can never
+retire a revision behind a finished project (c6). An all-parked plan keeps ending in
+`all_done` (`case_parked` p1). Reports print the horizon line — planned, REACHED naming
+both moves, or closed by its actor with the reason — and nothing on an unmarked project
+(`case_report` r1–r4).
 
 ## Replanning at the horizon
 
@@ -102,12 +148,21 @@ outside the tripwire's reach — the log is the same trusted input the whole eve
 design already assumes. The tripwire makes the quiet path loud; it does not authenticate
 the actors walking it.
 
+The horizon marker has the same honest edge. It is plan surface, like `desc` — the drift
+tripwire pins only a completed gate's criteria — so deleting the flag from the completed
+phase, or parking the flagged phase, silences the wake with doctor quiet on both runtimes
+(`case_limits` l1, l2). The recorded way to end a horizon is the close verb; a hand-appended
+`horizon_closed` event is accepted like any other log line, under the same procedural trust.
+
 ## Prove it
 
 ```bash
-bash tests/replan.sh              # REPLAN-OK — every claim above, both runtimes
-bash tests/replan.sh --selftest   # REPLAN-SELFTEST-OK — the proof's own teeth
+bash tests/replan.sh               # REPLAN-OK — the append/edit/tripwire claims, both runtimes
+bash tests/replan.sh --selftest    # REPLAN-SELFTEST-OK — that proof's own teeth
+bash tests/horizon.sh              # HORIZON-OK — the marker/wake/close/audit claims, both runtimes
+bash tests/horizon.sh --selftest   # HORIZON-SELFTEST-OK — each stripped horizon guard reddens its check
 ```
 
-The suite wires both as group T184 (outcome-keyed on those markers), and
-`tests/parity.sh` holds the cross-runtime verdicts byte-identical (`drift:cross`).
+The suite wires them as groups T184 and T185 (outcome-keyed on those markers), and
+`tests/parity.sh` holds the cross-runtime verdicts byte-identical (`drift:cross`,
+`horizon:resolve`, `horizon:project`, `horizon:lint`, `horizon:audit`).

@@ -39,8 +39,9 @@ HB_MAX_CONCURRENCY="${HB_MAX_CONCURRENCY:-1}"
 HEARTBEAT_STALE_S="${HEARTBEAT_STALE_S:-180}"
 # v1.4: optional notifier for human-needed wakes. If set, it is run as
 #   $HB_NOTIFY_CMD "<reason>" "<project>" "<detail>"
-# on build_stuck / gate_blocked / deadlock / unsanctioned_drift / criteria_drift /
-# all_done / replan_pending / review_stuck / gate_rot — once per blockage. Timeout-wrapped and best-effort;
+# on build_stuck / gate_blocked / deadlock / unsanctioned_drift / all_done /
+# replan_pending / review_stuck / gate_rot — once per blockage (criteria_drift is not
+# notified: it wakes every tick until cured). Timeout-wrapped and best-effort;
 # it can never break the tick.
 HB_NOTIFY_CMD="${HB_NOTIFY_CMD:-}"
 # v1.6: run `hb.js doctor` each tick and wake `gate_rot` if a COMPLETED phase's

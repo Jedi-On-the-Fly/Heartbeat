@@ -1,13 +1,15 @@
 # The auditor catches each weakness — and doesn't cry wolf
 
-`hb-audit` is the front-line gate-quality check: it refuses a DAG whose gates are hollow,
-existence-only, nondeterministic, side-effecting, off-phase, ungated, or unguarded, *before*
-a token is spent. A checker is only worth trusting if it actually fires on each weakness it
+`hb-audit` is the front-line gate-quality check, *before* a token is spent: it refuses a DAG
+whose gates are hollow, ungated or carry a control byte, and it flags gates that are
+vacuous, existence-only, nondeterministic, side-effecting, off-phase, unguarded or
+unconstrained — and a speculative tail (phases planned past the knowledge horizon) — as
+warnings or notes. A checker is only worth trusting if it actually fires on each weakness it
 claims to catch — and stays quiet on a clean DAG. This is how that's proven.
 
 ## The rules
 
-The auditor emits eight findings; some are hard errors (`ungated`, `hollow_gate`), the rest
+The auditor emits eleven findings; some are hard errors (`ungated`, `hollow_gate`, `control_char`), the rest
 warn or info (the full semantics and exact severities live in the auditor itself,
 [`hb-audit.js`](../../plugin/templates/hb-audit.js), and the gate catalogue in
 [writing-behavioral-gates.md](writing-behavioral-gates.md)):
@@ -24,6 +26,7 @@ warn or info (the full semantics and exact severities live in the auditor itself
 | `gate_offphase` | a gate referencing files no task in the phase mentions |
 | `control_char` | a criterion carrying a `\x1e`/`\x1f` byte that would corrupt the gate runner's transport |
 | `unconstrained_review` | a review gate with no plan-time `review.constraints` — the refuter's target is implicit (a warning) |
+| `speculative_tail` | two or more trailing LIVE (non-parked) phases left unverified behind a verified head — planned past the knowledge horizon; names the cut point (a warning) |
 
 ## Proof
 
@@ -34,7 +37,7 @@ generates a minimal must-trip DAG and asserts that rule fires; finally it assert
 behavioral DAG trips **none** of them (no false alarms). Run it:
 
 ```bash
-bash docs/howto/gate-examples/audit-rules-check.sh   # -> AUDIT-RULES-PROVEN:10
+bash docs/howto/gate-examples/audit-rules-check.sh   # -> AUDIT-RULES-PROVEN:11
 ```
 
 This is the auditor's analogue of the parity self-test

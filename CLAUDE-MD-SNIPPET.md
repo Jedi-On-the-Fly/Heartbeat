@@ -52,7 +52,11 @@ When woken by a tick (`data.reason` present in context):
 | `dag_corrupted` | `git checkout HEAD -- .hb/dag.json` (structure is immutable). |
 | `deadlock` | `active_orphan` → reclaimed automatically; if it persists `hb fail <id>`. `dag_invalid` → surface for human review. |
 | `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
+| `criteria_drift` | A completed gate's criteria changed without sanction — HUMAN NEEDED. Cure with a full regate cycle (`node .hb/hb.js regate <gate> <reason>`, a different actor's rearm, a fresh `bash .hb/gate.sh <gate>`); never freeze or edit past it. |
+| `gate_rot` | A completed phase's gate references a deleted file — `node .hb/hb.js diagnose` names it and the commit that deleted it; restore it or re-point the gate. |
 | `build_stuck` | `signal: no_progress` = woken repeatedly without progress. Produce a blocker report. |
+| `review_stuck` | An adversarial review never resolved — run the refuter, then `hb review <gate> pass\|fail`, or surface for human review. |
+| `replan_pending` | The flagged last phase (`"horizon": true`) completed — HUMAN NEEDED: append the next horizon's phases, or end the project with `node .hb/hb.js horizon close --reason <why>`. |
 | `all_done` | Write the final project report. |
 
 **Version control:** bootstrap runs `git init`; every gate pass commits + force-tags

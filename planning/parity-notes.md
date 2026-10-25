@@ -151,6 +151,8 @@ updates, so the check has teeth), wired as node-suite T140.
 
 ## Intentional divergences (not on the byte-equal surface)
 
+- **The tick notifier is node-only.** `tick.sh` runs `HB_NOTIFY_CMD` once per blockage on `build_stuck`, `gate_blocked`, `deadlock`, `unsanctioned_drift`, `gate_rot`, `review_stuck`, `replan_pending` and `all_done`; the python `tick.py` has no notifier. The wake reasons and the once-flags (`.replan-alerted` included) are shared; only the side-channel ping differs.
+
 - **Pre-push gate guard: behavioral parity, runtime-specific body; rot pre-commit is node-only.** Both
   bootstraps now install a **blocking `pre-push` hook** (re-verify every gate, block the push on any
   regression) — behavioral parity (T118): the body differs by runtime (node calls `bash .hb/gate.sh
@@ -259,6 +261,10 @@ Findings (severity):
 - `vacuous` / `existence` (**info**) — per-criterion note (does not fail the DAG on its own if a sibling criterion is behavioral).
 - `nondeterministic` (**warn**) — per-criterion flake risk.
 - `gate_offphase` (**warn**) — the gate references files no task in that phase mentions (may not test this phase's work).
+- `side_effecting` (**warn**) — a criterion writes/creates files (it could fabricate its own evidence).
+- `unconstrained_review` (**warn**) — a review gate without plan-time `review.constraints`.
+- `control_char` (**error**) — a criterion cmd/desc carries a `\x1e`/`\x1f` byte.
+- `speculative_tail` (**warn**) — ≥ 2 trailing live phases unverified behind a verified head (see the horizon contract below).
 
 `audit` exits 1 if any **error**, else 0. A phase with one behavioral + one `test -f`
 criterion is NOT hollow (one behavioral criterion is enough) — only its `test -f` gets an
@@ -425,8 +431,9 @@ both runtimes: no gate, no criteria (never an audit crash, never an audit diverg
 objects agree). This is an audit guarantee only — the lints do not yet reject every such shape. When the maximal trailing run of unverified phases is ≥ 2 AND at least one earlier live
 phase is verified, ONE warn finding names the tail ids, the cut phase and the cure (end the plan
 there with the horizon flag; `docs/howto/plan-to-the-horizon.md`). Parked phases are excluded. It
-stays a WARN: the hollow members already carry their own per-phase errors — this rule's job is the
-diagnosis (where to cut), not a second verdict.
+stays a WARN: its job is the diagnosis (where to cut), not a second verdict — a tail member carries
+its own finding when its shape has one (unguarded warns, ungated/hollow error), and an empty
+placeholder carries none, which this rule names.
 
 HONEST LIMITS, recorded: the marker is plan surface, desc-class — the drift tripwire pins only a
 completed gate's `(id, cmd)` criteria, so deleting the flag or parking the flagged phase silences the

@@ -383,6 +383,13 @@ py:   $op"
     node "$P/.hb/hb-lint.js" "$P/.hb/dag.json" >/dev/null 2>&1 || fail "n2: node lint rejected horizon=$v"
     PY lint "$P/.hb/dag.json" --dir "$P" >/dev/null 2>&1 || fail "n2: python lint rejected horizon=$v"
   done
+  # n4: the shipped dag schema declares the marker (phases are additionalProperties:false — a schema
+  # that omits it would reject every horizon plan the skill tells planners to write)
+  python3 - "$ROOT/plugin/dag.schema.json" <<'PYEOF' || fail "n4: plugin/dag.schema.json does not declare a boolean phase 'horizon'"
+import json, sys
+ph = json.load(open(sys.argv[1]))["properties"]["phases"]["items"]
+assert ph["properties"]["horizon"]["type"] == "boolean"
+PYEOF
   # n3: the marker is a STRICT boolean on every runtime surface, not only the lint: a truthy
   # non-true value on the reached last phase is NO horizon — both resolvers all_done, no replan
   # wake from either tick, no horizon line in either report, and both closes refuse with no event

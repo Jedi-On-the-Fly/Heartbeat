@@ -59,7 +59,8 @@ either host — see [install-the-heartbeat-plugin.md](install-the-heartbeat-plug
 `tick` is **pull-based**: one call returns one action, then exits — there is no external ticker in
 an interactive session. To run a whole project the client must **drive**: after performing
 `data.action`, call `tick` **again**, and keep looping until the reason is `all_done` or a
-human-needed reason (`gate_blocked` / `build_stuck` / `deadlock` / `review_stuck`). The tool teaches
+human-needed reason (`gate_blocked` / `build_stuck` / `deadlock` / `review_stuck` /
+`unsanctioned_drift` / `criteria_drift` / `gate_rot` / `replan_pending`). The tool teaches
 this itself — its description says so, and on a work-advancing wake the result carries a `data.next`
 nudge to call `tick` again (and *nothing* on a terminal tick, so a finished project is never told to
 keep looping). A client that reacts to a single tick and stops leaves the DAG unfinished; this is the

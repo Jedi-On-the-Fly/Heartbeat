@@ -162,7 +162,9 @@ tasks, behavioral gates, adversarial review on sensitive gates, and lints clean.
 4. Drift            SHA256 of WATCH_PATHS; unsanctioned change → wake unsanctioned_drift
 5. Gate errors      a previously failed gate → wake gate_blocked
 6. Next task        eligible task → wake next_task; tasks done but gate unpassed → gate_pending;
-                    deterministic gate passed, review owed → review_pending; project done → all_done;
+                    deterministic gate passed, review owed → review_pending; project done → all_done
+                    — unless the LAST LIVE phase is a flagged, unclosed knowledge horizon →
+                    replan_pending (once per horizon);
                     nothing actionable on an unfinished project → deadlock (with diagnostic)
 ```
 
@@ -208,9 +210,11 @@ steps — you are never left guessing.
 | `dag_corrupted` | Restore dag.json from git/backup (structure is immutable). |
 | `deadlock` | `active_orphan` → reclaimed automatically. `dag_invalid` → surface for human review. |
 | `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
+| `criteria_drift` | A completed gate's criteria changed without sanction — HUMAN NEEDED. The cure is a full regate cycle (`hb regate`, a different actor's rearm, a fresh pass), never a freeze or an edit past it. |
 | `gate_rot` | A completed phase's gate references a deleted file — run `hb doctor`, fix or re-point the gate. |
 | `build_stuck` | Woken repeatedly without progress. Produce a blocker report. |
 | `review_stuck` | An adversarial review never resolved — run the refuter, then `hb review`. |
+| `replan_pending` | The flagged last phase (`"horizon": true`) completed — HUMAN NEEDED: append the next horizon's phases, or end the project with `hb horizon close --reason "<why>"`. |
 | `all_done` | Write the final project report. |
 
 **End of session:** finish each claimed task with `hb done`/`hb fail`. The handout

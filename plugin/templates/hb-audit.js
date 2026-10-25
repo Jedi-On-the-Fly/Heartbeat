@@ -74,7 +74,7 @@ function reviewQuestions(dag, gate) {
 // speculative_tail: a plan whose TRAILING live phases are unverified (no gate, no criteria, or no
 // behavioral criterion — a zero-task zero-gate placeholder included) behind a verified head was
 // planned past its knowledge horizon: those phases are guesses dressed as a plan. Fires once, warn
-// (the hollow members already carry their own errors) — its job is the DIAGNOSIS: the cut point.
+// — its job is the DIAGNOSIS: the cut point (members carry their own findings when their shape has one).
 // Twin: audit._speculative_tail.
 // Hostile shapes (a non-object gates map or gate value, a non-array criteria, a non-string
 // gate_exit) are lint errors; here they read as EMPTY on both runtimes — never a crash, never a
