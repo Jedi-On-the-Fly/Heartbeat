@@ -434,8 +434,8 @@ def main(argv=None):
                   f"(re-audit before running: hb audit)")
         return 0
     elif args.cmd == "lint":
-        dag = json.loads(Path(args.dagfile).read_text()) if args.dagfile else st.read_dag(hb)
-        r = lintmod.lint(dag)
+        dag, rerr = lintmod.read_dag_file(args.dagfile if args.dagfile else Path(hb) / "dag.json")
+        r = {"errors": [rerr], "warnings": []} if rerr else lintmod.lint(dag)
         if args.json:
             print(json.dumps(r))
             return 1 if r["errors"] else 0
@@ -448,11 +448,15 @@ def main(argv=None):
         return 1 if r["errors"] else 0
     elif args.cmd == "audit":
         from . import audit as auditmod
-        dag = json.loads(Path(args.dagfile).read_text()) if args.dagfile else st.read_dag(hb)
+        dag, rerr = lintmod.read_dag_file(args.dagfile if args.dagfile else Path(hb) / "dag.json")
         if args.questions:
+            bad = rerr or (lintmod.shape_errors(dag, True) or [None])[0]  # fail closed: no checklist from a malformed plan
+            if bad:
+                sys.stderr.write(f"✗ dag.json structure is invalid: {bad} — run the lint for every error\n")
+                return 1
             sys.stdout.write(auditmod.review_questions(dag, args.questions))
             return 0
-        r = auditmod.audit(dag)
+        r = auditmod.audit(dag, rerr)
         if args.json and not args.agent:
             print(json.dumps(r))
             return 1 if r["errors"] else 0
@@ -461,7 +465,9 @@ def main(argv=None):
             print(f"  {icon[f['severity']]} [{f['rule']}] {f['message']}")
         if r.get("parked"):   # loud — a skipped phase must be visible in the audit
             print(f"  ⏸ skipped {len(r['parked'])} parked phase(s): {' '.join(r['parked'])} (unpark to re-audit)")
-        print(f"✗ {r['errors']} error(s), {r['warns']} warning(s) — fix hollow gates before running"
+        print((f"✗ {r['errors']} error(s), {r['warns']} warning(s) — dag.json is structurally invalid; run the lint, fix it, then re-audit"
+               if any(f["rule"] == "dag_shape" for f in r["findings"]) else
+               f"✗ {r['errors']} error(s), {r['warns']} warning(s) — fix hollow gates before running")
               if r["errors"] else f"✓ gates look behavioural ({r['warns']} warning(s))")
         refuted = False
         if args.agent:

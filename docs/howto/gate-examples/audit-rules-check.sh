@@ -23,6 +23,7 @@ gen(){ case "$1" in
   gate_offphase)   echo '{"phases":[{"id":"P","gate_exit":"G","tasks":[{"id":"T","title":"x"}]}],"gates":{"G":{"criteria":[{"id":"c","cmd":"grep -q ok \"$PROJECT_DIR/orphan.txt\""}]}}}';;
   unconstrained_review) echo '{"phases":[{"id":"P","gate_exit":"G","tasks":[{"id":"T","title":"write out.txt"}]}],"gates":{"G":{"review":{"prompt":"refute P"},"criteria":[{"id":"c","cmd":"grep -q ok \"$PROJECT_DIR/out.txt\""}]}}}';;
   control_char)    echo '{"phases":[{"id":"P","gate_exit":"G","tasks":[{"id":"T","title":"x"}]}],"gates":{"G":{"criteria":[{"id":"c","cmd":"grep -q ok f\u001ftrue"}]}}}';;
+  dag_shape)       echo '{"phases":[{"id":5,"gate_exit":"G","tasks":[{"id":"T","title":"x"}]}],"gates":{"G":{"criteria":[{"id":"c","cmd":"grep -q ok \"$PROJECT_DIR/out.txt\""}]}}}';;
   speculative_tail) echo '{"phases":[{"id":"P","gate_exit":"G","tasks":[{"id":"T","title":"write out.txt"}]},{"id":"Q","tasks":[{"id":"U","title":"x"}]},{"id":"R","tasks":[{"id":"V","title":"y"}]}],"gates":{"G":{"criteria":[{"id":"c","cmd":"grep -q ok \"$PROJECT_DIR/out.txt\""}]}}}';;
   *) echo "";;
 esac; }

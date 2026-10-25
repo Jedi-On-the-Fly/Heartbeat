@@ -428,7 +428,8 @@ placeholder is the purest speculative shape), its gate has no criteria, or none 
 behavioral. Hostile shapes outside the dag schema — a non-object `gates` map or gate value, a
 non-array `criteria`, a non-string (or empty) `gate_exit` — read as EMPTY in every audit rule on
 both runtimes: no gate, no criteria (never an audit crash, never an audit divergence; full finding
-objects agree). This is an audit guarantee only — the lints do not yet reject every such shape. When the maximal trailing run of unverified phases is ≥ 2 AND at least one earlier live
+objects agree). Each such shape is also a lint ERROR and an audit `dag_shape` finding under the
+shape contract below. When the maximal trailing run of unverified phases is ≥ 2 AND at least one earlier live
 phase is verified, ONE warn finding names the tail ids, the cut phase and the cure (end the plan
 there with the horizon flag; `docs/howto/plan-to-the-horizon.md`). Parked phases are excluded. It
 stays a WARN: its job is the diagnosis (where to cut), not a second verdict — a tail member carries
@@ -443,3 +444,65 @@ procedural trust the whole event log carries (`HB_ACTOR` is self-declared identi
 refusals bind the verb, not the pen. Parity cases: `horizon:resolve`, `horizon:project`
 (multi-close insertion order + the absent key), `horizon:lint`, `horizon:audit`, each with a
 non-vacuity floor, implemented inline. Proof: `tests/horizon.sh` (T185) + its `--selftest` teeth.
+
+## The shape contract (dag.json's STRUCTURE has one judge)
+
+STRUCTURE is exactly the nodes of `plugin/dag.schema.json` annotated `"x-hb-structure": true`, plus
+the implicit root: `phases` (a list) and each phase (an object) with an `id` (a non-empty string);
+`tasks` (a list) and each task (an object) with an `id`; `requires` (a list of strings);
+`gate_entry` / `gate_exit` (a string or null); `parked` (a boolean — it is control flow: a truthy
+non-boolean ended a plan silently, and `[]`/`{}` split the runtimes); `gates` (an object) and each
+gate value (an object); a gate's `criteria` (a list) and each criteria entry (an object). The root's
+`phases` and `gates` are required (a `{}` plan slept forever); a gate without `criteria` and a phase
+without `tasks` stay outside by design (`"x-hb-absent-ok": true`), and an EMPTY `phases` list stays
+valid. Everything else — a criterion's fields, `review`, `review.constraints`, `regate`, the detach
+fields, `horizon`, `_meta` — keeps its own existing rules and pins.
+
+`readDagFile` (hb-lint.js) ≡ `read_dag_file` (lint.py) is the checked FILE read: a missing, empty,
+unparseable or non-object `dag.json` is an error with FIXED bytes, never parser text —
+`dag.json unreadable: missing` / `cannot be read` / `empty` / `not valid JSON` /
+`nested too deeply` / `top level is not an object`. Nesting is bounded at 256 levels by a scan of
+the TEXT before parsing (the parsers' own depth limits differ — python's recursion vs V8's stack — so
+one bound must decide on both). Python parses strictly (NaN/Infinity rejected; a BOM, invalid UTF-8 or
+an unpaired surrogate escape is `not valid JSON` on both). Lint and audit read through it with or
+without a file argument (python's no-argument CLI and the MCP lint/audit tools included), never
+through `read_dag`'s silent empty-plan fallback.
+
+`shapeErrors` ≡ `shape_errors` emits ONE byte-identical error per violation, named by its JSON path
+(`phases[1].tasks[0].id must be a non-empty string`, `phases: missing`); a non-object criteria entry
+keeps the existing `[G] criteria entry N must be …` line instead. Every other rule then runs on
+`structureView` ≡ `structure_view` — malformed containers, wrong-typed references and items, and
+invalid-id tasks dropped — so it neither crashes nor emits junk lines; on a structure-valid dag the
+view IS the dag, and every existing dag lints byte-for-byte as before (the proof's oracle is the
+pre-wave linter at commit a500587). Audit adds one error finding `dag_shape` naming the first
+structure error (every field mirrored; both summaries then name the structure failure, never
+"hollow gates") and stays tolerant otherwise. Python's lint task-id set is insertion-ordered like
+JS `Set` (a hash-ordered set made the cycle message vary run to run), and python adopts JS OBJECT
+key order for gates (canonical array-index keys ascending first, then insertion order — node cannot
+see the insertion order of integer-like keys), so ordered outputs agree. Node's rule maps (the view's
+gates, lint's task map and colors) are prototype-free (`Object.create(null)`), so an id or gate named
+`__proto__` stays an ordinary key and a reference to `constructor` / `toString` finds no inherited
+member, and its lint/audit CLIs set `process.exitCode` instead of calling `process.exit()` mid-write (a
+piped `--json` report over the pipe buffer was truncated). A criteria entry's offending value is named
+by its JSON type (`got a number`), never rendered — number formatting and string slicing differ. Python parses an integer literal over 4000 digits as a float
+(CPython's `int()` refuses more than 4300 digits; JS reads every number as a double), so a giant
+literal gets node's verdict. Audit's `--questions` finds a gate by membership (an empty gate object
+is a gate) and reads `desc` only when it is a string.
+
+The schema is reconciled with what the runtimes write: `project` (top), `note` (task), the `regate`
+marker and its `rearm` (`model` string or null), the four `detached_*` fields, `minLength: 1` on ids,
+`_meta` of any type. A reverse pin runs park/unpark, regate declare/rearm (with and without
+`--model`) and detach/reattach on both runtimes and asserts every key they write is declared.
+
+HONEST LIMITS, recorded: only STRUCTURE is enforced — a wrong-typed optional scalar (`title`,
+`timeout_s`, …) or an undeclared key is not a lint finding, and a non-string criterion id still
+renders per runtime in audit's notes (`[5]` vs `[5.0]`, `[true]` vs `[True]`); lint hand-codes the rules (mirrored), with
+the schema's annotations as the proof's oracle, not a runtime dependency (bootstrap still does not
+ship the schema into `.hb/`); semantic lint errors (cycles, missing refs) keep their runtime path.
+Audit's `--questions` mode fails closed on a malformed or unreadable plan (exit 1, the dag_shape
+line) and reads gates through the view on both runtimes. The adapter fixtures under
+`plugin/adapters/*/fixtures/` are code/docs graphs without a `gates` map; under the contract each
+gains exactly `gates: missing` (the proof's oracle allowlists precisely that).
+Parity cases: `shape:lint`, `shape:unreadable`, `shape:audit`, each with a non-vacuity floor,
+inline. Proof: `tests/dag-shape.sh` (T186) + its `--selftest` teeth.
+

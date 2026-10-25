@@ -4,35 +4,73 @@
   "title": "HeartBeat DAG",
   "description": "Schema for a HeartBeat .hb/dag.json — phases, tasks, dependencies, and quality gates. Reference it from your dag.json with \"$schema\": \"../path/to/dag.schema.json\" for live editor validation.",
   "type": "object",
-  "required": ["gates", "phases"],
+  "required": [
+    "gates",
+    "phases"
+  ],
   "properties": {
-    "$schema": { "type": "string" },
-    "_meta": { "type": "object" },
+    "$schema": {
+      "type": "string"
+    },
+    "_meta": {
+      "description": "Free-form plan documentation (design notes, refutation records). Any JSON value; nothing reads it as structure."
+    },
     "gates": {
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "required": ["criteria"],
+        "required": [
+          "criteria"
+        ],
         "properties": {
-          "desc": { "type": "string" },
+          "desc": {
+            "type": "string"
+          },
           "review": {
             "type": "object",
             "description": "Optional adversarial review — the phase advances only after a second agent fails to refute completion.",
             "properties": {
-              "prompt": { "type": "string" },
+              "prompt": {
+                "type": "string"
+              },
               "constraints": {
                 "type": "array",
                 "description": "Plan-time constraints: falsifiable claims the refuter must answer one by one (VIOLATED / NOT-REPRODUCED / N/A). Ids P<n>; G<n> is reserved for constraints authored at review time.",
                 "items": {
                   "type": "object",
-                  "required": ["id", "claim", "subjects", "violation"],
+                  "required": [
+                    "id",
+                    "claim",
+                    "subjects",
+                    "violation"
+                  ],
                   "properties": {
-                    "id": { "type": "string", "pattern": "^P[0-9]+$" },
-                    "claim": { "type": "string", "minLength": 1 },
-                    "subjects": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
-                    "violation": { "type": "string", "minLength": 1 }
+                    "id": {
+                      "type": "string",
+                      "pattern": "^P[0-9]+$"
+                    },
+                    "claim": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "subjects": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "violation": {
+                      "type": "string",
+                      "minLength": 1
+                    }
                   }
                 }
+              },
+              "profile": {
+                "type": "string",
+                "description": "The refuter profile that reviews this gate (.hb/refuters/<name>)."
               }
             },
             "additionalProperties": true
@@ -41,52 +79,195 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": ["id", "cmd"],
+              "required": [
+                "id",
+                "cmd"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "desc": { "type": "string" },
-                "cmd": { "type": "string", "description": "One-line bash, exit 0 = pass. $PROJECT_DIR and $HB_DIR are available." },
-                "timeout_s": { "type": "integer", "minimum": 1, "description": "Per-criterion timeout in seconds — WINS over the runner default (GATE_TIMEOUT_S, 60). An invalid value fails the criterion loudly at runtime." }
+                "id": {
+                  "type": "string"
+                },
+                "desc": {
+                  "type": "string"
+                },
+                "cmd": {
+                  "type": "string",
+                  "description": "One-line bash, exit 0 = pass. $PROJECT_DIR and $HB_DIR are available."
+                },
+                "timeout_s": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Per-criterion timeout in seconds — WINS over the runner default (GATE_TIMEOUT_S, 60). An invalid value fails the criterion loudly at runtime."
+                }
               },
-              "additionalProperties": false
-            }
+              "additionalProperties": false,
+              "x-hb-structure": true
+            },
+            "x-hb-structure": true,
+            "x-hb-absent-ok": true
+          },
+          "regate": {
+            "type": "object",
+            "description": "The regate marker written by hb regate (declare) and its --rearm half; every evaluation/acceptance path fails closed while pending.",
+            "properties": {
+              "at": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "actor": {
+                "type": "string"
+              },
+              "prev_criteria": {
+                "type": "array"
+              },
+              "pending": {
+                "type": "boolean"
+              },
+              "rearm": {
+                "type": "object",
+                "properties": {
+                  "at": {
+                    "type": "string"
+                  },
+                  "actor": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "artifact": {
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
           }
         },
-        "additionalProperties": false
-      }
+        "additionalProperties": false,
+        "x-hb-structure": true
+      },
+      "x-hb-structure": true
     },
     "phases": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "tasks"],
+        "required": [
+          "id",
+          "tasks"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "title": { "type": "string" },
-          "desc": { "type": "string" },
-          "gate_entry": { "type": ["string", "null"] },
-          "gate_exit": { "type": ["string", "null"] },
-          "parked": { "type": "boolean", "description": "Out of the plan's live surface: the resolver never offers its tasks, audit skips its gate, the --all sweep skips it (even if armed), and report lists it as parked. Set via `hb park <PHASE|GATE>`; reversible with `hb unpark`. Parking, not deletion — deleting a gate dangles gate_exit." },
-          "parked_reason": { "type": "string" },
-          "horizon": { "type": "boolean", "description": "The knowledge-horizon marker. When this is the LAST live phase and every live phase is complete, the tick wakes replan_pending instead of all_done: append the next horizon's phases, or end the project with `hb horizon close --reason <why>`. Inert on any other phase (a flag left behind by an append is historical)." },
+          "id": {
+            "type": "string",
+            "x-hb-structure": true,
+            "minLength": 1
+          },
+          "title": {
+            "type": "string"
+          },
+          "desc": {
+            "type": "string"
+          },
+          "gate_entry": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-hb-structure": true
+          },
+          "gate_exit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "x-hb-structure": true
+          },
+          "parked": {
+            "type": "boolean",
+            "description": "Out of the plan's live surface: the resolver never offers its tasks, audit skips its gate, the --all sweep skips it (even if armed), and report lists it as parked. Set via `hb park <PHASE|GATE>`; reversible with `hb unpark`. Parking, not deletion — deleting a gate dangles gate_exit.",
+            "x-hb-structure": true
+          },
+          "parked_reason": {
+            "type": "string"
+          },
+          "horizon": {
+            "type": "boolean",
+            "description": "The knowledge-horizon marker. When this is the LAST live phase and every live phase is complete, the tick wakes replan_pending instead of all_done: append the next horizon's phases, or end the project with `hb horizon close --reason <why>`. Inert on any other phase (a flag left behind by an append is historical)."
+          },
           "tasks": {
             "type": "array",
             "maxItems": 8,
             "items": {
               "type": "object",
-              "required": ["id"],
+              "required": [
+                "id"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "title": { "type": "string" },
-                "description": { "type": "string" },
-                "requires": { "type": "array", "items": { "type": "string" } }
+                "id": {
+                  "type": "string",
+                  "x-hb-structure": true,
+                  "minLength": 1
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "requires": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "x-hb-structure": true
+                  },
+                  "x-hb-structure": true
+                },
+                "note": {
+                  "type": "string",
+                  "description": "Free-form note about the task."
+                }
               },
-              "additionalProperties": false
-            }
+              "additionalProperties": false,
+              "x-hb-structure": true
+            },
+            "x-hb-structure": true,
+            "x-hb-absent-ok": true
+          },
+          "detached_from": {
+            "type": "string",
+            "description": "The gate this phase's dependency claim was retracted from (set by hb detach; restored by hb reattach)."
+          },
+          "detached_reason": {
+            "type": "string",
+            "description": "Why the dependency claim was retracted."
+          },
+          "detached_by": {
+            "type": "string",
+            "description": "The HB_ACTOR that retracted it."
+          },
+          "detached_at": {
+            "type": "string",
+            "description": "When it was retracted (ISO timestamp)."
           }
         },
-        "additionalProperties": false
-      }
+        "additionalProperties": false,
+        "x-hb-structure": true
+      },
+      "x-hb-structure": true
+    },
+    "project": {
+      "type": "string",
+      "description": "The project name the reports print."
     }
   },
   "additionalProperties": false

@@ -615,6 +615,31 @@ anchors_case(){  # <git|nogit>: same tree → same manifest (path set + hashes) 
 }
 anchors_case git; anchors_case nogit
 
+echo "── shape parity ──"
+# The shape contract: structure errors, unreadable files and audit's dag_shape agree byte-for-byte —
+# each with a non-vacuity floor. Inline mktemp cases, never fixture files.
+SD=$(mktemp -d)
+printf '%s' '{"phases":[{"id":"A","gate_exit":"G","tasks":[{"id":5,"title":"t"},{"id":"b","requires":"x"}]},"junk"],"gates":{"G":{"criteria":"x"},"H":[]}}' > "$SD/s.json"
+SL_N=$(l_node "$SD/s.json"); SL_P=$(l_py "$SD/s.json")
+node "$ROOT/plugin/templates/hb-lint.js" "$SD/s.json" >/dev/null 2>&1; SL_NR=$?
+eval "$PY lint \"$SD/s.json\"" >/dev/null 2>&1; SL_PR=$?
+cmp "shape:lint" "$SL_N exit=$SL_NR" "$SL_P exit=$SL_PR"
+case "$SL_N exit=$SL_NR" in *'phases[0].tasks[0].id must be'*'exit=1') ;; *) echo "  ✗ shape:lint — node found no path-named structure error / exit 1: $SL_N"; FAIL=1;; esac
+printf '{"phases": [' > "$SD/t.json"; printf '[1,2]' > "$SD/top.json"
+SU_N=""; SU_P=""
+for f in t top; do
+  o=$(node "$ROOT/plugin/templates/hb-lint.js" "$SD/$f.json" --json 2>&1); r=$?; SU_N="$SU_N $o exit=$r"
+  o=$(eval "$PY lint \"$SD/$f.json\" --json" 2>&1); r=$?; SU_P="$SU_P $(echo "$o" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin),separators=(",",":")))' 2>&1) exit=$r"
+done
+cmp "shape:unreadable" "$SU_N" "$SU_P"
+echo "$SU_N$SU_P" | grep -qE 'Traceback|TypeError' && { echo "  ✗ shape:unreadable — a lint crashed: $SU_N / $SU_P"; FAIL=1; }
+case "$SU_N" in *'not valid JSON'*'exit=1'*'top level is not an object'*'exit=1') ;; *) echo "  ✗ shape:unreadable — node lacks the fixed unreadable classes: $SU_N"; FAIL=1;; esac
+SA_N=$(node "$ROOT/plugin/templates/hb-audit.js" "$SD/s.json" 2>&1 | grep '\[dag_shape\]'); node "$ROOT/plugin/templates/hb-audit.js" "$SD/s.json" >/dev/null 2>&1; SA_NR=$?
+SA_P=$(eval "$PY audit \"$SD/s.json\"" 2>&1 | grep '\[dag_shape\]'); eval "$PY audit \"$SD/s.json\"" >/dev/null 2>&1; SA_PR=$?
+cmp "shape:audit" "$SA_N exit=$SA_NR" "$SA_P exit=$SA_PR"
+echo "$SA_N" | grep -q 'dag_shape' || { echo "  ✗ shape:audit — node audit emitted no dag_shape finding"; FAIL=1; }
+rm -rf "$SD"
+
 echo "── horizon parity ──"
 # The knowledge horizon: the resolver verdict, the sparse insertion-ordered projection, the marker's
 # lint error and the speculative_tail finding agree byte-for-byte — each with a non-vacuity floor

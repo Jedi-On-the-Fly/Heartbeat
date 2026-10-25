@@ -14,7 +14,7 @@
  */
 'use strict';
 const fs = require('fs');
-const { extractPaths } = require('./hb-lint.js');
+const { extractPaths, readDagFile, shapeErrors, structureView } = require('./hb-lint.js');
 
 const VACUOUS   = /^\s*(true|:|exit\s+0|echo\b|test\s+1\s*=\s*1|\[\s+1\s+=\s+1\s+\])\s*;?\s*$/;
 const EXISTENCE = /^\s*(test\s+-[efds]\b|\[\s+-[efds]\b|ls(\s|$))/;
@@ -46,7 +46,7 @@ const COVERAGE = /\bgrep\b[^|]*(GROUPS-PASSED|\bT[0-9]+\b|[A-Z][A-Z0-9-]*-OK)/;
 // --questions: derive, from each criterion's CLASS, a "how could this FALSELY pass?" question — the
 // deterministic seed for the adversarial review (turns the audit taxonomy into a falsification checklist).
 function criterionQuestion(c) {
-  const cmd = (c.cmd || '').trim(), id = c.id || '?', cls = classify(cmd);
+  const cmd = (typeof c.cmd === 'string' ? c.cmd : '').trim(), id = c.id || '?', cls = classify(cmd);
   if (cls === 'vacuous')
     return `${id}: looks trivially true — does it assert anything about the phase's real work, or would it pass on ANY code?`;
   if (cls === 'existence')
@@ -63,11 +63,13 @@ function criterionQuestion(c) {
 }
 
 function reviewQuestions(dag, gate) {
-  const g = ((dag || {}).gates || {})[gate];
-  if (!g) return `no gate '${gate}' in this DAG\n`;
+  // through the structure view (prototype-free, malformed gates dropped): 'constructor' is no gate
+  const v = (dag !== null && typeof dag === 'object' && !Array.isArray(dag)) ? structureView(dag) : { gates: Object.create(null) };
+  const g = Object.prototype.hasOwnProperty.call(v.gates, gate) ? v.gates[gate] : undefined;
+  if (g === undefined) return `no gate '${gate}' in this DAG\n`;   // membership, not truthiness ({} is a gate)
   const lines = [`Falsification checklist for ${gate} — for each criterion, how could it FALSELY pass?`];
   for (const c of (g.criteria || [])) lines.push(`  - ${criterionQuestion(c && typeof c === 'object' && !Array.isArray(c) ? c : {})}`);
-  lines.push(`  - PHASE CLAIM: "${g.desc || gate}". Could every criterion above pass while this is still broken? Is any criterion testing the WRONG behaviour? Is the REAL runtime exercised (not mocked/stubbed)?`);
+  lines.push(`  - PHASE CLAIM: "${typeof g.desc === 'string' && g.desc ? g.desc : gate}". Could every criterion above pass while this is still broken? Is any criterion testing the WRONG behaviour? Is the REAL runtime exercised (not mocked/stubbed)?`);
   return lines.join('\n') + '\n';
 }
 
@@ -104,12 +106,18 @@ function speculativeTail(phases, gates, F) {
     { tail, cut });
 }
 
-function audit(dag) {
+// unreadable: the checked file read's error (the CLI passes it) — the plan is then reported as
+// one dag_shape finding instead of a crash or an empty "clean" audit.
+function audit(dag, unreadable) {
   const findings = [];
-  const phases = dag.phases || [];
-  const gates = (dag.gates && typeof dag.gates === 'object' && !Array.isArray(dag.gates)) ? dag.gates : {};
   const parked = [];
   const F = (severity, rule, phase, message, extra) => findings.push({ severity, rule, phase, message, ...(extra || {}) });
+  const shape = unreadable ? [unreadable] : shapeErrors(dag, true);
+  if (shape.length) F('error', 'dag_shape', null, `dag.json structure is invalid: ${shape[0]} — run the lint for every error`);   // shape-guard: audit
+  const ok = !unreadable && dag !== null && typeof dag === 'object' && !Array.isArray(dag);
+  const view = ok ? structureView(dag) : { phases: [], gates: {} };
+  const phases = view.phases.filter(p => typeof p.id === 'string' && p.id);   // an invalid-id phase is dag_shape's to report
+  const gates = view.gates;
 
   for (const p of phases) {
     if (p.parked) {
@@ -135,20 +143,21 @@ function audit(dag) {
     let behavioral = 0;
     for (let c of crit) {
       if (!c || typeof c !== 'object' || Array.isArray(c)) c = {};   // a non-object entry is a lint error (criteria-shape rule); here it is simply not behavioral
+      const cidS = (c.id === undefined || c.id === null) ? '?' : c.id, cidX = c.id === undefined ? null : c.id;   // one rendering on both runtimes
       const cls = classify(c.cmd);
       if (cls === 'behavioral') behavioral++;
       else F('info', cls, p.id,
-        `${gx}[${c.id}] is ${cls === 'vacuous' ? 'trivially true' : 'an existence-only check'} — assert behaviour, not ${cls === 'vacuous' ? 'nothing' : 'mere existence'}`,
-        { gate: gx, criterion: c.id });
+        `${gx}[${cidS}] is ${cls === 'vacuous' ? 'trivially true' : 'an existence-only check'} — assert behaviour, not ${cls === 'vacuous' ? 'nothing' : 'mere existence'}`,
+        { gate: gx, criterion: cidX });
       if (isNondet(c.cmd)) F('warn', 'nondeterministic', p.id,
-        `${gx}[${c.id}] touches network/time — may flake; gates must be deterministic`,
-        { gate: gx, criterion: c.id });
+        `${gx}[${cidS}] touches network/time — may flake; gates must be deterministic`,
+        { gate: gx, criterion: cidX });
       if (isSideEffecting(c.cmd)) F('warn', 'side_effecting', p.id,
-        `${gx}[${c.id}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)`,
-        { gate: gx, criterion: c.id });
-      if (/[\x1e\x1f]/.test(c.cmd || '') || /[\x1e\x1f]/.test(c.desc || '')) F('error', 'control_char', p.id,
-        `${gx}[${c.id}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it`,
-        { gate: gx, criterion: c.id });
+        `${gx}[${cidS}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)`,
+        { gate: gx, criterion: cidX });
+      if (/[\x1e\x1f]/.test(typeof c.cmd === 'string' ? c.cmd : '') || /[\x1e\x1f]/.test(typeof c.desc === 'string' ? c.desc : '')) F('error', 'control_char', p.id,
+        `${gx}[${cidS}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it`,
+        { gate: gx, criterion: cidX });
     }
     if (behavioral === 0)
       F('error', 'hollow_gate', p.id,
@@ -162,7 +171,7 @@ function audit(dag) {
         `gate ${gx} has an adversarial review but no plan-time constraints — the refuter's target is implicit (add review.constraints)`,
         { gate: gx });
 
-    const taskText = tasks.map(t => `${t.title || ''} ${t.description || ''}`).join(' ').toLowerCase();
+    const taskText = tasks.map(t => `${typeof t.title === 'string' ? t.title : ''} ${typeof t.description === 'string' ? t.description : ''}`).join(' ').toLowerCase();   // strings only: coercion splits the runtimes
     const paths = new Set();
     for (const c of crit) { if (!c || typeof c !== 'object' || Array.isArray(c) || typeof c.cmd !== 'string') continue; for (const pth of extractPaths(c.cmd)) paths.add(pth); }   // hostile shapes are lint errors, skipped here
     if (paths.size && ![...paths].some(pth => {
@@ -188,21 +197,28 @@ if (require.main === module) {
   const file = process.argv[2];
   const asJson = process.argv.includes('--json');
   if (!file) { console.error('Usage: hb-audit.js <dag.json> [--json]'); process.exit(2); }
-  let dag;
-  try { dag = JSON.parse(fs.readFileSync(file, 'utf8')); }
-  catch (e) { console.error(`✗ dag.json unreadable: ${e.message}`); process.exit(1); }
+  const rd = readDagFile(file);
+  const dag = rd.dag || {};
   const qi = process.argv.indexOf('--questions');
-  if (qi !== -1) { process.stdout.write(reviewQuestions(dag, process.argv[qi + 1])); process.exit(0); }
-  const r = audit(dag);
-  if (asJson) { console.log(JSON.stringify(r)); process.exit(r.errors ? 1 : 0); }
+  if (qi !== -1) {
+    if (!process.argv[qi + 1]) { console.error('Usage: hb-audit.js <dag.json> --questions <gate>'); process.exitCode = 2; return; }
+    const bad = rd.error || shapeErrors(rd.dag, true)[0];   // fail closed: no checklist from a malformed or unreadable plan
+    if (bad) { console.error(`✗ dag.json structure is invalid: ${bad} — run the lint for every error`); process.exitCode = 1; return; }
+    process.stdout.write(reviewQuestions(dag, process.argv[qi + 1]));
+    return;
+  }
+  const r = audit(rd.dag, rd.error);
+  if (asJson) { console.log(JSON.stringify(r)); process.exitCode = r.errors ? 1 : 0; return; }
   const icon = { error: '✗', warn: '⚠', info: '·' };
   for (const f of r.findings) console.log(`  ${icon[f.severity]} [${f.rule}] ${f.message}`);
   if (r.parked.length)   // loud — a skipped phase must be visible in the audit
     console.log(`  ⏸ skipped ${r.parked.length} parked phase(s): ${r.parked.join(' ')} (unpark to re-audit)`);
   console.log(r.errors
-    ? `✗ ${r.errors} error(s), ${r.warns} warning(s) — this DAG has hollow gates; fix before running`
+    ? (r.findings.some(f => f.rule === 'dag_shape')
+      ? `✗ ${r.errors} error(s), ${r.warns} warning(s) — dag.json is structurally invalid; run the lint, fix it, then re-audit`
+      : `✗ ${r.errors} error(s), ${r.warns} warning(s) — this DAG has hollow gates; fix before running`)
     : `✓ gates look behavioural (${r.warns} warning(s))`);
-  process.exit(r.errors ? 1 : 0);
+  process.exitCode = r.errors ? 1 : 0;   // exitCode, not exit(): a piped write must flush first
 }
 
 

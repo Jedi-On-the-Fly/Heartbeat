@@ -158,8 +158,9 @@ case_append(){
   ( cd "$P" && PY rebuild --dir "$P" >/dev/null ); b=$(norm "$P")
   [ "$a" = "$b" ] || fail "append: python rebuild not idempotent modulo last_updated"
   assert_quiet "$P" GATE_H1 "append (an append is sanctioned quiet)"
-  # degenerate-id lint surface, PINNED: an id-less phase (even >8 tasks) lints identically on
-  # both runtimes — exit 0, the same '[?]' warning bytes, no crash (the dev-tests.md claim)
+  # degenerate-id lint surface, PINNED: an id-less phase (even >8 tasks) is a STRUCTURE error on
+  # both runtimes (the shape contract, T186) — exit 1/1, the same '[?]' warning bytes and the same
+  # path-named error line, no crash (the dev-tests.md claim)
   local dn dq rn rq
   P="$W/app-noid"; mkh "$P"
   python3 - "$P/.hb/dag.json" <<'EOF'
@@ -171,7 +172,13 @@ json.dump(d, open(p, "w"), indent=2)
 EOF
   dn=$(node "$P/.hb/hb-lint.js" "$P/.hb/dag.json" 2>&1); rn=$?
   dq=$( PY lint "$P/.hb/dag.json" --dir "$P" 2>&1 ); rq=$?
-  [ "$rn" = 0 ] && [ "$rq" = 0 ] || fail "append(degenerate id): a lint crashed or errored (node=$rn py=$rq): $dq"
+  [ "$rn" = 1 ] && [ "$rq" = 1 ] || fail "append(degenerate id): an id-less phase must be a lint ERROR on both (node=$rn py=$rq): $dn / $dq"
+  echo "$dn$dq" | grep -qE 'Traceback|TypeError' && fail "append(degenerate id): a lint crashed: $dn / $dq"
+  local en eq
+  en=$(echo "$dn" | grep '✗' | grep 'id: missing'); eq=$(echo "$dq" | grep '✗' | grep 'id: missing')
+  [ -n "$en" ] && [ "$en" = "$eq" ] || fail "append(degenerate id): the path-named 'id: missing' error differs or is missing:
+node: $en
+py:   $eq"
   dn=$(echo "$dn" | grep '\[?\]'); dq=$(echo "$dq" | grep '\[?\]')
   [ -n "$dn" ] && [ "$dn" = "$dq" ] || fail "append(degenerate id): the '[?]' warning bytes differ or are missing:
 node: $dn

@@ -12,6 +12,7 @@ invariant (AGENTS rule 1) holds inside the server exactly as in the CLI.
 """
 import json
 import sys
+from pathlib import Path
 
 from . import state as st
 from . import resolver as rv
@@ -71,8 +72,12 @@ def _stateview(hb, a): return _state(hb)
 def _report(hb, a):   return reportmod.build(hb)
 def _diagnose(hb, a): return {"diagnosis": doc.diagnose(hb, a.get("reason"))}
 def _doctor(hb, a):   return doc.doctor(hb)
-def _lint(hb, a):     return lintmod.lint(st.read_dag(hb))
-def _audit(hb, a):    return auditmod.audit(st.read_dag(hb))
+def _lint(hb, a):
+    dag, err = lintmod.read_dag_file(Path(hb) / "dag.json")
+    return {"errors": [err], "warnings": []} if err else lintmod.lint(dag)
+def _audit(hb, a):
+    dag, err = lintmod.read_dag_file(Path(hb) / "dag.json")
+    return auditmod.audit(dag, err)
 
 
 # name -> (handler, description, inputSchema). Act tools are appended in

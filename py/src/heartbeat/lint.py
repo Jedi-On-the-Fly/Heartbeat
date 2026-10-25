@@ -12,11 +12,242 @@ PLACEHOLDER_MARKERS = [
 ]
 
 
+# ── The shape contract ─────────────────────────────────────────────────────────────────────
+# STRUCTURE is what every reader dereferences: the schema nodes annotated "x-hb-structure" in
+# plugin/dag.schema.json. A violation is ONE path-named error, identical bytes on both runtimes,
+# and the other rules then run on a view with the malformed parts dropped — on a structure-valid
+# dag the view IS the dag (every existing message unchanged). Twin: hb-lint.js.
+def _is_obj(x):
+    return isinstance(x, dict)
+
+
+def _valid_id(x):
+    return isinstance(x, str) and len(x) > 0
+
+
+def _shown(v):
+    """A rendered value in a message: a string quoted, anything else by its JSON type (twin: shown)."""
+    if isinstance(v, str):
+        return json.dumps(v, ensure_ascii=False)
+    if v is None:
+        return "null"
+    if isinstance(v, list):
+        return "a list"
+    if isinstance(v, dict):
+        return "an object"
+    if isinstance(v, bool):
+        return "a boolean"
+    return "a number"
+
+
+def _type_name(c):
+    """The offending value named by its JSON TYPE, never rendered (twin: hb-lint.js typeName)."""
+    if c is None:
+        return "null"
+    if isinstance(c, list):
+        return "a list"
+    if isinstance(c, str):
+        return "a string"
+    if isinstance(c, bool):
+        return "a boolean"
+    if isinstance(c, (int, float)):
+        return "a number"
+    return "an object whose cmd is not a string"
+
+
+_MAX_DEPTH = 256
+
+
+def _too_deep(text):
+    """Nesting bounded BEFORE parsing, over the text itself (twin: hb-lint.js tooDeep)."""
+    depth, in_str, esc = 0, False, False
+    for c in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+            continue
+        if c == '"':
+            in_str = True
+        elif c in "[{":
+            depth += 1
+            if depth > _MAX_DEPTH:
+                return True
+        elif c in "]}":
+            depth -= 1
+    return False
+
+
+def _js_order(d):
+    """Keys in JS object order: canonical array-index keys ascending first, then insertion order —
+    node cannot see insertion order for integer-like keys, so python adopts node's."""
+    idx = [k for k in d if isinstance(k, str) and (k == "0" or (k[:1] in "123456789" and k.isdigit() and k.isascii())) and int(k) < 4294967295]
+    return sorted(idx, key=int) + [k for k in d if k not in idx]
+
+
+def _has_surrogate(v):
+    if isinstance(v, str):
+        return any("\ud800" <= ch <= "\udfff" for ch in v)
+    if isinstance(v, list):
+        return any(_has_surrogate(x) for x in v)
+    if isinstance(v, dict):
+        return any(_has_surrogate(k) or _has_surrogate(x) for k, x in v.items())
+    return False
+
+
+def _reject_constant(name):
+    raise ValueError(name)
+
+
+def _parse_int(s):
+    # JS reads every number as a double; python's int() also REFUSES literals over 4300 digits
+    # (CPython's str-digits limit) — a giant literal must get node's verdict, not a parse error
+    return float(s) if len(s) > 4000 else int(s)
+
+
+def read_dag_file(path):
+    """The checked FILE read — never a silent empty plan. Returns (dag, error) with fixed bytes per
+    class (twin: hb-lint.js readDagFile): strict UTF-8, no NaN/Infinity, no lone surrogates."""
+    from pathlib import Path
+    try:
+        raw = Path(path).read_bytes()
+    except FileNotFoundError:
+        return None, "dag.json unreadable: missing"
+    except OSError:
+        return None, "dag.json unreadable: cannot be read"
+    if not raw.strip(b" \t\n\r"):
+        return None, "dag.json unreadable: empty"
+    try:
+        text = raw.decode("utf-8")
+    except Exception:
+        return None, "dag.json unreadable: not valid JSON"
+    if _too_deep(text):
+        return None, "dag.json unreadable: nested too deeply"
+    try:
+        dag = json.loads(text, parse_constant=_reject_constant, parse_int=_parse_int)
+    except Exception:
+        return None, "dag.json unreadable: not valid JSON"
+    if _has_surrogate(dag):
+        return None, "dag.json unreadable: not valid JSON"
+    if not isinstance(dag, dict):
+        return None, "dag.json unreadable: top level is not an object"
+    return dag, None
+
+
+def shape_errors(dag, entries=False):
+    """entries: also report non-object criteria entries (lint's own criteria-entry rule reports them
+    there; audit passes True for its dag_shape). Twin: hb-lint.js shapeErrors."""
+    if not _is_obj(dag):
+        return ["dag.json unreadable: top level is not an object"]
+    e = []
+    if "phases" not in dag:
+        e.append("phases: missing")
+    elif not isinstance(dag["phases"], list):
+        e.append("phases must be a list")
+    else:
+        for i, p in enumerate(dag["phases"]):
+            at = f"phases[{i}]"
+            if not _is_obj(p):
+                e.append(f"{at} must be an object")
+                continue
+            if "id" not in p:
+                e.append(f"{at}.id: missing")
+            elif not _valid_id(p["id"]):
+                e.append(f"{at}.id must be a non-empty string")
+            for k in ("gate_entry", "gate_exit"):
+                if k in p and p[k] is not None and not isinstance(p[k], str):
+                    e.append(f"{at}.{k} must be a string or null")
+            if "parked" in p and not isinstance(p["parked"], bool):
+                e.append(f"{at}.parked must be true or false")
+            if "tasks" not in p:
+                continue
+            if not isinstance(p["tasks"], list):
+                e.append(f"{at}.tasks must be a list")
+                continue
+            for j, t in enumerate(p["tasks"]):
+                ta = f"{at}.tasks[{j}]"
+                if not _is_obj(t):
+                    e.append(f"{ta} must be an object")
+                    continue
+                if "id" not in t:
+                    e.append(f"{ta}.id: missing")
+                elif not _valid_id(t["id"]):
+                    e.append(f"{ta}.id must be a non-empty string")
+                if "requires" not in t:
+                    continue
+                if not isinstance(t["requires"], list):
+                    e.append(f"{ta}.requires must be a list")
+                    continue
+                for k, r in enumerate(t["requires"]):
+                    if not isinstance(r, str):
+                        e.append(f"{ta}.requires[{k}] must be a string")
+    if "gates" not in dag:
+        e.append("gates: missing")
+    elif not _is_obj(dag["gates"]):
+        e.append("gates must be an object")
+    else:
+        for g in _js_order(dag["gates"]):
+            gv = dag["gates"][g]
+            if not _is_obj(gv):
+                e.append(f"gates.{g} must be an object")
+                continue
+            if "criteria" in gv and not isinstance(gv["criteria"], list):
+                e.append(f"gates.{g}.criteria must be a list")
+            elif entries and isinstance(gv.get("criteria"), list):
+                for i, c in enumerate(gv["criteria"]):
+                    if not isinstance(c, dict):
+                        e.append(f"[{g}] criteria entry {i} must be an object with a string cmd "
+                                 f"(got {_type_name(c)})")
+    return e
+
+
+def structure_view(dag):
+    """The rules' view: malformed containers, wrong-typed references/items and invalid-id tasks
+    dropped; _ntasks keeps the ORIGINAL task count for the >8 warning (twin: structureView)."""
+    phases = []
+    for p in (dag.get("phases") if isinstance(dag.get("phases"), list) else []):
+        if not _is_obj(p):
+            continue
+        q = dict(p)
+        for k in ("gate_entry", "gate_exit"):
+            if k in q and q[k] is not None and not isinstance(q[k], str):
+                q[k] = None
+        if "parked" in q and not isinstance(q["parked"], bool):
+            q.pop("parked")  # truthiness splits the runtimes on []/{}
+        q["_ntasks"] = len(p["tasks"]) if isinstance(p.get("tasks"), list) else 0
+        if "tasks" in p:
+            ts = []
+            for t in (p["tasks"] if isinstance(p["tasks"], list) else []):
+                if not (_is_obj(t) and _valid_id(t.get("id"))):
+                    continue
+                if "requires" in t:
+                    t = dict(t, requires=[r for r in (t["requires"] if isinstance(t["requires"], list) else []) if isinstance(r, str)])
+                ts.append(t)
+            q["tasks"] = ts
+        phases.append(q)
+    gates = {}
+    if _is_obj(dag.get("gates")):
+        for g in _js_order(dag["gates"]):
+            gv = dag["gates"][g]
+            if not _is_obj(gv):
+                continue
+            gates[g] = dict(gv, criteria=[]) if ("criteria" in gv and not isinstance(gv["criteria"], list)) else gv
+    return dict(dag, phases=phases, gates=gates)
+
+
 def lint(dag):
+    if not _is_obj(dag):
+        return {"errors": ["dag.json unreadable: top level is not an object"], "warnings": []}
     errors, warnings = [], []
+    errors.extend(shape_errors(dag))  # shape-guard: lint
+    raw = dag
+    dag = structure_view(dag)
     gates = dag.get("gates") or {}
     phases = dag.get("phases") or []
-    task_ids, task_map = set(), {}
+    task_ids, task_map = {}, {}   # insertion-ordered like JS Set: a hash-ordered set made the cycle text vary run to run
     phase_ids = set()
 
     for p in phases:
@@ -31,8 +262,8 @@ def lint(dag):
                 errors.append(f"duplicate phase ID: {pid}")
             phase_ids.add(pid)
         tasks = p.get("tasks") or []
-        if len(tasks) > 8:
-            warnings.append(f"[{pid_s}] {len(tasks)} tasks (>8) — context-loss risk, consider sub-phases")
+        if p["_ntasks"] > 8:
+            warnings.append(f"[{pid_s}] {p['_ntasks']} tasks (>8) — context-loss risk, consider sub-phases")
         # The knowledge-horizon marker is a strict boolean; its POSITION is never linted (a flag left
         # on a no-longer-last phase after an append is historical and inert, by design).
         if "horizon" in p and not isinstance(p["horizon"], bool):
@@ -40,7 +271,7 @@ def lint(dag):
         for t in tasks:
             if t["id"] in task_ids:
                 errors.append(f"duplicate task ID: {t['id']}")
-            task_ids.add(t["id"])
+            task_ids[t["id"]] = True
             task_map[t["id"]] = t
         for g in (p.get("gate_entry"), p.get("gate_exit")):
             if g and g not in gates:
@@ -84,9 +315,9 @@ def lint(dag):
         for i, c in enumerate(gv.get("criteria") or []):
             if not isinstance(c, dict) or not isinstance(c.get("cmd"), str):
                 errors.append(f"[{g}] criteria entry {i} must be an object with a string cmd "
-                              f"(got {json.dumps(c, separators=(',', ':'), ensure_ascii=False)[:120]})")
+                              f"(got {_type_name(c)})")
 
-    _check_placeholders(dag, warnings)
+    _check_placeholders(raw, warnings)
     _check_gate_artifacts(dag, warnings)
     _check_constraints(dag, errors)
     _check_regate(dag, errors)   # regate-guard
@@ -149,6 +380,8 @@ def _check_detach(dag, errors):
     exits = {p.get("gate_exit") for p in (dag.get("phases") or []) if p.get("gate_exit")}
     fields = ["detached_from", "detached_reason", "detached_by", "detached_at"]
     for p in (dag.get("phases") or []):
+        if not _valid_id(p.get("id")):
+            continue  # an invalid id is the structure layer's to report (no '[undefined]'/'[None]' split)
         has = [k for k in fields if k in p]
         if not has:
             continue
@@ -158,7 +391,7 @@ def _check_detach(dag, errors):
         if p.get("gate_entry") is not None:
             errors.append(f"[{p.get('id')}] detach fields alongside a non-null gate_entry — a half-reattach; reattach properly or clear the fields")
         if not _blank_free(p.get("detached_from")) or p.get("detached_from") not in gates or p.get("detached_from") not in exits:
-            errors.append(f"[{p.get('id')}] detached_from must name a defined gate that is some phase's gate_exit (got {json.dumps(p.get('detached_from'), ensure_ascii=False, separators=(',', ':'))})")
+            errors.append(f"[{p.get('id')}] detached_from must name a defined gate that is some phase's gate_exit (got {_shown(p.get('detached_from'))})")
         if not _blank_free(p.get("detached_reason")):
             errors.append(f"[{p.get('id')}] detached_reason must be a non-empty string")
         if not _blank_free(p.get("detached_by")):
@@ -229,7 +462,8 @@ def constraint_errors(cs, kind):
 
 def _check_placeholders(dag, warnings):
     hits = []
-    if dag.get("_meta", {}).get("project") == "my-project":
+    meta = dag.get("_meta")
+    if isinstance(meta, dict) and meta.get("project") == "my-project":
         hits.append('_meta.project = "my-project"')
     flat = str(dag)
     for m in PLACEHOLDER_MARKERS:
@@ -300,7 +534,7 @@ def extract_paths(cmd):
 def _check_gate_artifacts(dag, warnings):
     phases = dag.get("phases") or []
     task_text = " ".join(
-        f"{t.get('title', '')} {t.get('description', '')}"
+        f"{t['title'] if isinstance(t.get('title'), str) else ''} {t['description'] if isinstance(t.get('description'), str) else ''}"
         for p in phases for t in (p.get("tasks") or [])
     ).lower()
     seen = set()

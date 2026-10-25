@@ -48,7 +48,7 @@ COVERAGE = re.compile(r"\bgrep\b[^|]*(GROUPS-PASSED|\bT[0-9]+\b|[A-Z][A-Z0-9-]*-
 
 def criterion_question(c):
     """From a criterion's CLASS, a 'how could this FALSELY pass?' question (byte-identical to node)."""
-    cmd = (c.get("cmd") or "").strip()
+    cmd = (c.get("cmd") if isinstance(c.get("cmd"), str) else "").strip()
     cid = c.get("id") or "?"
     cls = classify(cmd)
     if cls == "vacuous":
@@ -68,13 +68,14 @@ def criterion_question(c):
 
 def review_questions(dag, gate):
     """The falsification checklist for a gate — the deterministic seed for the adversarial review."""
-    g = ((dag or {}).get("gates") or {}).get(gate)
-    if not g:
+    v = lintmod.structure_view(dag) if isinstance(dag, dict) else {"gates": {}}  # malformed gates dropped (== node)
+    g = v["gates"].get(gate)
+    if gate not in v["gates"]:  # membership, not truthiness ({} is a gate; == node)
         return f"no gate '{gate}' in this DAG\n"
     lines = [f"Falsification checklist for {gate} — for each criterion, how could it FALSELY pass?"]
     for c in (g.get("criteria") or []):
         lines.append(f"  - {criterion_question(c if isinstance(c, dict) else {})}")
-    lines.append(f'  - PHASE CLAIM: "{g.get("desc") or gate}". Could every criterion above pass while this is still broken? Is any criterion testing the WRONG behaviour? Is the REAL runtime exercised (not mocked/stubbed)?')
+    lines.append(f'  - PHASE CLAIM: "{g["desc"] if isinstance(g.get("desc"), str) and g["desc"] else gate}". Could every criterion above pass while this is still broken? Is any criterion testing the WRONG behaviour? Is the REAL runtime exercised (not mocked/stubbed)?')
     return "\n".join(lines) + "\n"
 
 
@@ -120,14 +121,19 @@ def _speculative_tail(phases, gates, F):
       tail=tail, cut=cut)
 
 
-def audit(dag):
+def audit(dag, unreadable=None):
+    """unreadable: the checked file read's error — the plan is then one dag_shape finding instead
+    of a crash or an empty 'clean' audit (twin: hb-audit.js)."""
     findings = []
-    phases = dag.get("phases") or []
-    gates = dag.get("gates") if isinstance(dag.get("gates"), dict) else {}
     parked = []
 
     def F(sev, rule, phase, message, **extra):
         findings.append({"severity": sev, "rule": rule, "phase": phase, "message": message, **extra})
+    shape = [unreadable] if unreadable else lintmod.shape_errors(dag, True)
+    if shape: F("error", "dag_shape", None, f"dag.json structure is invalid: {shape[0]} — run the lint for every error")  # shape-guard: audit
+    view = lintmod.structure_view(dag) if (not unreadable and isinstance(dag, dict)) else {"phases": [], "gates": {}}
+    phases = [p for p in view["phases"] if isinstance(p.get("id"), str) and p["id"]]  # an invalid-id phase is dag_shape's to report
+    gates = view["gates"]
 
     for p in phases:
         if p.get("parked"):
@@ -152,25 +158,26 @@ def audit(dag):
         for c in crit:
             if not isinstance(c, dict):
                 c = {}   # a non-object entry is a lint error (criteria-shape rule); here it is simply not behavioral
+            cid_s = "?" if c.get("id") is None else c.get("id")  # one rendering on both runtimes
             cls = classify(c.get("cmd"))
             if cls == "behavioral":
                 behavioral += 1
             else:
                 what = "trivially true" if cls == "vacuous" else "an existence-only check"
                 tail = "nothing" if cls == "vacuous" else "mere existence"
-                F("info", cls, p["id"], f"{gx}[{c.get('id')}] is {what} — assert behaviour, not {tail}",
+                F("info", cls, p["id"], f"{gx}[{cid_s}] is {what} — assert behaviour, not {tail}",
                   gate=gx, criterion=c.get("id"))
             if is_nondet(c.get("cmd")):
                 F("warn", "nondeterministic", p["id"],
-                  f"{gx}[{c.get('id')}] touches network/time — may flake; gates must be deterministic",
+                  f"{gx}[{cid_s}] touches network/time — may flake; gates must be deterministic",
                   gate=gx, criterion=c.get("id"))
             if is_side_effecting(c.get("cmd")):
                 F("warn", "side_effecting", p["id"],
-                  f"{gx}[{c.get('id')}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)",
+                  f"{gx}[{cid_s}] writes/creates files — a gate must OBSERVE, not PRODUCE its evidence (self-fabricated pass)",
                   gate=gx, criterion=c.get("id"))
             if any("\x1e" in v or "\x1f" in v for v in ((c.get(k) if isinstance(c.get(k), str) else "") for k in ("cmd", "desc"))):
                 F("error", "control_char", p["id"],
-                  f"{gx}[{c.get('id')}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it",
+                  f"{gx}[{cid_s}] cmd/desc contains a \\x1e/\\x1f control byte — it would corrupt the gate runner's record transport; remove it",
                   gate=gx, criterion=c.get("id"))
         if behavioral == 0:
             F("error", "hollow_gate", p["id"],
@@ -184,7 +191,7 @@ def audit(dag):
               f"gate {gx} has an adversarial review but no plan-time constraints — the refuter's target is implicit (add review.constraints)",
               gate=gx)
 
-        task_text = " ".join(f"{t.get('title', '')} {t.get('description', '')}" for t in tasks).lower()
+        task_text = " ".join(f"{t['title'] if isinstance(t.get('title'), str) else ''} {t['description'] if isinstance(t.get('description'), str) else ''}" for t in tasks).lower()  # strings only (== node)
         paths = set()
         for c in crit:
             if not isinstance(c, dict) or not isinstance(c.get("cmd"), str):
