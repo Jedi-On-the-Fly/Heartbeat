@@ -254,7 +254,7 @@ def main(argv=None):
                 rg2["pending"] = False
                 rg2["rearm"] = {"at": st.now_iso(), "actor": actor, "model": args.model or None,
                                 "artifact": f"reviews/{gate}.regate.md", "sha256": sha}
-                dagpath.write_text(json.dumps(dag2, indent=2))
+                st.write_dag(hb, dag2)
                 st.append_event(hb, {"event": "gate_rearmed", "gate": gate, "model": args.model or None,
                                      "artifact": f"reviews/{gate}.regate.md", "sha256": sha})   # audit-only
                 st.reproject(hb)
@@ -287,7 +287,7 @@ def main(argv=None):
                         "— edit the criteria and rearm that revision first")
             gv2["regate"] = {"at": st.now_iso(), "reason": reason, "actor": actor,
                              "prev_criteria": json.loads(json.dumps(gv2.get("criteria") or [])), "pending": True}
-            dagpath.write_text(json.dumps(dag2, indent=2))
+            st.write_dag(hb, dag2)
             st.append_event(hb, {"event": "gate_regated", "gate": gate, "reason": reason})   # audit-only: the projection ignores it
             st.reproject(hb)
             return None
@@ -332,7 +332,7 @@ def main(argv=None):
             t["detached_by"] = actor
             t["detached_at"] = at
             t["gate_entry"] = None
-            dagpath.write_text(json.dumps(dag, indent=2))
+            st.write_dag(hb, dag)
             st.append_event(hb, {"event": "phase_detached", "phase": t["id"], "from": frm, "reason": reason})   # audit-only
             st.reproject(hb)
             return {"id": t["id"], "from": frm, "at": at}
@@ -366,7 +366,7 @@ def main(argv=None):
             t["gate_entry"] = to
             for k in ("detached_from", "detached_reason", "detached_by", "detached_at"):
                 t.pop(k, None)
-            dagpath.write_text(json.dumps(dag, indent=2))
+            st.write_dag(hb, dag)
             st.append_event(hb, {"event": "phase_reattached", "phase": t["id"], "to": to})   # audit-only
             st.reproject(hb)
             return {"id": t["id"], "to": to}
@@ -430,7 +430,7 @@ def main(argv=None):
             else:
                 t.pop("parked", None)
                 t.pop("parked_reason", None)
-            dagpath.write_text(json.dumps(dag, indent=2))
+            st.write_dag(hb, dag)
             return {"id": t["id"], "gate_exit": t.get("gate_exit")}
         target = st.with_wlock(hb, _park_locked)
         if target is None:

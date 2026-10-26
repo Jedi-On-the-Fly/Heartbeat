@@ -2030,6 +2030,17 @@ else
   echo "  (python3 absent — T187 skipped)"
 fi
 
+grp "T188 — atomic plan rewrites: every verb that rewrites dag.json (park, unpark, regate declare/--rearm, detach, reattach) replaces it via tmp + rename, never in place — a concurrent verb's pre-lock read never sees a torn plan; both runtimes"
+DWR="$HB_SRC/tests/dag-write.sh"
+if command -v python3 >/dev/null 2>&1; then
+  check "T188.1 each dag-writing verb leaves dag.json on a new inode with no tmp left behind, node + py (dag-write.sh → DAG-WRITE-OK)" \
+    'bash "'"$DWR"'" 2>&1 | grep -q "^DAG-WRITE-OK"'
+  check "T188.2 teeth: an in-place writer swapped into either runtime goes red (--selftest)" \
+    'bash "'"$DWR"'" --selftest 2>&1 | grep -q "^DAG-WRITE-SELFTEST-OK"'
+else
+  echo "  (python3 absent — T188 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done

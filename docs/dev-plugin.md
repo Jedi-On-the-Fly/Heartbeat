@@ -122,7 +122,10 @@ Each criterion runs under a timeout (timeout → fail): its own `timeout_s` from
 Mutation is `withWlock` (`.wlock` mkdir) → append event → reproject → atomic write. The lock's scope is
 exactly that state.json read-modify-write; the append-only informational events `tick.sh` writes (`wake`,
 `lease_expired`, …) are lock-free by design (atomic O_APPEND + reproject is a full re-fold). See
-[parity-notes.md](../planning/parity-notes.md) "Write-lock scope".
+[parity-notes.md](../planning/parity-notes.md) "Write-lock scope". The verbs that rewrite `dag.json`
+(`park`, `unpark`, `regate` declare and `--rearm`, `detach`, `reattach`) do it under the same lock and
+through one writer, `writeDag` — tmp + rename, never in place, because every verb reads `dag.json`
+before it takes the lock and must never see a torn plan (T188).
 
 | Command | Effect |
 |---|---|

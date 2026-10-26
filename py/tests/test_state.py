@@ -71,3 +71,17 @@ def test_mutate_and_leases_atomic(tmp_path):
     assert "P0T1" in s["active_tasks"]
     state.release_lease(hb, "P0T1")
     assert not (state.leases_dir(hb) / "P0T1").exists()
+
+
+def test_write_dag_replaces_atomically(tmp_path):
+    # dag.json is replaced (tmp + rename → a new inode), never rewritten in place: verbs read it
+    # before taking the write lock, and an in-place write lets that read see a torn plan (T188).
+    import json, os
+    hb = make_hb(tmp_path, two_phase_dag())
+    p = os.path.join(hb, "dag.json")
+    before = os.stat(p).st_ino
+    dag = json.load(open(p)); dag["note"] = "x"
+    state.write_dag(hb, dag)
+    assert os.stat(p).st_ino != before
+    assert json.load(open(p))["note"] == "x"
+    assert not os.path.exists(p + ".tmp")

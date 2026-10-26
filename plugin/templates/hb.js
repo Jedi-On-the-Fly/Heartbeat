@@ -201,6 +201,10 @@ function atomicWrite(file, data) {
   fs.renameSync(tmp, file);
 }
 
+// Every dag.json rewrite goes through here: tmp + rename, never in place — the verbs read dag.json
+// before taking the write lock, and an in-place write lets that read land on a torn plan (T188).
+function writeDag(dag) { atomicWrite(DAG, JSON.stringify(dag, null, 2)); }   // dag-write-guard
+
 function reproject() {
   const state = project(readEvents(), readDag());
   atomicWrite(STATE, JSON.stringify(state, null, 2));
@@ -1602,7 +1606,7 @@ switch (cmd) {
         fs.writeFileSync(path.join(rd, `${gate}.regate.md`), body);
         rg2.pending = false;
         rg2.rearm = { at: nowIso(), actor, model: model ?? null, artifact: `reviews/${gate}.regate.md`, sha256: sha };
-        fs.writeFileSync(DAG, JSON.stringify(dag2, null, 2));
+        writeDag(dag2);
         appendEvent({ event: 'gate_rearmed', gate, model: model ?? null, artifact: `reviews/${gate}.regate.md`, sha256: sha });   // audit-only
         reproject();
         return null;
@@ -1633,7 +1637,7 @@ switch (cmd) {
       }
       gv2.regate = { at: nowIso(), reason, actor,
                      prev_criteria: JSON.parse(JSON.stringify(gv2.criteria || [])), pending: true };
-      fs.writeFileSync(DAG, JSON.stringify(dag2, null, 2));
+      writeDag(dag2);
       appendEvent({ event: 'gate_regated', gate, reason });   // audit-only: the projection ignores it
       reproject();
       return null;
@@ -1675,7 +1679,7 @@ switch (cmd) {
       target.detached_by = actorD;
       target.detached_at = at;
       target.gate_entry = null;
-      fs.writeFileSync(DAG, JSON.stringify(dag, null, 2));
+      writeDag(dag);
       appendEvent({ event: 'phase_detached', phase: target.id, from, reason: reasonD });   // audit-only: attribution in the log
       reproject();
       return { id: target.id, from, at };
@@ -1705,7 +1709,7 @@ switch (cmd) {
       delete target.detached_reason;
       delete target.detached_by;
       delete target.detached_at;
-      fs.writeFileSync(DAG, JSON.stringify(dag, null, 2));
+      writeDag(dag);
       appendEvent({ event: 'phase_reattached', phase: target.id, to });   // audit-only
       reproject();
       return { id: target.id, to };
@@ -1768,7 +1772,7 @@ switch (cmd) {
         delete target.parked;
         delete target.parked_reason;
       }
-      fs.writeFileSync(DAG, JSON.stringify(dag, null, 2));
+      writeDag(dag);
       return { id: target.id, gateNote: target.gate_exit ? ` [gate: ${target.gate_exit}]` : '' };
     });
     if (typeof parkRes === 'string') die(parkRes);

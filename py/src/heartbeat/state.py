@@ -196,6 +196,11 @@ def atomic_write(path, data):
     os.replace(tmp, path)
 
 
+def write_dag(hb, dag):
+    # Every dag.json rewrite goes through here: tmp + rename, never in place (== hb.js writeDag, T188).
+    atomic_write(Path(hb, "dag.json"), json.dumps(dag, indent=2))   # dag-write-guard
+
+
 def atomic_write_bytes(path, data):
     path = Path(path)
     tmp = path.with_name(path.name + ".tmp")
