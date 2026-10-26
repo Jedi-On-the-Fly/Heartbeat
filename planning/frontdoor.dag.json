@@ -363,7 +363,8 @@
           "id": "h2y",
           "desc": "the how-to's anchor is green in the owning suite: T185 in GROUPS-PASSED (full node suite; ~13min measured)",
           "cmd": "cd \"$PROJECT_DIR\" && bash tests/run-tests.sh 2>&1 | grep -q 'GROUPS-PASSED:.* T185 '",
-          "timeout_s": 1500
+          "timeout_s": 1500,
+          "sweep": false
         },
         {
           "id": "h2q",
@@ -429,7 +430,8 @@
           "id": "s1f",
           "desc": "the FULL node suite is green (zero failing checks) \u2014 every run-tests-only sub-suite included",
           "cmd": "cd \"$PROJECT_DIR\" && bash tests/run-tests.sh 2>&1 | grep -qE '^  RESULT: [0-9]+ passed, 0 failed$'",
-          "timeout_s": 3000
+          "timeout_s": 3000,
+          "sweep": false
         },
         {
           "id": "s1q",
@@ -519,7 +521,8 @@
           "id": "s2f",
           "desc": "the FULL node suite is green (zero failing checks) \u2014 every run-tests-only sub-suite included",
           "cmd": "cd \"$PROJECT_DIR\" && bash tests/run-tests.sh 2>&1 | grep -qE '^  RESULT: [0-9]+ passed, 0 failed$'",
-          "timeout_s": 3000
+          "timeout_s": 3000,
+          "sweep": false
         },
         {
           "id": "s2q",
@@ -611,7 +614,8 @@
           "id": "s3y",
           "desc": "the full node suite is green and T184, T185, T186 are each in GROUPS-PASSED",
           "cmd": "cd \"$PROJECT_DIR\" && o=$(bash tests/run-tests.sh 2>&1) && echo \"$o\" | grep -qE '^  RESULT: [0-9]+ passed, 0 failed$' && gp=$(echo \"$o\" | grep 'GROUPS-PASSED:') && for g in T184 T185 T186; do echo \"$gp\" | grep -q \" $g \" || exit 1; done",
-          "timeout_s": 3000
+          "timeout_s": 3000,
+          "sweep": false
         },
         {
           "id": "s3q",

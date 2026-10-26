@@ -134,6 +134,8 @@ def main(argv=None):
             print(f"— re-verifying {len(armed)} ever-passed gate(s)…", flush=True)
             r = gatemod.run_all(hb)
             for g, res in r["gates"].items():
+                for ln in res["lines"]:   # gate-time-only skips are listed, never silent (== gate.sh)
+                    if ln.startswith("  ○ ") or ln.startswith("  ⚠ "): print(f"{g}{ln}" if ln.startswith("  ○ ") else ln.strip())
                 if res["failed"]:
                     fl = f" ({res['flaky']} flaky — failed once, passed on re-run)" if res.get("flaky") else ""
                     print(f"✗ {g}: {res['failed']} failing criteria{fl}")
@@ -146,6 +148,7 @@ def main(argv=None):
                 rgnote = f" (regate pending: {' '.join(r['parked_regated'])})" if r.get("parked_regated") else ""
                 print(f"— skipped {len(r['parked'])} parked gate(s): {' '.join(r['parked'])}{rgnote}")
             dsuf = f", {r['deduped']} deduped" if r.get("deduped") else ""
+            dsuf += f", {r['gate_time_only']} gate-time-only skipped" if r.get("gate_time_only") else ""
             fsuf = f", {r['flaky']} flaky" if r.get("flaky") else ""
             print(f"✅ ALL GATES PASS ({len(r['gates'])} gate(s) in {r['elapsed_s']}s{dsuf})" if r["ok"]
                   else f"❌ some gates would block ({r['elapsed_s']}s{dsuf}{fsuf})")

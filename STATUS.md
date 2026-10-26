@@ -34,6 +34,12 @@ gives `dag.json`'s structure one judge and makes every reader refuse a broken pl
   errors; both drivers and every MCP tool behave by class; the live viz server re-checks every
   request. A missing, crashing or garbage-answering resolver wakes `deadlock`/`resolver_error` on
   every tick (no more silent `no_pending_tasks`), never arming the real deadlock alert.
+- **Gate-time-only criteria**: `"sweep": false` on a criterion keeps it at gate time and under
+  `--check`, but the `--all` regression sweep (the pre-push guard) lists, counts and skips it, and
+  names a gate left with nothing to re-verify. For "the whole suite is green" checks: the sweep had
+  been running the same 18-minute suite once per gate, past git's connection timeout, so every push
+  failed. Lint requires a boolean (identical bytes on both runtimes); the drift tripwire does not pin
+  it (`tests/gate-sweep.sh`, T187).
 - **Docs**: two gated how-tos (`plan-to-the-horizon.md` re-specified, `a-malformed-plan-fails-closed.md`
   new), every reason table and stop list current (`replan_pending`, `dag_corrupted`,
   `state_corrupted`), the `dag_corrupted` action re-specified (the "structure is immutable" clause

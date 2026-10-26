@@ -28,6 +28,14 @@ nothing to regress from; the sweep skips it and says so
 a DAG's future phases from failing the sweep (and, via the
 [pre-push guard](block-pushes-on-failing-gates.md), from blocking pushes on unrelated work).
 
+A criterion can also be **gate-time only**: `"sweep": false` on it. It runs when its gate
+passes and under an explicit `--check`, but the sweep does not re-run it — it lists it
+(`○ [id] … gate-time only`), counts it in the verdict (`N gate-time-only skipped`), and names any
+gate left with nothing to re-verify. This is for criteria like "the whole test suite is green":
+right at gate time, but in the sweep it would run the same suite once per gate (CI runs it on
+every push anyway). The field is not pinned by the drift tripwire, like `desc` and `timeout_s`
+(`tests/gate-sweep.sh`, suite group T187).
+
 Two states are counted FAILING without being re-run, annotated in the verdict: a gate under a
 **pending regate** (revised, not re-refuted — parked or not), and a **drifted** gate whose
 criteria changed without sanction (re-running weakened criteria proves nothing; the cure is a

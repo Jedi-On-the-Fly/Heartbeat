@@ -82,7 +82,7 @@ _dedup_find() {   # $1 = key → sets DD_I on hit
 
 # eval_gate <GATE> — run the criteria, print ✓/✗, set PASS/FAIL globals. No side effects.
 eval_gate() {
-  local -x G="$1"; PASS=0; FAIL=0; CRIT_EXITS=""   # CRIT_EXITS: per-criterion exit codes in dag order (provenance)
+  local -x G="$1"; PASS=0; FAIL=0; SKIPPED=0; CRIT_EXITS=""   # CRIT_EXITS: per-criterion exit codes in dag order (provenance)
   echo "=== Gate: $G ==="
   echo ""
   # Hollow-gate floor: a gate with zero criteria proves nothing. The auditor warns
@@ -101,7 +101,10 @@ eval_gate() {
   # -d $'\x1e'. This is immune to embedded newlines in a cmd/desc (e.g. a heredoc) — which a plain
   # newline-delimited `read` would split into bogus empty-CMD records that trivially "pass" (a false
   # gate). \x1e never appears in a shell command, and a multi-line cmd now runs verbatim.
-  while IFS=$'\x1f' read -r -d $'\x1e' ID DESC TOUT CMD; do
+  while IFS=$'\x1f' read -r -d $'\x1e' ID DESC TOUT SWEEP CMD; do
+    # "sweep": false = a gate-time-only criterion (e.g. the whole suite): checked when the gate
+    # passes and by --check, but the --all sweep does not re-run it — listed and counted, never silent.
+    if [ "${ALL:-0}" = 1 ] && [ "$SWEEP" = 0 ]; then echo "  ○ [$ID] $DESC (gate-time only — not re-run by the sweep)"; SKIPPED=$((SKIPPED + 1)); continue; fi   # sweep-guard
     # Per-criterion timeout_s (empty = use the default). Invalid is a LOUD runtime failure of
     # the criterion (the zero-criteria-floor precedent) — never a silent fallback.
     EFF_T="$GATE_TIMEOUT_S"
@@ -173,8 +176,12 @@ eval_gate() {
   done < <(node -e "
     const dag = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
     // timeout_s travels as the 3rd field; cmd stays LAST so it keeps swallowing any remainder.
-    for (const c of dag.gates[process.argv[2]].criteria) process.stdout.write([c.id, c.desc, c.timeout_s ?? '', c.cmd].join('\x1f') + '\x1e');
+    for (const c of dag.gates[process.argv[2]].criteria) process.stdout.write([c.id, c.desc, c.timeout_s ?? '', c.sweep === false ? '0' : '1', c.cmd].join('\x1f') + '\x1e');
   " "$DAG_FILE" "$G")
+  if [ "${ALL:-0}" = 1 ] && [ "$SKIPPED" -gt 0 ]; then
+    SWEEP_SKIPPED=$((SWEEP_SKIPPED + SKIPPED))
+    [ $((PASS + FAIL)) -eq 0 ] && echo "  ⚠ $G has no sweepable criteria — it is verified only when it passes (gate time)"
+  fi
   echo ""
   echo "=== $G: $PASS passed, $FAIL failed ==="
 }
@@ -275,7 +282,7 @@ if [ "$ALL" = 1 ]; then
   set -- $GATES; NGATES=$#
   echo "— re-verifying $NGATES ever-passed gate(s)…"
   echo ""
-  DEDUP=1; DEDUP_KEYS=(); DEDUP_EXITS=(); DEDUP_DTS=(); DEDUP_FLAKY=(); DEDUP_HITS=0; FLAKY_TOTAL=0
+  DEDUP=1; DEDUP_KEYS=(); DEDUP_EXITS=(); DEDUP_DTS=(); DEDUP_FLAKY=(); DEDUP_HITS=0; FLAKY_TOTAL=0; SWEEP_SKIPPED=0
   S0=$SECONDS
   TOTAL_FAIL=0
   for g in $GATES; do eval_gate "$g"; TOTAL_FAIL=$((TOTAL_FAIL + FAIL)); echo ""; done
@@ -295,6 +302,7 @@ if [ "$ALL" = 1 ]; then
   fi
   DSUF=""; [ "$DEDUP_HITS" -gt 0 ] && DSUF=", $DEDUP_HITS deduped"
   FSUF=""; [ "$FLAKY_TOTAL" -gt 0 ] && FSUF=", $FLAKY_TOTAL flaky"
+  [ "$SWEEP_SKIPPED" -gt 0 ] && DSUF="$DSUF, $SWEEP_SKIPPED gate-time-only skipped"
   if [ "$TOTAL_FAIL" -eq 0 ]; then echo "✅ ALL GATES PASS (read-only: $NGATES gate(s) in ${T_ALL}s${DSUF})"; exit 0
   else echo "❌ $TOTAL_FAIL failing criteria across gates (read-only; ${T_ALL}s${DSUF}${FSUF})"; exit 1; fi
 fi

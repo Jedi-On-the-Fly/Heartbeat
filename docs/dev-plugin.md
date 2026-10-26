@@ -47,7 +47,7 @@ Every project owns copies of the templates under `.hb/`. `HB_DIR` = the `.hb/` d
 | root | `phases[]` and `gates{}` (both required), `project?`, `_meta?` (any value), `$schema?` |
 | phase | `id` (non-empty), `title?`, `desc?`, `gate_entry` / `gate_exit` (gateId\|null), `tasks[]?`, `parked?` (boolean), `parked_reason?`, `horizon?` (boolean), `detached_from?` / `detached_reason?` / `detached_by?` / `detached_at?` (set together by `hb detach`) |
 | task | `id` (non-empty), `title?`, `description?`, `requires[]?` (task ids), `note?` |
-| gate | `desc?`, `criteria[]{id, desc?, cmd, timeout_s?}?`, `review?{prompt, profile?, constraints[]?}`, `regate?{at, reason, actor, prev_criteria, pending, rearm?{at, actor, model, artifact, sha256}}` (written by `hb regate`) |
+| gate | `desc?`, `criteria[]{id, desc?, cmd, timeout_s?, sweep?}?` (`sweep: false` = gate-time only), `review?{prompt, profile?, constraints[]?}`, `regate?{at, reason, actor, prev_criteria, pending, rearm?{at, actor, model, artifact, sha256}}` (written by `hb regate`) |
 
 The nodes marked `x-hb-structure` in `plugin/dag.schema.json` are what `hb-lint` enforces as STRUCTURE (see Lint); `horizon`, `cmd`, `review`, `review.constraints`, `regate` and the detach fields keep their own lint rules; `timeout_s` is checked by the runner at evaluation (an invalid value fails the criterion); the remaining optional fields' types — and a criterion's `id`, which the schema requires but STRUCTURE leaves out — are documented, not enforced.
 
@@ -111,7 +111,7 @@ Priority order (first match wins):
 |---|---|---|
 | `gate.sh <GATE>` | eval criteria; on pass append `gate_passed`, reproject, git snapshot, announce review if any; on fail append `gate_failed` | pass 0 / blocked 1 / usage or unknown gate 2 / regate pending 3 / `dag.json` structurally invalid or unreadable 4 |
 | `gate.sh --check <GATE>` | eval read-only, no state change | would-pass 0 / would-block 1 / regate pending 3 / structurally invalid 4 |
-| `gate.sh --all` | eval every **ever-passed** gate read-only (regression sweep); never-passed/planned gates are skipped and reported; a DRIFTED gate (criteria changed without sanction) is EXCLUDED from re-evaluation — running weakened criteria proves nothing — and counted FAILING, annotated (`hb.js drift` feeds the list); a pending regate is likewise counted FAILING, parked or not | 0 / 1 / structurally invalid 4 |
+| `gate.sh --all` | eval every **ever-passed** gate read-only (regression sweep); a criterion marked `"sweep": false` (gate-time only) is listed (`○`), counted (`N gate-time-only skipped`) and NOT re-run, and a gate left with no sweepable criteria is named; never-passed/planned gates are skipped and reported; a DRIFTED gate (criteria changed without sanction) is EXCLUDED from re-evaluation — running weakened criteria proves nothing — and counted FAILING, annotated (`hb.js drift` feeds the list); a pending regate is likewise counted FAILING, parked or not | 0 / 1 / structurally invalid 4 |
 
 Every mode checks the plan's STRUCTURE first (exit 4, no event — T186), ahead of usage (2) and a pending regate (3).
 

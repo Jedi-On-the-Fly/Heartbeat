@@ -200,6 +200,32 @@ def test_all_dedupes_identical_criteria(tmp_path):
     assert text.count("deduped") == 2                       # every reuse is loud, never silent
 
 
+def test_all_skips_gate_time_only_criteria(tmp_path):
+    # "sweep": false — run at gate time and by --check, listed + counted but NOT re-run by --all.
+    dag = {"phases": [
+        {"id": p, "gate_exit": g, "tasks": [{"id": f"T{p}", "title": "t", "requires": []}]}
+        for p, g in (("P0", "G0"), ("P1", "G1"))],
+        "gates": {"G0": {"desc": "g0", "criteria": [
+                      {"id": "fast", "desc": "quick", "cmd": "true"},
+                      {"id": "suite", "desc": "suite", "sweep": False, "cmd": 'echo run >> "$PROJECT_DIR/runs.txt"'}]},
+                  "G1": {"desc": "g1", "criteria": [
+                      {"id": "only", "desc": "only", "sweep": False, "cmd": 'echo run >> "$PROJECT_DIR/runs.txt"'}]}}}
+    hb = make_hb(tmp_path, dag)
+    state.reproject(hb)
+    for g in ("G0", "G1"):
+        assert gate.run_gate(hb, g)["status"] == "passed"
+    assert (tmp_path / "runs.txt").read_text().count("run") == 2   # both ran at gate time
+    r = gate.run_all(hb)
+    assert r["ok"] and r["gate_time_only"] == 2
+    assert (tmp_path / "runs.txt").read_text().count("run") == 2   # the sweep re-ran neither
+    assert r["gates"]["G0"]["passed"] == 1                        # the ordinary criterion still ran
+    text = "\n".join(ln for res in r["gates"].values() for ln in res["lines"])
+    assert "○ [suite]" in text and "○ [only]" in text
+    assert "G1 has no sweepable criteria" in text
+    assert gate.run_gate(hb, "G0", check=True)["status"] in ("passed", "would_pass")
+    assert (tmp_path / "runs.txt").read_text().count("run") == 3   # --check still runs it
+
+
 def test_all_dedup_respects_timeout_and_failure(tmp_path):
     # Same cmd under a DIFFERENT effective timeout is NOT deduped (a pass under 60s proves
     # nothing about a 1s budget), and a cached FAILURE still fails every referencing gate.

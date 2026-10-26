@@ -316,6 +316,8 @@ def lint(dag):
             if isinstance(c, dict) and not isinstance(c.get("cmd"), str):  # a non-object entry is STRUCTURE (the shape layer)
                 errors.append(f"[{g}] criteria entry {i} must be an object with a string cmd "
                               f"(got {_type_name(c)})")
+            if isinstance(c, dict) and "sweep" in c and not isinstance(c["sweep"], bool):
+                errors.append(f"[{g}] criteria entry {i} sweep must be true or false (false = gate-time only: not re-run by the --all sweep)")
 
     _check_placeholders(raw, warnings)
     _check_gate_artifacts(dag, warnings)

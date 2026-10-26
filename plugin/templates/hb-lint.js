@@ -223,6 +223,8 @@ function lint(dag) {
       // a NON-OBJECT entry is STRUCTURE, already reported by the shape layer (in the readers' order)
       if (isObj(c) && typeof c.cmd !== 'string')
         errors.push(`[${g}] criteria entry ${i} must be an object with a string cmd (got ${typeName(c)})`);
+      if (isObj(c) && has(c, 'sweep') && typeof c.sweep !== 'boolean')
+        errors.push(`[${g}] criteria entry ${i} sweep must be true or false (false = gate-time only: not re-run by the --all sweep)`);
     });
   }
 

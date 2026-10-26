@@ -107,8 +107,12 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None
     passed = failed = 0
     dedup_hits = 0
     flaky_count = 0
+    sweep_skipped = 0
     results = []
     for c in criteria:
+        # "sweep": false = gate-time only: checked when the gate passes and by --check; the --all sweep
+        # (the only caller passing a dedup scope) lists and counts it but does not re-run it (== gate.sh)
+        if dedup is not None and c.get("sweep") is False: _add(f"  ○ [{c.get('id')}] {c.get('desc', '')} (gate-time only — not re-run by the sweep)"); sweep_skipped += 1; continue  # sweep-guard
         eff = timeout
         ts = c.get("timeout_s")
         if ts is not None:
@@ -172,8 +176,10 @@ def eval_gate(hbdir, gate_id, timeout=None, emit=None, progress=None, dedup=None
         results.append({"id": c.get("id"), "cmd": c.get("cmd", ""), "exit": 0 if ok else 1})
         passed += 1 if ok else 0
         failed += 0 if ok else 1
+    if dedup is not None and sweep_skipped and not (passed or failed):
+        _add(f"  ⚠ {gate_id} has no sweepable criteria — it is verified only when it passes (gate time)")
     return {"passed": passed, "failed": failed, "lines": lines, "results": results,
-            "deduped": dedup_hits, "flaky": flaky_count}
+            "deduped": dedup_hits, "flaky": flaky_count, "gate_time_only": sweep_skipped}
 
 
 def run_gate(hbdir, gate_id, check=False, emit=None, progress=None):
@@ -246,6 +252,7 @@ def run_all(hbdir, emit=None, progress=None):
     out = {"ok": total_fail == 0, "gates": report, "skipped": skipped, "parked": parked,
            "deduped": sum(r["deduped"] for r in report.values()),
            "flaky": sum(r["flaky"] for r in report.values()),
+           "gate_time_only": sum(r.get("gate_time_only", 0) for r in report.values()),
            "elapsed_s": int(time.monotonic() - t0 + 0.5)}
     out["regated"] = _rgl; out["parked_regated"] = _rg_parked; out["ok"] = out["ok"] and not _rgl   # regate-guard: ALL pending revisions count FAILING, parked included
     out["drifted"] = _dft; out["ok"] = out["ok"] and not _dft   # drift-guard: sweep — counted FAILING, annotated (the pending-regate precedent); parked silences nothing

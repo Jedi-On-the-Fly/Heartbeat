@@ -78,7 +78,10 @@ it. Method and proof: [plan-to-the-horizon.md](../../../docs/howto/plan-to-the-h
   pipe hides the exit code). Instead assert the group actually PASSED: `tests/run-tests.sh`
   emits a machine-checkable `GROUPS-PASSED: …` line listing only groups with zero failing
   checks, so gate on `grep -q 'GROUPS-PASSED:.* Tnn '` (trailing space) — or run just that
-  test and check its real result.
+  test and check its real result. Mark a criterion that runs the WHOLE suite `"sweep": false`
+  (gate-time only): it still proves the phase broke nothing when the gate passes, but the
+  `--all` regression sweep (the pre-push guard) skips it, so the suite is not re-run once per
+  gate on every push — keep each phase's own focused criteria sweepable.
 - **Adversarial review** on sensitive gates — add `"review": { "prompt": "Refute that
   this phase is done: …" }` so a second agent must fail to refute before it advances.
 - **Plan-time constraints on every review gate** — give the review explicit targets:

@@ -98,6 +98,10 @@
                   "type": "integer",
                   "minimum": 1,
                   "description": "Per-criterion timeout in seconds — WINS over the runner default (GATE_TIMEOUT_S, 60). An invalid value fails the criterion loudly at runtime."
+                },
+                "sweep": {
+                  "type": "boolean",
+                  "description": "false = gate-time only: checked when the gate passes (and by an explicit --check), but the --all regression sweep (the pre-push guard) does not re-run it — for criteria like the whole test suite, which one CI run covers. Listed and counted by the sweep, never silent. Not pinned by the drift tripwire (like desc/timeout_s)."
                 }
               },
               "additionalProperties": false,

@@ -650,6 +650,13 @@ cmp "shape:tick" "$TK_N" "$TK_P"
 [ "$TK_N" = "True dag_corrupted" ] || { echo "  ✗ shape:tick — node does not wake dag_corrupted: $TK_N"; FAIL=1; }
 rm -rf "$SD" "$ST"
 
+# sweep:lint — a non-boolean gate-time-only flag is the SAME lint error on both runtimes
+SW=$(mktemp -d)
+printf '%s' '{"phases":[{"id":"A","gate_exit":"G","tasks":[{"id":"a","title":"t"}]}],"gates":{"G":{"criteria":[{"id":"c","cmd":"python3 -c 1","sweep":"no"}]}}}' > "$SW/d.json"
+cmp "sweep:lint" "$(l_node "$SW/d.json")" "$(l_py "$SW/d.json")"
+case "$(l_node "$SW/d.json")" in *'sweep must be true or false'*) ;; *) echo "  ✗ sweep:lint — node found no sweep error"; FAIL=1;; esac
+rm -rf "$SW"
+
 echo "── horizon parity ──"
 # The knowledge horizon: the resolver verdict, the sparse insertion-ordered projection, the marker's
 # lint error and the speculative_tail finding agree byte-for-byte — each with a non-vacuity floor

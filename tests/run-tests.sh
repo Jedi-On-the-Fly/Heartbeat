@@ -2019,6 +2019,17 @@ else
   echo "  (python3 absent — T186 skipped)"
 fi
 
+grp "T187 — gate-time-only criteria: \"sweep\": false keeps a criterion (the whole suite) at gate time and --check, but the --all regression sweep (the pre-push guard) lists and skips it; lint type-checks it; unpinned by the drift tripwire; both runtimes"
+GSW="$HB_SRC/tests/gate-sweep.sh"
+if command -v python3 >/dev/null 2>&1; then
+  check "T187.1 run at gate time and by --check, listed + counted + skipped by --all, a gate with nothing left named, lint boolean, no drift (gate-sweep.sh → GATE-SWEEP-OK)" \
+    'bash "'"$GSW"'" 2>&1 | grep -q "^GATE-SWEEP-OK"'
+  check "T187.2 teeth: the stripped sweep-guard (node + py) makes the sweep re-run the gate-time-only criterion (--selftest)" \
+    'bash "'"$GSW"'" --selftest 2>&1 | grep -q "^GATE-SWEEP-SELFTEST-OK"'
+else
+  echo "  (python3 absent — T187 skipped)"
+fi
+
 # Outcome marker: groups with zero failing checks AND at least one REGISTERED check (a
 # coverage gate keys on this; a zero-check/dep-skipped group must not read as PASSED).
 _gp=""; for g in $_ALLG; do [ -z "${_GFAIL[$g]:-}" ] && [ -n "${_GCHECKS[$g]:-}" ] && _gp="$_gp $g"; done
