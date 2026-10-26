@@ -64,7 +64,7 @@ mark a new node and the proof grows cases for it (k1).
 
 Only structure fails closed: a wrong-typed optional field such as `title` or `desc`, or an
 undeclared key, is not a lint finding — the schema documents those types and nothing enforces
-them (a few fields keep their own checks: `horizon`, `cmd`, `review` and `regate` are lint
+them (a few fields keep their own checks: `horizon`, `cmd`, `sweep`, `review` and `regate` are lint
 errors, and the gate runner fails a criterion whose `timeout_s` is invalid). A criterion's own
 fields are outside STRUCTURE by design: a criterion without a string `id` lints clean, though the
 schema requires one, and its label then renders per runtime in the gate's output. Semantic

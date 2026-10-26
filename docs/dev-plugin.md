@@ -49,7 +49,7 @@ Every project owns copies of the templates under `.hb/`. `HB_DIR` = the `.hb/` d
 | task | `id` (non-empty), `title?`, `description?`, `requires[]?` (task ids), `note?` |
 | gate | `desc?`, `criteria[]{id, desc?, cmd, timeout_s?, sweep?}?` (`sweep: false` = gate-time only), `review?{prompt, profile?, constraints[]?}`, `regate?{at, reason, actor, prev_criteria, pending, rearm?{at, actor, model, artifact, sha256}}` (written by `hb regate`) |
 
-The nodes marked `x-hb-structure` in `plugin/dag.schema.json` are what `hb-lint` enforces as STRUCTURE (see Lint); `horizon`, `cmd`, `review`, `review.constraints`, `regate` and the detach fields keep their own lint rules; `timeout_s` is checked by the runner at evaluation (an invalid value fails the criterion); the remaining optional fields' types — and a criterion's `id`, which the schema requires but STRUCTURE leaves out — are documented, not enforced.
+The nodes marked `x-hb-structure` in `plugin/dag.schema.json` are what `hb-lint` enforces as STRUCTURE (see Lint); `horizon`, `cmd`, `sweep`, `review`, `review.constraints`, `regate` and the detach fields keep their own lint rules; `timeout_s` is checked by the runner at evaluation (an invalid value fails the criterion); the remaining optional fields' types — and a criterion's `id`, which the schema requires but STRUCTURE leaves out — are documented, not enforced.
 
 `criteria[].cmd` is a one-line shell command; exit 0 = pass. `$PROJECT_DIR`/`$HB_DIR` in env.
 

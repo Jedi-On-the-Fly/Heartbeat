@@ -144,7 +144,7 @@ my-project/
 - **`review` block (optional):** adds an adversarial second-agent gate — the phase
   advances only after the deterministic gate passes AND a skeptical agent fails to
   refute completion. See below.
-- **Schema:** [`plugin/dag.schema.json`](plugin/dag.schema.json) documents the format; `hb lint` is the judge of its STRUCTURE (the nodes the schema marks `x-hb-structure`), and every reader refuses a structurally broken plan. A few fields keep their own lint rules (`horizon`, `cmd`, `review`, `regate`, the detach fields) and the gate runner checks `timeout_s`; the other optional fields' types — and a criterion's `id`, which the schema requires — are documented, not enforced ([a-malformed-plan-fails-closed.md](docs/howto/a-malformed-plan-fails-closed.md)).
+- **Schema:** [`plugin/dag.schema.json`](plugin/dag.schema.json) documents the format; `hb lint` is the judge of its STRUCTURE (the nodes the schema marks `x-hb-structure`), and every reader refuses a structurally broken plan. A few fields keep their own lint rules (`horizon`, `cmd`, `sweep`, `review`, `regate`, the detach fields) and the gate runner checks `timeout_s`; the other optional fields' types — and a criterion's `id`, which the schema requires — are documented, not enforced ([a-malformed-plan-fails-closed.md](docs/howto/a-malformed-plan-fails-closed.md)).
 
 Author a DAG from a written plan with `/heartbeat plan` — it enforces spec-first
 tasks, behavioral gates, adversarial review on sensitive gates, and lints clean.
