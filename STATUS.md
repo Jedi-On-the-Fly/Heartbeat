@@ -1156,8 +1156,9 @@ the deterministic layer can re-inspect.
 
 1. **Lock** — atomic `mkdir` lock; guards concurrent ticks and the agent
    session. Stale locks (> `LOCK_STALE_S`, default 1800s) are auto-broken.
-2. **Integrity** — corrupt `state.json` → wake `state_corrupted`; corrupt
-   `dag.json` → wake `dag_corrupted`.
+2. **Integrity** — a `dag.json` that is unreadable or structurally malformed → wake
+   `dag_corrupted` (checked FIRST, every tick); then a corrupt `state.json` self-heals by rebuild,
+   else wakes `state_corrupted`.
 3. **Circuit breaker** — `build_stuck_count >= 5` → single wake `build_stuck`,
    then silence until human reset.
 4. **Drift detection** — SHA256 of `WATCH_PATHS`; baseline auto-frozen on first

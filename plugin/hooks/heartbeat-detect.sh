@@ -15,7 +15,7 @@ review_stuck / unsanctioned_drift / criteria_drift / gate_rot / replan_pending /
 dag_corrupted / state_corrupted). An interactive session has no
 external ticker — you are the loop; a single completed task does not mean the
 project is done. When blocked (gate_blocked / build_stuck / deadlock / gate_rot /
-review_stuck / criteria_drift), run
+review_stuck / criteria_drift / dag_corrupted), run
 `node .hb/hb.js diagnose` for a computed root-cause and recovery steps. Mutate
 state only via the hb CLI. Full protocol: `node .hb/hb.js protocol` or .hb/PROTOCOL.md.
 EOF

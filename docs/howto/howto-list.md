@@ -188,6 +188,7 @@ Legend: ✅ created · ⬜ Not available yet · *(→ file)* = the outcome lives
 | The Worker Keeps Failing the Same Task | ✅ [prove-liveness.md](prove-liveness.md) (build_stuck) — T56 |
 | A Completed Phase Became Broken | ✅ [re-verify-completed-gates.md](re-verify-completed-gates.md) — T58 |
 | Plan to the Knowledge Horizon (replan without laundering) | ✅ [plan-to-the-horizon.md](plan-to-the-horizon.md) — T184 + T185 |
+| A Malformed Plan Fails Closed (one judge for dag.json's structure) | ✅ [a-malformed-plan-fails-closed.md](a-malformed-plan-fails-closed.md) — T186 |
 | My Backend Works but State Does Not Advance | ✅ [keep-stage-b-untrusted.md](keep-stage-b-untrusted.md) — T56 |
 | Switching Models Changes Project Behavior | ✅ [swap-workers-without-changing-the-dag.md](swap-workers-without-changing-the-dag.md) — T57 |
 | My Refuter Always / Never Finds Anything | ✅ [tune-refuter-sensitivity.md](tune-refuter-sensitivity.md) — T145–T149, T152 |

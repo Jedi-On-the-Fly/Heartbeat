@@ -138,8 +138,8 @@ def read_dag_file(path):
 
 
 def shape_errors(dag, entries=False):
-    """entries: also report non-object criteria entries (lint's own criteria-entry rule reports them
-    there; audit passes True for its dag_shape). Twin: hb-lint.js shapeErrors."""
+    """entries: also report non-object criteria entries. Every caller passes True (lint, audit,
+    every reader) — one walk, one order. Twin: hb-lint.js shapeErrors."""
     if not _is_obj(dag):
         return ["dag.json unreadable: top level is not an object"]
     e = []
@@ -242,7 +242,7 @@ def lint(dag):
     if not _is_obj(dag):
         return {"errors": ["dag.json unreadable: top level is not an object"], "warnings": []}
     errors, warnings = [], []
-    errors.extend(shape_errors(dag))  # shape-guard: lint
+    errors.extend(shape_errors(dag, True))  # shape-guard: lint — entries mode: the readers' order, one walk
     raw = dag
     dag = structure_view(dag)
     gates = dag.get("gates") or {}
@@ -313,7 +313,7 @@ def lint(dag):
         # doctor/audit on both runtimes (a refuter catch). Loud, identical bytes across runtimes.
         gv = gates[g] if isinstance(gates[g], dict) else {}
         for i, c in enumerate(gv.get("criteria") or []):
-            if not isinstance(c, dict) or not isinstance(c.get("cmd"), str):
+            if isinstance(c, dict) and not isinstance(c.get("cmd"), str):  # a non-object entry is STRUCTURE (the shape layer)
                 errors.append(f"[{g}] criteria entry {i} must be an object with a string cmd "
                               f"(got {_type_name(c)})")
 

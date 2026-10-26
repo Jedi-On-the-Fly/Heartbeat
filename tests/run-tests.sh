@@ -2011,7 +2011,7 @@ fi
 grp "T186 — the shape contract: lint and audit judge dag.json's annotated STRUCTURE identically on both runtimes (derived from the schema; unreadable = malformed; no existing dag's lint moved), and every plan-interpreting reader fails CLOSED on a malformed plan — the tick wakes dag_corrupted, never dispatches or sleeps; both runtimes"
 DSH="$HB_SRC/tests/dag-shape.sh"
 if command -v python3 >/dev/null 2>&1; then
-  check "T186.1 lint/audit/schema (k1-k7) + every reader on every derived mutation (r0-r10), both runtimes (dag-shape.sh → DAG-SHAPE-OK)" \
+  check "T186.1 lint/audit/schema (k1-k7) + every reader on every derived mutation (r0-r17), both runtimes (dag-shape.sh → DAG-SHAPE-OK)" \
     'bash "'"$DSH"'" 2>&1 | grep -q "^DAG-SHAPE-OK"'
   check "T186.2 teeth: each stripped shape-guard (lint, audit, reader, tick — node + py) reddens its named case by behavior (--selftest)" \
     'bash "'"$DSH"'" --selftest 2>&1 | grep -q "^DAG-SHAPE-SELFTEST-OK"'

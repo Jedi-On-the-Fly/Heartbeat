@@ -144,7 +144,7 @@ my-project/
 - **`review` block (optional):** adds an adversarial second-agent gate — the phase
   advances only after the deterministic gate passes AND a skeptical agent fails to
   refute completion. See below.
-- **Schema:** validate against [`plugin/dag.schema.json`](plugin/dag.schema.json).
+- **Schema:** [`plugin/dag.schema.json`](plugin/dag.schema.json) documents the format; `hb lint` is the judge of its STRUCTURE (the nodes the schema marks `x-hb-structure`), and every reader refuses a structurally broken plan. A few fields keep their own lint rules (`horizon`, `cmd`, `review`, `regate`, the detach fields) and the gate runner checks `timeout_s`; the other optional fields' types — and a criterion's `id`, which the schema requires — are documented, not enforced ([a-malformed-plan-fails-closed.md](docs/howto/a-malformed-plan-fails-closed.md)).
 
 Author a DAG from a written plan with `/heartbeat plan` — it enforces spec-first
 tasks, behavioral gates, adversarial review on sensitive gates, and lints clean.
@@ -155,7 +155,8 @@ tasks, behavioral gates, adversarial review on sensitive gates, and lints clean.
 
 ```
 1. Handout lock     atomic mkdir; serializes concurrent ticks (released before Stage B)
-2. Integrity        corrupt state.json → self-heal via rebuild; corrupt dag.json → wake dag_corrupted
+2. Integrity        dag.json unreadable or structurally malformed → wake dag_corrupted (checked FIRST,
+                    every tick); corrupt state.json → self-heal via rebuild
 2.5 Lease reclaim   a stale/hung lease (heartbeat gone) is reclaimed → task returns to pending
 2.6 Rot             a COMPLETED phase's gate references a deleted file → wake gate_rot
 3. Circuit breaker  build_stuck_count ≥ 5, or objective no-progress → wake build_stuck (single alert)
@@ -207,7 +208,7 @@ steps — you are never left guessing.
 | `gate_blocked` | Fix the failing criteria/findings, re-run the gate. |
 | `at_capacity` | Nothing to do — max tasks in flight (or the only ready task is leased). |
 | `state_corrupted` | `hb rebuild` (the tick self-heals; surfaces only if the log is unusable). |
-| `dag_corrupted` | Restore dag.json from git/backup (structure is immutable). |
+| `dag_corrupted` | `dag.json` is unreadable or structurally malformed — run `hb lint` for every error, then restore it from git/backup or fix the named fields until it lints clean. Never hand-edit `state.json`. |
 | `deadlock` | `active_orphan` → reclaimed automatically. `dag_invalid` → surface for human review. |
 | `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
 | `criteria_drift` | A completed gate's criteria changed without sanction — HUMAN NEEDED. The cure is a full regate cycle (`hb regate`, a different actor's rearm, a fresh pass), never a freeze or an edit past it. |

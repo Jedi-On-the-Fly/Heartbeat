@@ -91,8 +91,14 @@ it. Method and proof: [plan-to-the-horizon.md](../../../docs/howto/plan-to-the-h
   write them on every gate whose review matters. `hb-lint` rejects malformed ones; `hb-audit`
   warns `unconstrained_review` on a review gate without any. The review of such a gate is constraint-first — see
   [constraint-first-review.md](../../../docs/howto/constraint-first-review.md).
-- **No hardcoded values/counts** — derive from source/registry. Validate the shape
-  against the plugin's `${CLAUDE_PLUGIN_ROOT}/dag.schema.json` (bootstrap does not copy it into `.hb/`).
+- **No hardcoded values/counts** — derive from source/registry. **Structure is lint's to judge:**
+  `hb-lint` enforces every node the plugin's `${CLAUDE_PLUGIN_ROOT}/dag.schema.json` annotates
+  `x-hb-structure` (the containers, ids, references and `parked`) as errors, and every reader
+  refuses a structurally broken plan (the tick wakes `dag_corrupted`). A few fields keep
+  their own checks (`horizon`, `cmd`, `review`, `regate` and the detach fields are lint errors;
+  `timeout_s` is checked by the gate runner); the other optional fields' types — and a criterion's
+  `id` — are documented in the schema, not enforced. See
+  [a-malformed-plan-fails-closed.md](../../../docs/howto/a-malformed-plan-fails-closed.md).
 
 **Acceptance (run and show before proposing):**
 ```bash
@@ -177,7 +183,8 @@ Flags: **hollow_gate** (a phase whose gate has no behavioral criterion), **ungat
 its own evidence — observe, don't produce), **gate_offphase** (the gate tests nothing
 the phase produces), **unconstrained_review** (a review gate without plan-time
 `review.constraints`), **control_char** (a `\x1e`/`\x1f` byte that would corrupt the gate
-runner's transport), and **speculative_tail** (a warning: two or more trailing unverified LIVE phases, parked ones
+runner's transport), **dag_shape** (an error: the plan's structure is invalid — the first structure
+error, the same one `hb-lint` reports), and **speculative_tail** (a warning: two or more trailing unverified LIVE phases, parked ones
 excluded, behind a verified head — planned past the knowledge horizon; it names where to cut and mark
 `"horizon": true`).
 
@@ -219,8 +226,8 @@ Tick Protocol below.
 
 **Serial (default):** repeatedly `bash .hb/tick.sh` → act on `data.reason` → repeat,
 stopping only at a wake that needs a human (`gate_blocked`, `build_stuck`, `deadlock`,
-`review_stuck`, `unsanctioned_drift`, `criteria_drift`, `gate_rot`, `replan_pending`, or a
-`review_pending` you can't clear) or `all_done`. Equivalent to `/loop 15m /heartbeat tick <dir>`
+`review_stuck`, `unsanctioned_drift`, `criteria_drift`, `gate_rot`, `replan_pending`,
+`dag_corrupted`, `state_corrupted`, or a `review_pending` you can't clear) or `all_done`. Equivalent to `/loop 15m /heartbeat tick <dir>`
 but self-paced.
 
 **Parallel (independent branches):** ask HeartBeat for the concurrently-runnable set
@@ -361,7 +368,7 @@ When woken by a tick (`data.reason` present), act by reason:
 | `gate_blocked` | `node .hb/hb.js diagnose` → shows which criteria fail + attempts; fix the ROOT cause (never weaken the gate), re-run `bash .hb/gate.sh <gate>`. |
 | `at_capacity` | Nothing to do — max tasks already in flight (or the only ready task is leased). The tick handled it; no wake. |
 | `state_corrupted` | `node .hb/hb.js rebuild` (replays events.jsonl). The tick self-heals this; only surfaces if the log itself is unusable. |
-| `dag_corrupted` | Restore dag.json from git/backup (structure is immutable). |
+| `dag_corrupted` | `dag.json` is unreadable or structurally malformed — run `node .hb/hb-lint.js .hb/dag.json` for every error, then restore `dag.json` from git/backup or fix the named fields until it lints clean. Never hand-edit `state.json`. |
 | `deadlock` | `active_orphan` → the stale-lease reclaim frees it automatically; if it persists, `hb fail <id>`. `dag_invalid` → surface errors for human review. |
 | `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
 | `criteria_drift` | A completed gate's criteria changed without sanction — `node .hb/hb.js doctor` names the gate. HUMAN NEEDED; never freeze or edit past it. The cure is a full regate cycle: git-restore dag.json to retract the content, or declare the revision (`node .hb/hb.js regate <gate> <reason>`), a DIFFERENT actor rearms with evidence (`node .hb/hb.js regate <gate> --rearm --artifact <file>`), then a fresh pass (`bash .hb/gate.sh <gate>`). |

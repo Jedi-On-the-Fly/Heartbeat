@@ -20,7 +20,12 @@ What it names, by blocker:
   re-point the gate.
 - **`review_stuck`** — the gate whose adversarial review never resolved. Recovery: run the
   refuter and record the verdict.
-- **`build_stuck` / `deadlock`** — repeated no-progress, or an orphaned lease / invalid DAG.
+- **`build_stuck` / `deadlock`** — repeated no-progress, or an orphaned lease / invalid DAG; a
+  `deadlock` whose resolver is missing or crashed names `Cause: resolver_error` and the cure
+  (restore `.hb/hb-next-task.js`, or repair the python install).
+- **`dag_corrupted`** — `dag.json` is unreadable or structurally malformed: the diagnosis names the
+  first structure error (the one `hb lint` lists first) and the restore-or-fix cure; doctor then
+  reports only the structure errors ([a-malformed-plan-fails-closed.md](a-malformed-plan-fails-closed.md)).
 
 A healthy project reports `no blocker detected` — the diagnosis is not a constant. The
 mechanisms behind these (rebuild, rot, liveness) are covered in

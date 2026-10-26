@@ -41,6 +41,9 @@ families A–J) is in [howto-list.md](howto-list.md).
   cause (failing criterion, missing file, awaiting gate).
 - [Re-verify completed gates](re-verify-completed-gates.md) — a passed gate is a claim about
   current reality; `--check` / `--all` re-run it and catch decay.
+- [A malformed plan fails closed](a-malformed-plan-fails-closed.md) — `hb lint` judges the
+  plan's structure (read from the schema), and every reader refuses a broken plan: the tick wakes
+  `dag_corrupted` instead of dispatching or sleeping (T186).
 - [Plan to the horizon](plan-to-the-horizon.md) — plan only what is known, mark the last
   planned phase `"horizon": true` so completing it wakes `replan_pending` (append the next
   horizon, or `hb horizon close --reason "<why>"`), replan through sanctioned surface; the drift tripwire makes

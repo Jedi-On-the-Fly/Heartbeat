@@ -86,8 +86,9 @@ function readDagFile(file) {
   if (!isObj(dag)) return { error: 'dag.json unreadable: top level is not an object' };
   return { dag };
 }
-// entries: also report non-object criteria entries (lint's own criteria-entry rule reports them
-// there, so lint passes false — one line per violation; audit passes true for its dag_shape).
+// entries: also report non-object criteria entries. Every caller passes true — lint, audit and
+// every reader — so they all walk ONE order and lint's first error is every reader's first error;
+// lint's own criteria-entry rule then reports only OBJECT entries with a non-string cmd.
 function shapeErrors(dag, entries) {
   if (!isObj(dag)) return ['dag.json unreadable: top level is not an object'];
   const e = [];
@@ -149,7 +150,7 @@ function structureView(dag) {
 function lint(dag) {
   if (!isObj(dag)) return { errors: ['dag.json unreadable: top level is not an object'], warnings: [] };
   const errors = [], warnings = [];
-  errors.push(...shapeErrors(dag));   // shape-guard: lint
+  errors.push(...shapeErrors(dag, true));   // shape-guard: lint — entries mode: the readers' order, one walk
   const raw = dag;
   dag = structureView(dag);
   const gates  = dag.gates  ?? {};
@@ -219,7 +220,8 @@ function lint(dag) {
     // runners eval cmd and every static reader walks these entries, so garbage here crashed
     // doctor/audit on both runtimes (a refuter catch). Loud, identical bytes across runtimes.
     ((gates[g] && typeof gates[g] === 'object' && !Array.isArray(gates[g]) ? gates[g].criteria : null) || []).forEach((c, i) => {
-      if (!c || typeof c !== 'object' || Array.isArray(c) || typeof c.cmd !== 'string')
+      // a NON-OBJECT entry is STRUCTURE, already reported by the shape layer (in the readers' order)
+      if (isObj(c) && typeof c.cmd !== 'string')
         errors.push(`[${g}] criteria entry ${i} must be an object with a string cmd (got ${typeName(c)})`);
     });
   }

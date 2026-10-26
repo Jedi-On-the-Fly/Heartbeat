@@ -49,7 +49,7 @@ When woken by a tick (`data.reason` present in context):
 | `gate_blocked` | Fix the failing criteria/findings. Re-run the gate. |
 | `at_capacity` | Nothing to do — max tasks in flight / only ready task is leased. |
 | `state_corrupted` | `node .hb/hb.js rebuild` (tick self-heals; surfaces only if the log is unusable). |
-| `dag_corrupted` | `git checkout HEAD -- .hb/dag.json` (structure is immutable). |
+| `dag_corrupted` | `dag.json` is unreadable or structurally malformed — run `node .hb/hb-lint.js .hb/dag.json` for every error, then restore `dag.json` from git/backup or fix the named fields until it lints clean. Never hand-edit `state.json`. |
 | `deadlock` | `active_orphan` → reclaimed automatically; if it persists `hb fail <id>`. `dag_invalid` → surface for human review. |
 | `unsanctioned_drift` | Review the diff. If intended: `bash .hb/tick.sh --freeze`. |
 | `criteria_drift` | A completed gate's criteria changed without sanction — HUMAN NEEDED. Cure with a full regate cycle (`node .hb/hb.js regate <gate> <reason>`, a different actor's rearm, a fresh `bash .hb/gate.sh <gate>`); never freeze or edit past it. |

@@ -506,3 +506,21 @@ gains exactly `gates: missing` (the proof's oracle allowlists precisely that).
 Parity cases: `shape:lint`, `shape:unreadable`, `shape:audit`, each with a non-vacuity floor,
 inline. Proof: `tests/dag-shape.sh` (T186) + its `--selftest` teeth.
 
+## Fail-closed readers (the shape contract's second half)
+
+On a structure-invalid or unreadable `dag.json` both runtimes agree, reader by reader: the tick runs
+the structure check FIRST (before the state self-heal) and wakes `dag_corrupted` every tick carrying
+the first errors (≤ 5, in lint's own order — lint and every reader take them from the same entries-mode walk), appending ONE `dag_corrupted` event per blockage
+(`.dag-corrupted-alerted`); both resolvers answer `{type: deadlock, cause: dag_invalid}`; gate
+evaluation exits 4 in every mode (ahead of 2 and 3) with no event; doctor reports only the structure
+errors (`plan checks skipped: dag.json invalid`) and diagnose names `dag_corrupted`; the CLI class
+tables (`SHAPE_CHECKED` in hb.js, `_shape_checked` in cli.py — each complete for its own runtime's verbs, which differ) refuse with ONE line — refusal TEXT is
+runtime-flavored (the node line names `node .hb/hb-lint.js .hb/dag.json`, python's `hb lint`), the
+exit code, the empty stdout and the untouched `.hb/` tree are the shared contract; MCP tools answer by
+class (`_SHAPE_FREE`). A resolver that is missing, crashes or answers something that is not `null`,
+a known verdict type or a task view with a string id is `deadlock` cause `resolver_error` on both
+ticks, every tick, never arming `.deadlock-alerted`. The `dag_corrupted` and `deadlock` PROTOCOL
+actions carry the cures (keys unchanged). Node-only surfaces: a missing or outdated `hb-lint.js` (the
+python checker ships inside the package) and the viz server. Parity case: `shape:tick`. Proof:
+`tests/dag-shape.sh` readers (r0-r17).
+

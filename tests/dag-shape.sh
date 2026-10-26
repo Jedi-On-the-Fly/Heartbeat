@@ -14,7 +14,7 @@
 # SPEC-FIRST: the lint/audit/schema cases are RED TODAY by design — the schema carries no
 # annotations yet, python lint crashes on several of these shapes, and the runtimes disagree.
 #
-#   bash tests/dag-shape.sh [case]           cases: lint (k1-k7) readers (r0-r10); default: both
+#   bash tests/dag-shape.sh [case]           cases: lint (k1-k7) readers (r0-r17); default: both
 #   bash tests/dag-shape.sh --selftest [lint|readers]
 # Prints SHAPE-LINT-OK / SHAPE-READERS-OK per case and DAG-SHAPE-OK for both; the selftest prints
 # SHAPE-SELFTEST-LINT-OK / SHAPE-SELFTEST-READERS-OK and DAG-SHAPE-SELFTEST-OK for both.
@@ -473,6 +473,7 @@ tickj(){ if [ "$2" = node ]; then ( cd "$1" && bash .hb/tick.sh 2>&1 ); else PY 
 core_readers(){   # $1 = project, $2 = label
   local P="$1" L="$2" rt o r e0 fe n
   fe=$(first_error "$P"); [ -n "$fe" ] || fail "readers [$L]: the fixture lints clean — not a structure fixture"
+  # (r1) both ticks WAKE dag_corrupted carrying the errors, every tick, with the restore-or-fix action
   for rt in node py; do
     for n in 1 2; do
       o=$(tickj "$P" "$rt")
@@ -485,6 +486,7 @@ assert d.get("wakeAgent") is True and a.get("reason")=="dag_corrupted" and isins
         || fail "readers r1 [$L] ($rt): the dag_corrupted action must name '$lc', never 'immutable', and warn off state.json: $o"
     done
   done
+  # (r2) both resolvers answer deadlock dag_invalid with identical keys, never a throw
   local rn rp
   rn=$( cd "$P" && node .hb/hb-next-task.js .hb/state.json 2>&1 ); rp=$(PY next --dir "$P" 2>&1)
   crashed "$rn$rp" && fail "readers r2 [$L]: a resolver CRASHED: $rn / $rp"
@@ -500,6 +502,7 @@ assert d.get("wakeAgent") is True and a.get("reason")=="dag_corrupted" and isins
   o=$(PY gate G1 --dir "$P" 2>&1); r=$?
   [ "$r" = 4 ] || fail "readers r5 [$L]: hb gate G1 exit $r (want 4): $o"
   [ "$(nev "$P")" = "$e0" ] || fail "readers r5 [$L]: a refused gate appended an event"
+  # (r6) doctor reports ONLY the structure errors and skips every plan-derived check
   for rt in node py; do
     if [ "$rt" = node ]; then o=$( cd "$P" && node .hb/hb.js doctor 2>&1 ); r=$?; else o=$(PY doctor --dir "$P" 2>&1); r=$?; fi
     crashed "$o" && fail "readers r6 [$L] ($rt): doctor CRASHED: $o"
@@ -751,6 +754,21 @@ R14EOF
     printf '{"phases": [' > "$P/.hb/dag.json"; tickj "$P" "$rt" >/dev/null
     [ "$(grep -c '"dag_corrupted"' "$P/.hb/events.jsonl")" = 2 ] || fail "readers r16 ($rt): a NEW blockage after a sound plan must log again (want 2 dag_corrupted events)"
   done
+  # (r17) ONE order: lint's first error IS every reader's first error (ticks, resolvers, refusals, doctor, audit), both runtimes
+  P="$W/r17"; rm -rf "$P"; cp -a "$T" "$P"
+  printf '%s' "$BASE" | python3 -c 'import json,sys; d=json.load(sys.stdin); d["gates"]["G1"]["criteria"]=[5]; d["gates"]["G2"]["criteria"]="x"; print(json.dumps(d))' > "$P/.hb/dag.json"
+  local f0 x
+  f0=$(first_error "$P"); [ "$(PY lint "$P/.hb/dag.json" --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["errors"][0])')" = "$f0" ] || fail "readers r17: the two lints disagree on the first error"
+  for rt in node py; do
+    x=$(tickj "$P" "$rt" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["data"]["errors"][0])'); [ "$x" = "$f0" ] || fail "readers r17 ($rt tick): first error '$x', lint says '$f0'"
+  done
+  x=$( cd "$P" && node .hb/hb-next-task.js .hb/state.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["detail"]["errors"][0])'); [ "$x" = "$f0" ] || fail "readers r17 (node resolver): '$x' vs '$f0'"
+  x=$(PY next --dir "$P" | python3 -c 'import json,sys; print(json.load(sys.stdin)["detail"]["errors"][0])'); [ "$x" = "$f0" ] || fail "readers r17 (python resolver): '$x' vs '$f0'"
+  ( cd "$P" && node .hb/hb.js state 2>&1 ) | grep -qF "$f0" || fail "readers r17 (node refusal) does not lead with '$f0'"
+  PY state --dir "$P" 2>&1 | grep -qF "$f0" || fail "readers r17 (python refusal) does not lead with '$f0'"
+  [ "$( cd "$P" && node .hb/hb.js doctor 2>&1 | grep '✗ dag:' | head -1 )" = "  ✗ dag: $f0" ] || fail "readers r17 (node doctor) does not lead with '$f0'"
+  [ "$(PY doctor --dir "$P" 2>&1 | grep '✗ dag:' | head -1)" = "  ✗ dag: $f0" ] || fail "readers r17 (python doctor) does not lead with '$f0'"
+  node "$NAUDIT" "$P/.hb/dag.json" 2>&1 | grep '\[dag_shape\]' | grep -qF "$f0" || fail "readers r17 (audit dag_shape) does not name '$f0'"
   echo "SHAPE-READERS-OK ($nmut derived mutations through the core readers; 5 representatives through every verb, gate mode, driver and MCP tool)"
 }
 core_readers_unreadable(){   # like core_readers, with the expected first error given (a missing file has no lint output to ask)
