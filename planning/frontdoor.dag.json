@@ -412,7 +412,8 @@
           "id": "s1x",
           "desc": "the schema-derived lint/audit/schema cases are green on both runtimes",
           "cmd": "cd \"$PROJECT_DIR\" && bash tests/dag-shape.sh lint 2>&1 | grep -q '^SHAPE-LINT-OK'",
-          "timeout_s": 600
+          "timeout_s": 600,
+          "sweep": false
         },
         {
           "id": "s1y",
