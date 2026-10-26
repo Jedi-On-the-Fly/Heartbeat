@@ -1,0 +1,25 @@
+[
+  {
+    "id": "G1",
+    "claim": "The tolerant rest of audit (and lint's gate-artifacts heuristic) reads every criterion and task field as TEXT with ONE type guard on both runtimes — the guard classify/isNondet/isSideEffecting already use: a non-string cmd or desc reads as '' in the control_char rule, and a non-string (null, number, boolean, list, object) task title or description reads as '' in the taskText of audit's gate_offphase and of hb-lint.js checkGateArtifacts / lint.py _check_gate_artifacts — never String()-coerced on node (an array becomes its joined text, an object '[object Object]') and never str()'d on python ('None', \"['x']\", \"{'a': 1}\") — so on a dag that is STRUCTURE-valid (and even lint-clean) the two audits emit the same findings, the same error count and the same exit, and the two lints the same warnings; tests/dag-shape.sh k7 pins a list-valued desc carrying \\x1e, a list-valued cmd carrying \\x1f beside a real behavioral criterion, and an object-valued task title under a gate whose cmd names a file.",
+    "subjects": [
+      "plugin/templates/hb-audit.js::audit",
+      "py/src/heartbeat/audit.py::audit",
+      "plugin/templates/hb-lint.js::checkGateArtifacts",
+      "py/src/heartbeat/lint.py::_check_gate_artifacts",
+      "tests/dag-shape.sh"
+    ],
+    "violation": "{\"phases\":[{\"id\":\"P1\",\"gate_exit\":\"G1\",\"tasks\":[{\"id\":\"t1\",\"title\":\"one\"}]}],\"gates\":{\"G1\":{\"criteria\":[{\"id\":\"c1\",\"desc\":[\"x\\u001e\"],\"cmd\":\"python3 -c \\\"assert 1\\\"\"}]}}} lints {errors:[],warnings:[]} exit 0 on BOTH runtimes, yet `node hb-audit.js f.json --json` reports one error finding control_char 'G1[c1] cmd/desc contains a \\x1e/\\x1f control byte …' and exits 1 while `hb audit f.json --json` reports findings:[] errors:0 and exits 0 — a lint-clean plan is audit-clean on python and refused on node; likewise a second criterion {\"id\":\"c9\",\"cmd\":[\"\\u001f\"]} beside a behavioral one gives node errors:1 exit 1 (control_char) and python errors:0 exit 0 (only the vacuous info); and a task whose title is {\"a\":\"out.txt\"} under a gate cmd grep -q ok \"$PROJECT_DIR/out.txt\" makes node lint warn 'gate references out.txt — no task appears to produce it …' and node audit warn gate_offphase while python's lint and audit emit nothing — none of which tests/dag-shape.sh, tests/parity.sh or horizon.sh exercises."
+  },
+  {
+    "id": "G2",
+    "claim": "The shape contract's message rule — an offending value is named by its JSON TYPE, never rendered, because number formatting and serialization split the runtimes' bytes — holds for EVERY lint line that quotes a value, not only the criteria-entry line: the detach rule's '[P] detached_from must name a defined gate that is some phase's gate_exit (got …)' (checkDetach ≡ _check_detach, the last JSON.stringify / json.dumps of a dag value left in either lint) renders a string value identically on both runtimes and names any non-string value by type (or otherwise yields byte-identical lines), so for detached_from = 5.0, -0.0, 12345678901234567890, 1e400, [1.0] or {\"a\":5.0} on a valid-id phase the sorted error lists are byte-identical across runtimes; tests/dag-shape.sh k7 pins at least the float and the 1e400 case, and planning/parity-notes.md's message-rule sentence is true of every rendered value.",
+    "subjects": [
+      "plugin/templates/hb-lint.js::checkDetach",
+      "py/src/heartbeat/lint.py::_check_detach",
+      "tests/dag-shape.sh",
+      "planning/parity-notes.md"
+    ],
+    "violation": "With phases[1] = {\"id\":\"P2\",\"gate_entry\":null,\"detached_from\":5.0,\"detached_reason\":\"r\",\"detached_by\":\"a\",\"detached_at\":\"t\",…} on the lint fixture, node lint prints '[P2] detached_from must name a defined gate that is some phase's gate_exit (got 5)' and python '(got 5.0)'; -0.0 → '(got 0)' vs '(got -0.0)'; 12345678901234567890 → '(got 12345678901234567000)' vs the exact digits; 1e400 → '(got null)' vs '(got Infinity)'; [1.0] → '(got [1])' vs '(got [1.0])' — both exit 1, but the error lists differ byte-for-byte on a STRUCTURE-valid dag, while `bash tests/dag-shape.sh lint` and tests/parity.sh stay green (round 1's k7 detach case uses an INVALID phase id, so the line is skipped and the rendering never compared) and parity-notes states the offending value is 'named by its JSON type … never rendered'."
+  }
+]

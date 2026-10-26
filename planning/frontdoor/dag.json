@@ -1,0 +1,656 @@
+{
+  "project": "horizon",
+  "_meta": {
+    "wave": "frontdoor (wave 5) \u2014 an append-continuation of the horizon plan: H1/H2 are completed and untouched; S1-S3 append behind GATE_H2, and S3 carries the new horizon flag (H2's flag is now historical and inert).",
+    "intent": "Make dag.json's STRUCTURE a contract with one judge (hb lint) and make every other reader FAIL CLOSED on a structurally malformed plan instead of crashing, diverging between runtimes, dispatching work, or sleeping silently. planning/parity-notes.md currently records the gap verbatim: 'the lints do not yet reject every such shape'.",
+    "evidence (probe at plan time, scratchpad w5/probe.sh \u2014 29 hostile shapes x 12 readers x 2 runtimes)": [
+      "python readers crash (traceback) on ~20 shapes: a non-object phase entry, a string/object phases, a string gates or gate value, a string/object/non-object-entry tasks list, a missing task or phase id, a list gate_entry, a non-object top level, a string _meta (lint.py), ...",
+      "node crashes on null phase/task entries, non-array phases, string criteria (lint + doctor), string requires (resolver)",
+      "the lints DISAGREE on exit status for 8 shapes (node 0, python crash): non-object phase entries, string _meta, string/number task entries, missing task id, non-object top level",
+      "SILENT WEDGE: node tick.sh swallows a resolver crash into the no_pending_tasks sleep forever (null/string/object phases, null task entries, string requires, non-object top level)",
+      "DISPATCH ON A BROKEN PLAN: node tick hands out next_task on dags both lints reject (string gates, string criteria, ...)",
+      "lint-clean but malformed on BOTH: numeric task/phase id, missing phase id, string gate value, parked:'yes', criterion id null",
+      "the shipped plugin/dag.schema.json has DRIFTED from the format the runtimes write: it declares no top-level project, no gate regate marker, no phase detached_* fields, no task note (11 dags carry project, 3 carry note) \u2014 a regated or detached plan is schema-invalid today"
+    ],
+    "design": {
+      "STRUCTURE, by explicit annotation (round-1 F4/F5)": "the contract covers EXACTLY the schema nodes annotated \"x-hb-structure\": true in plugin/dag.schema.json, plus the implicit root (the top level must be an object): phases (array) and each phase (object) with id (string, minLength 1); tasks (array) and each task (object) with id (string, minLength 1); requires (array of strings); gate_entry / gate_exit (string or null); parked (boolean \u2014 it is CONTROL FLOW: parked:'no' silently ends a project today, and []/{} split the runtimes, round-1 F7); gates (object) and each gate value (object); a gate's criteria (array) and each criteria ENTRY (object \u2014 a non-object entry crashes gate evaluation on both runtimes and the tick then hands out gate_pending forever, round-2 N3; its existing '[G] criteria entry N must be \u2026' line is reused as the one line); the root's REQUIRED phases and gates (a dag missing either \u2014 e.g. {} \u2014 lints clean and sleeps no_pending_tasks forever today, round-2 N4; phases: [] stays valid, gate-timeout-portable.sh evaluates a gate on it); the items of every annotated array are derived from items.type (requires:[[\"a1\"]] crashes six python readers, N10). Everything else \u2014 the criterion entry's FIELDS id/cmd/desc/timeout_s, review, review.constraints, regate, detach fields, horizon, _meta \u2014 stays owned by the existing rules and perimeters, with their messages, exit codes and pins unchanged (T179's exit-3 regate shapes, T184's d7 hostile criterion ids, the fuzz generator's deliberately malformed constraints, horizon's strict-boolean n1/n3). OUTSIDE the contract by design: a gate missing criteria and a phase missing tasks (absence of an optional-looking container \u2014 tests/fixtures/parity/broken.json's G0/G1 stay byte-equal under k3), and an EMPTY phases array (valid; see the honest limit).",
+      "unreadable is malformed (F6)": "a missing, empty or unparseable dag.json is a structure failure too: the checked read parses the file itself (readDag/read_dag silently turn a parse failure into an EMPTY VALID plan today \u2014 python doctor says healthy, gate --all says ALL GATES PASS). The unreadable classes have FIXED bytes, never native parser text (round-2 N5): 'dag.json unreadable: missing', '\u2026 empty', '\u2026 not valid JSON', '\u2026 top level is not an object'; python parses strictly (NaN/Infinity rejected via parse_constant; a BOM or invalid UTF-8 is 'not valid JSON' on both). An unpaired surrogate escape in any string or key is also 'dag.json unreadable: not valid JSON' on both runtimes (node and python decode it differently, and python's text lint tracebacks on it \u2014 R3-3).",
+      "lint": "each structure violation is an ERROR, byte-identical across runtimes, exactly one line per violation: the existing SHAPE message about that very node where one exists (e.g. '[G] criteria entry N \u2026'; hb-lint.js's other shape messages at the criteria and phase levels count likewise \u2014 R3-6), otherwise the structure layer's path-named line (phases[1].tasks[0].id); every other rule SKIPS a malformed container, every wrong-typed reference (a gate_entry/gate_exit that is a list, object, boolean or number \u2014 the 'undefined gate' rule no longer runs on it; round-4 R4-1), every wrong-typed item of an annotated array (requires:[1.0] no longer prints '1' on node and '1.0' on python), and a phase or task whose id is STRUCTURE-invalid in the id-keyed rules \u2014 keeping the '[?]' rendering where T184 pins it (requires:'a1' no longer iterates its characters into junk lines, N9); never a traceback for any file content; lint.py stops crashing on a string _meta (the schema declares _meta as any type \u2014 several planning files carry a string)",
+      "audit": "stays tolerant (it analyzes what it can, never crashes) AND reports: exactly one finding with rule dag_shape naming the first structure error \u2014 the other rules still run tolerantly (test_hardening.py's hollow_gate on all-garbage criteria and parity hostile-criteria:audit's no-hollow floor stay; R3-4) \u2014 with every field of the dag_shape object (severity, phase, extras) mirrored, since horizon.sh t7 compares full finding objects \u2014 so 'audit clean' can never pass a plan that will fail closed on its first tick (F14) Byte-identity is scoped to the dag_shape finding itself (its text line and JSON object) \u2014 the runtimes' audit summaries and JSON spacing already differ by design (N6); on a dag_shape plan both summaries name the structure failure, never 'hollow gates'.",
+      "readers fail closed": "one checked dag read (node readDagChecked in hb.js, exported; python state.read_dag_checked) used ONLY by plan-interpreting paths; lint and audit read through the structure layer's own checked FILE read \u2014 never read_dag's silent empty-plan fallback \u2014 with or without a file argument, on the CLI and the MCP lint/audit tools (python's no-argument `hb lint` says 'DAG valid' on a truncated dag today, the very command the refusal points at \u2014 round-3 R3-1); the raw read_dag stays only for doctor/diagnose's tolerance, whose structure test also reads the file (F8). The tick runs the structure check FIRST, before the state self-heal (F17), and wakes dag_corrupted (existing human-needed reason, every tick) carrying the errors; both resolvers return {type: deadlock, cause: dag_invalid}; mutating verbs refuse with no event; read verbs exit nonzero with one line naming the first error and the runtime's lint command (node: node .hb/hb-lint.js .hb/dag.json \u2014 hb.js has no lint verb, F9; python: hb lint); gate evaluation refuses with exit 4 and no event; doctor reports problems; diagnose names dag_corrupted; both exec drivers stop on dag_corrupted; MCP tools per class (R3-2): tick returns the dag_corrupted wake (as r1), next returns deadlock dag_invalid (as r2), lint returns the errors, audit returns its findings incl. dag_shape, doctor/diagnose report, the three dag-independent tools are exempt, and every other tool (ready, state, report, gate, start, done, fail, review, \u2026) returns an error result. Doctor on a structure-invalid dag reports ONLY the structure errors plus one line 'plan checks skipped: dag.json invalid' and skips every plan-derived check (drift, rot, projection, regate, detach) \u2014 whose cures would now refuse (N7). In gate.sh / hb gate the structure check is the first statement after argument parsing in every mode, so exit 4 precedes exit 2 (unknown gate) and exit 3 (regate pending) \u2014 a regate-pending gate inside a broken dag exits 4 (N8). Verb coverage is derived from the CLI dispatch only: hb.js's switch after `if (require.main === module)` (not the projector's event-type case labels) and python's parser choices (incl. the start/done/fail/heartbeat loop); MCP tools that never read the project dag (code_context, code_discover, deplint) are class 'exempt \u2014 does not read the project dag' (N12).",
+      "no silent sleep (F12)": "tick.sh's `NEXT=$(node \u2026 || echo null)` swallow becomes a deadlock wake with cause resolver_error (the existing human-needed deadlock path \u2014 no new protocol key); tick.py wraps resolve the same way. A dag rewritten mid-tick is an honest limit: each section reads the file it sees, and any crash that causes now wakes instead of sleeping. A MISSING resolver script (tick.sh's no_next_task_script sleep) is the limiting case of a crashed resolver and wakes the same deadlock resolver_error (N13).",
+      "protocol": "dag_corrupted keys unchanged; the action text is re-specified on both runtimes (the 'structure is immutable' clause has been false since append-continuation): unreadable or structurally malformed \u2014 run the runtime's lint for every error, restore dag.json from git/backup or fix the named fields, lint clean; never hand-edit state.json. tick.sh's hint and docs/dev-plugin.md:43's 'immutable at runtime' likewise. The canonical human-needed stop set (wave 4) gains dag_corrupted and state_corrupted on every surface that enumerates it (the hook, mcp_server's tick description, SKILL's run section, the MCP how-to).",
+      "schema reconciled": "declare project (top string), note (task string), regate (gate object: at/reason/actor/prev_criteria/pending and rearm {at, actor, model string|null, artifact, sha256}), detached_from/detached_reason/detached_by/detached_at (phase strings); _meta any type; minLength 1 on phase/task ids; the x-hb-structure annotations. A reverse pin RUNS the dag-writing verbs (park with a reason, unpark, regate declare, rearm with and without --model, detach, reattach) and asserts every key they write is declared."
+    },
+    "falsified pins this wave re-specifies (never weakens)": [
+      "tests/replan.sh case_append's degenerate-id block (l.~160-178; the dev-tests.md T184 row): an id-less phase lints exit 0 today; phase id is STRUCTURE, so it becomes exit 1 on both lints with byte-identical '[?]'-rendered lines and no crash \u2014 the identity and rendering pins stay",
+      "planning/parity-notes.md's hostile-shapes sentence ('the lints do not yet reject every such shape')",
+      "the dag_corrupted rows (README, SKILL, CLAUDE-MD-SNIPPET: 'structure is immutable') and docs/dev-plugin.md:43 ('immutable at runtime')",
+      "the auditor how-to and dev docs' audit-rule counts (eleven \u2192 twelve with dag_shape) and docs/howto/gate-examples/audit-rules-check.sh (gains the dag_shape must-trip fixture \u2014 AUDIT-RULES-PROVEN:12)",
+      "the canonical human-needed stop set (gains dag_corrupted, state_corrupted)",
+      "docs/dev-tests.md gains its T186 row IN S2 (s2c) \u2014 T124.1 (index-coverage.sh) reddens the full suite the moment the group is wired without one (round-2 N1); s3c re-specifies the row string-accurately"
+    ],
+    "pre-checks": [
+      "T186 is unused; markers shape-guard: lint / audit / reader / tick are unused",
+      "no existing planning dag, the template, or any fixture carries a non-boolean parked, a non-object phase/task, a non-array tasks/requires/criteria, or a missing/empty phase or task id \u2014 except the deliberately degenerate replan.sh fixture named above (verified by the probe and re-checked by k3's oracle)",
+      "the regate, review, constraints and criterion-entry rules and their pins (T179 exit 3, T184 d7, hostile-criteria parity, the fuzz generator's malformed constraints on seeds 0/1/4/5/6) are untouched \u2014 those nodes are not annotated STRUCTURE; horizon.sh t7's hostile GATE shapes ARE structure shapes and now also exercise dag_shape, which must be mirrored field-for-field (t7 compares full finding objects)",
+      "run-tests.sh prints '  RESULT: <n> passed, <m> failed' and 'GROUPS-PASSED: \u2026 T184 T185 T186 ' (adjacent groups \u2014 a per-group grep, never a chained '.*' pattern, round-1 F1)"
+    ],
+    "honest limits (recorded, not hidden)": [
+      "only STRUCTURE is enforced: a wrong-typed optional scalar (title, desc, timeout_s, \u2026) and an undeclared key are not lint findings this wave \u2014 the schema documents them, nothing enforces them",
+      "lint hand-codes the structure rules (mirrored); the schema's annotations are the proof's oracle, not a runtime dependency \u2014 bootstrap still does not ship the schema into .hb/",
+      "semantic lint errors (cycles, missing refs) keep today's runtime path (deadlock dag_invalid when they block)",
+      "a dag rewritten mid-tick is read per section; any resulting crash wakes deadlock resolver_error instead of sleeping",
+      "strict exec checks lint warnings only at gate evaluation (strictBlock), not at dispatch",
+      "lint-ERROR shapes outside STRUCTURE (review, review.profile, review.constraints and subjects, regate, the criterion entry's fields) keep today's runtime path \u2014 refute-prompt and constraints --prompt still crash on some of them (review:'x'/5, profile:5, constraints:[null], subjects:'x'); hb exec stops on them with review_error, so no driver spins (round-2 N11)",
+      "a plan with an EMPTY phases array is valid and the tick sleeps no_pending_tasks; only an absent or wrong-typed container fails closed (round-3 R3-5)"
+    ],
+    "previous wave": "planning/horizon/ (the archived horizon plan, events, reviews and refutation rounds)",
+    "refutation_rounds": [
+      {
+        "round": 1,
+        "model": "session",
+        "verdict": "UNSOUND",
+        "findings": "F1 adjacent-group grep can never match; F2 k4 0/0 unsatisfiable (template skeleton warning T21.1, 13 warned plans, 6 string _meta); F3 T184 d7 hostile criterion ids would flip doctor; F4 regate container vs T179 exit-3 pins; F5 self-contradictory tier rule + fuzz generator's malformed constraints; F6 unreadable dag reads as an empty valid plan; F7 parked is control flow (silent all_done, runtime split; strict-exec honest limit false); F8 python seam vs exempt tools; F9 node has no hb lint; F10 S1/S2 skip run-tests-only sub-suites; F11 selftest admits a crash; F12 tick swallow + TOCTOU; F13 hand-written verb lists incomplete; F14 tolerant audit passes dead-on-arrival plans; F15 runtime budget; F16 s2s proves nothing, hook omits dag_corrupted; F17 state self-heal before the dag check; F18 small gaps (docs-currency checks nothing new, rearm/model fields, k5 writer list, minLength, dev-plugin:43, 9 vs 8). All folded: the design was narrowed to an annotated STRUCTURE contract.",
+        "archive": "scratchpad fd-plan-refutation1.md"
+      },
+      {
+        "round": 2,
+        "model": "session",
+        "verdict": "UNSOUND",
+        "findings": "F1-F18 converged except: N1 T186 wired in S2 without the dev-tests row \u2192 T124.1 red \u2192 S2/S3 deadlock; N2 k6 resolver agreement at S1 is S2's work; N3 non-object criteria entries crash gate eval (gate_pending forever) though the derivation generates them; N4 {} / missing phases-gates lint clean and sleep forever; N5 unreadable bytes cannot be identical (native parser text, NaN/Infinity, BOM); N6 audit byte-identity too broad; N7 doctor's false drift/rebuild advice on an unreadable dag; N8 exit-4 precedence vs 2/3 unspecified; N9 'existing message' ambiguous; N10 array items not derived; N11 lint-error shapes outside STRUCTURE still crash read verbs, unnamed; N12 verb/tool derivation mechanics; N13 missing resolver sleeps; N14 counts/dag predicate. All folded.",
+        "archive": "scratchpad fd-plan-refutation2.md"
+      },
+      {
+        "round": 3,
+        "model": "session",
+        "verdict": "UNSOUND",
+        "findings": "N1-N14 landed (N4's limit and N9/N12 wording incomplete). R3-1 python no-arg hb lint/audit read the raw fallback and say 'DAG valid' on a truncated dag \u2014 the refusal's own cure; R3-2 MCP class table contradicted r1/r2 for tick/next; R3-3 lone surrogate splits the runtimes and tracebacks python text lint; R3-4 k5 'exactly one' ambiguity vs test_hardening's hollow_gate + t7 full-object compare; R3-5 empty-phases plan sleeps forever, limit unrecorded; R3-6 skip rule stops at containers ([1.0] divergence), 'today only' wrong, t7 pre-check wrong, absent-criteria/tasks out-of-contract unstated. All folded. Full suite/pytest/parity/fuzz green in a clone with a structure-breaking-read logger.",
+        "archive": "scratchpad fd-plan-refutation3.md"
+      },
+      {
+        "round": 4,
+        "model": "session",
+        "verdict": "SOUND",
+        "findings": "R3-1..R3-6 landed coherently; re-probes found no collision (no test runs no-arg python lint/audit or MCP lint on an unreadable dag; no surrogates in any dag; node lint's missing-file text is unpinned); full suites green in a clone with in-memory-dag read logging. Non-blocking wording folds applied: R4-1 wrong-typed gate_entry/gate_exit join the skip list with the generated values named; R4-2 s2c's stale read_dag and MCP parentheticals reworded; R4-3 the string-_meta count dropped.",
+        "archive": "scratchpad fd-plan-refutation4.md"
+      }
+    ]
+  },
+  "phases": [
+    {
+      "id": "H1",
+      "title": "the horizon made machine-visible \u2014 replan_pending, the recorded close, the teeth",
+      "gate_entry": null,
+      "gate_exit": "GATE_H1",
+      "tasks": [
+        {
+          "id": "h1a",
+          "title": "author tests/horizon.sh (spec-first: mechanism + teeth RED today)",
+          "requires": [],
+          "description": "Write tests/horizon.sh with the env-hygiene header VERBATIM (unset HB_DIR PROJECT_DIR GATE G DAG_FILE EVENTS_FILE 2>/dev/null || true). Fixtures are built in mktemp from the repo's templates (the tests/replan.sh pattern); never against the repo's own .hb. Cases: (marker) a project whose last phase carries \"horizon\": true, completed through the CLI with criteria-pinned passes \u2014 both resolvers return {\"type\":\"replan_pending\",\"phase\":<id>} with identical keys (m1); both ticks wake replan_pending ONCE with a data.action that NAMES both sanctioned moves (grep the append path and the close verb in the action text, not mere non-emptiness) and the SECOND tick sleeps replan_waiting (m2); the same fixture without the marker verdicts all_done on both (m3 \u2014 the regression pin); both exec drivers print 'HB-EXEC STOP: replan_pending' and exit nonzero (HB_EXEC_BACKEND=script HB_EXEC_CMD='cat >/dev/null') (m4). (close) hb horizon close is fail-closed on BOTH runtimes: refused with a nonzero exit and NO appended event when the horizon is not reached (c1), when --reason is missing/empty (c2), when already closed per the PROJECTED state.horizon_closed \u2014 the resolver's own source, and the c5 probe pins ONE source: close, append an 'initialized' event, REPLAY the completion history after the reset (re-append the task_done/gate_passed events \u2014 the proj_compare 'mid' precedent; bare replayed passes never pin, so the replay is drift-safe), then both runtimes must re-verdict replan_pending AND re-accept a close (a projection read sees the reset; a log scan still sees the old event and wedges) (c5), and when any live gate's regate cycle is open in ANY state \u2014 pending (declared), unanswered in the log, or REARMED WITHOUT A FRESH PASS (the stale-rearm window every verdict-class sibling refuses) (c6 \u2014 probe all FOUR shapes on both runtimes: declare \u2192 refused; declare then HAND-CLEAR the marker in the mktemp dag \u2192 STILL refused, the log is truth (the unanswered-regate clause isolated); rearm alone \u2192 STILL refused; fresh criteria-pinned pass \u2192 the close reopens); the close on an ALL-PARKED plan takes the not-reached refusal, never a throw (c7); a valid close appends horizon_closed carrying phase, reason and the recording HB_ACTOR, reprojects state.json (horizon_closed: [<phase>] present; ABSENT on every fixture with no close event \u2014 the sparse-projection pin), and the next tick verdicts all_done (c3); hb rebuild preserves the verdict (c4). (append) at a reached horizon, appending fresh phases (first new gate_entry = the completed horizon phase's gate_exit) makes both ticks hand out the appended tasks (a1); the old flag is inert mid-plan \u2014 no replan wake while appended work remains (a2); completing an appended plan whose own last phase is flagged wakes replan_pending for the NEW phase even though the OLD phase has a recorded close (a3 \u2014 the close is phase-scoped); a STALE once-flag never silences a newer horizon \u2014 after the first wake (flag set), append and complete the new phases entirely through the CLI with NO intermediate tick, and the next tick must still wake replan_pending for the NEW phase (the flag stores the phase id) (a4). (limits) deleting the flag from the completed phase (l1) or parking the flagged phase (l2) verdicts all_done with doctor QUIET on both runtimes \u2014 the honest limit pinned as behavior. (parked-out) an ALL-PARKED plan verdicts all_done on both runtimes \u2014 no crash, no eternal no_pending_tasks sleep \u2014 including when the flag sits on a parked phase (p1). (lint) a non-boolean horizon is a lint ERROR with byte-identical messages (n1); \"horizon\": true and false lint at 0 errors, including true on a NON-final phase (inert \u2014 n2). (audit) speculative_tail fires exactly once, severity warn, naming the tail phase ids, the cut phase and the horizon cure, byte-identical on both runtimes, on a plan with a behaviorally-gated head and >= 2 trailing live phases that are unverified \u2014 unguarded (tasks, no gate_exit), ungated (gate with no criteria), or hollow (zero behavioral criteria) (t1); and stays QUIET on a fully-gated plan (t2), a single unverified final phase (t3), an all-unverified plan (t4 \u2014 no gated head), and when the tail phases are parked (t5); a zero-task, zero-gate phase counts UNVERIFIED \u2014 a trailing pair of placeholder phases behind a gated head fires the rule (t6). (report) both reports print the horizon line \u2014 planned (r1), REACHED naming both sanctioned moves (r2), closed-by with actor and reason (r3) \u2014 and print NO horizon line on an unmarked project (r4). --selftest: sabotages against COPIES of the runtimes, each reddening the NAMED check for the RIGHT reason: the horizon-guard lines stripped from the node resolver (s1), the py resolver (s2), tick.sh (s3), tick.py (s4); ALL the horizon-guard: close lines stripped from the node close verb (s5) and the py close verb (s6) \u2014 an early close AND a mid-regate close must then be ACCEPTED, reddening the c1 and c6 probes; the speculative_tail block stripped from hb-audit.js (s7) and audit.py (s8). Prints HORIZON-OK / HORIZON-SELFTEST-OK."
+        },
+        {
+          "id": "h1b",
+          "title": "implement the mechanism (resolver, projection, ticks, close verb, protocol, exec, report)",
+          "requires": [
+            "h1a"
+          ],
+          "description": "Implement the mechanism on both runtimes, logic mirrored exactly, every guard marker (horizon-guard: resolver / tick / close) on a strip-clean SINGLE line that is a complete statement (python lines never a block header \u2014 the IndentationError class). RESOLVER (hb-next-task.js resolve + resolver.py resolve): in the all-live-phases-complete branch, when the LAST live phase carries horizon === true and its id is not in state.horizon_closed, return {\"type\":\"replan_pending\",\"phase\":<id>} \u2014 identical keys; every other shape keeps returning all_done, EXPLICITLY including the empty live list (an all-parked plan has no last live phase \u2014 today's all_done behavior, never a throw that tick.sh would swallow into a no_pending_tasks sleep). PROJECTION (hb.js project + state.py project): a horizon_closed event adds its phase to a set ('initialized' resets it, the existing precedent); project it SPARSELY \u2014 s.horizon_closed only when non-empty, insertion-ordered \u2014 so every existing projection stays byte-identical. TICK (tick.sh + tick.py): a replan_pending resolution wakes ONCE (flag file .replan-alerted, the .all-done-alerted precedent; tick.sh also notifies 'replan_pending' and updates the header's notify-reason comment, folding the comment's missing criteria_drift in the same edit \u2014 the F5 currency-debt class), then sleeps {\"reason\":\"replan_waiting\"}; the flag STORES THE HORIZON PHASE ID \u2014 a wake for a DIFFERENT phase ignores a stale flag and rewrites it (so an append completed entirely through the CLI with no intermediate tick can never be permanently silenced) \u2014 and is cleared on the task and all_done branches; no event is appended on the wake (the log records decisions, not notifications). CLOSE VERB (hb.js case 'horizon' + a cli.py 'horizon' parser): hb horizon close --reason <why> under the write lock \u2014 the close is an ACCEPTANCE verb and sits inside the regate fail-closed perimeter like its siblings (anchor, review, constraints --record): refused (nonzero exit, NO event appended) when the subaction is not 'close', when --reason is missing/empty, when the last live phase is not flagged, when any live phase is incomplete, when the live list is EMPTY (the not-reached refusal \u2014 never a throw on an all-parked plan), when that phase is already in the PROJECTED state.horizon_closed (one source \u2014 the resolver's), or when any live gate's regate cycle is open in any state \u2014 pending (regateBlocks), unanswered in the log, or rearmed WITHOUT a fresh criteria-pinned pass (staleRearm \u2014 the verdict-class perimeter: hb review and both executors refuse this exact window; the close is a verdict, not a record); on success append {\"event\":\"horizon_closed\",\"phase\":...,\"reason\":...} (actor via the existing appendEvent attribution), reproject, print the confirmation; both usage strings gain the verb. PROTOCOL (every wave-3 surface): a replan_pending row in hb.js PROTOCOL and protocol.py with identical KEYS and runtime-flavored action text naming BOTH sanctioned moves (replan by append-continuation \u2014 plan only the NEXT horizon \u2014 or hb horizon close --reason <why> as the recorded end-of-project decision) and never a third path \u2014 and never a quoted key-colon substring like a literal '\"horizon\":' in the action or SKILL-row text (single-source.sh extracts protocol keys with a key-colon grep); .hb/PROTOCOL.md regenerates from the table; SKILL.md's reason table gains the row (T138.1 forces it; the surrounding prose is H2's); hb-exec.js and executor.py gain a NAMED replan_pending case (escalate / 'HB-EXEC STOP: replan_pending', exit nonzero \u2014 both drivers already fail closed on unknown reasons, the named case is honesty); heartbeat-detect.sh's two stop lists gain replan_pending keeping docs/howto/gate-examples/hook-drives-loop.sh green (T143's checker, which h1s runs at the gate); mcp_server.py's tick-tool description likewise. REPORT (hb-report.js + report.py): one horizon line when the last live phase is flagged \u2014 planned / REACHED (naming both sanctioned moves) / closed by <actor>: <reason> \u2014 and no line otherwise."
+        },
+        {
+          "id": "h1c",
+          "title": "implement the teeth (lint marker type rule, audit speculative_tail)",
+          "requires": [
+            "h1a"
+          ],
+          "description": "Implement the static teeth, rulesets mirrored byte-exact. LINT (hb-lint.js + lint.py): a phase carrying a non-boolean horizon is an ERROR \u2014 '[<pid>] horizon must be true or false (the knowledge-horizon marker)' (the regate.pending precedent, degenerate phase ids rendered '?' at the existing sites); true/false pass, and position is NOT linted (an inert historical flag after an append is sanctioned \u2014 the how-to documents inertness). AUDIT (hb-audit.js + audit.py): the speculative_tail rule \u2014 over LIVE phases in plan order, a phase is 'unverified' when it has tasks but no gate_exit, when it has NO tasks and no gate_exit (a placeholder is the purest speculative shape), when its gate has no criteria, or when its gate has zero behavioral criteria (reusing classify; hostile shapes ride the existing not-behavioral normalization, never a crash); when the maximal TRAILING run of unverified phases has length >= 2 AND at least one earlier live phase is verified, emit ONE warn finding (rule 'speculative_tail', anchored on the first tail phase) naming the tail ids, the cut phase (the last verified phase) and the cure \u2014 end the plan there with \"horizon\": true and plan the tail when its spec is known \u2014 citing docs/howto/plan-to-the-horizon.md; quiet on the t2\u2013t5 shapes. Severity stays warn: the hollow members already carry their own per-phase errors, and this rule's job is the DIAGNOSIS (the cut point), not a second sentence. The seeded template dag and every fixture dag the suites audit must stay speculative_tail-quiet (check, don't assume), with the one marker line this wave adds to its own plan file linting clean."
+        },
+        {
+          "id": "h1d",
+          "title": "wire T185, parity cases, the horizon contract in parity-notes",
+          "requires": [
+            "h1b",
+            "h1c"
+          ],
+          "description": "Wire tests/horizon.sh into tests/run-tests.sh as group T185, outcome-keyed on HORIZON-OK / HORIZON-SELFTEST-OK (never a group-name grep). Add four parity cases to tests/parity.sh, each with a non-vacuity floor and each implemented INLINE in mktemp (the regate_case pattern \u2014 NEVER a new fixture file in the audit fixture loop, whose count T137 pins into two doc rows): horizon:resolve (both resolvers' JSON on a reached-horizon fixture, compared after the proj_compare-style normalization \u2014 node prints compact JSON, py spaced \u2014 and the output must name replan_pending), horizon:project (the new shared projection surface, AGENTS rule 2: a multi-close fixture projected by both runtimes through the existing proj_compare normalization \u2014 the horizon_closed key present, insertion-ordered, byte-agreed), horizon:lint (the non-boolean-marker error, byte-compared, exits 1/1), horizon:audit (the speculative_tail finding line, byte-compared, equal exits, the line must name the rule). Append 'The horizon contract' to planning/parity-notes.md: the marker semantics (strict boolean true on the LAST live phase; inert elsewhere; type-checked), the replan_pending shape and once-only wake, the sparse horizon_closed projection (insertion order; the key ABSENT on horizon-less logs \u2014 the byte-stability guarantee for every existing project), the close verb's refusals and phase scope, the speculative_tail rule (threshold 2, the gated-head requirement, parked exclusion, warn severity and why), and the HONEST LIMITS: the marker is plan surface \u2014 desc-class, unpinned by the drift tripwire \u2014 so deleting the flag or parking the phase silences the wake silently; the recorded decision is hb horizon close; the trust model stays procedural (HB_ACTOR self-declared)."
+        }
+      ]
+    },
+    {
+      "id": "H2",
+      "title": "the doctrine meets the mechanism \u2014 skill re-spec, how-to re-spec, docs current-state",
+      "gate_entry": "GATE_H1",
+      "gate_exit": "GATE_H2",
+      "horizon": true,
+      "tasks": [
+        {
+          "id": "h2a",
+          "title": "SKILL.md: the replan point IS the marker; stop lists gain replan_pending",
+          "requires": [],
+          "description": "Edit plugin/skills/heartbeat/SKILL.md. (1) Re-specify the horizon rule (the l.48 area): the explicit replan point IS the mechanism \u2014 mark the final planned phase \"horizon\": true; the tick then wakes replan_pending instead of all_done when the horizon completes, with exactly two sanctioned moves (replan by append-continuation, or hb horizon close --reason <why> to end the project as a recorded decision); a final task that records the learning remains the recommended CONTENT of the horizon phase, no longer the definition of the replan point. (2) The run verb's stop list (the l.213 area) and the schedule routine's reason list (the l.279 area) gain replan_pending; keep the exec section's 'until all_done or a human is needed' sentence true. (3) Own the reason-table row's wording (the row itself landed in H1 for T138.1): keys identical to both protocol tables, action text naming both sanctioned moves and never a third path. Prose-check-clean; no new placeholder-class phrase."
+        },
+        {
+          "id": "h2b",
+          "title": "re-specify docs/howto/plan-to-the-horizon.md from convention to mechanism",
+          "requires": [
+            "h2a"
+          ],
+          "description": "Re-specify docs/howto/plan-to-the-horizon.md, every behavioral claim anchored to a tests/horizon.sh case BY NAME (the gated-docs method; replan.sh / detach / regate anchors stay where still cited): the 'explicit replan point' paragraph now states the marker, the replan_pending wake and the two sanctioned moves (m1/m2, c3, a1); the 'plan refuter should flag it the way hb-audit flags test -f' sentence becomes CURRENT-STATE \u2014 hb-audit flags the fabricated-far-phases shape as speculative_tail, naming the cut (t1\u2013t5); add the close verb's fail-closed contract \u2014 including that the close is a VERDICT inside the regate perimeter (an open revision in any state refuses it) and that an all-parked plan cannot be closed (c1/c2/c5/c6/c7) \u2014 its rebuild survival (c4) and phase scope (a3); add the honest-limit additions \u2014 the marker is plan surface, unpinned by the drift tripwire, so deleting the flag or parking the phase silences the wake (l1/l2) and the recorded path is the close verb; the sizing guidance gains the inertness note (an old flag after an append is historical, not an error \u2014 n2). Current-state prose only; no version narrative; prose-check-clean."
+        },
+        {
+          "id": "h2c",
+          "title": "docs current-state (dev docs rows re-specified, T185 row, howto index)",
+          "requires": [
+            "h2b"
+          ],
+          "description": "Docs current-state across every surface the mechanism extends \u2014 re-specify the rows the change FALSIFIES, never only append (the wave-3 F24/F26 lesson). dev-plugin.md: the resolver row (l.100) and resolve() types line (l.160) gain replan_pending (+phase); the PROTOCOL reasons list (l.156) gains it; the once-flag enumeration (l.102) gains .replan-alerted; the exec loop paragraph (l.201) gains the named stop; the hook paragraph (l.241) stays true against the edited heartbeat-detect.sh text; the hb verbs enumeration gains horizon close; the report and tick sections gain the horizon line/rows where those tables enumerate. README.md's tick summary (l.165) and data.reason table (l.200-214) and CLAUDE-MD-SNIPPET.md's reason table (l.56) gain the replan_pending row AND the criteria_drift row both tables are missing (pre-existing currency debt, same class \u2014 folded, never left half-true). dev-python.md: the same re-specs on its resolver / tick / protocol / CLI / report rows (locate every enumeration of resolver types, protocol reasons and human-needed stop lists). docs/dev-tests.md gains the T185 row, string-accurate against the real run-tests.sh group line. docs/howto/howto-list.md's plan-to-the-horizon row is re-specified to cite T184 + T185; docs/howto/README.md's horizon line stays true. Every changed doc prose-check-clean; docs-currency green."
+        }
+      ]
+    },
+    {
+      "id": "S1",
+      "title": "the shape contract: lint and audit judge dag.json's structure; the schema reconciled with reality",
+      "gate_entry": "GATE_H2",
+      "gate_exit": "GATE_S1",
+      "tasks": [
+        {
+          "id": "s1a",
+          "title": "author tests/dag-shape.sh lint/audit/schema cases (spec-first: RED today)",
+          "requires": [],
+          "description": "Write tests/dag-shape.sh with the env-hygiene header VERBATIM (unset HB_DIR PROJECT_DIR GATE G DAG_FILE EVENTS_FILE 2>/dev/null || true); fixtures in mktemp only, never the repo's .hb. The STRUCTURE mutations are DERIVED from plugin/dag.schema.json, never a hand list: walk the schema, and for every node annotated \"x-hb-structure\": true (plus the implicit root) generate wrong-type mutations of a lint-clean base dag \u2014 for an object/array node a value of each other JSON type, and for every annotated array wrong-typed ITEMS derived from its items.type (null, a number, a string, a list, an object \u2014 whichever differ from the declared type); for a required id a missing key, an empty string and a number; for a string|null reference a list, an object, a boolean, an integer and a float; for a boolean a string, 1, [] and {}. Cases: (k1) every derived mutation is a lint ERROR on BOTH runtimes \u2014 exit 1/1, sorted error lists byte-identical, EXACTLY ONE structure-attributable line \u2014 the existing '[G] criteria entry N \u2026' line for a criteria entry, else the path-named line (phases[1].tasks[0].id form) \u2014 and no junk lines from rules iterating a malformed container; no traceback; (k2) an UNREADABLE or EMPTY-PLAN dag \u2014 a missing file, an empty file, truncated JSON, NaN / Infinity, a BOM, invalid UTF-8, the non-object tops [] \"x\" 5 null, and {} / a dag missing phases or gates \u2014 \u2014 plus an unpaired surrogate escape in a string and in a key \u2014 lints exit 1/1 with the FIXED class bytes ('dag.json unreadable: missing' / 'empty' / 'not valid JSON' / 'top level is not an object', or the path-named 'phases: missing'), byte-identical, no traceback; phases: [] stays lint-valid; every k2 class ALSO runs python's no-argument `hb lint --dir P` and `hb audit --dir P` (exit 1, the fixed bytes, never 'DAG valid' / 'gates look behavioural'); (k3) NO NEW FINDINGS: extract the pre-wave linters from commit a500587 (git show a500587:plugin/templates/hb-lint.js, its requires, and a500587's py/src) into a mktemp tree; over plugin/templates/dag.json, every planning/**/*.json file that is a dag (a JSON object with a phases or gates key), and every tests/fixtures dag, the post-wave NODE lint output (errors and warnings) equals the pre-wave node output byte-for-byte, except the named allowlist (none expected beyond k1's own mutations), and the post-wave python output equals the post-wave node output (the string-_meta planning files that crash pre-wave python now lint identically); (k4) the REVERSE pin: in a bootstrapped fixture run park with a reason, unpark, regate declare, rearm with and without --model, detach, reattach on both runtimes and assert every key written into dag.json is declared in the schema at its level (and the result lints clean); (k5) audit on every k1/k2 mutation never crashes and emits exactly one finding with rule dag_shape (the other rules still run tolerantly \u2014 test_hardening.py's hollow_gate on all-garbage criteria stays) naming the first structure error \u2014 its text line and its JSON object byte-identical across runtimes (the summaries may stay runtime-flavored but must name the structure failure, never 'hollow gates', even when hollow_gate co-fires) \u2014 exit 1; audit on the base dag, the template and every planning dag emits no dag_shape; (k6) the parked control-flow pin: parked 'no' / 1 / [] / {} is a lint error on both runtimes (the readers' agreement is S2's r2). --selftest lint: the shape-guard: lint lines stripped from COPIES of hb-lint.js (sl1) and lint.py (sl2), and the shape-guard: audit lines from COPIES of hb-audit.js (sa1) and audit.py (sa2), each redden k1 (resp. k5) for the RIGHT reason \u2014 the stripped copy passes node --check / python -m py_compile, the base dag still lints/audits exit 0 with it, and a targeted mutation then exits 0 with no traceback (a crash is the WRONG reason). Prints SHAPE-LINT-OK (case lint) and SHAPE-SELFTEST-LINT-OK."
+        },
+        {
+          "id": "s1b",
+          "title": "implement the structure layer (lint + audit); reconcile the schema",
+          "requires": [
+            "s1a"
+          ],
+          "description": "plugin/dag.schema.json: annotate the STRUCTURE nodes listed in _meta.design with \"x-hb-structure\": true; add minLength 1 to phase and task ids; declare project (top string), note (task string), regate (gate object: at, reason, actor, prev_criteria, pending, and rearm {at, actor, model string|null, artifact, sha256}), detached_from/detached_reason/detached_by/detached_at (phase strings); make _meta any type. hb-lint.js + lint.py, mirrored exactly, every guard line marked shape-guard: lint (strip-clean single complete statements; python lines never a block header): a structure layer that reads the file itself (unreadable/empty/missing/non-object top/unpaired surrogate = the first error) and is the read path of lint and audit with or without a file argument (python's no-arg CLI and the MCP lint/audit tools included \u2014 never read_dag's empty-plan fallback), runs FIRST, never throws on any content, and emits one byte-identical ERROR per STRUCTURE violation (the existing '[G] criteria entry N \u2026' line for a criteria entry, else the path-named form; the unreadable classes with fixed bytes and strict python parsing); every other rule SKIPS a malformed container, a wrong-typed gate_entry/gate_exit, every wrong-typed item of an annotated array, and a phase/task with a STRUCTURE-invalid id in the id-keyed rules (never a crash, never junk lines; T184's '[?]' rendering kept) and keeps its message bytes everywhere else (parity.sh hostile-criteria:lint keeps its bytes; doctor's 'dag: ' problem prefix stays \u2014 py/tests/test_hardening.py asserts it); lint.py stops crashing on a string _meta. Export the structure check (node: from hb-lint.js; python: lint.py) for S2's readers. hb-audit.js + audit.py (shape-guard: audit): exactly one finding rule dag_shape naming the first structure error (every field of that object mirrored \u2014 horizon.sh t7 compares full finding objects), both summaries naming the structure failure instead of hollow gates, the rest of the audit staying tolerant and crash-free; docs/howto/gate-examples/audit-rules-check.sh gains the dag_shape must-trip fixture (AUDIT-RULES-PROVEN:12)."
+        },
+        {
+          "id": "s1c",
+          "title": "re-spec the T184 degenerate-id pin; parity cases; the shape contract notes",
+          "requires": [
+            "s1b"
+          ],
+          "description": "tests/replan.sh case_append's degenerate-id block is re-specified to the stricter contract \u2014 exit 1 on BOTH lints (the missing phase id is STRUCTURE), the '[?]'-rendered lines byte-identical across runtimes, no crash \u2014 never weakened (identity and rendering stay pinned). tests/parity.sh gains three INLINE cases (mktemp; never a fixture file in the audit loop whose count T137 pins), each with a non-vacuity floor: shape:lint (several structure errors \u2014 sorted lists byte-equal, exits 1/1, a path-named line present), shape:unreadable (truncated JSON and a non-object top \u2014 no traceback, exits 1/1, outputs equal), shape:audit (the dag_shape finding line byte-equal, exits equal, the line names the rule). Keep tests/parity-fuzz.sh (T75's generated-case oracle) green \u2014 its malformed constraints are not STRUCTURE, so its cases must keep agreeing on every surface. Append 'The shape contract' to planning/parity-notes.md (the annotated STRUCTURE set and why each member is there, unreadable-as-malformed, the message rule, audit's dag_shape, the reverse pin, the reconciled schema fields, the HONEST LIMITS from _meta) and re-specify the existing hostile-shapes sentence that says the lints do not yet reject every such shape."
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "title": "fail closed: no reader crashes, diverges, dispatches or sleeps silently on a malformed or unreadable plan",
+      "gate_entry": "GATE_S1",
+      "gate_exit": "GATE_S2",
+      "tasks": [
+        {
+          "id": "s2a",
+          "title": "author the reader cases in tests/dag-shape.sh (spec-first: RED today)",
+          "requires": [],
+          "description": "Extend tests/dag-shape.sh with case readers on BOTH runtimes, every fixture a bootstrapped mktemp project with one completed task in the log. VERB COVERAGE IS DERIVED from the CLI dispatch only: hb.js's switch after `if (require.main === module)` (never the projector's event-type case labels) and python's parser choices (incl. the start/done/fail/heartbeat loop \u2014 e.g. from `hb -h` or a factored parser builder), and fail if any is not classified in the test's table as mutating / read / exempt (a new verb cannot slip past); MCP tools likewise from mcp_server.TOOLS, with the class 'exempt \u2014 does not read the project dag' for code_context, code_discover and deplint. The core readers run on EVERY k1/k2 mutation; the full verb sweep runs on one representative per STRUCTURE class (unreadable file, wrong container, bad id, bad reference, parked). Cases: (r1) the tick wakes dag_corrupted (wakeAgent true, the errors in data) \u2014 never next_task, never no_pending_tasks or any other sleep, no traceback \u2014 and again on the next tick; (r2) both resolvers return {type: deadlock, cause: dag_invalid} with identical keys, never throw \u2014 including on every parked 'no' / 1 / [] / {} mutation (the runtimes agree); (r3) every MUTATING verb refuses \u2014 nonzero exit, NO appended event, dag.json byte-unchanged; (r4) every READ verb exits nonzero with ONE line naming the first shape error and the runtime's lint command (node: node .hb/hb-lint.js .hb/dag.json; python: hb lint), no traceback; (r5) gate evaluation (gate.sh <g>, --check, --all, no-arg; hb gate) refuses with exit 4 on both and appends no gate event \u2014 the check precedes exit 2 (unknown gate) and exit 3 (regate pending): a regate-pending gate inside a broken dag exits 4; (r6) doctor exits 1 naming ONLY the structure errors plus 'plan checks skipped: dag.json invalid' \u2014 no drift, rot, projection, regate or detach line and no 'hb rebuild' note \u2014 and diagnose names dag_corrupted with the dag_corrupted action; (r7) both exec drivers stop 'HB-EXEC STOP: dag_corrupted', exit nonzero; (r8) every MCP tool per class \u2014 tick returns the dag_corrupted wake (as r1), next returns deadlock dag_invalid (as r2), lint returns the errors (on the unreadable representative: 'dag.json unreadable: \u2026'), audit returns findings incl. dag_shape, doctor/diagnose report, the three dag-independent tools are exempt, every other tool returns an error result, none raises; (r9) a corrupt state.json AND a malformed dag together wake dag_corrupted (the structure check runs before the state self-heal); (r10) NO SILENT SLEEP: a fixture whose resolver crashes (node: the fixture's hb-next-task.js replaced by a script that exits 1, AND removed entirely; python: a runtime copy whose resolve raises) makes both ticks wake deadlock with cause resolver_error, never no_pending_tasks or no_next_task_script; (r0) the regression pin: on the lint-clean base every reader behaves exactly as today. --selftest readers: the shape-guard: reader lines stripped from COPIES of the node chokepoints (sr1) and the python chokepoints (sr2), the shape-guard: tick lines from tick.sh (st1) and tick.py (st2), each redden the NAMED case for the right reason (the copy compiles, r0 still passes with it, the targeted case then fails by behavior, not by a crash). Prints SHAPE-READERS-OK, DAG-SHAPE-OK when every case passes, and DAG-SHAPE-SELFTEST-OK for the full selftest (lint + readers). The whole default run stays under GATE_S2's 600s budget (the mutation sets are the derived ones, not a combinatorial sweep)."
+        },
+        {
+          "id": "s2b",
+          "title": "implement fail-closed at the node chokepoints",
+          "requires": [
+            "s2a"
+          ],
+          "description": "Node, every guard line marked shape-guard: reader (shape-guard: tick in tick.sh), strip-clean complete statements: readDagChecked in hb.js (the s1b structure check over the file itself) used by every plan-interpreting verb \u2014 mutating verbs refuse before appending; read verbs (incl. rebuild, state, ready, changed, evidence, drift, refute-prompt, constraints --prompt) print the one-line refusal naming node .hb/hb-lint.js .hb/dag.json; doctor and diagnose report instead (they keep the raw read); protocol and refuters are exempt; the classification matches s2a's table \u2014 plus hb-next-task.js (resolve \u2192 deadlock dag_invalid; its CLI), hb-report.js, hb-viz.js, gate.sh (exit 4, no event, all modes \u2014 the check is the first statement after argument parsing, ahead of exit 2 and exit 3) and tick.sh, whose structure check moves to the FRONT of the integrity section (before the state self-heal; the JSON-parse check folds into it) and wakes dag_corrupted with the errors every tick; tick.sh's resolver call no longer swallows a crash \u2014 a nonzero or unparseable resolver output, or a missing resolver script, becomes the deadlock wake with cause resolver_error. Doctor on a structure-invalid dag reports only the structure errors plus 'plan checks skipped: dag.json invalid'. hb-exec.js already stops on dag_corrupted and deadlock. hb.js PROTOCOL's dag_corrupted action is re-specified (keys unchanged; no 'immutable'; names node .hb/hb-lint.js .hb/dag.json and the restore-or-fix cure; never a state.json hand-edit); tick.sh's hint likewise; .hb/PROTOCOL.md regenerates from the table. plugin/hooks/heartbeat-detect.sh's human-needed stop list gains dag_corrupted and state_corrupted (keeping hook-drives-loop.sh green)."
+        },
+        {
+          "id": "s2c",
+          "title": "implement fail-closed at the python chokepoints; wire T186",
+          "requires": [
+            "s2a"
+          ],
+          "description": "Python, mirrored (shape-guard: reader / shape-guard: tick, complete statements, never block headers): state.read_dag_checked (lint and audit read through the structure layer's own checked file read; the raw read_dag stays only for doctor/diagnose's tolerance) used by every plan-interpreting entry point \u2014 the cli verbs (same class table as node; the refusal names hb lint), resolver.resolve (deadlock dag_invalid), report, gate (exit 4 at the CLI, no event), tick.py (structure check first, before the state self-heal; dag_corrupted with the errors; resolve wrapped so a raise becomes the deadlock resolver_error wake), executor (stops on dag_corrupted), and every mcp_server tool per s2a's class table (tick the dag_corrupted wake, next deadlock dag_invalid, lint/audit/doctor/diagnose report, the three dag-independent tools exempt, every other tool an error result \u2014 none ever raises); mcp_server's tick description gains dag_corrupted and state_corrupted in its human-needed list. protocol.py's dag_corrupted action is re-specified to hb.js's meaning (runtime-flavored text naming hb lint; identical key). Wire tests/dag-shape.sh into tests/run-tests.sh as group T186, outcome-keyed on DAG-SHAPE-OK and DAG-SHAPE-SELFTEST-OK (never a group-name grep), and in the SAME task add the T186 row to docs/dev-tests.md (T124.1's index-coverage.sh reddens the full suite on a wired group without a row; s3c re-specifies it string-accurately). Doctor (python) mirrors node's skip of plan-derived checks on a structure-invalid dag. Add the INLINE parity case shape:tick to tests/parity.sh (both ticks on a structure-invalid dag \u2192 identical [True dag_corrupted], non-vacuous)."
+        }
+      ]
+    },
+    {
+      "id": "S3",
+      "title": "docs current-state: the shape contract and the fail-closed readers, as verified claims",
+      "gate_entry": "GATE_S2",
+      "gate_exit": "GATE_S3",
+      "horizon": true,
+      "tasks": [
+        {
+          "id": "s3a",
+          "title": "author the how-to: a malformed plan fails closed (gated)",
+          "requires": [],
+          "description": "Write docs/howto/a-malformed-plan-fails-closed.md by the gated-docs method: every behavioral claim anchored to a tests/dag-shape.sh case BY NAME (k1-k6, r0-r10) \u2014 the annotated STRUCTURE set read from the schema, unreadable-as-malformed, the one-line-per-violation message rule, audit's dag_shape, the reverse pin, the tick's dag_corrupted wake ahead of the state self-heal (never a dispatch, never a silent sleep), resolver_error, the resolver / verb / gate exit 4 / doctor / exec / MCP behaviors, and the HONEST LIMITS from _meta (including the empty-phases plan that still sleeps). Current-state prose only, prose-check-clean. Add its row to docs/howto/howto-list.md citing T186 and its line to docs/howto/README.md."
+        },
+        {
+          "id": "s3b",
+          "title": "SKILL.md, protocol rows, stop lists",
+          "requires": [],
+          "description": "plugin/skills/heartbeat/SKILL.md: the plan rule 'Validate the shape against \u2026 dag.schema.json' is re-specified (lint enforces the schema's annotated STRUCTURE; the rest of the schema documents and is not enforced); the dag_corrupted reason-table row's wording matches the re-specified protocol (keys identical; T138.1); the run section's human-needed stop list gains dag_corrupted and state_corrupted; the audit Flags paragraph gains dag_shape. README.md's tick summary (the Integrity line and the order: structure before state self-heal) and data.reason table, CLAUDE-MD-SNIPPET.md's table and docs/howto/drive-heartbeat-over-mcp.md's stop list re-specify dag_corrupted / gain the two keys; docs/howto/the-auditor-catches-each-weakness.md gains dag_shape (twelve findings, AUDIT-RULES-PROVEN:12). Prose-check-clean."
+        },
+        {
+          "id": "s3c",
+          "title": "dev docs current-state",
+          "requires": [
+            "s3a"
+          ],
+          "description": "docs/dev-plugin.md: l.43's 'immutable at runtime', the tick table's integrity rows (structure check first; dag_corrupted for unreadable OR structurally malformed; resolver_error), the Lint section (the annotated structure layer, the message rule, the reconciled schema), the audit rule table (dag_shape), the verb table's refusal behavior and gate.sh's exit 4, the resolver's deadlock dag_invalid / resolver_error, the PROTOCOL dag_corrupted meaning, the hook paragraph; docs/dev-python.md the twins (lint.py, audit.py, state.read_dag_checked, resolver, cli, gate, tick, executor, mcp_server). docs/dev-tests.md: the T186 row string-accurate against run-tests.sh, and the T184 row re-specified for the degenerate-id pin's exit 1. Re-specify every row the change falsifies, never only append. Every changed doc prose-check-clean."
+        }
+      ]
+    }
+  ],
+  "gates": {
+    "GATE_H1": {
+      "desc": "the horizon is machine-visible and every channel tells the truth about it \u2014 a reached horizon wakes replan_pending (once, with exactly two sanctioned moves) instead of all_done on both runtimes, the close verb is fail-closed and phase-scoped with a rebuild-surviving recorded decision, existing projections stay byte-identical, the exec drivers stop, the teeth flag the fabricated-far-phases shape at its cut point, and the honest limits are pinned as behavior \u2014 proven by a self-testing proof with four new parity cases and full pytest green.",
+      "criteria": [
+        {
+          "id": "h1x",
+          "desc": "the horizon proof is green end-to-end",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/horizon.sh 2>&1 | grep -q '^HORIZON-OK'",
+          "timeout_s": 600
+        },
+        {
+          "id": "h1y",
+          "desc": "the proof's teeth: each sabotage reddens its named check",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/horizon.sh --selftest 2>&1 | grep -q '^HORIZON-SELFTEST-OK'",
+          "timeout_s": 600
+        },
+        {
+          "id": "h1p",
+          "desc": "parity green (incl. horizon:resolve, horizon:project, horizon:lint, horizon:audit)",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/parity.sh >/dev/null 2>&1",
+          "timeout_s": 600
+        },
+        {
+          "id": "h1s",
+          "desc": "the mechanical pins run AT this gate, not first at h2y: protocol single-sourcing (T138.1's checker) and the hook stop lists (T143's checker)",
+          "cmd": "cd \"$PROJECT_DIR\" && bash docs/howto/gate-examples/single-source.sh 2>&1 | grep -q 'SINGLE-SOURCE-OK' && bash docs/howto/gate-examples/hook-drives-loop.sh 2>&1 | grep -q 'HOOK-DRIVES-LOOP-OK'",
+          "timeout_s": 60
+        },
+        {
+          "id": "h1q",
+          "desc": "full python suite green (py/.venv pytest)",
+          "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src ./.venv/bin/python -m pytest -q >/dev/null 2>&1",
+          "timeout_s": 300
+        }
+      ],
+      "review": {
+        "profile": "correctness",
+        "prompt": "Refute that H1 is done. Work ONLY in mktemp fixtures you build yourself \u2014 never against the repo's own .hb, and modify nothing in the repo tree. Does tests/horizon.sh carry the env-hygiene header VERBATIM? Build a reached-horizon fixture through the CLI on BOTH runtimes and probe: (a) resolve returns replan_pending with identical keys; the tick wakes ONCE (data.action names BOTH sanctioned moves and no third) then sleeps replan_waiting; no marker / flag deleted / phase parked / after a recorded close each verdict all_done \u2014 and an ALL-PARKED plan verdicts all_done on both runtimes without a resolver crash (probe it: park everything, tick, check the reason is not an eternal no_pending_tasks); after a first wake, append and complete the new phases entirely through the CLI with NO intermediate tick \u2014 the stale once-flag must not silence the new horizon's wake; (b) the CLOSE \u2014 refused (nonzero exit, NO event appended) when not reached, when --reason is missing, when already closed per the PROJECTED state (one source with the resolver \u2014 run c5's sequence yourself: close, append an 'initialized' event, REPLAY the completion history after the reset, check both runtimes re-verdict replan_pending and RE-ACCEPT a close, no wedge), when the live list is empty (hb horizon close on an all-parked plan \u2014 a refusal, never a traceback), and through the WHOLE regate cycle on a live gate: declare \u2192 refused; declare then hand-clear the marker in the mktemp dag \u2192 STILL refused (the log is truth \u2014 the unanswered-regate clause isolated); rearm WITHOUT a fresh pass \u2192 STILL refused (the stale-rearm window \u2014 the verdict-class perimeter hb review and both executors enforce); fresh criteria-pinned pass \u2192 the close reopens; on both runtimes; a valid close appends horizon_closed with phase+reason+actor, projects a horizon_closed key that is ABSENT on every closeless fixture (byte-stability of existing projections \u2014 compare a pre-wave projection byte-for-byte modulo last_updated), and survives hb rebuild; try to construct a close that silences a LATER appended horizon (phase scope) or a sequence where the wake never fires for a genuinely reached horizon or fires for an unreached one \u2014 either breaks P1/P2; (c) REACH \u2014 both exec drivers STOP with 'HB-EXEC STOP: replan_pending' and nonzero exit; the reason lives on every protocol surface (hb.js PROTOCOL, protocol.py, regenerated PROTOCOL.md, SKILL.md's reason table, both exec tables, both heartbeat-detect.sh stop lists with T143 still green, the MCP tick description) with identical KEYS; both reports print planned / REACHED / closed-by correctly and NOTHING on an unmarked project; (d) TEETH \u2014 both lints error byte-identically on a non-boolean marker and stay 0-error on true, false, and an inert non-final flag; speculative_tail fires once (warn) on the gated-head + two-unverified-tail shape naming tail, cut and cure \u2014 a zero-task zero-gate placeholder counts unverified \u2014 and is QUIET on fully-gated, single-tail, all-unverified and parked-tail shapes; feed the rule hostile criteria shapes (the lint-error class) \u2014 no crash on either runtime; confirm the seeded template dag, the suites' fixture dags and the planning/*.dag.json archive stay quiet, and that the parity cases are inline (the audit fixture loop's count unchanged \u2014 T137 green); (e) HYGIENE \u2014 strip the horizon-guard lines (resolver, tick, close, audit classes) from COPIES of each runtime: the selftest must redden the NAMED check for the RIGHT reason, and no marker may sit on a structural line (python markers are complete statements); do T185's suite checks key on HORIZON-OK / HORIZON-SELFTEST-OK outcome markers; do the four parity cases carry non-vacuity floors (horizon:project through the proj_compare normalization, multi-close insertion order agreed); does h1s actually run single-source.sh and hook-drives-loop.sh green AT THIS GATE (the SKILL row and stop lists bind here, not first at the full suite); is m2's data.action assert on CONTENT (both sanctioned moves named), not mere non-emptiness; are parity and full pytest green? End SOUND or UNSOUND.",
+        "constraints": [
+          {
+            "id": "P1",
+            "claim": "The reached horizon is distinguished from the done project, exactly: on both runtimes, when every live phase is complete and the LAST live phase carries horizon === true with its id not in the projected state.horizon_closed, resolve returns {type:'replan_pending', phase} with identical keys and the tick wakes replan_pending ONCE (a second un-cured tick sleeps replan_waiting; data.action injected from the protocol names both sanctioned moves); with no marker, a deleted flag, a parked horizon phase, a recorded close, or an EMPTY live list (an all-parked plan \u2014 never a throw), the verdict is all_done; after an append the resolver hands out the new phases (the old flag inert) and a newly reached appended horizon wakes again \u2014 a stale once-flag from an earlier horizon never silences it (the flag stores the phase id); the horizon_closed projection is SPARSE \u2014 a log with no horizon_closed event projects a state.json without the key, byte-identical to today's projection.",
+            "subjects": [
+              "plugin/templates/hb-next-task.js",
+              "py/src/heartbeat/resolver.py",
+              "plugin/templates/tick.sh",
+              "py/src/heartbeat/tick.py",
+              "plugin/templates/hb.js",
+              "py/src/heartbeat/state.py",
+              "py/src/heartbeat/protocol.py",
+              "tests/horizon.sh"
+            ],
+            "violation": "Any listed shape returns the wrong verdict on either runtime or the runtimes diverge on keys; an all-parked plan crashes a resolver (or sleeps no_pending_tasks forever); the wake repeats without a cure, never fires for a reached horizon, or stays silenced by a stale flag after an untick'd append; a horizon-less project's state.json gains a key or changes a byte (beyond last_updated)."
+          },
+          {
+            "id": "P2",
+            "claim": "The close is a recorded, fail-closed, phase-scoped VERDICT on both runtimes, inside the full regate perimeter like its verdict-class siblings (hb review, both executors): hb horizon close requires a non-empty --reason, a reached horizon (all live phases complete, the live list non-empty \u2014 an all-parked plan takes the not-reached refusal, never a throw \u2014 and the last live phase flagged), no prior close for that phase in the PROJECTED state.horizon_closed (the resolver's own source \u2014 never a second, log-scan reading; c5's initialized-reset-then-replay probe distinguishes the implementations), and NO open regate cycle in any state on any live gate \u2014 pending, unanswered in the log, or rearmed without a fresh criteria-pinned pass (the stale-rearm window) \u2014 each refusal exits nonzero and appends NO event; a valid close appends horizon_closed {phase, reason} under the existing actor attribution, reprojects, and the verdict survives hb rebuild; a close recorded for an earlier horizon phase never quiets a later appended one.",
+            "subjects": [
+              "plugin/templates/hb.js",
+              "py/src/heartbeat/cli.py",
+              "py/src/heartbeat/state.py",
+              "tests/horizon.sh"
+            ],
+            "violation": "A refused close appends an event or exits 0; an early, reason-less, unflagged or double close is accepted on either runtime; a close is accepted while a live gate's regate cycle is open \u2014 pending, unanswered, OR rearmed without a fresh pass (the revision retired behind a 'finished' project); the close throws on an all-parked plan; the refusal and the resolver read different sources (the initialized-reset wedge \u2014 c5's probe sequence fails); the close is lost on rebuild; an old close silences a new horizon."
+          },
+          {
+            "id": "P3",
+            "claim": "The loudness reaches every surface and the limits are stated where they bind: both exec drivers STOP on replan_pending with a NAMED escalation (HB-EXEC STOP: replan_pending, nonzero exit, never a busy-loop); the reason lives with identical keys on every protocol surface \u2014 hb.js PROTOCOL, protocol.py, the regenerated PROTOCOL.md, SKILL.md's reason table (T138.1 green), both exec case tables, heartbeat-detect.sh's stop lists (T143 green), mcp_server.py's tick description; both reports print the horizon line (planned / REACHED naming both sanctioned moves / closed by actor: reason) and nothing on an unmarked project; and the honest limits (flag deletion and parking silence the wake \u2014 plan surface, unpinned by the drift tripwire; the recorded path is the close verb) are pinned by the proof and recorded in parity-notes.",
+            "subjects": [
+              "plugin/templates/hb-exec.js",
+              "py/src/heartbeat/executor.py",
+              "plugin/templates/hb.js",
+              "py/src/heartbeat/protocol.py",
+              "plugin/skills/heartbeat/SKILL.md",
+              "plugin/hooks/heartbeat-detect.sh",
+              "py/src/heartbeat/mcp_server.py",
+              "plugin/templates/hb-report.js",
+              "py/src/heartbeat/report.py",
+              "planning/parity-notes.md",
+              "tests/horizon.sh"
+            ],
+            "violation": "A driver proceeds or busy-loops past a reached horizon; any protocol surface omits replan_pending or its action text invents a third path (or permits closing as an escape from an unreached horizon); the reports stay silent on a reached horizon or invent lines on unmarked projects; a stop-list edit reddens T143 or the SKILL row reddens T138.1; the limits go unrecorded."
+          },
+          {
+            "id": "P4",
+            "claim": "The teeth and the proof's hygiene are exact: both lints error byte-identically on a non-boolean horizon and stay at 0 errors on true/false and on an inert non-final flag; both audits emit speculative_tail exactly once (warn) iff >= 2 trailing live phases are unverified (unguarded / ungated / zero-behavioral / the zero-task zero-gate placeholder) AND at least one earlier live phase is verified \u2014 naming the tail ids, the cut phase and the horizon cure \u2014 and stay quiet on a fully-gated plan, a single unverified final phase, an all-unverified plan, and a parked tail, without crashing on hostile criteria shapes and without firing on any existing planning dag, the seeded template, or a suite fixture; the selftest sabotages redden the NAMED checks (markers strip-clean, python markers complete statements); T185's suite checks key on HORIZON-OK / HORIZON-SELFTEST-OK; the four parity cases (resolve, project, lint, audit) are non-vacuous, implemented inline, and leave the audit fixture loop's count (T137's pin) untouched.",
+            "subjects": [
+              "plugin/templates/hb-lint.js",
+              "py/src/heartbeat/lint.py",
+              "plugin/templates/hb-audit.js",
+              "py/src/heartbeat/audit.py",
+              "tests/horizon.sh",
+              "tests/run-tests.sh",
+              "tests/parity.sh"
+            ],
+            "violation": "A rule misfires or stays silent on a listed shape, crashes, or its message bytes differ between runtimes; a sabotage passes or reddens the wrong check (or for a parse error instead of the named reason); a T185 check would pass on a red run; a parity case passes on two empty or identical-error outputs."
+          }
+        ]
+      }
+    },
+    "GATE_H2": {
+      "desc": "the doctrine and the mechanism are one text: the skill's replan point IS the marker, the how-to's two prophecy sentences are current-state mechanism claims anchored to T185 cases by name, the honest limits are documented where they bind, every falsified doc row is re-specified (the README and snippet reason tables included) \u2014 all nine docs prose-check-clean, docs-currency green, T185 green in the owning suite, full pytest green.",
+      "criteria": [
+        {
+          "id": "h2w",
+          "desc": "the 9 docs the wave writes or re-specifies are prose-check-clean",
+          "cmd": "cd \"$PROJECT_DIR\" && bash docs/howto/gate-examples/prose-check.sh plugin/skills/heartbeat/SKILL.md docs/howto/plan-to-the-horizon.md docs/dev-plugin.md docs/dev-python.md docs/dev-tests.md docs/howto/howto-list.md docs/howto/README.md README.md CLAUDE-MD-SNIPPET.md 2>&1 | grep -q '^ALL-PROSE-OK:9'",
+          "timeout_s": 120
+        },
+        {
+          "id": "h2x",
+          "desc": "docs-currency green",
+          "cmd": "cd \"$PROJECT_DIR\" && bash docs/howto/gate-examples/docs-currency.sh >/dev/null 2>&1",
+          "timeout_s": 300
+        },
+        {
+          "id": "h2z",
+          "desc": "h2c's outputs exist and point at real things: the dev-tests T185 row, the howto-list cite, and the run-tests group they name",
+          "cmd": "cd \"$PROJECT_DIR\" && grep -q 'T185' docs/dev-tests.md && grep -q 'T185' docs/howto/howto-list.md && grep -q 'grp \"T185' tests/run-tests.sh",
+          "timeout_s": 60
+        },
+        {
+          "id": "h2y",
+          "desc": "the how-to's anchor is green in the owning suite: T185 in GROUPS-PASSED (full node suite; ~13min measured)",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/run-tests.sh 2>&1 | grep -q 'GROUPS-PASSED:.* T185 '",
+          "timeout_s": 1500
+        },
+        {
+          "id": "h2q",
+          "desc": "full python suite green (py/.venv pytest)",
+          "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src ./.venv/bin/python -m pytest -q >/dev/null 2>&1",
+          "timeout_s": 300
+        }
+      ],
+      "review": {
+        "profile": "default",
+        "prompt": "Refute that H2 is done. Read the re-specified skill sections and how-to as a SKEPTIC: run every documented command VERBATIM in mktemp fixtures (never the repo's own .hb; modify nothing in the repo tree) \u2014 does any documented mechanic, marker, verb, reason key, refusal or channel not exist or behave otherwise in code? Open tests/horizon.sh and check every cited case name is real and that the claim each anchor carries matches what the case actually asserts. Is the replan point stated AS the marker (not the old final-task convention), with exactly two sanctioned moves at a reached horizon, and is the close verb documented with its refusals so it cannot be read as an escape hatch \u2014 try to construct the misreadings ('close early to stop the nagging', 'delete the flag, same thing', 'park it past the wake') and check the text forecloses each, with the honest limits documented where they bind rather than hidden? Does the new text contradict SKILL.md or AGENTS.md anywhere (never-weaken, spec-first, the continuation rule, the drift tripwire's pin identity)? Are the falsified rows RE-SPECIFIED, not appended to \u2014 dev-plugin's resolver row, resolve() types, PROTOCOL reasons, once-flag enumeration and exec-loop paragraph; dev-python's twins; README.md's and CLAUDE-MD-SNIPPET.md's reason tables (replan_pending AND the folded criteria_drift row); dev-tests' T185 row string-accurate against the real group line; howto-list's row citing T184 + T185? Does every backticked hb verb name a registered subcommand (horizon included) and every relative link resolve? Are all nine docs prose-check-clean, docs-currency green, T185 in GROUPS-PASSED on a full node suite run, and pytest green? End SOUND or UNSOUND.",
+        "constraints": [
+          {
+            "id": "P1",
+            "claim": "Every behavioral claim in the re-specified skill sections and how-to is anchored to a runnable proof that exists and passes (tests/horizon.sh cases by name; replan/detach/regate suites where still cited), and every doc row the mechanism falsifies states the NEW truth: dev-plugin's resolver row, resolve() types line, PROTOCOL reasons list, once-flag enumeration, exec-loop paragraph and hook paragraph; dev-python's resolver/tick/protocol/CLI/report twins; README.md's tick summary and reason table and CLAUDE-MD-SNIPPET.md's reason table (replan_pending plus the folded criteria_drift row); dev-tests' T185 row; howto-list's plan-to-the-horizon row; every backticked hb verb names a registered subcommand, every relative link resolves, and the nine pinned docs are prose-check-clean with docs-currency green.",
+            "subjects": [
+              "plugin/skills/heartbeat/SKILL.md",
+              "docs/howto/plan-to-the-horizon.md",
+              "docs/dev-plugin.md",
+              "docs/dev-python.md",
+              "docs/dev-tests.md",
+              "docs/howto/howto-list.md",
+              "docs/howto/README.md",
+              "README.md",
+              "CLAUDE-MD-SNIPPET.md"
+            ],
+            "violation": "A claim with no runnable anchor or a dead/misnamed anchor, an anchor whose case asserts something other than the claim, a falsified row left stating the old truth, an unknown hb verb, a broken link, or PROSE-FAIL / docs-currency red on any pinned doc."
+          },
+          {
+            "id": "P2",
+            "claim": "The doctrine is prohibition plus sanctioned path, never softened into permission: at a reached horizon the text presents exactly two sanctioned moves \u2014 replan by append-continuation or hb horizon close with a recorded reason \u2014 and names flag-deletion and parking as the UNSANCTIONED silences the honest-limits section pins (never as a recommended path); closing is never presented as an escape from an unreached horizon, from refutation outcomes, or from the drift tripwire; fabricating post-horizon phases is tied to the named teeth (speculative_tail); and no wording can be read as permission to weaken a gate, constraint or review.",
+            "subjects": [
+              "plugin/skills/heartbeat/SKILL.md",
+              "docs/howto/plan-to-the-horizon.md"
+            ],
+            "violation": "Wording that permits closing early, presents flag-deletion/parking as equivalent to the close, omits or makes optional the recorded reason, presents the marker as optional for discovery work, or reads as sanctioning gate/constraint-weakening or post-horizon fabrication."
+          }
+        ]
+      }
+    },
+    "GATE_S1": {
+      "desc": "lint and audit judge dag.json's structure identically on both runtimes, derived from the schema's annotations; the schema matches what the runtimes write",
+      "criteria": [
+        {
+          "id": "s1x",
+          "desc": "the schema-derived lint/audit/schema cases are green on both runtimes",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/dag-shape.sh lint 2>&1 | grep -q '^SHAPE-LINT-OK'",
+          "timeout_s": 600
+        },
+        {
+          "id": "s1y",
+          "desc": "the teeth: each stripped shape-guard: lint/audit line reddens k1/k5 for the right reason",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/dag-shape.sh --selftest lint 2>&1 | grep -q '^SHAPE-SELFTEST-LINT-OK'",
+          "timeout_s": 600
+        },
+        {
+          "id": "s1p",
+          "desc": "parity green (incl. shape:lint, shape:unreadable, shape:audit) and the fuzz oracle green",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/parity.sh 2>&1 | grep -q 'PARITY OK' && bash tests/parity-fuzz.sh 2>&1 | grep -q '^FUZZ-PARITY-OK'",
+          "timeout_s": 900
+        },
+        {
+          "id": "s1f",
+          "desc": "the FULL node suite is green (zero failing checks) \u2014 every run-tests-only sub-suite included",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/run-tests.sh 2>&1 | grep -qE '^  RESULT: [0-9]+ passed, 0 failed$'",
+          "timeout_s": 3000
+        },
+        {
+          "id": "s1q",
+          "desc": "full python suite green (py/.venv pytest)",
+          "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src ./.venv/bin/python -m pytest -q >/dev/null 2>&1",
+          "timeout_s": 300
+        }
+      ],
+      "review": {
+        "profile": "correctness",
+        "prompt": "Refute that S1 is done. Work ONLY in mktemp fixtures and scratchpad copies \u2014 never run any tool against the repo's own .hb, never modify the repo. Probe: (a) is the mutation set REALLY derived from the schema's x-hb-structure annotations \u2014 annotate a new node in a COPY of the schema and show the test grows cases, remove one and show they vanish; (b) a STRUCTURE or unreadable shape either lint misses, crashes on, or reports with different bytes (fuzz beyond the derived set: nesting, unicode keys, huge arrays, duplicate JSON keys, BOMs, floats as ids); (c) k3's oracle \u2014 any template / planning / fixture dag whose lint output changed vs a500587, and is the oracle real (does it actually run the pre-wave copies?); (d) the reverse pin \u2014 a key some verb writes that the schema does not declare, or a dag-writing verb the pin forgot; (e) audit's dag_shape \u2014 byte-identical, exactly one finding, never on a clean plan; (f) the T184 re-spec stricter, never weaker; (g) every untouched pin (T179 exit 3, T184 d7, hostile-criteria, horizon t7, fuzz seeds with malformed constraints) still green for the right reason; (h) the selftest strips' right-reason rule and complete-statement python markers; (i) the parity cases non-vacuous and inline (T137's count untouched).",
+        "constraints": [
+          {
+            "id": "P1",
+            "claim": "Both lints judge every STRUCTURE violation the schema's x-hb-structure annotations imply \u2014 every criteria entry, the root's required phases and gates, every annotated array's items \u2014 and every unreadable, non-object or empty-plan dag as an error, exactly one structure-attributable line per violation (fixed bytes for the unreadable classes), byte-identical across runtimes, exit 1, never a traceback for any file content.",
+            "subjects": [
+              "plugin/templates/hb-lint.js",
+              "py/src/heartbeat/lint.py",
+              "plugin/dag.schema.json",
+              "tests/dag-shape.sh"
+            ],
+            "violation": "A derived or unreadable mutation lints exit 0 on either runtime, the sorted error lists or exits differ, a new-rule line omits the path, or either lint prints a traceback."
+          },
+          {
+            "id": "P2",
+            "claim": "Nothing outside the STRUCTURE contract changes: every template / planning / fixture dag keeps its pre-wave node lint output byte-for-byte (oracle: the a500587 linters), python now agrees with node on all of them, and every existing rule's messages, exit codes and pins (T179, T184 d7, hostile-criteria, horizon n1/n3/t7, the fuzz generator's malformed constraints) are untouched.",
+            "subjects": [
+              "plugin/templates/hb-lint.js",
+              "py/src/heartbeat/lint.py",
+              "tests/dag-shape.sh"
+            ],
+            "violation": "Some existing dag's lint output changes, python still differs from node on one, an existing message or exit code changes, or an untouched pin reddens."
+          },
+          {
+            "id": "P3",
+            "claim": "The schema is reconciled with what the runtimes write and the proof derives from it: mutations come from the annotations; every key park/unpark/regate declare/rearm (with and without --model)/detach/reattach write is declared at its level.",
+            "subjects": [
+              "plugin/dag.schema.json",
+              "tests/dag-shape.sh"
+            ],
+            "violation": "The mutation list is hand-coded (a schema annotation change does not change the cases), or a writing verb leaves an undeclared key."
+          },
+          {
+            "id": "P4",
+            "claim": "Audit reports a structure-invalid or unreadable plan with exactly one dag_shape error finding (that finding byte-identical; both summaries name the structure failure, never hollow gates) and never crashes, and never emits it on a clean plan; the T184 degenerate-id pin is stricter, never weaker; the three shape parity cases are inline and non-vacuous; the selftest strips redden for the right reason; parity-notes records the contract and its honest limits.",
+            "subjects": [
+              "plugin/templates/hb-audit.js",
+              "py/src/heartbeat/audit.py",
+              "tests/replan.sh",
+              "tests/parity.sh",
+              "tests/dag-shape.sh",
+              "planning/parity-notes.md",
+              "docs/howto/gate-examples/audit-rules-check.sh"
+            ],
+            "violation": "dag_shape is missing, duplicated, divergent or fires on a clean plan; audit crashes; the T184 block drops an assertion or still expects exit 0; a parity case passes on empty or crashing outputs; a strip reddens by crashing; parity-notes is stale."
+          }
+        ]
+      }
+    },
+    "GATE_S2": {
+      "desc": "every plan-interpreting reader on both runtimes fails closed on a malformed or unreadable dag; the tick wakes dag_corrupted (or deadlock resolver_error) \u2014 never a dispatch, never a silent sleep",
+      "criteria": [
+        {
+          "id": "s2x",
+          "desc": "every dag-shape case green end-to-end on both runtimes, inside the 600s budget",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/dag-shape.sh 2>&1 | grep -q '^DAG-SHAPE-OK'",
+          "timeout_s": 600
+        },
+        {
+          "id": "s2y",
+          "desc": "the full teeth: lint, audit, reader and tick strips each redden their named case for the right reason",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/dag-shape.sh --selftest 2>&1 | grep -q '^DAG-SHAPE-SELFTEST-OK'",
+          "timeout_s": 900
+        },
+        {
+          "id": "s2t",
+          "desc": "the dag_corrupted re-spec is real on both runtimes: no 'immutable', the action names the runtime's lint command",
+          "cmd": "cd \"$PROJECT_DIR\" && ! grep -qi 'immutable' plugin/templates/hb.js py/src/heartbeat/protocol.py plugin/templates/tick.sh && node -e \"const a=require('./plugin/templates/hb.js').PROTOCOL.dag_corrupted;process.exit(a.includes('hb-lint.js')?0:1)\" && PYTHONPATH=py/src python3 -c \"from heartbeat.protocol import PROTOCOL as P; import sys; sys.exit(0 if 'hb lint' in P['dag_corrupted'] else 1)\""
+        },
+        {
+          "id": "s2p",
+          "desc": "parity (incl. shape:tick) and the fuzz oracle green; the stop-list and single-source checkers green",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/parity.sh 2>&1 | grep -q 'PARITY OK' && bash tests/parity-fuzz.sh 2>&1 | grep -q '^FUZZ-PARITY-OK' && bash docs/howto/gate-examples/single-source.sh 2>&1 | grep -q 'SINGLE-SOURCE-OK' && bash docs/howto/gate-examples/hook-drives-loop.sh 2>&1 | grep -q 'HOOK-DRIVES-LOOP-OK'",
+          "timeout_s": 900
+        },
+        {
+          "id": "s2f",
+          "desc": "the FULL node suite is green (zero failing checks) \u2014 every run-tests-only sub-suite included",
+          "cmd": "cd \"$PROJECT_DIR\" && bash tests/run-tests.sh 2>&1 | grep -qE '^  RESULT: [0-9]+ passed, 0 failed$'",
+          "timeout_s": 3000
+        },
+        {
+          "id": "s2q",
+          "desc": "full python suite green (py/.venv pytest)",
+          "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src ./.venv/bin/python -m pytest -q >/dev/null 2>&1",
+          "timeout_s": 300
+        }
+      ],
+      "review": {
+        "profile": "correctness",
+        "prompt": "Refute that S2 is done. mktemp fixtures and scratchpad copies only \u2014 never the repo's .hb, never modify the repo. Probe: (a) a STRUCTURE-invalid or unreadable dag (the annotated set; lint-error shapes outside it are a recorded honest limit) on which ANY entry point on either runtime still crashes, dispatches, sleeps silently, appends an event, rewrites dag.json, or exits 0 \u2014 derive the entry points yourself (every hb.js case, every cli.py subcommand, every MCP tool, gate.sh run/--check/--all, hb-report, hb-viz, both exec drivers, the hook) and check s2a's classification table is complete and right; (b) any remaining path where the tick sleeps after a crash (resolver, state, events, a dag rewritten mid-tick) instead of waking; (c) the r0 regression pin \u2014 any behavior change on a lint-clean dag (outputs, exit codes, events); (d) semantic-error dags (cycles, missing refs) wrongly failing closed, or structure errors taking the semantic path; (e) the dag_corrupted re-spec and the stop-list additions across both PROTOCOL tables, SKILL, the hook and mcp_server (keys identical, no third route, no state.json hand-edit); (f) the combined corrupt-state + malformed-dag ordering; (g) the selftest strips' right-reason rule and T186's outcome keying.",
+        "constraints": [
+          {
+            "id": "P1",
+            "claim": "On every malformed or unreadable dag, both ticks wake dag_corrupted (carrying the errors) from a structure check that runs before the state self-heal \u2014 never next_task, never a sleep, never a traceback \u2014 both resolvers return deadlock dag_invalid with identical keys, and a crashing or missing resolver wakes deadlock resolver_error instead of sleeping.",
+            "subjects": [
+              "plugin/templates/tick.sh",
+              "py/src/heartbeat/tick.py",
+              "plugin/templates/hb-next-task.js",
+              "py/src/heartbeat/resolver.py",
+              "tests/dag-shape.sh"
+            ],
+            "violation": "Either tick dispatches, sleeps, crashes or omits the errors; the corrupt-state + malformed-dag case wakes state_corrupted; a resolver throws; a resolver crash still yields no_pending_tasks; the runtimes disagree."
+          },
+          {
+            "id": "P2",
+            "claim": "Every other plan-interpreting entry point on both runtimes fails closed per its class \u2014 mutating verbs refuse with no event and an unchanged dag, read verbs exit nonzero with one line naming the first error and the runtime's lint command, gate evaluation exits 4 with no event ahead of exits 2 and 3, doctor reports only the structure errors (plan checks skipped) and diagnose names dag_corrupted, exec drivers stop on dag_corrupted, MCP tools return per class (tick the dag_corrupted wake, next deadlock dag_invalid, lint/audit/doctor/diagnose report, the dag-independent three exempt, every other tool an error result) \u2014 and the class table covers every verb and tool the dispatch tables define.",
+            "subjects": [
+              "plugin/templates/hb.js",
+              "plugin/templates/gate.sh",
+              "plugin/templates/hb-report.js",
+              "plugin/templates/hb-viz.js",
+              "plugin/templates/hb-exec.js",
+              "py/src/heartbeat/cli.py",
+              "py/src/heartbeat/state.py",
+              "py/src/heartbeat/gate.py",
+              "py/src/heartbeat/report.py",
+              "py/src/heartbeat/executor.py",
+              "py/src/heartbeat/mcp_server.py",
+              "tests/dag-shape.sh"
+            ],
+            "violation": "Some entry point crashes, appends, rewrites dag.json, exits 0, prints a traceback, names a lint command that does not exist, or diverges across runtimes; a verb or tool is unclassified."
+          },
+          {
+            "id": "P3",
+            "claim": "Nothing changes on a lint-clean dag (r0), semantic lint errors keep today's path, and the dag_corrupted action plus the human-needed stop set (now incl. dag_corrupted and state_corrupted) are re-specified identically-keyed on both PROTOCOL tables, the hook and mcp_server without a third recovery route or a state.json hand-edit.",
+            "subjects": [
+              "plugin/templates/hb.js",
+              "py/src/heartbeat/protocol.py",
+              "plugin/hooks/heartbeat-detect.sh",
+              "py/src/heartbeat/mcp_server.py",
+              "plugin/templates/tick.sh",
+              "tests/dag-shape.sh"
+            ],
+            "violation": "A lint-clean dag's behavior changes; a cycle or missing-ref dag wakes dag_corrupted; protocol keys diverge; an action still says immutable or omits the lint command; a stop list omits a key."
+          },
+          {
+            "id": "P4",
+            "claim": "The proof has teeth and hygiene: reader cases ride the same schema-derived mutations, verb coverage is derived from the dispatch tables, every strip reddens its named case by behavior (the copy compiles, r0 still passes), T186 keys on DAG-SHAPE-OK / DAG-SHAPE-SELFTEST-OK, shape:tick is inline and non-vacuous, and the default run fits the 600s budget.",
+            "subjects": [
+              "tests/dag-shape.sh",
+              "tests/run-tests.sh",
+              "tests/parity.sh"
+            ],
+            "violation": "A reader case or the verb list is hand-coded without a completeness check; a strip passes or reddens by crashing; T186 would pass on a red run; shape:tick passes on two crashes; the run exceeds its budget."
+          }
+        ]
+      }
+    },
+    "GATE_S3": {
+      "desc": "docs describe the shape contract and the fail-closed readers as verified current-state claims",
+      "criteria": [
+        {
+          "id": "s3w",
+          "desc": "the docs this phase writes or re-specifies are prose-check-clean",
+          "cmd": "cd \"$PROJECT_DIR\" && bash docs/howto/gate-examples/prose-check.sh docs/howto/a-malformed-plan-fails-closed.md plugin/skills/heartbeat/SKILL.md docs/dev-plugin.md docs/dev-python.md docs/dev-tests.md docs/howto/howto-list.md docs/howto/README.md README.md CLAUDE-MD-SNIPPET.md docs/howto/drive-heartbeat-over-mcp.md docs/howto/the-auditor-catches-each-weakness.md 2>&1 | grep -q '^ALL-PROSE-OK:11'"
+        },
+        {
+          "id": "s3a",
+          "desc": "every dag-shape case the how-to cites exists in tests/dag-shape.sh (no dangling anchor)",
+          "cmd": "cd \"$PROJECT_DIR\" && ids=$(grep -oE '\\b[kr][0-9]+\\b' docs/howto/a-malformed-plan-fails-closed.md | sort -u) && [ -n \"$ids\" ] && for i in $ids; do grep -qE \"\\($i\\)\" tests/dag-shape.sh || exit 1; done"
+        },
+        {
+          "id": "s3z",
+          "desc": "the T186 rows exist and point at the real group",
+          "cmd": "cd \"$PROJECT_DIR\" && grep -q 'T186' docs/dev-tests.md && grep -q 'a-malformed-plan-fails-closed.md.*T186' docs/howto/howto-list.md && grep -q 'grp \"T186' tests/run-tests.sh"
+        },
+        {
+          "id": "s3y",
+          "desc": "the full node suite is green and T184, T185, T186 are each in GROUPS-PASSED",
+          "cmd": "cd \"$PROJECT_DIR\" && o=$(bash tests/run-tests.sh 2>&1) && echo \"$o\" | grep -qE '^  RESULT: [0-9]+ passed, 0 failed$' && gp=$(echo \"$o\" | grep 'GROUPS-PASSED:') && for g in T184 T185 T186; do echo \"$gp\" | grep -q \" $g \" || exit 1; done",
+          "timeout_s": 3000
+        },
+        {
+          "id": "s3q",
+          "desc": "full python suite green (py/.venv pytest)",
+          "cmd": "cd \"$PROJECT_DIR/py\" && PYTHONPATH=src ./.venv/bin/python -m pytest -q >/dev/null 2>&1",
+          "timeout_s": 300
+        }
+      ],
+      "review": {
+        "profile": "default",
+        "prompt": "Refute that S3's docs are true. Read every changed sentence against the code (plugin/templates/*, py/src/heartbeat/*) and tests/dag-shape.sh \u2014 each cited case must exist and assert what the sentence says; grep the WHOLE repo's docs for enumerations this wave falsified (dag_corrupted rows, the human-needed stop set, lint/audit rule lists and counts, verb and gate.sh exit codes, schema fields, the T184 row, 'immutable'); current-state prose only. mktemp fixtures only; never the repo's .hb; modify nothing.",
+        "constraints": [
+          {
+            "id": "P1",
+            "claim": "Every behavioral claim in the new how-to and the re-specified docs is anchored to a tests/dag-shape.sh case by name and holds against the code on both runtimes; no doc row the wave falsified is left stale.",
+            "subjects": [
+              "docs/howto/a-malformed-plan-fails-closed.md",
+              "docs/dev-plugin.md",
+              "docs/dev-python.md",
+              "docs/dev-tests.md",
+              "README.md",
+              "CLAUDE-MD-SNIPPET.md",
+              "docs/howto/the-auditor-catches-each-weakness.md",
+              "docs/howto/drive-heartbeat-over-mcp.md"
+            ],
+            "violation": "A claim contradicts the code or cites a case that does not assert it; a dag_corrupted row, stop list, rule list or count, exit-code table, or the T184/T186 row is stale; 'immutable' survives in a dag_corrupted description."
+          },
+          {
+            "id": "P2",
+            "claim": "The skill and the protocol rows tell an agent the truth about a malformed plan: lint is the judge of STRUCTURE only, dag_corrupted means unreadable or structurally malformed, the cure is restore or fix-and-lint, never a state.json hand-edit, and the honest limits are stated.",
+            "subjects": [
+              "plugin/skills/heartbeat/SKILL.md",
+              "docs/howto/a-malformed-plan-fails-closed.md",
+              "README.md"
+            ],
+            "violation": "A doc implies the whole schema is enforced, hides an honest limit, invents a recovery route, or suggests editing state.json."
+          }
+        ]
+      }
+    }
+  }
+}

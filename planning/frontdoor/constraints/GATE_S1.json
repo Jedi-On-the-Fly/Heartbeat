@@ -1,0 +1,28 @@
+[
+  {
+    "id": "G1",
+    "claim": "A numeric literal of any length is file content like any other, and the checked read gives it ONE verdict on both runtimes: for a dag.json carrying an integer literal of more than 4300 digits (positive or negative) anywhere — in _meta, as a criteria entry, as a phase id — readDagFile ≡ read_dag_file either both parse it (python's json.loads given a parse_int that never hands a long digit string to int(), whose CPython 3.11+ limit of 4300 digits raises ValueError and is caught as 'not valid JSON') or both refuse it with one fixed unreadable class decided by the pre-parse text scan, as the 256-level nesting bound is — never python-only 'dag.json unreadable: not valid JSON' against node's '✓ DAG valid'; lint and audit (file argument, python's no-arg CLI, the MCP tools) agree on exit, sorted error list and the dag_shape finding, with no traceback; tests/dag-shape.sh pins the case (k2 with the fixed bytes if refused, k7 if accepted) and planning/parity-notes.md's shape-contract section names the decision beside the nesting bound.",
+    "subjects": [
+      "py/src/heartbeat/lint.py::read_dag_file",
+      "plugin/templates/hb-lint.js::readDagFile",
+      "py/src/heartbeat/cli.py",
+      "plugin/templates/hb-audit.js::audit",
+      "py/src/heartbeat/audit.py::audit",
+      "tests/dag-shape.sh",
+      "planning/parity-notes.md"
+    ],
+    "violation": "With f.json = {\"phases\":[],\"gates\":{},\"_meta\":<4301 or more '1' digits>} (4300 digits read fine on both), `node plugin/templates/hb-lint.js f.json` prints '✓ DAG valid (0 warning(s))' exit 0 and `node hb-audit.js f.json` '✓ gates look behavioural' exit 0, while `hb lint f.json` prints '✗ dag.json unreadable: not valid JSON' exit 1 and `hb audit f.json` one dag_shape finding exit 1; with the literal as phases[0].id the exits agree but the lint lines ('phases[0].id must be a non-empty string' vs 'dag.json unreadable: not valid JSON') and the dag_shape JSON objects differ; with it as a criteria entry node says '(got a number)' and python 'not valid JSON' — all while `bash tests/dag-shape.sh lint`, tests/parity.sh, tests/parity-fuzz.sh and pytest stay green and parity-notes lists no such class."
+  },
+  {
+    "id": "G2",
+    "claim": "Audit's --questions mode reads a gate through the view the way the shape contract says, by own-key MEMBERSHIP, not by the gate object's truthiness: reviewQuestions ≡ review_questions answer 'no gate' only when the view's gates map has no such key, so a structure-valid gate whose value is exactly {} (an object with no criteria — x-hb-absent-ok, lint-clean on both) yields the same checklist bytes and exit 0 on both runtimes; and the PHASE CLAIM line reads the gate's desc with the one type guard the rest of the contract uses (a non-string desc — [], {}, 5, false, null — falls back to the gate id on both, never '', '[object Object]' or a python repr); tests/dag-shape.sh's q() cases pin an empty-object gate and a list-valued and an object-valued desc. (A non-string criterion ID rendering per runtime in the question text is the recorded honest limit and is outside this claim.)",
+    "subjects": [
+      "plugin/templates/hb-audit.js::reviewQuestions",
+      "py/src/heartbeat/audit.py::review_questions",
+      "py/src/heartbeat/cli.py",
+      "tests/dag-shape.sh",
+      "planning/parity-notes.md"
+    ],
+    "violation": "On {\"phases\":[{\"id\":\"P\",\"gate_exit\":\"G\",\"tasks\":[{\"id\":\"t\",\"title\":\"x\"}]}],\"gates\":{\"G\":{}}} (both lints '✓ DAG valid' exit 0), `node hb-audit.js f.json --questions G` prints 'Falsification checklist for G …' plus the PHASE CLAIM line while `hb audit f.json --questions G` prints \"no gate 'G' in this DAG\" (both exit 0) — node's `if (!g)` sees a truthy {} and python's `if not g` a falsy one; and with gates.G = {\"desc\":[],\"criteria\":[{\"id\":\"c\",\"cmd\":\"python3 -c 1\"}]} node's PHASE CLAIM reads '\"\"' and python's '\"G\"' (desc {\"a\":1}: '\"[object Object]\"' vs '\"{'a': 1}\"') — the two checklists differ byte-for-byte on structure-valid plans while tests/dag-shape.sh's q() (clean plan, string gate, string gates map, numeric cmd, missing, truncated) and tests/parity.sh stay green and parity-notes says --questions 'reads gates through the view on both runtimes'."
+  }
+]

@@ -1,7 +1,54 @@
 # STATUS — HeartBeat
 
-**Version:** v1.39.0 (the discovery doctrine — plan to the horizon; criteria drift is loud)
+**Version:** v1.40.0 (the knowledge horizon is machine-visible; a malformed plan fails closed)
 **Regression suite:** `bash tests/run-tests.sh` · **Parity:** `bash tests/parity.sh`
+
+## v1.40.0 — the knowledge horizon made machine-visible; a malformed plan fails closed
+
+Two waves. The first turns the v1.39 doctrine's "end at a replan point" into mechanism; the second
+gives `dag.json`'s structure one judge and makes every reader refuse a broken plan.
+
+- **The horizon marker** (both runtimes): `"horizon": true` on the last planned phase. When it is
+  the last live phase and every live phase is complete, both resolvers return `replan_pending`
+  instead of `all_done`; both ticks wake it ONCE per horizon (`.replan-alerted` stores the phase
+  id, so a stale flag never silences a newer horizon) and both exec drivers stop on every run. The
+  two sanctioned moves are named in the protocol action: append the next horizon's phases, or end
+  the project with **`hb horizon close --reason <why>`** — a verdict that fails closed (unreached,
+  unflagged, reasonless, already closed by the projection's reading, all-parked, or under any open
+  revision on a live gate) and appends a phase-scoped `horizon_closed` event (sparse, insertion-
+  ordered projection). Lint type-checks the marker; reports print a horizon line.
+- **`speculative_tail`** (audit, warn): two or more trailing unverified live phases behind a verified
+  head — planned past the knowledge horizon — named with the cut point and the cure.
+- **The shape contract** (both runtimes): `plugin/dag.schema.json` marks the STRUCTURE nodes
+  (`x-hb-structure`: containers, phase/task ids, references, `requires` items, `parked`) and is
+  reconciled with what the runtimes write (`project`, `note`, the regate marker, the detach fields).
+  `hb lint` reports every structure violation as ONE path-named error with identical bytes on both
+  runtimes; an unreadable file (missing, empty, invalid JSON incl. BOM/NaN/lone surrogates, nested
+  over 256, non-object) gets fixed words; every existing dag lints exactly as before (oracle: the
+  pre-wave linters). Audit adds the `dag_shape` error. Python's cycle message no longer varies with
+  hash seeds; giant integer literals, `__proto__` names and integer-like gate keys agree.
+- **Fail-closed readers**: on a structurally broken plan the tick wakes `dag_corrupted` every tick
+  (checked before the state self-heal; one event per blockage) — never a dispatch, never a silent
+  sleep; both resolvers answer `deadlock`/`dag_invalid`; mutating verbs refuse with no event; read
+  verbs print one line; gate evaluation exits 4 in every mode; doctor reports only the structure
+  errors; both drivers and every MCP tool behave by class; the live viz server re-checks every
+  request. A missing, crashing or garbage-answering resolver wakes `deadlock`/`resolver_error` on
+  every tick (no more silent `no_pending_tasks`), never arming the real deadlock alert.
+- **Docs**: two gated how-tos (`plan-to-the-horizon.md` re-specified, `a-malformed-plan-fails-closed.md`
+  new), every reason table and stop list current (`replan_pending`, `dag_corrupted`,
+  `state_corrupted`), the `dag_corrupted` action re-specified (the "structure is immutable" clause
+  was false since append-continuation).
+- Refuter record: the horizon plan took 4 refutation rounds, the frontdoor plan 4; gate reviews
+  took 5 (H1), 3 (H2), 4 (S1), 2 (S2) and 3 (S3) cycles — every refuted round a real catch
+  (cross-runtime splits, unpinned guarantees, stale doc claims), each folded with a test that
+  fails when reverted.
+- Proof-driven: `tests/horizon.sh` (T185) and `tests/dag-shape.sh` (T186: 94 schema-derived
+  mutations through every reader, 100 existing dags against the oracle), each with a selftest;
+  parity cases `horizon:*` and `shape:*`.
+- Honest limits (recorded in the how-tos): the horizon flag is plan surface (deleting it or parking
+  the phase silences the wake); only STRUCTURE is enforced (a wrong-typed optional field or an
+  undeclared key lints clean); an empty `phases` list still sleeps; a malformed `review` block can
+  still crash `refute-prompt`.
 
 ## v1.39.0 — the discovery doctrine: plan to the knowledge horizon; drift in accepted criteria is loud
 

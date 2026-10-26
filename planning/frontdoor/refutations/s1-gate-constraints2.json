@@ -1,0 +1,38 @@
+[
+  {
+    "id": "G1",
+    "claim": "On a structure-valid dag the two lints agree on every gate REFERENCE, whatever the name: the id-keyed rules that look a gate up by name — 'undefined gate' for gate_entry/gate_exit, and detached_from's 'must name a defined gate' — test own-property membership of the view's gates map on node exactly as python tests dict membership, so a gate_exit or detached_from of 'constructor', 'toString', 'hasOwnProperty', 'valueOf' or '__proto__' with no such gate defined is '[P] undefined gate: <name>' (exit 1) on BOTH runtimes; structureView's rebuilt gates map is therefore prototype-free in fact (Object.fromEntries yields an object that inherits Object.prototype), and planning/parity-notes.md's sentence 'Node's rule maps are prototype-free (Object.create(null) / Object.fromEntries)' is made true or corrected; tests/dag-shape.sh k7 pins a prototype-named gate REFERENCE (not only a prototype-named gate KEY).",
+    "subjects": [
+      "plugin/templates/hb-lint.js::lint",
+      "plugin/templates/hb-lint.js::structureView",
+      "plugin/templates/hb-lint.js::checkDetach",
+      "py/src/heartbeat/lint.py::lint",
+      "tests/dag-shape.sh",
+      "planning/parity-notes.md"
+    ],
+    "violation": "{\"phases\":[{\"id\":\"P\",\"gate_exit\":\"constructor\",\"tasks\":[{\"id\":\"t\",\"title\":\"x\"}]}],\"gates\":{}} lints {\"errors\":[],\"warnings\":[]} exit 0 on node and '[P] undefined gate: constructor' exit 1 on python (likewise toString, hasOwnProperty, valueOf, __proto__), and with a second phase carrying detached_from 'constructor' node is still silent while python adds '[Q] detached_from must name a defined gate …' — a lint-exit split on a structure-valid dag that `bash tests/dag-shape.sh lint` and tests/parity.sh leave green, while parity-notes asserts the maps are prototype-free."
+  },
+  {
+    "id": "G2",
+    "claim": "The k3 no-new-findings oracle sees every dag the repository ships, not only the three globbed roots: tests/dag-shape.sh's dag inventory includes the dag-like JSON files under plugin/adapters/**/fixtures (and any other repo path that holds one — the predicate is 'a JSON object with phases or gates', applied repo-wide, events files excluded), and for each such file either the post-wave node lint output equals the a500587 output byte-for-byte or the file is named in the test's allowlist with its new verdict; a shipped fixture whose verdict flips from '✓ DAG valid' to an error is a recorded, allowlisted change (or the fixture is amended), never a silent one.",
+    "subjects": [
+      "tests/dag-shape.sh",
+      "plugin/adapters/code/fixtures",
+      "plugin/adapters/docs/fixtures",
+      "planning/parity-notes.md"
+    ],
+    "violation": "Ten shipped adapter fixtures — plugin/adapters/code/fixtures/{clean,collision,coverage,missing,multi,redundant,redundant-empty,transitive}.dag.json and plugin/adapters/docs/fixtures/{docs-clean,docs-unordered}.dag.json — lint '✓ DAG valid (0 warning(s))' exit 0 on the a500587 node lint and '✗ gates: missing' exit 1 on the post-wave lint (coverage.dag.json gains a second error), yet `bash tests/dag-shape.sh lint` reports '86 existing dags against the a500587 oracle' with no allowlist entry: k3's globs (plugin/templates/dag.json, planning/**, tests/fixtures/**) never open them, so the flip is invisible to the proof and unrecorded anywhere."
+  },
+  {
+    "id": "G3",
+    "claim": "Audit's --questions mode is part of audit and obeys the shape contract: on an unreadable or structure-invalid dag (missing/truncated file, a non-object gates map, a gate value that is a string, number or list) both runtimes refuse with the same fixed structure error and exit 1 — never a traceback, never a checklist for a gate that does not exist, never the empty-plan fallback 'no gate … in this DAG' exit 0 — and reviewQuestions ≡ review_questions look a gate up by own-property membership (a gate named 'constructor' in an empty gates map is 'no gate' on both); the node CLI writes the checklist with process.exitCode (or a flushed write), never process.exit() after an asynchronous stdout write, so a piped checklist over 64 KiB arrives whole.",
+    "subjects": [
+      "plugin/templates/hb-audit.js::reviewQuestions",
+      "py/src/heartbeat/audit.py::review_questions",
+      "py/src/heartbeat/cli.py",
+      "tests/parity.sh",
+      "tests/dag-shape.sh"
+    ],
+    "violation": "`hb audit f.json --questions G1` on {\"phases\":[],\"gates\":{\"G1\":\"x\"}} (or G1: 5) prints a python AttributeError traceback ('str' object has no attribute 'get', audit.py review_questions) exit 1 while node prints a full 'Falsification checklist for G1' exit 0; on gates:\"abc\" with gate 0 python tracebacks and node prints a checklist for gate 0; on G1: [] node prints a checklist and python says 'no gate'; on a missing or truncated dag.json both say \"no gate 'G1' in this DAG\" and exit 0; `--questions constructor` on {\"gates\":{}} yields a checklist on node and 'no gate' on python; and `node hb-audit.js big.json --questions G | wc -c` gives 65536 of a 270262-byte checklist (process.exit(0) after stdout.write) — none of which tests/parity.sh or tests/dag-shape.sh exercises."
+  }
+]

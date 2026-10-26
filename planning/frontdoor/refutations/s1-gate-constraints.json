@@ -1,0 +1,82 @@
+[
+  {
+    "id": "G1",
+    "claim": "The FIRST structure error — the one audit's dag_shape finding names — is the same error on both runtimes for every dag, independent of JS object key ordering: when several gate values are malformed and the gate keys are integer-like (\"10\", \"9\"), shapeErrors and shape_errors enumerate gates in the same order (document/insertion order), so the dag_shape text line and JSON object are byte-identical and the unsorted shape error list agrees.",
+    "subjects": [
+      "plugin/templates/hb-lint.js::shapeErrors",
+      "py/src/heartbeat/lint.py::shape_errors",
+      "plugin/templates/hb-audit.js::audit",
+      "py/src/heartbeat/audit.py::audit",
+      "tests/parity.sh"
+    ],
+    "violation": "{\"phases\":[],\"gates\":{\"10\":\"x\",\"9\":\"y\"}} audited on both runtimes yields node '[dag_shape] … gates.9 must be an object' and python '[dag_shape] … gates.10 must be an object' (or any other pair of dag_shape lines that differ), while tests/dag-shape.sh k5 and parity.sh shape:audit stay green because their fixtures use non-numeric gate keys."
+  },
+  {
+    "id": "G2",
+    "claim": "On a structure-valid dag the structure view IS the dag for every gate key, including the key \"__proto__\": the post-wave node lint output (errors, warnings, exit) equals the pre-wave a500587 node output and equals python's for a dag whose gate is named __proto__ — the view's rebuilt gates map keeps that gate as an own property, so the criteria-shape rule, the never-referenced warning and audit's gate rules still see it.",
+    "subjects": [
+      "plugin/templates/hb-lint.js::structureView",
+      "py/src/heartbeat/lint.py::structure_view",
+      "plugin/templates/hb-audit.js::audit",
+      "tests/dag-shape.sh"
+    ],
+    "violation": "{\"phases\":[{\"id\":\"P\",\"tasks\":[{\"id\":\"t\"}]}],\"gates\":{\"__proto__\":{\"criteria\":[\"x\"]},\"Z\":{\"criteria\":[{\"id\":\"c\",\"cmd\":\"true\"}]}}} lints exit 0 on post-wave node with only 'gate defined but never referenced: Z', while pre-wave node and python both report '[__proto__] criteria entry 0 must be an object with a string cmd (got \"x\")' plus 'gate defined but never referenced: __proto__' and exit 1 — a gate silently dropped from node's view (and from audit's hollow-gate rules) that k3 cannot see because no existing dag carries the key."
+  },
+  {
+    "id": "G3",
+    "claim": "A phase whose id is STRUCTURE-invalid (missing, empty, a number, a boolean) is skipped by EVERY id-keyed rule, checkDetach/_check_detach included: no lint line renders such an id as [undefined], [None], [5] vs [5.0] or [true] vs [True]; the sorted error lists stay byte-identical across runtimes when an invalid-id phase also carries detach fields, and the proof's junk-line detector catches a bracketed undefined/None rendering, not only ': undefined' / '(got undefined' / '= undefined'.",
+    "subjects": [
+      "plugin/templates/hb-lint.js::checkDetach",
+      "py/src/heartbeat/lint.py::_check_detach",
+      "tests/dag-shape.sh"
+    ],
+    "violation": "A dag whose phases[0] has no id and carries detached_from/detached_reason/detached_by/detached_at with gate_entry null lints as '[undefined] a detached phase id must be usable as an anchor file name …' on node and '[None] a detached phase id …' on python (likewise id 5.0 → '[5] detach fields are partial …' vs '[5.0] …', id true → '[true]' vs '[True]'), so the two lints' error lists differ on a structure-invalid dag; and echo '[undefined] a detached phase id' passes tests/dag-shape.sh's junk-line grep."
+  },
+  {
+    "id": "G4",
+    "claim": "The offending value rendered in the '[G] criteria entry N must be an object with a string cmd (got …)' line — reused verbatim as dag_shape's first error — is byte-identical across runtimes for every JSON value the file can carry: the numbers 1.0, -0.0, 12345678901234567890 and the out-of-range 1e400 (which both parsers accept as an infinity; the contract must either reject it as 'not valid JSON' on both or render it identically), and a string of more than 120 non-BMP characters truncated by code points, not UTF-16 units, on both.",
+    "subjects": [
+      "plugin/templates/hb-lint.js::shapeErrors",
+      "py/src/heartbeat/lint.py::shape_errors",
+      "py/src/heartbeat/lint.py::read_dag_file",
+      "plugin/templates/hb-audit.js::audit",
+      "py/src/heartbeat/audit.py::audit",
+      "tests/parity.sh"
+    ],
+    "violation": "{\"phases\":[],\"gates\":{\"G\":{\"criteria\":[1.0]}}} audits to '… (got 1) …' on node and '… (got 1.0) …' on python; -0.0 → '(got 0)' vs '(got -0.0)'; 12345678901234567890 → '(got 12345678901234567000)' vs the exact digits; 1e400 → '(got null)' vs '(got Infinity)'; a 130-emoji string → the node slice ends in a broken surrogate half and holds 60 emoji while python's holds 120 — any of these makes the dag_shape finding (and the lint line) differ while k5 and shape:audit, which only use ASCII strings and small ints, stay green."
+  },
+  {
+    "id": "G5",
+    "claim": "Nesting depth is file content like any other: for a dag.json whose _meta (or any value) is nested to any depth, neither lint nor audit prints a traceback or a stack trace on either runtime, and the two runtimes agree on the outcome — both accept it as a valid plan with the same output, or both report 'dag.json unreadable: not valid JSON' with exit 1 — because the surrogate scan, the structure walk and the placeholder flatten are depth-safe (iterative or bounded) rather than naively recursive.",
+    "subjects": [
+      "plugin/templates/hb-lint.js::readDagFile",
+      "plugin/templates/hb-lint.js::hasUnpaired",
+      "py/src/heartbeat/lint.py::read_dag_file",
+      "py/src/heartbeat/lint.py::_has_surrogate",
+      "tests/dag-shape.sh"
+    ],
+    "violation": "{\"phases\":[],\"gates\":{},\"_meta\":[[[…600 deep…]]]} lints '✓ DAG valid' exit 0 on node while python exits 1 with 'RecursionError: maximum recursion depth exceeded' from lint.py _has_surrogate (hb lint and hb audit alike); at depth 5000 node itself dies with a RangeError stack trace from hb-lint.js:35 while python says 'dag.json unreadable: not valid JSON' — a traceback for file content and a cross-runtime exit-status split that k2's fixed-class list never exercises."
+  },
+  {
+    "id": "G6",
+    "claim": "The tolerant rest of the audit does not split across runtimes on a STRUCTURE-invalid parked: when parked is [] or {} (truthy in JS, falsy in python), the structure view neutralises it (or both audits treat it the same way), so the non-dag_shape finding set, the error count and the 'parked' list of the audit result are identical on both runtimes — the round-1 F7 split the contract set out to remove does not survive inside audit.",
+    "subjects": [
+      "plugin/templates/hb-lint.js::structureView",
+      "py/src/heartbeat/lint.py::structure_view",
+      "plugin/templates/hb-audit.js::audit",
+      "py/src/heartbeat/audit.py::audit"
+    ],
+    "violation": "{\"phases\":[{\"id\":\"P\",\"gate_exit\":\"G\",\"parked\":[],\"tasks\":[{\"id\":\"t\",\"title\":\"x\"}]}],\"gates\":{\"G\":{\"criteria\":[{\"id\":\"c\",\"cmd\":\"true\"}]}}} audits to errors=1, parked=['P'] (phase skipped as parked) on node and errors=2 with a hollow_gate finding and parked=[] on python (same with parked {}): the two runtimes disagree on how many errors the plan has and on what was audited, while k5 passes because it compares only the dag_shape object."
+  },
+  {
+    "id": "G7",
+    "claim": "The reverse pin (tests/dag-shape.sh k4) has teeth at every level the dag-writing verbs write: an undeclared key written into the regate marker, its rearm record or a gate's review is detected — either the schema closes those objects (additionalProperties false, with every key the runtimes write — including review.profile — declared) or the k4 checker treats an unspecified additionalProperties as closed — so a verb that leaks a key below the gate/phase level reddens k4 instead of passing.",
+    "subjects": [
+      "tests/dag-shape.sh",
+      "plugin/dag.schema.json",
+      "plugin/templates/hb.js",
+      "py/src/heartbeat/cli.py"
+    ],
+    "violation": "Running k4's schema-walk checker over a dag whose gates.G.regate carries \"bogus\": 1, whose regate.rearm carries \"extra\": 2 and whose review carries \"bogus2\": 3 prints 'undeclared: []' and exits 0 (regate, rearm and review declare no additionalProperties, so the checker's default of True skips them); equivalently, a mutant of hb.js / cli.py that writes rg2.rearm.leak = 1 during regate --rearm leaves tests/dag-shape.sh k4 green on both runtimes."
+  }
+]
